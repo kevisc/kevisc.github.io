@@ -20,8 +20,7 @@ editPost:
 ##### Download
 
 -   [Paper](bwc1.pdf) <!-- + [Online appendix](appendix1.pdf)
-                            + [Code and data](https://github.com/pmichaillat/u-star) -->
-
+                                + [Code and data](https://github.com/pmichaillat/u-star) -->
 
 ------------------------------------------------------------------------
 

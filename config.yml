@@ -50,7 +50,6 @@ params:
           enabled: true
           title: Kevin
           subtitle: "test \n
-
           My research interests is .... \n"
           imageUrl: "headshot.jpg"
           imageWidth: 160
