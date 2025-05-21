@@ -1,50 +1,55 @@
 ---
-title: "Monitoring Technology: The Impact of Body-Worn Cameras on Citizen-Police Interactions" 
-date: 2023-12-01
-lastmod: 2023-12-08
-tags: ["Police","Development","Technology","Field Experiment"]
-author: ["Thiemo Fetzer","Pedro CL Souza","Caterina Soto Vieira"]
-description: "This paper provides experimental evidence that using body-worn cameras (BWCs) for police monitoring improves police-citizen interactions." 
-summary: "[Submitted]. This paper provides experimental evidence that using body-worn cameras (BWCs) for police monitoring improves police-citizen interactions. We compare our results to the previous literatures by replicating their empirical strategy in our setting, finding attenuated effects." 
+title: "Welfare state policy and educational inequality:
+a cross-national multicohort study" 
+date: 2024-02-01
+lastmod: 2024-02-01
+tags: ["Welfare","Education","Comparative"]
+author: ["Kevin Schoenholzer","Kaspar Burger"]
+description: "Findings provide evidence of the mixed role of welfare state policies for social inequality in student achievement." 
+summary: "Proponents of welfare policy have argued that publicly funded early childhood education and care (ECEC), paid parental leave, and family benefts spending can weaken the infuence of social background on educational outcomes by providing a supplementary source of early investment that particularly benefts disadvantaged families. We analyze whether the welfare state context in which children spend their early childhood (ages 0–5) moderates the association between parental educational attainment and the child’s educational achievement at age 10." 
 cover:
-    image: "cameras.jpg"
-    alt: "Body Worn Cameras"
+    image: "image11.jpg"
+    alt: "fig3"
     relative: false
 editPost:
     # URL: "https://github.com/pmichaillat/hugo-website"
     # Text: "Journal of Oleic Science"
-
 ---
 
----
+------------------------------------------------------------------------
 
 ##### Download
 
-+ [Paper](bwc.pdf)
-<!-- + [Online appendix](appendix1.pdf)
-+ [Code and data](https://github.com/pmichaillat/u-star) -->
+-   [Paper](bwc.pdf) <!-- + [Online appendix](appendix1.pdf)
+    + [Code and data](https://github.com/pmichaillat/u-star) -->
 
+```{=html}
 <!-- ---
 
 ##### Media Coverage
  -->
+```
 
----
+------------------------------------------------------------------------
 
 ##### Abstract
 
-We provide experimental evidence that using body-worn cameras (BWCs) for police monitoring improves police-citizen interactions. Dispatches with BWCs show a 61.2% decrease in police use of force and a 47.0% reduction in negative interactions, including handcuff use and arrests. The use of BWCs also improves the quality of officers’ record from the dispatches. The rate of incomplete reports dropped by 5.9%, which is accompanied by a 69% increase in the notification of domestic violence. 
+Proponents of welfare policy have argued that publicly funded early childhood education and care (ECEC), paid parental leave, and family benefits spending can weaken the influence of social background on educational outcomes by providing a supplementary source of early investment that particularly benefits disadvantaged families. We analyze whether the welfare state context in which children spend their early childhood (ages 0–5) moderates the association between parental educational attainment and the child’s educational achievement at age 10. We combine data from two large-scale international student assessments with data about welfare state policies. Results from multilevel models show that countries with higher public ECEC spending and higher family benefits spending exhibited a weaker association between parental education and student math achievement. Countries with longer parental leave exhibited a stronger association between parental education and student math, science, and reading achievement. Findings provide evidence of the mixed role of welfare state policies for social inequality in student achievement.
 
-We explore various mechanisms that explain why BWCs work and show that the results are consistent with the police changing their behavior in the presence of cameras. Our results stand in contrast with previous experimental literature which used coarser designs and indicated muted or null body-worn camera effects on use of force. Replicating those designs, our data also finds attenuated effects. Overall, our results show that the use of BWCs de-escalates conflicts.
+------------------------------------------------------------------------
 
----
-
+```{=html}
 <!-- ##### Figure 6: Some Uses For Olive Oil
 
 ![](paper1.png) -->
+```
+
+```{=html}
 <!-- 
 --- -->
+```
 
+````{=html}
 <!-- ##### Citation
 
 Unterholzer, Detlev A., and  Moritz-Maria von Igelfeld. 2013. "Unusual Uses For Olive Oil." *Journal of Oleic Science* 34 (1): 449–489. http://www.alexandermccallsmith.com/book/unusual-uses-for-olive-oil.
@@ -60,10 +65,17 @@ number = {1},
 pages = {449--489},
 url = {http://www.alexandermccallsmith.com/book/unusual-uses-for-olive-oil}}
 ``` -->
+````
+
+```{=html}
 <!-- 
 --- -->
+```
 
+```{=html}
 <!-- ##### Related material
 
 + [Presentation slides](presentation1.pdf) -->
+```
+
 <!-- + [Summary of the paper](https://www.penguinrandomhouse.com/books/110403/unusual-uses-for-olive-oil-by-alexander-mccall-smith/) -->
