@@ -1,0 +1,116 @@
+baseURL: "https://dacbarbosa.github.io/" 
+title: Daniel A.C. Barbosa
+paginate: 20
+theme: PaperMod
+
+enableInlineShortcodes: true
+enableRobotsTXT: true
+
+taxonomies:
+    tag: tags
+
+menu:
+    main:
+        # - name: Books
+        #   url: books/
+        #   weight: 5 
+        - name: Home
+          url: /
+          weight: 1
+        - name: Research
+          url: papers/
+          weight: 2
+
+params:
+    description: "I am a PhD student in Economics at the University of Oxford and Nuffield College. My research interest lies on macroeconomics and climate change."
+    author: Daniel AC Barbosa
+    # googleAnalyticsID: "G-XXXXX"
+    DateFormat: "January 2006"
+    defaultTheme: light
+    hideFooter: false
+    disableThemeToggle: true
+    ShowShareButtons: false
+    ShowReadingTime: false
+    disableSpecial1stPost: true
+    disableAnchoredHeadings: true
+    ShowPostNavLinks: false
+    ShowBreadCrumbs: false
+    ShowCodeCopyButtons: true
+    ShowAllPagesInArchive: false
+    MainSections: ["books","courses","papers","data"]
+    ShowRssButtonInSectionTermList: false
+    ShowToc: false
+    disableScrollToTop: true
+    TocOpen: true
+    ShowWordCount: false
+    UseHugoToc: true
+    comments: false
+    math: true
+    profileMode:
+          enabled: true
+          title: Daniel A.C. Barbosa
+          subtitle: "I am a PhD (DPhil) student in Economics at the University of Oxford and Nuffield College. \n
+
+          My research interests lie on macroeconomics and trade, with an emphasis on climate change. \n
+
+          \n Email: daniel [dot] barbosa [at] economics [dot] ox [dot] ac [dot] uk"
+          imageUrl: "picture-dacb.jpg"
+          imageWidth: 160
+          imageHeight: 160
+          imageTitle: Daniel Barbosa
+          buttons:
+            - name: Research
+              url: papers/
+            # - name: Courses
+            #   url: courses/
+            # - name: Data
+            #   url: data/
+            # - name: Books
+            #   url: books/
+            # - name: Tags
+            #   url: tags/
+            # - name: Archive
+            #   url: archive/
+            # - name: Blog
+            #   url: https://en.wikipedia.org/wiki/Moritz-Maria_von_Igelfeld_(character)
+
+    socialIcons:
+        - name: cv
+          url: cv-barbosa.pdf
+        - name: Email
+          url: mailto:daniel.barbosa@economics.ox.ac.uk
+          # url: location/
+        # - name: Office Hours
+        #   url: officehours/
+        - name: Google Scholar
+          url: https://scholar.google.com/citations?user=K5aOUegAAAAJ&hl
+        - name: GitHub
+          url: https://github.com/dacbarbosa
+        # - name: Substack
+        #   url: https://pmichaillat.substack.com
+        # - name: YouTube
+        #   url: https://www.youtube.com/@alexandermccallsmithoffici9000
+        - name: Twitter
+          url: https://twitter.com/barbosa_dac
+
+    assets:
+        disableScrollBarStyle: true
+    cover:
+        hiddenInList: false
+        hiddenInSingle: true
+    label:
+      text: "Daniel AC Barbosa"
+      icon: favicon.ico
+      iconHeight: 18
+
+markup:
+    goldmark:
+        renderer:
+            unsafe: true
+    highlight:
+        guessSyntax: true
+        style: autumn 
+    tableOfContents:
+        endLevel: 2
+        ordered: false
+        startLevel: 2

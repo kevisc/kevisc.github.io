@@ -1,0 +1,49 @@
+.buttons,
+.main .profile {
+    display: flex;
+    justify-content: left;
+}
+.main .profile {
+    align-items: center;
+    min-height: calc(100vh - var(--footer-height) - (var(--gap) * 2));
+    /* font-size: var(--homesize); */
+    font-size: 16px;
+    line-height: 2.00; /* Change line spacing */
+}
+
+.profile .profile_inner {
+    display: flex;
+    flex-direction: column;
+    align-items: left; /* Change main page alignment */
+    gap: 30px;
+}
+
+.profile .profile_inner h1 {
+    font-size: 40px; /* Change Font Display of Name*/
+}
+
+.profile img {
+    border-radius: 10%; /* This changes the picture border - 0 is full square, 100% is circle*/
+    border: 1px solid rgb(207, 207, 207);
+}
+
+.buttons {
+    flex-wrap: wrap;
+}
+
+.button {
+    background: var(--tertiary);
+    border: 1px solid rgb(207, 207, 207);
+    border-radius: var(--radius);
+    margin: 8px 16px 8px 0px;
+    padding: 6px;
+    transition: transform 0.1s;
+}
+
+.button-inner {
+    padding: 0 8px;
+}
+
+.button:hover {
+    background: var(--nuffieldgreen);
+}
