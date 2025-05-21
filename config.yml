@@ -1,5 +1,5 @@
-baseURL: "https://dacbarbosa.github.io/" 
-title: Daniel A.C. Barbosa
+baseURL: "https://kevisc.github.io/" 
+title: Kevin
 paginate: 20
 theme: PaperMod
 
@@ -22,8 +22,8 @@ menu:
           weight: 2
 
 params:
-    description: "I am a PhD student in Economics at the University of Oxford and Nuffield College. My research interest lies on macroeconomics and climate change."
-    author: Daniel AC Barbosa
+    description: "I am Kevin. My research interest lies in education and socioeconomic stratification using quantitative longitudinal data analysis."
+    author: Kevin
     # googleAnalyticsID: "G-XXXXX"
     DateFormat: "January 2006"
     defaultTheme: light
@@ -48,16 +48,16 @@ params:
     math: true
     profileMode:
           enabled: true
-          title: Daniel A.C. Barbosa
-          subtitle: "I am a PhD (DPhil) student in Economics at the University of Oxford and Nuffield College. \n
+          title: Kevin
+          subtitle: "test \n
 
-          My research interests lie on macroeconomics and trade, with an emphasis on climate change. \n
+          My research interests is .... \n
 
-          \n Email: daniel [dot] barbosa [at] economics [dot] ox [dot] ac [dot] uk"
-          imageUrl: "picture-dacb.jpg"
+          \n Email: kevin [dot] schoenholzer [at] usi [dot] ch [dot]"
+          imageUrl: "headshot.jpg"
           imageWidth: 160
           imageHeight: 160
-          imageTitle: Daniel Barbosa
+          imageTitle: Kevin
           buttons:
             - name: Research
               url: papers/
@@ -76,22 +76,22 @@ params:
 
     socialIcons:
         - name: cv
-          url: cv-barbosa.pdf
+          url: cv-1.pdf
         - name: Email
-          url: mailto:daniel.barbosa@economics.ox.ac.uk
+          url: mailto:kevin.schoenholzer@usi.ch
           # url: location/
         # - name: Office Hours
         #   url: officehours/
-        - name: Google Scholar
-          url: https://scholar.google.com/citations?user=K5aOUegAAAAJ&hl
-        - name: GitHub
-          url: https://github.com/dacbarbosa
+       # - name: Google Scholar
+        #  url: https://scholar.google.com/citations?user=K5aOUegAAAAJ&hl
+      #  - name: GitHub
+        #  url: https://github.com/dacbarbosa
         # - name: Substack
         #   url: https://pmichaillat.substack.com
         # - name: YouTube
         #   url: https://www.youtube.com/@alexandermccallsmithoffici9000
-        - name: Twitter
-          url: https://twitter.com/barbosa_dac
+      #  - name: Twitter
+       #   url: https://twitter.com/barbosa_dac
 
     assets:
         disableScrollBarStyle: true
@@ -99,7 +99,7 @@ params:
         hiddenInList: false
         hiddenInSingle: true
     label:
-      text: "Daniel AC Barbosa"
+      text: "Kevin"
       icon: favicon.ico
       iconHeight: 18
 
