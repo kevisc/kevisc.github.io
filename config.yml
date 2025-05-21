@@ -51,9 +51,7 @@ params:
           title: Kevin
           subtitle: "test \n
 
-          My research interests is .... \n
-
-          \n Email: kevin [dot] schoenholzer [at] usi [dot] ch [dot]"
+          My research interests is .... \n"
           imageUrl: "headshot.jpg"
           imageWidth: 160
           imageHeight: 160
