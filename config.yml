@@ -1,5 +1,5 @@
 baseURL: "https://kevisc.github.io/" 
-title: Kevin
+title: Kevin Schoenholzer, PhD
 paginate: 20
 theme: PaperMod
 
@@ -23,7 +23,7 @@ menu:
 
 params:
     description: "I am Kevin. My research interest lies in education and socioeconomic stratification using quantitative data analysis."
-    author: Kevin
+    author: Kevin Schoenholzer, PhD
     # googleAnalyticsID: "G-XXXXX"
     DateFormat: "January 2006"
     defaultTheme: light
@@ -48,7 +48,7 @@ params:
     math: true
     profileMode:
           enabled: true
-          title: Kevin
+          title: Kevin Schoenholzer, PhD
           
           subtitle: "I am currently a Postdoctoral Researcher at the Institute of Communication and Public Policy, University of Lugano (Università della Svizzera italiana, USI) Switzerland, in the research group of Prof. Dr. Benedetto Lepori. My current research primarily investigates how characteristics of higher education institutions and systems influence socioeconomic stratification among graduate populations.<br><br>
 
