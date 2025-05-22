@@ -97,7 +97,7 @@ My research examines social stratification through quantitative analysis, modeli
         hiddenInSingle: true
     label:
       text: "Kevin Schoenholzer"
-      icon: favicon_io
+      icon: favicon.ico
       iconHeight: 18
 
 markup:
