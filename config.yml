@@ -22,7 +22,7 @@ menu:
           weight: 2
 
 params:
-    description: "I am Kevin. My research interest lies in education and socioeconomic stratification using quantitative longitudinal data analysis."
+    description: "I am Kevin. My research interest lies in education and socioeconomic stratification using quantitative data analysis."
     author: Kevin
     # googleAnalyticsID: "G-XXXXX"
     DateFormat: "January 2006"
@@ -49,12 +49,22 @@ params:
     profileMode:
           enabled: true
           title: Kevin
-          subtitle: "test \n
-          My research interests is .... \n"
+          subtitle: "I am currently a Postdoctoral Researcher at the Institute of Communication and Public Policy, University of Lugano  (Università della Svizzera italiana, USI) Switzerland, in the research group of Prof. Dr. Benedetto Lepori. My current research primarily investigates how characteristics of higher education institutions and systems influence socioeconomic stratification among graduate populations.
+I received my PhD in Sociology from the University of Zurich in 2025, supervised by Prof. Dr. Kaspar Burger and Prof. Dr. Michael Shanahan. My dissertation, titled: 'Educational Stratification in Comparative Perspective: The Role of Welfare Policies, Normative Beliefs, and Educational Expansion' investigates the intersections between public policy, societal beliefs, and educational structures using large-scale international datasets such as TIMSS, PIRLS, and ISSP. Some of the research has been published here. I am an alumnus of the International Max Planck Research School on the Life Course (LIFE).
+Prior to my doctoral studies, I completed a Master's in Political Science and Economic History at the University of Zurich and a Bachelor's degree in Political Science from the University of Toronto. My Master's thesis addressed the influence of income inequality salience on political participation in Switzerland from 1995–2015.
+
+My research addresses: 
+Quantitative, longitudinal life-course research focused on social stratification. 
+Modeling institutional, individual and regional factors. 
+Comparative analyses exploring how different educational systems and societal ideologies shape diverse life pathways and opportunities across populations. 
+
+Advanced proficiency in statistical modeling and quantitative analysis using R and Stata. 
+Expertise in longitudinal data analysis and comparative international research. 
+My academic endeavors aim to provide evidence-based recommendations for education policy that foster social mobility."
           imageUrl: "headshot.jpg"
           imageWidth: 160
           imageHeight: 160
-          imageTitle: Kevin
+          imageTitle: Kevin Schoenholzer
           buttons:
             - name: Research
               url: papers/
