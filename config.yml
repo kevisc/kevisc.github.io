@@ -1,5 +1,5 @@
 baseURL: "https://kevisc.github.io/" 
-title: Kevin
+title: Kevin Schoenholzer
 paginate: 20
 theme: PaperMod
 
@@ -49,8 +49,8 @@ params:
     profileMode:
           enabled: true
           title: Kevin Schoenholzer, PhD
-          subtitle: "I am currently a Postdoctoral Researcher at the Institute of Communication and Public Policy, University of Lugano (Università della Svizzera italiana, [<u>USI</u>](https://search.usi.ch/en/people/0f2ecf024b739dc36a0f339bea7318e3/schoenholzer-kevin)) Switzerland, in the research group of Prof. Dr. Benedetto Lepori.<br><br>
-My research examines social stratification through quantitative analysis, modeling institutional, individual, and regional influences, and comparing how educational systems shape life trajectories across populations.<br><br>"
+          subtitle: "I am currently a Postdoctoral Researcher at the Institute of Communication and Public Policy, University of Lugano (Università della Svizzera italiana, [<u>USI</u>](https://search.usi.ch/en/people/0f2ecf024b739dc36a0f339bea7318e3/schoenholzer-kevin)) Switzerland, in the research group of Prof. Dr. Benedetto Lepori.<br>
+My research examines social stratification through quantitative analysis, modeling institutional, individual, and regional influences, and comparing how educational systems shape life trajectories across populations.<br>"
           imageUrl: "headshot.jpg"
           imageWidth: 160
           imageHeight: 160
