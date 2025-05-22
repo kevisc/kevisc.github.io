@@ -49,12 +49,12 @@ params:
     profileMode:
           enabled: true
           title: Kevin Schoenholzer, PhD
-          subtitle: "I am currently a [Postdoctoral Researcher] (https://search.usi.ch/en/people/0f2ecf024b739dc36a0f339bea7318e3/schoenholzer-kevin) at the Institute of Communication and Public Policy, University of Lugano (Università della Svizzera italiana, USI) Switzerland, in the research group of Prof. Dr. Benedetto Lepori.<br><br>
+          subtitle: "I am currently a Postdoctoral Researcher at the Institute of Communication and Public Policy, University of Lugano (Università della Svizzera italiana, USI) Switzerland, in the research group of Prof. Dr. Benedetto Lepori.<br><br>
 
   My research addresses: quantitative, longitudinal life-course research focused on social stratification; modeling institutional, individual and regional factors; and comparative analyses exploring how different educational systems and societal ideologies shape diverse life pathways and opportunities across populations.<br><br>
 
-  I have advanced proficiency in statistical modeling and quantitative analysis using R and Stata. I specialize in longitudinal data analysis and comparative international research. <br><br> 
-  My academic endeavors aim to provide evidence-based recommendations for education policy that foster social mobility."
+  I have advanced proficiency in statistical modeling and quantitative analysis using R and Stata. I specialize in longitudinal data analysis and comparative international research. <br>
+  My academic endeavors aim to provide evidence-based recommendations for education policy that foster social mobility.<br> <small> (https://search.usi.ch/en/people/0f2ecf024b739dc36a0f339bea7318e3/schoenholzer-kevin)</small>"
           imageUrl: "headshot.jpg"
           imageWidth: 160
           imageHeight: 160
