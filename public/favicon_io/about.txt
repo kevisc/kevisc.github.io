@@ -1,6 +1,0 @@
-This favicon was generated using the following font:
-
-- Font Title: Hubot Sans
-- Font Author: undefined
-- Font Source: https://fonts.gstatic.com/s/hubotsans/v4/pe0BMIiULYxOvxVLbVwhONyy6zb7yFM9V5G3iZ3X0avsIiCxjLsC57ZdgLDVwVqcXQ.ttf
-- Font License: undefined)
