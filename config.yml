@@ -27,7 +27,7 @@ params:
     # googleAnalyticsID: "G-XXXXX"
     DateFormat: "January 2006"
     defaultTheme: dark
-    hideFooter: false
+    hideFooter: true
     disableThemeToggle: true
     ShowShareButtons: false
     ShowReadingTime: false
@@ -97,7 +97,7 @@ My research examines social stratification through quantitative analysis, modeli
         hiddenInSingle: true
     label:
       text: "Kevin Schoenholzer"
-      icon: favicon_io
+      icon: favicon_io/favicon.ico
       iconHeight: 18
 
 markup:
