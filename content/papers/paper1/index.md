@@ -7,7 +7,7 @@ author: ["Kevin Schoenholzer","Kaspar Burger"]
 description: "Findings provide evidence of the mixed role of welfare state policies for social inequality in student achievement." 
 summary: "Proponents of welfare policy have argued that publicly funded early childhood education and care (ECEC), paid parental leave, and family benefts spending can weaken the infuence of social background on educational outcomes by providing a supplementary source of early investment that particularly benefts disadvantaged families. We analyze whether the welfare state context in which children spend their early childhood (ages 0–5) moderates the association between parental educational attainment and the child’s educational achievement at age 10." 
 cover:
-    image: "image12.jpg"
+    image: "image1.png"
     alt: "figure"
     relative: false
 editPost:
@@ -20,7 +20,7 @@ editPost:
 ##### Download
 
 -   [Paper](bwc1.pdf) <!-- + [Online appendix](appendix1.pdf)
-                                    + [Code and data](https://github.com/pmichaillat/u-star) -->
+                                        + [Code and data](https://github.com/pmichaillat/u-star) -->
 
 ------------------------------------------------------------------------
 
