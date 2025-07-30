@@ -1,31 +1,24 @@
 ---
-title: "Welfare state policy and educational inequality: a cross-national multicohort study" 
-date: 2024-02-01
-#lastmod: 2024-02-01
-tags: ["Welfare","Education","Comparative"]
-author: ["Kevin Schoenholzer","Kaspar Burger"]
-description: "Findings provide evidence of the mixed role of welfare state policies for social inequality in student achievement." 
-summary: "Proponents of welfare policy have argued that publicly funded early childhood education and care (ECEC), paid parental leave, and family benefts spending can weaken the infuence of social background on educational outcomes by providing a supplementary source of early investment that particularly benefts disadvantaged families. We analyze whether the welfare state context in which children spend their early childhood (ages 0–5) moderates the association between parental educational attainment and the child’s educational achievement at age 10." 
+title: "Educational Expansion and Shifts in the Social Origins of Tertiary Graduates—Comparing Cohorts Born 1948–1992 in Six Countries"
+date: 2025-07-07     # adjust if you prefer a different posting date
+#lastmod: 2025-07-07
+tags: ["Higher Education","Educational Expansion","Social Origin","Comparative"]
+author: ["Kevin Schoenholzer","Anna Katyn Chmielewski","Kaspar Burger"]
+description: "Working paper analysing how educational expansion reshaped the social‑origin composition of tertiary graduates in six countries."
+summary: "Using harmonised household‑panel data, we track cohorts born 1948–1992 in South Korea, Australia, the United States, Switzerland, Russia, and Great Britain. We show that shifts in parental‑education distributions, together with changing associations between parental education and children’s attainment, produced marked reconfigurations in who earns tertiary degrees. In most countries the share of graduates from tertiary‑educated families rose sharply, while chances for students from less‑educated origins narrowed more slowly than headline attainment trends suggest. Findings underline the importance of considering compositional change when assessing equity effects of post‑war educational expansion." 
 cover:
     image: ""
     alt: "figure"
     relative: false
 editPost:
-    # URL: "https://github.com/pmichaillat/hugo-website"
-    # Text: "Journal of Oleic Science"
+    # URL: ""
+    # Text: ""
 ---
 
-------------------------------------------------------------------------
+Download
 
-##### Download
+Working paper <!-- add link when available -->
 
--   [Paper](bwc1.pdf) <!-- + [Online appendix](appendix1.pdf)
-                                                        + [Code and data](https://github.com/pmichaillat/u-star) -->
+Abstract
 
-------------------------------------------------------------------------
-
-##### Abstract
-
-Proponents of welfare policy have argued that publicly funded early childhood education and care (ECEC), paid parental leave, and family benefits spending can weaken the influence of social background on educational outcomes by providing a supplementary source of early investment that particularly benefits disadvantaged families. We analyze whether the welfare state context in which children spend their early childhood (ages 0–5) moderates the association between parental educational attainment and the child’s educational achievement at age 10. We combine data from two large-scale international student assessments with data about welfare state policies. Results from multilevel models show that countries with higher public ECEC spending and higher family benefits spending exhibited a weaker association between parental education and student math achievement. Countries with longer parental leave exhibited a stronger association between parental education and student math, science, and reading achievement. Findings provide evidence of the mixed role of welfare state policies for social inequality in student achievement.
-
-------------------------------------------------------------------------
+Educational expansion shifted the distribution of educational attainment across most countries and cohorts over the twentieth century. Using harmonised panel surveys covering six diverse systems, we examine how changes in parental education and in the association between parental and child attainment jointly shaped the social‑origin composition of tertiary graduates.
