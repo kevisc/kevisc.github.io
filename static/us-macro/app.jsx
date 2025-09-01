@@ -6,7 +6,7 @@
 const { useState, useMemo, useEffect } = React;
 const {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend,
-  CartesianGrid, ResponsiveContainer, Brush
+  CartesianGrid, ResponsiveContainer, Brush, AreaChart, Area
 } = Recharts;
 
 // -------------------- Config --------------------
@@ -14,47 +14,55 @@ const ORANGE = "#f97316";
 const NEUTRAL = "#6b7280";
 const GRAY = "#a3a3a3";
 
-// Predefined FRED series (id, label, metadata)
+// Predefined series (FRED IDs). The app expects local JSON caches at ./data/{ID}.json
 const SERIES = [
-  { id: "FEDFUNDS", label: "Fed Funds Rate (EFFR)", units: "%", freq: "D|M", category: "Rates", isPriceUSD: false },
-  { id: "UNRATE", label: "Unemployment rate (U-3)", units: "%", freq: "M", category: "Labor", isPriceUSD: false },
-  { id: "CPIAUCSL", label: "CPI-U (All items, SA, Index 1982-84=100)", units: "index", freq: "M", category: "Prices", isPriceUSD: false },
+  { id: "FEDFUNDS", label: "Fed Funds Rate (EFFR)", units: "%", freq: "D|M", category: "Rates" },
+  { id: "DGS10", label: "10Y Treasury Yield", units: "%", freq: "D|M", category: "Rates" },
+  { id: "MORTGAGE30US", label: "30Y Mortgage Rate (avg)", units: "%", freq: "W|M", category: "Rates" },
+
+  { id: "UNRATE", label: "Unemployment rate (U-3)", units: "%", freq: "M", category: "Labor" },
+  { id: "PAYEMS", label: "Nonfarm payrolls (thousands)", units: "k", freq: "M", category: "Labor" },
+
+  { id: "CPIAUCSL", label: "CPI-U (SA, 1982-84=100)", units: "index", freq: "M", category: "Prices" },
+  { id: "PCEPI", label: "PCE price index (2012=100)", units: "index", freq: "M", category: "Prices" },
+
   { id: "M2SL", label: "M2 money stock (SA, $ billions)", units: "USDbn", freq: "M", category: "Money & Credit", isPriceUSD: true },
-  { id: "GFDEBTN", label: "Federal debt: total public ($ millions, NSA, quarterly)", units: "USDmn", freq: "Q", category: "Fiscal", isPriceUSD: true },
-  { id: "CSUSHPINSA", label: "Case-Shiller US National HPI (NSA, Jan2000=100)", units: "index", freq: "M", category: "Housing", isPriceUSD: false },
-  { id: "POPTOTUSA647NWDB", label: "Population, total (World Bank)", units: "people", freq: "A", category: "Population", isPriceUSD: false },
-  // Denominators for unit conversions:
-  { id: "GOLDAMGBD228NLBM", label: "Gold price (London AM USD/oz, daily)", units: "USD/oz", freq: "D", category: "Denominators", isPriceUSD: false, isDenominator: "gold" },
-  { id: "CBBTCUSD", label: "Bitcoin price (USD, Coinbase, daily)", units: "USD/BTC", freq: "D", category: "Denominators", isPriceUSD: false, isDenominator: "btc" },
+
+  { id: "GFDEBTN", label: "Federal debt: total public ($ millions, NSA, Q)", units: "USDmn", freq: "Q", category: "Fiscal", isPriceUSD: true },
+  { id: "GDP", label: "Nominal GDP (SAAR, $ billions, Q)", units: "USDbn", freq: "Q", category: "Output", isPriceUSD: true },
+  { id: "GDPC1", label: "Real GDP (chained 2017 $, SAAR, Q)", units: "USDbn 2017$", freq: "Q", category: "Output" },
+
+  { id: "CSUSHPINSA", label: "Case-Shiller US National HPI (NSA, Jan2000=100)", units: "index", freq: "M", category: "Housing" },
+  { id: "INDPRO", label: "Industrial Production Index (2017=100)", units: "index", freq: "M", category: "Production" },
+  { id: "SP500", label: "S&P 500 index (daily)", units: "index", freq: "D|M", category: "Markets" },
+
+  // Denominators for unit conversions; must exist in ./data as well
+  { id: "GOLDAMGBD228NLBM", label: "Gold price (London AM USD/oz, daily)", units: "USD/oz", freq: "D", category: "Denominators", isDenominator: "gold" },
+  { id: "CBBTCUSD", label: "Bitcoin price (USD, Coinbase, daily)", units: "USD/BTC", freq: "D", category: "Denominators", isDenominator: "btc" },
 ];
 
-// Sensible defaults (you can change in UI)
+// Sensible defaults
 const DEFAULTS = {
-  fredApiKey: "",
   start: "1990-01-01",
   end: new Date().toISOString().slice(0,10),
   series1: "FEDFUNDS",
   series2: "UNRATE",
   transform1: "level",  // level | yoy | index
   transform2: "level",
-  deflateByCPI: false,  // applies to price-like series in USD (where meaningful)
+  deflateByCPI: false,
   unitMode: "usd",      // usd | gold | btc
   smoothMonths: 0,      // 0 (none), 3, 6, 12
+  dualAxis: true,
+  logScale: false,
+  corrWindow: 0,        // months; 0 disables
+  showRatioAB: false,
 };
 
 // -------------------- Utilities --------------------
 const parseNumber = (x) => (x === "." || x === "" || x == null ? null : Number(x));
 function dstr(date) { return date instanceof Date ? date.toISOString().slice(0,10) : String(date).slice(0,10); }
 
-function endOfMonthStr(iso) {
-  const d = new Date(iso + "T00:00:00Z");
-  const nd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
-  return dstr(nd);
-}
-
 function toMonthly(series) {
-  // series: [{date:"YYYY-MM-DD", value:Number|null}] daily|monthly|quarterly|annual -> monthly by avg for period
-  // We'll aggregate by YYYY-MM.
   const buckets = new Map();
   for (const row of series) {
     const [y,m] = row.date.split("-");
@@ -72,7 +80,6 @@ function toMonthly(series) {
 }
 
 function toQuarterly(series) {
-  // Aggregate monthly into quarterly average
   const buckets = new Map();
   for (const row of series) {
     const d = new Date(row.date + "T00:00:00Z");
@@ -85,7 +92,7 @@ function toQuarterly(series) {
   for (const [key, arr] of buckets) {
     const [yqY, qstr] = key.split("-Q");
     const q = Number(qstr)-1;
-    const endMonth = q*3 + 2; // quarter end month index
+    const endMonth = q*3 + 2;
     const endDate = new Date(Date.UTC(Number(yqY), endMonth+1, 0));
     if (arr.length) out.push({ date: dstr(endDate), value: arr.reduce((a,b)=>a+b,0)/arr.length });
     else out.push({ date: dstr(endDate), value: null });
@@ -95,16 +102,15 @@ function toQuarterly(series) {
 }
 
 function yoy(series) {
-  const idx = new Map(series.map((r,i)=>[r.date,i]));
-  const out = series.map((r)=>({date:r.date, value:null}));
+  const m = new Map(series.map(r=>[r.date,r.value]));
+  const out = series.map(r=>({date:r.date,value:null}));
   for (let i=0;i<series.length;i++) {
     const d = new Date(series[i].date + "T00:00:00Z");
     const prev = new Date(Date.UTC(d.getUTCFullYear()-1, d.getUTCMonth(), 1));
     const prevKey = dstr(prev);
-    const j = idx.get(prevKey);
-    if (j!=null && series[i].value!=null && series[j].value!=null && series[j].value!==0) {
-      out[i] = { date: series[i].date, value: (series[i].value/series[j].value - 1)*100 };
-    }
+    const vPrev = m.get(prevKey);
+    const vNow = series[i].value;
+    if (vPrev!=null && vPrev!==0 && vNow!=null) out[i].value = (vNow/vPrev - 1)*100;
   }
   return out;
 }
@@ -135,41 +141,28 @@ function movingAverage(series, windowMonths) {
 }
 
 function alignAndMerge(a, b, denomGold, denomBTC, options) {
-  // Align by date (monthly), apply deflation/units
-  const {
-    cpiSeries, deflateByCPI, unitMode, metaA, metaB
-  } = options;
-
-  // Index by date
+  const { cpiSeries, deflateByCPI, unitMode, metaA, metaB } = options;
   const mapA = new Map(a.map(r=>[r.date, r.value]));
   const mapB = new Map(b.map(r=>[r.date, r.value]));
   const mapCPI = new Map((cpiSeries||[]).map(r=>[r.date, r.value]));
   const mapGold = new Map((denomGold||[]).map(r=>[r.date, r.value]));
-  const mapBTC = new Map((denomBTC||[]).map(r=>[r.date, r.value]));
-
+  const mapBTC  = new Map((denomBTC||[]).map(r=>[r.date, r.value]));
   const allDates = Array.from(new Set([...a.map(r=>r.date), ...b.map(r=>r.date)])).sort();
 
   function convert(val, date, meta){
     if (val==null) return null;
     let x = val;
-
-    // Deflate by CPI if requested and series is a price-like thing (USD)
-    if (deflateByCPI && meta && (meta.isPriceUSD || meta.id==="CSUSHPINSA")) {
-      const cpi = mapCPI.get(date);
-      if (cpi!=null && cpi!==0) {
-        // real terms as ratio to CPI, normalized to 100 at 1990-01 if desired later
-        x = x / cpi;
-      }
+    if (deflateByCPI && meta && (meta.isPriceUSD || meta.id==="CSUSHPINSA" || meta.id==="SP500" || meta.id==="GDP")) {
+      const c = mapCPI.get(date);
+      if (c!=null && c!==0) x = x / c;
     }
-
-    // Unit mode conversion: usd -> gold oz or btc
     if (unitMode==="gold") {
       const g = mapGold.get(date);
       if (g!=null && g!==0) x = x / g;
       else x = null;
     } else if (unitMode==="btc") {
-      const b = mapBTC.get(date);
-      if (b!=null && b!==0) x = x / b;
+      const p = mapBTC.get(date);
+      if (p!=null && p!==0) x = x / p;
       else x = null;
     }
     return x;
@@ -183,98 +176,69 @@ function alignAndMerge(a, b, denomGold, denomBTC, options) {
   return merged;
 }
 
-// -------------------- Data access --------------------
-async function fetchFredSeries({ apiKey, id, start, end }) {
-  const url = new URL("https://api.stlouisfed.org/fred/series/observations");
-  url.searchParams.set("series_id", id);
-  url.searchParams.set("file_type", "json");
-  url.searchParams.set("observation_start", start);
-  url.searchParams.set("observation_end", end);
-  url.searchParams.set("sort_order", "asc");
-  // Let FRED aggregate when possible:
-  // (We'll still align to monthly client-side.)
-  if (apiKey) url.searchParams.set("api_key", apiKey);
-
-  const res = await fetch(url.toString(), { mode: "cors" });
-  if (!res.ok) throw new Error("FRED fetch failed: " + res.status);
-  const j = await res.json();
-  if (!j || !j.observations) throw new Error("FRED malformed response");
-  return j.observations.map(o => ({ date: o.date.slice(0,10), value: parseNumber(o.value) }));
+function rollingCorrelation(merged, windowMonths) {
+  if (!windowMonths) return [];
+  const valsA = merged.map(r=>r.A);
+  const valsB = merged.map(r=>r.B);
+  const out = merged.map((r)=>({date:r.date, value:null}));
+  for (let i=0;i<merged.length;i++) {
+    const j = i - windowMonths + 1;
+    if (j<0) continue;
+    const a = valsA.slice(j, i+1).filter(v=>v!=null);
+    const b = valsB.slice(j, i+1).filter(v=>v!=null);
+    const n = Math.min(a.length, b.length);
+    if (n < windowMonths*0.7) continue; // require 70% non-null
+    const aa = a.slice(0, n), bb = b.slice(0, n);
+    const meanA = aa.reduce((x,y)=>x+y,0)/n;
+    const meanB = bb.reduce((x,y)=>x+y,0)/n;
+    const cov = aa.reduce((s, v, k)=>s + (v-meanA)*(bb[k]-meanB), 0) / n;
+    const sdA = Math.sqrt(aa.reduce((s, v)=>s + (v-meanA)**2, 0)/n);
+    const sdB = Math.sqrt(bb.reduce((s, v)=>s + (v-meanB)**2, 0)/n);
+    out[i].value = (sdA>0 && sdB>0) ? (cov/(sdA*sdB)) : null;
+  }
+  return out;
 }
 
-function loadCache(id) {
-  try { return JSON.parse(localStorage.getItem("usm:cache:" + id) || "null"); } catch { return null; }
-}
-function saveCache(id, data) {
-  try { localStorage.setItem("usm:cache:" + id, JSON.stringify({ t: Date.now(), data })); } catch {}
+// -------------------- Data access (Local JSON cache) --------------------
+async function fetchLocalSeries(id) {
+  try {
+    const res = await fetch("./data/" + id + ".json", { cache: "no-cache" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    if (!Array.isArray(arr)) throw new Error("Malformed JSON for " + id);
+    // Expect [{date:"YYYY-MM-DD", value:Number|null}, ...]
+    return arr;
+  } catch (e) {
+    console.warn("Local cache missing for", id, e);
+    return SAMPLE[id] || [];
+  }
 }
 
-// Fallback tiny sample to avoid blank UI without a key (few monthly points)
+// Fallback tiny samples (to keep UI functional without data files)
 const SAMPLE = {
-  FEDFUNDS: [
-    {date:"2023-01-01", value: 4.33},
-    {date:"2023-07-01", value: 5.12},
-    {date:"2024-01-01", value: 5.33},
-    {date:"2024-07-01", value: 5.33},
-    {date:"2025-01-01", value: 5.38},
-  ],
-  UNRATE: [
-    {date:"2023-01-01", value: 3.4},
-    {date:"2023-07-01", value: 3.5},
-    {date:"2024-01-01", value: 3.7},
-    {date:"2024-07-01", value: 4.1},
-    {date:"2025-01-01", value: 4.3},
-  ],
-  CPIAUCSL: [
-    {date:"2023-01-01", value: 300},
-    {date:"2023-07-01", value: 307},
-    {date:"2024-01-01", value: 309},
-    {date:"2024-07-01", value: 315},
-    {date:"2025-01-01", value: 318},
-  ],
-  GOLDAMGBD228NLBM: [
-    {date:"2023-01-01", value: 1900},
-    {date:"2023-07-01", value: 1960},
-    {date:"2024-01-01", value: 2050},
-    {date:"2024-07-01", value: 2350},
-    {date:"2025-01-01", value: 2600},
-  ],
-  CBBTCUSD: [
-    {date:"2023-01-01", value: 20000},
-    {date:"2023-07-01", value: 30000},
-    {date:"2024-01-01", value: 42000},
-    {date:"2024-07-01", value: 65000},
-    {date:"2025-01-01", value: 95000},
-  ],
+  FEDFUNDS: [{date:"2023-01-01",value:4.33},{date:"2024-01-01",value:5.33},{date:"2025-01-01",value:5.38}],
+  DGS10:    [{date:"2023-01-01",value:3.6},{date:"2024-01-01",value:4.1},{date:"2025-01-01",value:3.9}],
+  MORTGAGE30US:[{date:"2023-01-01",value:6.3},{date:"2024-01-01",value:6.6},{date:"2025-01-01",value:6.0}],
+
+  UNRATE:   [{date:"2023-01-01",value:3.4},{date:"2024-01-01",value:3.7},{date:"2025-01-01",value:4.2}],
+  PAYEMS:   [{date:"2023-01-01",value:155000},{date:"2024-01-01",value:157000},{date:"2025-01-01",value:158000}],
+
+  CPIAUCSL: [{date:"2023-01-01",value:300},{date:"2024-01-01",value:309},{date:"2025-01-01",value:318}],
+  PCEPI:    [{date:"2023-01-01",value:116},{date:"2024-01-01",value:118},{date:"2025-01-01",value:121}],
+
+  M2SL:     [{date:"2023-01-01",value:21000},{date:"2024-01-01",value:20650},{date:"2025-01-01",value:20500}],
+
+  GFDEBTN:  [{date:"2023-03-31",value:31800000},{date:"2024-03-31",value:34000000},{date:"2025-03-31",value:35500000}],
+  GDP:      [{date:"2023-03-31",value:26500},{date:"2024-03-31",value:28100},{date:"2025-03-31",value:29000}],
+  GDPC1:    [{date:"2023-03-31",value:19800},{date:"2024-03-31",value:20400},{date:"2025-03-31",value:20800}],
+
+  CSUSHPINSA:[{date:"2023-01-01",value:300},{date:"2024-01-01",value:325},{date:"2025-01-01",value:340}],
+  INDPRO:    [{date:"2023-01-01",value:105},{date:"2024-01-01",value:103},{date:"2025-01-01",value:104}],
+  SP500:     [{date:"2023-01-01",value:3900},{date:"2024-01-01",value:4800},{date:"2025-01-01",value:5600}],
+
+  GOLDAMGBD228NLBM:[{date:"2023-01-01",value:1900},{date:"2024-01-01",value:2050},{date:"2025-01-01",value:2600}],
+  CBBTCUSD:        [{date:"2023-01-01",value:20000},{date:"2024-01-01",value:42000},{date:"2025-01-01",value:95000}],
 };
-
-async function getSeries(id, start, end, apiKey) {
-  const cached = loadCache(id);
-  if (cached && cached.data && cached.data.length) {
-    // Use cache but attempt background refresh (non-blocking)
-    refreshSeries(id, start, end, apiKey);
-    return cached.data;
-  }
-  try {
-    const data = await fetchFredSeries({ apiKey, id, start, end });
-    saveCache(id, data);
-    return data;
-  } catch (e) {
-    console.warn("FRED fetch failed for", id, e);
-    // Fallback to SAMPLE glance so UI isn't blank
-    if (SAMPLE[id]) return SAMPLE[id];
-    return [];
-  }
-}
-
-async function refreshSeries(id, start, end, apiKey) {
-  try {
-    const data = await fetchFredSeries({ apiKey, id, start, end });
-    saveCache(id, data);
-  } catch (e) {
-    // ignore refresh errors
-  }
-}
 
 // -------------------- Components --------------------
 function Field({ label, children, hint }) {
@@ -311,10 +275,10 @@ function TextInput({ value, onChange, placeholder }) {
   );
 }
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, disabled }) {
   return (
-    <button onClick={()=>onChange(!checked)}
-      className={"w-full text-left px-3 py-2 rounded-xl border " + (checked ? "border-orange-600 bg-orange-50 dark:bg-orange-950" : "border-neutral-300 dark:border-neutral-700")}>
+    <button onClick={()=>!disabled && onChange(!checked)}
+      className={"w-full text-left px-3 py-2 rounded-xl border " + (checked ? "border-orange-600 bg-orange-50 dark:bg-orange-950" : "border-neutral-300 dark:border-neutral-700") + (disabled ? " opacity-50 cursor-not-allowed" : "")}>
       {label}: <b>{checked ? "On" : "Off"}</b>
     </button>
   );
@@ -332,19 +296,19 @@ function Card({ title, right, children }) {
   );
 }
 
-function BtcLogo({ size=18 }) {
+function MacroLogo({ size=18 }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none">
-      <circle cx="12" cy="12" r="11" fill="#f97316" />
-      <path d="M10 7h3.2a2.3 2.3 0 1 1 0 4.6H10m2.7 0A2.3 2.3 0 1 1 12.7 16H10" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 5.5v13M13.5 5.5v13" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden="true">
+      <rect x="3" y="10" width="3" height="10" rx="1" fill={NEUTRAL} />
+      <rect x="9" y="6" width="3" height="14" rx="1" fill={NEUTRAL} />
+      <rect x="15" y="3" width="3" height="17" rx="1" fill={ORANGE} />
+      <path d="M3 4l6 4 6-3 6 5" stroke={ORANGE} strokeWidth="1.8" fill="none" />
     </svg>
   );
 }
 
 // -------------------- Main App --------------------
 function App() {
-  const [fredApiKey, setFredApiKey] = useState(localStorage.getItem("usm:fredKey") || DEFAULTS.fredApiKey);
   const [start, setStart] = useState(localStorage.getItem("usm:start") || DEFAULTS.start);
   const [end, setEnd] = useState(localStorage.getItem("usm:end") || DEFAULTS.end);
 
@@ -355,8 +319,11 @@ function App() {
   const [deflateByCPI, setDeflateByCPI] = useState(localStorage.getItem("usm:deflate")==="1" || DEFAULTS.deflateByCPI);
   const [unitMode, setUnitMode] = useState(localStorage.getItem("usm:unit") || DEFAULTS.unitMode);
   const [smoothMonths, setSmoothMonths] = useState(Number(localStorage.getItem("usm:smooth") || DEFAULTS.smoothMonths));
+  const [dualAxis, setDualAxis] = useState((localStorage.getItem("usm:dual") ?? "1") === "1");
+  const [logScale, setLogScale] = useState(localStorage.getItem("usm:log")==="1" || DEFAULTS.logScale);
+  const [corrWindow, setCorrWindow] = useState(Number(localStorage.getItem("usm:corr") || DEFAULTS.corrWindow));
+  const [showRatioAB, setShowRatioAB] = useState(localStorage.getItem("usm:ratio")==="1" || DEFAULTS.showRatioAB);
 
-  useEffect(()=>localStorage.setItem("usm:fredKey", fredApiKey), [fredApiKey]);
   useEffect(()=>localStorage.setItem("usm:start", start), [start]);
   useEffect(()=>localStorage.setItem("usm:end", end), [end]);
   useEffect(()=>localStorage.setItem("usm:s1", series1), [series1]);
@@ -366,8 +333,11 @@ function App() {
   useEffect(()=>localStorage.setItem("usm:deflate", deflateByCPI ? "1":"0"), [deflateByCPI]);
   useEffect(()=>localStorage.setItem("usm:unit", unitMode), [unitMode]);
   useEffect(()=>localStorage.setItem("usm:smooth", String(smoothMonths)), [smoothMonths]);
+  useEffect(()=>localStorage.setItem("usm:dual", dualAxis ? "1":"0"), [dualAxis]);
+  useEffect(()=>localStorage.setItem("usm:log", logScale ? "1":"0"), [logScale]);
+  useEffect(()=>localStorage.setItem("usm:corr", String(corrWindow)), [corrWindow]);
+  useEffect(()=>localStorage.setItem("usm:ratio", showRatioAB ? "1":"0"), [showRatioAB]);
 
-  // Fetch needed series
   const meta1 = SERIES.find(s=>s.id===series1);
   const meta2 = SERIES.find(s=>s.id===series2);
   const cpiMeta = SERIES.find(s=>s.id==="CPIAUCSL");
@@ -384,29 +354,27 @@ function App() {
     setLoading(true); setError("");
     try {
       const [s1, s2, cpi, gold, btc] = await Promise.all([
-        getSeries(meta1.id, start, end, fredApiKey),
-        getSeries(meta2.id, start, end, fredApiKey),
-        getSeries("CPIAUCSL", start, end, fredApiKey),
-        getSeries("GOLDAMGBD228NLBM", start, end, fredApiKey),
-        getSeries("CBBTCUSD", start, end, fredApiKey),
+        fetchLocalSeries(meta1.id),
+        fetchLocalSeries(meta2.id),
+        fetchLocalSeries("CPIAUCSL"),
+        fetchLocalSeries("GOLDAMGBD228NLBM"),
+        fetchLocalSeries("CBBTCUSD"),
       ]);
 
+      // Restrict to date window early
+      const inRange = (d) => (!start || d.date>=start) && (!end || d.date<=end);
+
       // Harmonize to monthly
-      const m1 = toMonthly(s1);
-      const m2 = toMonthly(s2);
-      const mc = toMonthly(cpi);
-      const mg = toMonthly(gold);
-      const mb = toMonthly(btc);
+      const m1 = toMonthly(s1.filter(inRange));
+      const m2 = toMonthly(s2.filter(inRange));
+      const mc = toMonthly(cpi.filter(inRange));
+      const mg = toMonthly(gold.filter(inRange));
+      const mb = toMonthly(btc.filter(inRange));
 
-      // Some quarterly/annual need special handling
-      if (meta1.freq==="Q") setData1(toQuarterly(m1));
-      else setData1(m1);
-      if (meta2.freq==="Q") setData2(toQuarterly(m2));
-      else setData2(m2);
-
-      setCpiData(mc);
-      setGoldData(mg);
-      setBtcData(mb);
+      // Quarterly handling
+      setData1(meta1.freq==="Q" ? toQuarterly(m1) : m1);
+      setData2(meta2.freq==="Q" ? toQuarterly(m2) : m2);
+      setCpiData(mc); setGoldData(mg); setBtcData(mb);
     } catch (e) {
       console.error(e);
       setError(String(e.message || e));
@@ -414,8 +382,7 @@ function App() {
       setLoading(false);
     }
   }
-
-  useEffect(()=>{ loadAll(); }, [series1, series2, start, end, fredApiKey]);
+  useEffect(()=>{ loadAll(); }, [series1, series2, start, end]);
 
   // Transforms
   const tData1 = useMemo(()=>{
@@ -439,10 +406,23 @@ function App() {
     { cpiSeries: cpiData, deflateByCPI, unitMode, metaA: meta1, metaB: meta2 }
   ), [tData1, tData2, goldData, btcData, cpiData, deflateByCPI, unitMode, meta1, meta2]);
 
+  // Ratio A/B
+  const ratioAB = useMemo(()=> {
+    return merged.map(r => ({ date: r.date, value: (r.A!=null && r.B!=null && r.B!==0) ? (r.A / r.B) : null }));
+  }, [merged]);
+
+  // Rolling correlation
+  const corr = useMemo(()=> rollingCorrelation(merged, corrWindow), [merged, corrWindow]);
+
   function exportCSV() {
     const lines = [];
-    lines.push(["date", meta1.label, meta2.label].join(","));
-    for (const r of merged) lines.push([r.date, r.A ?? "", r.B ?? ""].join(","));
+    lines.push(["date", meta1.label, meta2.label, showRatioAB ? "A/B" : undefined].filter(Boolean).join(","));
+    for (let i=0;i<merged.length;i++) {
+      const r = merged[i];
+      const row = [r.date, r.A ?? "", r.B ?? ""];
+      if (showRatioAB) row.push(ratioAB[i].value ?? "");
+      lines.push(row.join(","));
+    }
     const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href=url; a.download="us_macro.csv"; a.click();
@@ -450,7 +430,8 @@ function App() {
   }
 
   const unitLabel = unitMode==="usd" ? "USD" : unitMode==="gold" ? "oz of gold" : "BTC";
-  const leftY = (transform1==="yoy" || transform2==="yoy") ? "%" : (unitMode==="usd" ? "" : unitLabel);
+  const anyYoY = (transform1==="yoy" || transform2==="yoy");
+  const canLog = !anyYoY && merged.every(r => (r.A==null || r.A>0) && (r.B==null || r.B>0));
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-neutral-50 to-neutral-100 dark:from-black dark:to-neutral-900">
@@ -458,23 +439,22 @@ function App() {
         <header className="mb-6">
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-3">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-500 text-white"><BtcLogo size={18}/></span>
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-500 text-white"><MacroLogo size={18}/></span>
               US Macro Visualizer
             </h1>
             <div className="flex gap-2">
-              <button onClick={loadAll} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Refresh</button>
+              <button onClick={loadAll} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Reload</button>
               <button onClick={exportCSV} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Export CSV</button>
             </div>
           </div>
-          <p className="text-sm text-neutral-600 dark:text-neutral-300 mt-1">Compare two U.S. macro time series. Fetches data from FRED (enter your API key below). You can deflate by CPI and denominate in gold or bitcoin.</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300 mt-1">
+            Compare two U.S. macro time series. Data are read from local JSON caches (./data/ID.json), aligned to monthly averages, with optional CPI deflation and denomination in gold or bitcoin.
+          </p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <Card title="A. Series selection">
             <div className="grid gap-3">
-              <Field label="FRED API key" hint="Get a free key at fred.stlouisfed.org; stored locally.">
-                <TextInput value={fredApiKey} onChange={setFredApiKey} placeholder="FRED API key (optional for live data)"/>
-              </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Series 1">
                   <Select value={series1} onChange={setSeries1}>
@@ -532,59 +512,123 @@ function App() {
                 <Field label="Deflation">
                   <Toggle checked={deflateByCPI} onChange={setDeflateByCPI} label="Deflate by CPI (real)" />
                 </Field>
+                <Field label="Dual axis">
+                  <Toggle checked={dualAxis} onChange={setDualAxis} label="Separate Y scales" />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Log scale (Y)">
+                  <Toggle checked={logScale} onChange={setLogScale} label="Logarithmic Y" disabled={!canLog} />
+                </Field>
+                <Field label="A/B ratio panel">
+                  <Toggle checked={showRatioAB} onChange={setShowRatioAB} label="Show A ÷ B" />
+                </Field>
+                <Field label="Rolling correlation">
+                  <Select value={String(corrWindow)} onChange={(v)=>setCorrWindow(Number(v))}>
+                    <option value="0">Off</option>
+                    <option value="6">6 months</option>
+                    <option value="12">12 months</option>
+                    <option value="24">24 months</option>
+                    <option value="60">60 months</option>
+                  </Select>
+                </Field>
               </div>
 
               {loading && <div className="text-sm text-neutral-500">Loading…</div>}
               {error && <div className="text-sm text-rose-600">Error: {error}</div>}
 
               <div className="text-xs text-neutral-500">
-                Notes: Gold series is London AM fix (GOLDAMGBD228NLBM). Bitcoin price is CBBTCUSD (Coinbase). CPI is CPIAUCSL. House index is CSUSHPINSA. Debt is GFDEBTN (quarterly). Population is POPTOTUSA647NWDB (annual). The app averages to monthly and aligns by month.
+                This app reads static JSON files placed in <code>static/us-macro/data/</code>. See instructions below to prefetch and cache FRED series.
               </div>
             </div>
           </Card>
 
           <div className="lg:col-span-2">
-            <Card title="Chart" right={<span className="text-xs text-neutral-500">{unitMode !== "usd" ? "Unit: "+unitLabel : (transform1==="yoy" || transform2==="yoy" ? "% change" : "Level")}</span>}>
+            <Card title="Chart" right={<span className="text-xs text-neutral-500">{(transform1==="yoy" || transform2==="yoy") ? "% change" : (unitMode==="usd" ? "Level (USD or native units)" : ("Unit: " + (unitMode==="gold"?"oz of gold":"BTC")))}</span>}>
               <div className="w-full h-[460px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={merged} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" tickFormatter={(v)=>v.slice(0,7)} minTickGap={24}/>
-                    <YAxis yAxisId="left" tickFormatter={(v)=>{
-                      if (transform1==="yoy" || transform2==="yoy") return v.toFixed(1)+"%";
-                      if (unitMode==="usd") return v>=1e12?("$"+(v/1e12).toFixed(1)+"T"): v>=1e9?("$"+(v/1e9).toFixed(1)+"B") : v>=1e6?("$"+(v/1e6).toFixed(1)+"M") : v>=1e3?("$"+(v/1e3).toFixed(0)+"k") : "$"+v.toFixed(0);
+                    <YAxis yAxisId="left" scale={(logScale && canLog) ? "log" : "auto"} domain={["auto","auto"]} tickFormatter={(v)=>{
+                      if (transform1==="yoy" || transform2==="yoy") return (v==null?"":v.toFixed(1)+"%");
+                      if (unitMode==="usd") return v>=1e12?("$"+(v/1e12).toFixed(1)+"T"): v>=1e9?("$"+(v/1e9).toFixed(1)+"B") : v>=1e6?("$"+(v/1e6).toFixed(1)+"M") : v>=1e3?("$"+(v/1e3).toFixed(0)+"k") : "$"+(Math.round(v));
                       if (unitMode==="gold") return v.toFixed(4)+" oz";
                       if (unitMode==="btc") return v.toFixed(6)+" ₿";
-                      return v.toFixed(2);
+                      return v?.toFixed ? v.toFixed(2) : v;
                     }}/>
+                    {dualAxis && <YAxis yAxisId="right" orientation="right" scale={(logScale && canLog) ? "log" : "auto"} domain={["auto","auto"]} tickFormatter={(v)=>{
+                      if (transform1==="yoy" || transform2==="yoy") return (v==null?"":v.toFixed(1)+"%");
+                      if (unitMode==="usd") return v>=1e12?("$"+(v/1e12).toFixed(1)+"T"): v>=1e9?("$"+(v/1e9).toFixed(1)+"B") : v>=1e6?("$"+(v/1e6).toFixed(1)+"M") : v>=1e3?("$"+(v/1e3).toFixed(0)+"k") : "$"+(Math.round(v));
+                      if (unitMode==="gold") return v.toFixed(4)+" oz";
+                      if (unitMode==="btc") return v.toFixed(6)+" ₿";
+                      return v?.toFixed ? v.toFixed(2) : v;
+                    }}/>
+                    }
                     <Tooltip formatter={(val, name)=>{
                       if (val==null) return ["", name];
-                      if (transform1==="yoy" || transform2==="yoy") return [val.toFixed(2)+"%", name];
+                      if (transform1==="yoy" || transform2==="yoy") return [Number(val).toFixed(2)+"%", name];
                       if (unitMode==="usd") return ["$"+Number(val).toLocaleString(undefined,{maximumFractionDigits:2}), name];
                       if (unitMode==="gold") return [Number(val).toFixed(6)+" oz", name];
                       if (unitMode==="btc") return [Number(val).toFixed(8)+" BTC", name];
                       return [String(val), name];
                     }} labelFormatter={(l)=>"Month "+l.slice(0,7)} />
                     <Legend />
-                    <Line yAxisId="left" type="monotone" dataKey="A" name={meta1.label} stroke={ORANGE} dot={false} strokeWidth={2} />
-                    <Line yAxisId="left" type="monotone" dataKey="B" name={meta2.label} stroke={NEUTRAL} dot={false} strokeWidth={2} />
+                    <Line yAxisId="left"  type="monotone" dataKey="A" name={meta1.label} stroke={ORANGE} dot={false} strokeWidth={2} />
+                    <Line yAxisId={dualAxis ? "right" : "left"} type="monotone" dataKey="B" name={meta2.label} stroke={NEUTRAL} dot={false} strokeWidth={2} />
                     <Brush dataKey="date" height={24} stroke={ORANGE}/>
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </Card>
 
+            {showRatioAB && (
+              <Card title="A ÷ B (ratio)">
+                <div className="w-full h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={ratioAB} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickFormatter={(v)=>v.slice(0,7)} minTickGap={24}/>
+                      <YAxis domain={["auto","auto"]}/>
+                      <Tooltip formatter={(v)=>[Number(v).toFixed(4),"A/B"]} labelFormatter={(l)=>l.slice(0,7)} />
+                      <Area type="monotone" dataKey="value" strokeWidth={2} stroke={ORANGE} fill="rgba(249,115,22,0.2)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
+
+            {corrWindow>0 && (
+              <Card title={`Rolling correlation (window: ${corrWindow} months)`}>
+                <div className="w-full h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={corr} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickFormatter={(v)=>v.slice(0,7)} minTickGap={24}/>
+                      <YAxis domain={[-1,1]} />
+                      <Tooltip formatter={(v)=>[Number(v).toFixed(2),"corr(A,B)"]} labelFormatter={(l)=>l.slice(0,7)} />
+                      <Line type="monotone" dataKey="value" strokeWidth={2} stroke={GRAY} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
               <Card title="Quick combos">
                 <div className="grid gap-2 text-sm">
-                  <button onClick={()=>{setSeries1("CSUSHPINSA"); setSeries2("CPIAUCSL"); setDeflateByCPI(true); setTransform1("index"); setTransform2("index"); setUnitMode("usd");}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                  <button onClick={()=>{setSeries1("CSUSHPINSA"); setSeries2("CPIAUCSL"); setDeflateByCPI(true); setTransform1("index"); setTransform2("index"); setUnitMode("usd"); setShowRatioAB(false);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
                     Real house prices (Case-Shiller deflated by CPI)
                   </button>
-                  <button onClick={()=>{setSeries1("GFDEBTN"); setSeries2("M2SL"); setTransform1("index"); setTransform2("index"); setUnitMode("usd");}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                    Federal debt vs M2 (indexed)
+                  <button onClick={()=>{setSeries1("GFDEBTN"); setSeries2("GDP"); setTransform1("index"); setTransform2("index"); setUnitMode("usd"); setShowRatioAB(true);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                    Federal debt vs GDP (indexed + ratio)
                   </button>
-                  <button onClick={()=>{setSeries1("FEDFUNDS"); setSeries2("UNRATE"); setTransform1("level"); setTransform2("level"); setUnitMode("usd");}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                  <button onClick={()=>{setSeries1("FEDFUNDS"); setSeries2("UNRATE"); setTransform1("level"); setTransform2("level"); setUnitMode("usd"); setShowRatioAB(false);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
                     Policy rate vs unemployment
+                  </button>
+                  <button onClick={()=>{setSeries1("SP500"); setSeries2("CPIAUCSL"); setTransform1("index"); setTransform2("index"); setUnitMode("usd"); setDeflateByCPI(true);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                    S&P 500 (real, indexed)
                   </button>
                 </div>
               </Card>
@@ -602,11 +646,19 @@ function App() {
 
               <Card title="About & attribution">
                 <div className="text-sm space-y-2">
-                  <p>Data source: FRED® (Federal Reserve Bank of St. Louis). Use your own FRED API key for live data; small offline samples are included to demonstrate the UI if no key is provided.</p>
-                  <p>Created by <b>Kevin Schoenholzer</b> with the help of <b>ChatGPT</b>, 2025.</p>
+                  <p><b>Created by Kevin Schoenholzer</b> with the help of <b>ChatGPT</b>, 2025. <i>Educational purposes only.</i></p>
+                  <p>How data loads: This app reads static JSON files placed under <code>static/us-macro/data/</code> (one file per series, e.g., <code>FEDFUNDS.json</code>). It averages higher-frequency series to monthly for alignment. If a series file is missing, a tiny sample is used so the UI remains functional.</p>
                 </div>
               </Card>
             </div>
+
+            <Card title="(Optional) Local data cache instructions">
+              <ol className="text-sm list-decimal pl-5 space-y-2">
+                <li>Create a folder in your repo: <code>static/us-macro/data/</code>.</li>
+                <li>For each series ID you want, save a JSON array of objects: <code>[{"{"}"date":"YYYY-MM-DD","value":Number{"}"}, ...]</code> to <code>static/us-macro/data/ID.json</code>. Example: <code>FEDFUNDS.json</code>.</li>
+                <li>(Recommended) Automate updates with a GitHub Action that fetches from FRED’s API and commits JSON weekly. I can provide a ready-to-use workflow and a tiny fetch script when you share (or store as a repo secret) your FRED API key.</li>
+              </ol>
+            </Card>
           </div>
         </div>
 
