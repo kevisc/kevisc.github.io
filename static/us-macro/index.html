@@ -8,8 +8,8 @@
     <style>
       :root { color-scheme: light dark; }
       html, body { height: 100%; margin: 0; }
-      body { display: grid; place-items: center; background: #0a0a0a; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; }
-      .card { width: min(480px, 90vw); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 24px; border-radius: 16px; backdrop-filter: blur(8px); }
+      body { display: grid; place-items: center; background: #0a0a0a; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+      .card { width: min(520px, 92vw); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 24px; border-radius: 16px; backdrop-filter: blur(8px); }
       h1 { margin: 0 0 8px 0; font-size: 20px; color: #fff; }
       p { margin: 6px 0; color: #c9c9c9; font-size: 13px; }
       label { display:block; margin: 14px 0 6px; color:#ddd; font-size: 12px; }
@@ -18,6 +18,7 @@
       .error { color: #ff8b8b; font-size:12px; min-height: 16px; }
       .meta { margin-top: 14px; font-size: 11px; color:#aaa; }
       #root { display:none; }
+      #bootlog { margin-top:10px; font-size:12px; color:#cfcfcf; white-space:pre-wrap; }
     </style>
   </head>
   <body>
@@ -28,11 +29,12 @@
       <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
       <div class="error" id="err"></div>
       <button id="enter">Enter</button>
-      <div class="meta">Preset passphrase configured. To change it later, you can regenerate the PBKDF2 hash & salt and edit this file.</div>
+      <div id="bootlog"></div>
+      <div class="meta">Preset passphrase is configured. You can change the PBKDF2 parameters later by editing this file.</div>
     </div>
 
     <!-- App mount point (hidden until unlocked) -->
-    <div id="root"></div>
+    <div id="root">Loading app…</div>
 
     <script>
     // --- Client-side gate (PBKDF2-SHA-256). Soft protection only. ---
@@ -40,6 +42,8 @@
     const SALT_B64 = "dXNtYWNyby1zYWx0LTIwMjU="; // base64 of 'usmacro-salt-2025'
     const ITER = 120000;
     const PASS_HASH = "3c0f4a2d6d4ec4f9337c81bce5f49b115c2cca94aab196885e5a08491a1b5b55";  // derived from password 'usmacro25'
+
+    const boot = (msg) => { const el = document.getElementById('bootlog'); el.textContent += (el.textContent ? "\n" : "") + msg; console.log("[gate]", msg); };
 
     async function deriveHex(pass, saltB64, iter) {
       const enc = new TextEncoder();
@@ -69,25 +73,38 @@
       }
     }
 
-    async function loadScript(src, attrs={}) {
+    function loadScript(src, attrs={}) {
       return new Promise((resolve, reject) => {
         const s = document.createElement("script");
         s.src = src;
         Object.entries(attrs).forEach(([k,v]) => s.setAttribute(k, v));
-        s.onload = resolve; s.onerror = () => reject(new Error("Failed to load " + src));
+        s.onload = () => { boot("Loaded: " + src); resolve(); };
+        s.onerror = () => { boot("FAILED: " + src); reject(new Error("Failed to load " + src)); };
         document.body.appendChild(s);
       });
     }
 
     async function loadApp() {
-      await loadScript("https://cdn.tailwindcss.com");
-      await loadScript("https://unpkg.com/react@18/umd/react.production.min.js");
-      await loadScript("https://unpkg.com/react-dom@18/umd/react-dom.production.min.js");
-      await loadScript("https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js");
-      await loadScript("https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js");
-      await loadScript("https://unpkg.com/@babel/standalone/babel.min.js");
-      await loadScript("app.secure.jsx", { "type":"text/babel", "data-plugins":"transform-react-jsx" });
-      if (window.Babel && window.Babel.transformScriptTags) window.Babel.transformScriptTags();
+      boot("Starting loader…");
+      try {
+        await loadScript("https://cdn.tailwindcss.com");
+        await loadScript("https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js");
+        // Try app.secure.jsx, then fall back to app.jsx if missing
+        try {
+          await loadScript("app.secure.jsx", { type:"text/babel", "data-plugins":"transform-react-jsx" });
+        } catch (e) {
+          boot("app.secure.jsx missing — trying app.jsx");
+          await loadScript("app.jsx", { type:"text/babel", "data-plugins":"transform-react-jsx" });
+        }
+        if (window.Babel && window.Babel.transformScriptTags) window.Babel.transformScriptTags();
+        boot("Babel transform complete.");
+      } catch (e) {
+        document.getElementById("err").textContent = "Loader error: " + e.message;
+      }
     }
 
     document.getElementById("enter").addEventListener("click", () => unlock(document.getElementById("pw").value));
