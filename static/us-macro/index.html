@@ -17,7 +17,7 @@
       button { margin-top: 12px; width:100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #9a5a1f; background:#f97316; color:#fff; font-weight:600; }
       .error { color: #ff8b8b; font-size:12px; min-height: 16px; }
       .meta { margin-top: 14px; font-size: 11px; color:#aaa; }
-      #appwrap { display:none; width:min(1000px, 96vw); }
+      #appwrap { display:none; width:min(1100px, 96vw); }
       #status { color:#ddd; font-size:13px; margin:10px 0; }
       #rootlog { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:10px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#dcdcdc; font-size:12px; max-height:36vh; overflow:auto; white-space:pre-wrap; }
       #root { min-height: 60vh; }
@@ -91,6 +91,11 @@
       });
     }
 
+    async function fetchText(url) {
+      const res = await fetch(url, { cache: "no-cache" });
+      return { ok: res.ok, status: res.status, text: await res.text() };
+    }
+
     async function loadApp() {
       boot("Starting loader…");
       try {
@@ -101,18 +106,30 @@
         await loadScript("https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js");
-        statusEl().textContent = "Loading app code…";
-        try {
-          await loadScript("app.secure.jsx", { type:"text/babel", "data-plugins":"transform-react-jsx" });
-          boot("Found app.secure.jsx");
-        } catch (e) {
-          boot("app.secure.jsx missing — trying app.jsx");
-          await loadScript("app.jsx", { type:"text/babel", "data-plugins":"transform-react-jsx" });
+
+        statusEl().textContent = "Fetching app code…";
+        let src = "app.secure.jsx";
+        let r = await fetchText(src);
+        if (!r.ok) {
+          boot(src + " HTTP " + r.status + " — trying app.jsx");
+          src = "app.jsx";
+          r = await fetchText(src);
         }
+        if (!r.ok) { throw new Error("No app code found (app.secure.jsx/app.jsx)"); }
+        boot("Fetched " + src + " (" + r.text.length + " bytes)");
+
+        // Inject as <script type=text/babel> so Babel can compile JSX
+        const s = document.createElement("script");
+        s.type = "text/babel";
+        s.setAttribute("data-plugins", "transform-react-jsx");
+        s.text = r.text;
+        document.body.appendChild(s);
+
+        // Compile & run
         if (window.Babel && window.Babel.transformScriptTags) { window.Babel.transformScriptTags(); boot("Babel transform complete."); }
-        statusEl().textContent = "App loaded. If nothing appears, check console for React errors inside app code.";
+        statusEl().textContent = "App loaded. If nothing appears, open DevTools → Console for app errors.";
       } catch (e) {
-        const msg = "Loader error: " + e.message;
+        const msg = "Loader error: " + (e.message || e);
         boot(msg);
         statusEl().textContent = msg;
       }
