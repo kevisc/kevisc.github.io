@@ -6,14 +6,21 @@
     <title>Educational Comparison — Dev</title>
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <style> html, body { height: 100%; margin: 0; } </style>
+    <!-- Tailwind (dev use) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React / ReactDOM -->
     <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- IMPORTANT: PropTypes must be loaded BEFORE Recharts UMD -->
+    <script src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+    <!-- Recharts UMD (exports global `Recharts`) -->
     <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
+    <!-- Babel (dev only) -->
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   </head>
   <body class="bg-neutral-50 dark:bg-neutral-900">
     <div id="root">Loading…</div>
+    <!-- Your app code -->
     <script type="text/babel" data-plugins="transform-react-jsx" src="app.jsx"></script>
   </body>
 </html>
