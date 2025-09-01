@@ -3,10 +3,8 @@
 const { useState, useEffect, useMemo } = React;
 const { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Brush } = Recharts;
 
-// ---- Theme colors (light blue accent, dark UI) ----
-const ACCENT = "#60a5fa";   // blue-400
-const ACCENT_DARK = "#1e3a8a"; // blue-900 for dark tints
-const TEXT_MUTED = "#9ca3af";  // gray-400
+const ACCENT = "#60a5fa";
+const TEXT_MUTED = "#9ca3af";
 
 function CapIcon({ size=18 }) {
   return (
@@ -55,15 +53,6 @@ function TextInput({ value, onChange, placeholder }) {
   );
 }
 
-function Toggle({ checked, onChange, label }) {
-  return (
-    <button onClick={()=>onChange(!checked)}
-      className={"w-full text-left px-3 py-2 rounded-xl border " + (checked ? "border-blue-500 bg-blue-950" : "border-neutral-700 bg-neutral-950")}>
-      {label}: <b>{checked ? "On" : "Off"}</b>
-    </button>
-  );
-}
-
 function CountryPicker({ options, value, onChange }) {
   const [q, setQ] = useState("");
   const filtered = useMemo(()=> options.filter(o=> (o.name.toLowerCase().includes(q.toLowerCase()) || o.code.toLowerCase().includes(q.toLowerCase()))), [q, options]);
@@ -86,7 +75,6 @@ function CountryPicker({ options, value, onChange }) {
   );
 }
 
-// ---------- Data & transforms ----------
 const WB_INDICATORS = [
   { code: "SE.PRM.ENRR", label: "Enrollment rate, primary (% gross)" },
   { code: "SE.SEC.ENRR", label: "Enrollment rate, secondary (% gross)" },
@@ -227,14 +215,14 @@ function movingAverage(data, countries, windowYears){
   return out;
 }
 
-// Series color palette (first is accent blue)
 const COLORS = ["#60a5fa","#a78bfa","#34d399","#f472b6","#f59e0b","#ef4444","#22c55e","#93c5fd","#fde047","#14b8a6","#38bdf8","#d946ef","#84cc16","#fb7185","#06b6d4"];
 
 function exportCSV(data, countries, filename="education.csv"){
   const header = ["date", ...countries];
   const rows = [header.join(",")];
   data.forEach(r => { rows.push([r.date, ...countries.map(c => r[c] ?? "")].join(",")); });
-  const blob = new Blob([rows.join("\n")], {type:"text/csv;charset=utf-8"});
+  const blob = new Blob([rows.join("
+")], {type:"text/csv;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href=url; a.download=filename; a.click();
   URL.revokeObjectURL(url);
@@ -261,7 +249,6 @@ function App(){
         raw = await fetchWorldBank(indicator, countries, startYear, endYear);
       } else {
         if (!oecdUrl || !oecdUrl.trim()) {
-          // Gentle guard: don't throw; show hint and stop.
           setError("Paste an OECD SDMX-JSON URL to load OECD data (or switch Source back to World Bank).");
           setData([]);
           return;
