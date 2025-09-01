@@ -28,24 +28,19 @@
       <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
       <div class="error" id="err"></div>
       <button id="enter">Enter</button>
-      <div class="meta">Tip: to change the password, edit this file’s <code>PASS_HASH</code>, <code>SALT_B64</code>, and <code>ITER</code> constants using the helper in the inline code comments.</div>
+      <div class="meta">Preset passphrase configured. To change it later, you can regenerate the PBKDF2 hash & salt and edit this file.</div>
     </div>
 
     <!-- App mount point (hidden until unlocked) -->
     <div id="root"></div>
 
     <script>
-    // --- Simple client-side gate (PBKDF2-SHA-256). Soft protection only. ---
-    // CHANGE ME: create your own salt+hash using the helper below.
+    // --- Client-side gate (PBKDF2-SHA-256). Soft protection only. ---
     const APP_KEY = "us-macro";
-    const SALT_B64 = "bXktc2FsdC1kZW1v"; // base64("my-salt-demo") — change this
-    const ITER = 120000;                  // PBKDF2 iterations — you can increase
-    const PASS_HASH = "5c7d1d2c7fd3c0d1e4a2c70a0e5a6a4e5d8f7f8f6d0b1a2c3d4e5f6a7b8c9d0"; // demo hash for 'demo' (replace)
+    const SALT_B64 = "dXNtYWNyby1zYWx0LTIwMjU="; // base64 of 'usmacro-salt-2025'
+    const ITER = 120000;
+    const PASS_HASH = "3c0f4a2d6d4ec4f9337c81bce5f49b115c2cca94aab196885e5a08491a1b5b55";  // derived from password 'usmacro25'
 
-    // Helper to compute a derived key hex for your own passphrase:
-    // 1) Open DevTools console on this page
-    // 2) Run: await deriveHex("your-pass-here", "your-salt-b64", ITER)
-    // 3) Replace PASS_HASH and SALT_B64 constants above with your values
     async function deriveHex(pass, saltB64, iter) {
       const enc = new TextEncoder();
       const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
@@ -85,22 +80,19 @@
     }
 
     async function loadApp() {
-      // Load dependencies only after unlock
       await loadScript("https://cdn.tailwindcss.com");
       await loadScript("https://unpkg.com/react@18/umd/react.production.min.js");
       await loadScript("https://unpkg.com/react-dom@18/umd/react-dom.production.min.js");
       await loadScript("https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js");
       await loadScript("https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js");
       await loadScript("https://unpkg.com/@babel/standalone/babel.min.js");
-      await loadScript("app.secure.jsx", {"type":"text/babel","data-plugins":"transform-react-jsx"});
+      await loadScript("app.secure.jsx", { "type":"text/babel", "data-plugins":"transform-react-jsx" });
       if (window.Babel && window.Babel.transformScriptTags) window.Babel.transformScriptTags();
     }
 
-    // Wire UI
     document.getElementById("enter").addEventListener("click", () => unlock(document.getElementById("pw").value));
     document.getElementById("pw").addEventListener("keydown", (e)=>{ if (e.key === "Enter") unlock(e.target.value); });
 
-    // Auto-load if already unlocked this session
     if (hasUnlock()) {
       document.getElementById("gate").style.display = "none";
       document.getElementById("root").style.display = "block";
