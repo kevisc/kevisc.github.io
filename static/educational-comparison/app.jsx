@@ -3,17 +3,23 @@
 const { useState, useEffect, useMemo } = React;
 const { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Brush } = Recharts;
 
+// ---- Theme colors (light blue accent, dark UI) ----
+const ACCENT = "#60a5fa";   // blue-400
+const ACCENT_DARK = "#1e3a8a"; // blue-900 for dark tints
+const TEXT_MUTED = "#9ca3af";  // gray-400
+
 function CapIcon({ size=18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M2 9l10-5 10 5-10 5L2 9z" fill="#f97316"/><path d="M6 12v4c0 1.1 2.686 2 6 2s6-.9 6-2v-4" stroke="#6b7280" strokeWidth="1.5" fill="none"/>
+      <path d="M2 9l10-5 10 5-10 5L2 9z" fill={ACCENT}/>
+      <path d="M6 12v4c0 1.1 2.686 2 6 2s6-.9 6-2v-4" stroke="#94a3b8" strokeWidth="1.5" fill="none"/>
     </svg>
   );
 }
 
 function Card({ title, right, children }) {
   return (
-    <div className="bg-white/70 dark:bg-neutral-900/60 backdrop-blur rounded-2xl shadow p-5 border border-neutral-200 dark:border-neutral-800">
+    <div className="bg-neutral-900/70 backdrop-blur rounded-2xl shadow p-5 border border-neutral-800 text-neutral-100">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold">{title}</h2>
         {right}
@@ -26,9 +32,9 @@ function Card({ title, right, children }) {
 function Field({ label, children, hint }) {
   return (
     <label className="grid gap-1">
-      <span className="text-xs text-neutral-500">{label}</span>
+      <span className="text-xs" style={{color:TEXT_MUTED}}>{label}</span>
       {children}
-      {hint && <span className="text-xs text-neutral-400">{hint}</span>}
+      {hint && <span className="text-xs" style={{color:TEXT_MUTED}}>{hint}</span>}
     </label>
   );
 }
@@ -36,7 +42,7 @@ function Field({ label, children, hint }) {
 function Select({ value, onChange, children, className="" }) {
   return (
     <select value={value} onChange={(e)=>onChange(e.target.value)}
-      className={"w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 "+className}>
+      className={"w-full px-3 py-2 rounded-xl border border-neutral-700 bg-neutral-950 text-neutral-100 "+className}>
       {children}
     </select>
   );
@@ -45,15 +51,15 @@ function Select({ value, onChange, children, className="" }) {
 function TextInput({ value, onChange, placeholder }) {
   return (
     <input value={value} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder}
-      className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900"/>
+      className="w-full px-3 py-2 rounded-xl border border-neutral-700 bg-neutral-950 text-neutral-100 placeholder-neutral-500"/>
   );
 }
 
 function Toggle({ checked, onChange, label }) {
   return (
     <button onClick={()=>onChange(!checked)}
-      className={"w-full text-left px-3 py-2 rounded-xl border "+(checked?"border-orange-600 bg-orange-50 dark:bg-orange-950":"border-neutral-300 dark:border-neutral-700")}>
-      {label}: <b>{checked?"On":"Off"}</b>
+      className={"w-full text-left px-3 py-2 rounded-xl border " + (checked ? "border-blue-500 bg-blue-950" : "border-neutral-700 bg-neutral-950")}>
+      {label}: <b>{checked ? "On" : "Off"}</b>
     </button>
   );
 }
@@ -63,16 +69,16 @@ function CountryPicker({ options, value, onChange }) {
   const filtered = useMemo(()=> options.filter(o=> (o.name.toLowerCase().includes(q.toLowerCase()) || o.code.toLowerCase().includes(q.toLowerCase()))), [q, options]);
   function toggle(code){ onChange(value.includes(code) ? value.filter(c=>c!==code) : [...value, code]); }
   return (
-    <div className="border border-neutral-300 dark:border-neutral-700 rounded-xl p-2 max-h-64 overflow-auto">
+    <div className="border border-neutral-700 rounded-xl p-2 max-h-64 overflow-auto bg-neutral-950">
       <div className="mb-2">
-        <input className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900" placeholder="Search countries…" value={q} onChange={e=>setQ(e.target.value)}/>
+        <input className="w-full px-3 py-2 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 placeholder-neutral-500" placeholder="Search countries…" value={q} onChange={e=>setQ(e.target.value)}/>
       </div>
       <div className="grid grid-cols-2 gap-1">
         {filtered.map(opt => (
-          <label key={opt.code} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer">
+          <label key={opt.code} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-neutral-900 cursor-pointer">
             <input type="checkbox" checked={value.includes(opt.code)} onChange={()=>toggle(opt.code)}/>
-            <span className="text-sm">{opt.name}</span>
-            <span className="text-xs text-neutral-400">({opt.code})</span>
+            <span className="text-sm text-neutral-100">{opt.name}</span>
+            <span className="text-xs" style={{color:TEXT_MUTED}}>({opt.code})</span>
           </label>
         ))}
       </div>
@@ -80,6 +86,7 @@ function CountryPicker({ options, value, onChange }) {
   );
 }
 
+// ---------- Data & transforms ----------
 const WB_INDICATORS = [
   { code: "SE.PRM.ENRR", label: "Enrollment rate, primary (% gross)" },
   { code: "SE.SEC.ENRR", label: "Enrollment rate, secondary (% gross)" },
@@ -220,7 +227,8 @@ function movingAverage(data, countries, windowYears){
   return out;
 }
 
-const COLORS = ["#f97316","#6b7280","#10b981","#3b82f6","#e11d48","#a855f7","#22c55e","#0284c7","#f59e0b","#ef4444","#14b8a6","#84cc16","#7c3aed","#db2777","#0ea5e9"];
+// Series color palette (first is accent blue)
+const COLORS = ["#60a5fa","#a78bfa","#34d399","#f472b6","#f59e0b","#ef4444","#22c55e","#93c5fd","#fde047","#14b8a6","#38bdf8","#d946ef","#84cc16","#fb7185","#06b6d4"];
 
 function exportCSV(data, countries, filename="education.csv"){
   const header = ["date", ...countries];
@@ -252,8 +260,13 @@ function App(){
       if (source==="WB"){
         raw = await fetchWorldBank(indicator, countries, startYear, endYear);
       } else {
-        if (!oecdUrl) throw new Error("Provide an OECD SDMX-JSON URL.");
-        raw = await fetchOECD_SDMX(oecdUrl);
+        if (!oecdUrl || !oecdUrl.trim()) {
+          // Gentle guard: don't throw; show hint and stop.
+          setError("Paste an OECD SDMX-JSON URL to load OECD data (or switch Source back to World Bank).");
+          setData([]);
+          return;
+        }
+        raw = await fetchOECD_SDMX(oecdUrl.trim());
       }
       let d = raw;
       if (transform==="index100") d = indexAtStart(d, countries);
@@ -278,29 +291,25 @@ function App(){
 
   useEffect(()=>{ load(); }, [source, indicator, countries.join(","), startYear, endYear, oecdUrl, transform, smooth]);
 
-  const countryMeta = useMemo(()=>{
-    const map = {}; COUNTRIES.forEach(c => map[c.code]=c.name); return map;
-  }, []);
-
   const anyYoY = transform==="yoy";
   const canLog = !anyYoY && data.every(r => countries.every(c => r[c]==null || r[c]>0));
   const yTickFmt = (v)=> anyYoY ? (v==null?"":v.toFixed(1)+"%") : (Math.round(v*100)/100);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-neutral-50 to-neutral-100 dark:from-black dark:to-neutral-900">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="min-h-screen w-full" style={{backgroundImage:"linear-gradient(to bottom, #0b0f1a, #0a0a0a)"}}>
+      <div className="max-w-7xl mx-auto px-6 py-8 text-neutral-100">
         <header className="mb-6">
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-3">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-500 text-white"><CapIcon/></span>
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full" style={{background:ACCENT, color:"#0b1020"}}><CapIcon/></span>
               Educational Comparison
             </h1>
             <div className="flex gap-2">
-              <button onClick={load} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Reload</button>
-              <button onClick={()=>exportCSV(data, countries)} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Export CSV</button>
+              <button onClick={load} className="px-3 py-2 rounded-xl border border-neutral-700 bg-neutral-950 hover:bg-neutral-900">Reload</button>
+              <button onClick={()=>exportCSV(data, countries)} className="px-3 py-2 rounded-xl border border-neutral-700 bg-neutral-950 hover:bg-neutral-900">Export CSV</button>
             </div>
           </div>
-          <p className="text-sm text-neutral-600 dark:text-neutral-300 mt-1">
+          <p className="text-sm" style={{color:TEXT_MUTED}}>
             Visualize major education indicators across countries using World Bank or OECD (SDMX-JSON) data.
           </p>
         </header>
@@ -359,29 +368,30 @@ function App(){
                 </div>
               </div>
 
-              {error && <div className="text-sm text-rose-600">Error: {error}</div>}
+              {error && <div className="text-sm text-rose-400">Error: {error}</div>}
             </div>
           </Card>
 
           <div className="lg:col-span-2">
-            <Card title="Chart" right={<span className="text-xs text-neutral-500">{transform==="yoy"?"% change":"Level / Index"}</span>}>
+            <Card title="Chart" right={<span className="text-xs" style={{color:TEXT_MUTED}}>{transform==="yoy"?"% change":"Level / Index"}</span>}>
               <div className="w-full h-[480px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" minTickGap={16}/>
-                    <YAxis scale={canLog?"log":"auto"} domain={["auto","auto"]} tickFormatter={yTickFmt}/>
-                    <Tooltip formatter={(val, name)=>{
-                      if (val==null) return ["",""];
-                      if (transform==="yoy") return [Number(val).toFixed(2)+"%", name];
-                      return [Number(val).toLocaleString(undefined,{maximumFractionDigits:2}), name];
-                    }}/>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                    <XAxis dataKey="date" minTickGap={16} stroke="#9ca3af" />
+                    <YAxis scale={canLog?"log":"auto"} domain={["auto","auto"]} tickFormatter={yTickFmt} stroke="#9ca3af" />
+                    <Tooltip contentStyle={{background:"#0b0f1a", border:"1px solid #1f2937", color:"#e5e7eb"}}
+                      formatter={(val, name)=>{
+                        if (val==null) return ["",""];
+                        if (transform==="yoy") return [Number(val).toFixed(2)+"%", name];
+                        return [Number(val).toLocaleString(undefined,{maximumFractionDigits:2}), name];
+                      }}/>
                     <Legend />
                     {countries.map((c, idx) => (
                       <Line key={c} type="monotone" dataKey={c} name={(COUNTRIES.find(x=>x.code===c)?.name) || c}
                         stroke={COLORS[idx % COLORS.length]} dot={false} strokeWidth={2} />
                     ))}
-                    <Brush dataKey="date" height={24} stroke="#f97316"/>
+                    <Brush dataKey="date" height={24} stroke={ACCENT}/>
                   </LineChart>
                 </ResponsiveContainer>
               </div>
