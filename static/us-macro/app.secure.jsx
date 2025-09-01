@@ -15,7 +15,7 @@ const NEUTRAL = "#6b7280";
 const GRAY = "#a3a3a3";
 
 // Predefined series (FRED IDs). The app can fetch live from FRED with API key,
-// or read local JSON caches at ./data/{ID}.json if no key is set.
+// or read local JSON caches at ./data/{ID}.json.
 const SERIES = [
   { id: "FEDFUNDS", label: "Fed Funds Rate (EFFR)", units: "%", freq: "D|M", category: "Rates" },
   { id: "DGS10", label: "10Y Treasury Yield", units: "%", freq: "D|M", category: "Rates" },
@@ -41,7 +41,7 @@ const SERIES = [
   { id: "RSXFS", label: "Retail and Food Services Sales (SA, Mil. USD)", units: "USDmn", freq: "M", category: "Spending", isPriceUSD: true },
   { id: "SP500", label: "S&P 500 index (daily)", units: "index", freq: "D|M", category: "Markets" },
 
-  // Denominators for unit conversions
+  // Denominators
   { id: "GOLDAMGBD228NLBM", label: "Gold price (London AM USD/oz, daily)", units: "USD/oz", freq: "D", category: "Denominators", isDenominator: "gold" },
   { id: "CBBTCUSD", label: "Bitcoin price (USD, Coinbase, daily)", units: "USD/BTC", freq: "D", category: "Denominators", isDenominator: "btc" },
 ];
@@ -192,7 +192,7 @@ function rollingCorrelation(merged, windowMonths) {
     const a = valsA.slice(j, i+1).filter(v=>v!=null);
     const b = valsB.slice(j, i+1).filter(v=>v!=null);
     const n = Math.min(a.length, b.length);
-    if (n < windowMonths*0.7) continue; // require 70% non-null
+    if (n < windowMonths*0.7) continue;
     const aa = a.slice(0, n), bb = b.slice(0, n);
     const meanA = aa.reduce((x,y)=>x+y,0)/n;
     const meanB = bb.reduce((x,y)=>x+y,0)/n;
@@ -230,10 +230,10 @@ async function fetchFredSeries({ apiKey, id, start, end }) {
   if (!res.ok) throw new Error("FRED fetch failed: " + res.status);
   const j = await res.json();
   if (!j || !j.observations) throw new Error("FRED malformed response");
-  return j.observations.map(o => ({ date: o.date.slice(0,10), value: parseNumber(o.value) }));
+  return j.observations.map(o => ({ date: o.date.slice(0,10), value: (o.value==="."? null : Number(o.value)) }));
 }
 
-// Fallback tiny samples (to keep UI functional without data files or key)
+// Tiny samples as last resort
 const SAMPLE = {
   FEDFUNDS: [{date:"2023-01-01",value:4.33},{date:"2024-01-01",value:5.33},{date:"2025-01-01",value:5.38}],
   DGS10:    [{date:"2023-01-01",value:3.6},{date:"2024-01-01",value:4.1},{date:"2025-01-01",value:3.9}],
@@ -263,20 +263,14 @@ const SAMPLE = {
   CBBTCUSD:        [{date:"2023-01-01",value:20000},{date:"2024-01-01",value:42000},{date:"2025-01-01",value:95000}],
 };
 
-// Smart loader: priority = live FRED (if key) -> local JSON -> SAMPLE fallback.
-async function getSeriesSmart(id, start, end, apiKey) {
-  // Try live FRED first if key present
-  if (apiKey) {
-    try {
-      return await fetchFredSeries({ apiKey, id, start, end });
-    } catch (e) {
-      console.warn("FRED fetch failed for", id, e);
-    }
+// Smart loader: opt-in live FRED (with toggle) -> local JSON -> SAMPLE fallback.
+async function getSeriesSmart(id, start, end, apiKey, useLiveFred) {
+  if (apiKey && useLiveFred) {
+    try { return await fetchFredSeries({ apiKey, id, start, end }); }
+    catch (e) { console.warn("FRED fetch failed for", id, e); }
   }
-  // Then local JSON cache
   const local = await fetchLocalSeries(id);
   if (local) return local;
-  // Finally a tiny sample
   return SAMPLE[id] || [];
 }
 
@@ -297,14 +291,6 @@ function Select({ value, onChange, children }) {
       className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900">
       {children}
     </select>
-  );
-}
-
-function NumberInput({ value, onChange, min, max, step=1 }) {
-  return (
-    <input type="number" value={value} onChange={e=>onChange(Number(e.target.value))}
-      min={min} max={max} step={step}
-      className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900"/>
   );
 }
 
@@ -350,7 +336,7 @@ function MacroLogo({ size=18 }) {
 // -------------------- Main App --------------------
 function App() {
   const [fredApiKey, setFredApiKey] = useState(localStorage.getItem("usm:fredKey") || "");
-  const [testStatus, setTestStatus] = useState("");
+  const [useLiveFred, setUseLiveFred] = useState(localStorage.getItem("usm:useLiveFred")==="1" ? true : false);
 
   const [start, setStart] = useState(localStorage.getItem("usm:start") || DEFAULTS.start);
   const [end, setEnd] = useState(localStorage.getItem("usm:end") || DEFAULTS.end);
@@ -368,6 +354,7 @@ function App() {
   const [showRatioAB, setShowRatioAB] = useState(localStorage.getItem("usm:ratio")==="1" || DEFAULTS.showRatioAB);
 
   useEffect(()=>localStorage.setItem("usm:fredKey", fredApiKey), [fredApiKey]);
+  useEffect(()=>localStorage.setItem("usm:useLiveFred", useLiveFred? "1":"0"), [useLiveFred]);
   useEffect(()=>localStorage.setItem("usm:start", start), [start]);
   useEffect(()=>localStorage.setItem("usm:end", end), [end]);
   useEffect(()=>localStorage.setItem("usm:s1", series1), [series1]);
@@ -394,14 +381,14 @@ function App() {
   const [error, setError] = useState("");
 
   async function loadAll() {
-    setLoading(true); setError(""); setTestStatus("");
+    setLoading(true); setError("");
     try {
       const [s1, s2, cpi, gold, btc] = await Promise.all([
-        getSeriesSmart(meta1.id, start, end, fredApiKey),
-        getSeriesSmart(meta2.id, start, end, fredApiKey),
-        getSeriesSmart("CPIAUCSL", start, end, fredApiKey),
-        getSeriesSmart("GOLDAMGBD228NLBM", start, end, fredApiKey),
-        getSeriesSmart("CBBTCUSD", start, end, fredApiKey),
+        getSeriesSmart(meta1.id, start, end, fredApiKey, useLiveFred),
+        getSeriesSmart(meta2.id, start, end, fredApiKey, useLiveFred),
+        getSeriesSmart("CPIAUCSL", start, end, fredApiKey, useLiveFred),
+        getSeriesSmart("GOLDAMGBD228NLBM", start, end, fredApiKey, useLiveFred),
+        getSeriesSmart("CBBTCUSD", start, end, fredApiKey, useLiveFred),
       ]);
 
       const inRange = (d) => (!start || d.date>=start) && (!end || d.date<=end);
@@ -415,19 +402,15 @@ function App() {
       setData1(meta1.freq==="Q" ? toQuarterly(m1) : m1);
       setData2(meta2.freq==="Q" ? toQuarterly(m2) : m2);
       setCpiData(mc); setGoldData(mg); setBtcData(mb);
-
-      if (fredApiKey) setTestStatus("Live FRED data loaded.");
     } catch (e) {
       console.error(e);
       setError(String(e.message || e));
-      if (fredApiKey) setTestStatus("FRED fetch failed — using local/sample data.");
     } finally {
       setLoading(false);
     }
   }
-  useEffect(()=>{ loadAll(); }, [series1, series2, start, end, fredApiKey]);
+  useEffect(()=>{ loadAll(); }, [series1, series2, start, end, fredApiKey, useLiveFred]);
 
-  // Transforms
   const tData1 = useMemo(()=>{
     let s = data1;
     if (transform1==="yoy") s = yoy(s);
@@ -472,13 +455,11 @@ function App() {
   const canLog = !anyYoY && merged.every(r => (r.A==null || r.A>0) && (r.B==null || r.B>0));
 
   async function testFred() {
-    setTestStatus("Testing…");
     try {
       const ping = await fetchFredSeries({ apiKey: fredApiKey, id: "UNRATE", start, end });
-      if (ping && ping.length) setTestStatus("FRED API OK ✓");
-      else setTestStatus("FRED API key accepted but empty data returned.");
+      alert(ping && ping.length ? "FRED API OK. Points: " + ping.length : "FRED OK, but empty data.");
     } catch (e) {
-      setTestStatus("FRED error: " + (e.message || e));
+      alert("FRED error: " + (e.message || e));
     }
   }
 
@@ -497,20 +478,24 @@ function App() {
             </div>
           </div>
           <p className="text-sm text-neutral-600 dark:text-neutral-300 mt-1">
-            Compare two U.S. macro time series. Live data fetches from FRED when an API key is provided; otherwise the app uses local JSON caches (if present) or small samples. Data are aligned to monthly averages, with optional CPI deflation and denomination in gold or bitcoin.
+            Compare two U.S. macro time series. Prefer static JSON caches for reliability; optionally enable live FRED fetch (may be blocked by CORS on some networks).
           </p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <Card title="A. Series & data settings">
+          <Card title="A. Data & series settings">
             <div className="grid gap-3">
-              <Field label="FRED API key" hint="Stored in your browser (localStorage). Exposed client-side.">
-                <div className="flex gap-2">
-                  <TextInput value={fredApiKey} onChange={setFredApiKey} placeholder="Paste your FRED API key"/>
-                  <button onClick={testFred} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Test</button>
-                </div>
-                {testStatus && <div className="text-xs mt-1">{testStatus}</div>}
-              </Field>
+              <div className="grid grid-cols-1 gap-3">
+                <Field label="FRED API key (optional)" hint="Stored in your browser. Exposed client-side.">
+                  <div className="flex gap-2">
+                    <TextInput value={fredApiKey} onChange={setFredApiKey} placeholder="Paste your FRED API key"/>
+                    <button onClick={testFred} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">Test</button>
+                  </div>
+                </Field>
+                <Field label="Use live FRED fetch">
+                  <Toggle checked={useLiveFred} onChange={setUseLiveFred} label="Fetch from FRED (experimental; may be blocked by CORS)" />
+                </Field>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Series 1">
@@ -594,10 +579,6 @@ function App() {
 
               {loading && <div className="text-sm text-neutral-500">Loading…</div>}
               {error && <div className="text-sm text-rose-600">Error: {error}</div>}
-
-              <div className="text-xs text-neutral-500">
-                Live FRED fetch uses your key client-side (visible in network requests). If you prefer to keep the key private, I can provide a GitHub Action to prefetch JSON into <code>static/us-macro/data/</code> using a repository secret.
-              </div>
             </div>
           </Card>
 
@@ -615,7 +596,7 @@ function App() {
                       if (unitMode==="btc") return v.toFixed(6)+" ₿";
                       return v?.toFixed ? v.toFixed(2) : v;
                     }}/>
-                    {dualAxis && <YAxis yAxisId="right" orientation="right" scale={(! (transform1==='yoy' || transform2==='yoy') && merged.every(r => (r.A==null || r.A>0) && (r.B==null || r.B>0)) && logScale) ? "log" : "auto"} domain={["auto","auto"]} tickFormatter={(v)=>{
+                    {true && <YAxis yAxisId="right" orientation="right" scale={(! (transform1==='yoy' || transform2==='yoy') && merged.every(r => (r.A==null || r.A>0) && (r.B==null || r.B>0)) && logScale) ? "log" : "auto"} domain={["auto","auto"]} tickFormatter={(v)=>{
                       if (transform1==="yoy" || transform2==="yoy") return (v==null?"":v.toFixed(1)+"%");
                       if (unitMode==="usd") return v>=1e12?("$"+(v/1e12).toFixed(1)+"T"): v>=1e9?("$"+(v/1e9).toFixed(1)+"B") : v>=1e6?("$"+(v/1e6).toFixed(1)+"M") : v>=1e3?("$"+(v/1e3).toFixed(0)+"k") : "$"+(Math.round(v));
                       if (unitMode==="gold") return v.toFixed(4)+" oz";
@@ -633,81 +614,19 @@ function App() {
                     }} labelFormatter={(l)=>"Month "+l.slice(0,7)} />
                     <Legend />
                     <Line yAxisId="left"  type="monotone" dataKey="A" name={meta1.label} stroke={ORANGE} dot={false} strokeWidth={2} />
-                    <Line yAxisId={dualAxis ? "right" : "left"} type="monotone" dataKey="B" name={meta2.label} stroke={NEUTRAL} dot={false} strokeWidth={2} />
+                    <Line yAxisId={"right"} type="monotone" dataKey="B" name={meta2.label} stroke={NEUTRAL} dot={false} strokeWidth={2} />
                     <Brush dataKey="date" height={24} stroke={ORANGE}/>
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </Card>
 
-            {showRatioAB && (
-              <Card title="A ÷ B (ratio)">
-                <div className="w-full h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={ratioAB} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tickFormatter={(v)=>v.slice(0,7)} minTickGap={24}/>
-                      <YAxis domain={["auto","auto"]}/>
-                      <Tooltip formatter={(v)=>[Number(v).toFixed(4),"A/B"]} labelFormatter={(l)=>l.slice(0,7)} />
-                      <Area type="monotone" dataKey="value" strokeWidth={2} stroke={ORANGE} fill="rgba(249,115,22,0.2)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            )}
-
-            {corrWindow>0 && (
-              <Card title={`Rolling correlation (window: ${corrWindow} months)`}>
-                <div className="w-full h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={corr} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tickFormatter={(v)=>v.slice(0,7)} minTickGap={24}/>
-                      <YAxis domain={[-1,1]} />
-                      <Tooltip formatter={(v)=>[Number(v).toFixed(2),"corr(A,B)"]} labelFormatter={(l)=>l.slice(0,7)} />
-                      <Line type="monotone" dataKey="value" strokeWidth={2} stroke={GRAY} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
-              <Card title="Quick combos">
-                <div className="grid gap-2 text-sm">
-                  <button onClick={()=>{setSeries1("CSUSHPINSA"); setSeries2("CPIAUCSL"); setDeflateByCPI(true); setTransform1("index"); setTransform2("index"); setUnitMode("usd"); setShowRatioAB(false);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                    Real house prices (Case-Shiller deflated by CPI)
-                  </button>
-                  <button onClick={()=>{setSeries1("GFDEBTN"); setSeries2("GDP"); setTransform1("index"); setTransform2("index"); setUnitMode("usd"); setShowRatioAB(true);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                    Federal debt vs GDP (indexed + ratio)
-                  </button>
-                  <button onClick={()=>{setSeries1("FEDFUNDS"); setSeries2("UNRATE"); setTransform1("level"); setTransform2("level"); setUnitMode("usd"); setShowRatioAB(false);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                    Policy rate vs unemployment
-                  </button>
-                  <button onClick={()=>{setSeries1("SP500"); setSeries2("CPIAUCSL"); setTransform1("index"); setTransform2("index"); setUnitMode="usd"; setDeflateByCPI(true);}} className="px-3 py-2 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                    S&P 500 (real, indexed)
-                  </button>
-                </div>
-              </Card>
-
-              <Card title="Series library">
-                <div className="text-sm grid grid-cols-1 gap-1 max-h-64 overflow-auto pr-2">
-                  {SERIES.filter(s=>!s.isDenominator).map(s=>(
-                    <div key={s.id} className="flex items-center justify-between">
-                      <span className="truncate">{s.category}: {s.label}</span>
-                      <span className="text-xs text-neutral-500">{s.id}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card title="About & attribution">
-                <div className="text-sm space-y-2">
-                  <p><b>Created by Kevin Schoenholzer</b> with the help of <b>ChatGPT</b>, 2025. <i>Educational purposes only.</i></p>
-                  <p>Live data via FRED® (Federal Reserve Bank of St. Louis). If you prefer not to expose your key in the browser, we can set up a GitHub Action to prefetch JSON into <code>static/us-macro/data/</code> using a repository secret.</p>
-                </div>
-              </Card>
-            </div>
+            <Card title="About & attribution">
+              <div className="text-sm space-y-2">
+                <p><b>Created by Kevin Schoenholzer</b> with the help of <b>ChatGPT</b>, 2025. <i>Educational purposes only.</i></p>
+                <p>Data sources: local JSON caches (<code>static/us-macro/data/*.json</code>) or the FRED API when enabled.</p>
+              </div>
+            </Card>
           </div>
         </div>
 
