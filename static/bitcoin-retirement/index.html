@@ -10,7 +10,10 @@
     <!-- UMD libraries (safe on GitHub Pages) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Use jsDelivr for Recharts UMD to avoid CORS issues seen on unpkg -->
+
+    <!-- Recharts UMD requires PropTypes global; load it first -->
+    <script src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+    <!-- Use jsDelivr for Recharts UMD (CORS-friendly) -->
     <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
 
     <!-- Babel Standalone to transpile JSX at runtime -->
