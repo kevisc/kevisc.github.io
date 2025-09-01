@@ -218,18 +218,31 @@ function movingAverage(data, countries, windowYears){
 const COLORS = ["#60a5fa","#a78bfa","#34d399","#f472b6","#f59e0b","#ef4444","#22c55e","#93c5fd","#fde047","#14b8a6","#38bdf8","#d946ef","#84cc16","#fb7185","#06b6d4"];
 
 function exportCSV(data, countries, filename="education.csv"){
-  // Build CSV safely (quote fields with commas/quotes)
+  // Build CSV safely — avoid literal newlines in string literals to prevent parser issues.
   const esc = (v) => {
     if (v == null) return "";
     const s = String(v);
-    return (s.includes(",") || s.includes('"') || s.includes("
-")) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    const needsQuote = /[",
+]/.test(s); // checks for comma, quote, CR or LF
+    return needsQuote ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
   const header = ["date", ...countries];
   const rows = [header.map(esc).join(",")];
   for (const r of data) {
     rows.push([esc(r.date), ...countries.map(c => esc(r[c]))].join(","));
   }
+  const csv = rows.join(`
+`);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
   const csv = rows.join(`
 `);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
