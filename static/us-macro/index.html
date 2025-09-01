@@ -17,8 +17,10 @@
       button { margin-top: 12px; width:100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #9a5a1f; background:#f97316; color:#fff; font-weight:600; }
       .error { color: #ff8b8b; font-size:12px; min-height: 16px; }
       .meta { margin-top: 14px; font-size: 11px; color:#aaa; }
-      #root { display:none; }
-      #bootlog { margin-top:10px; font-size:12px; color:#cfcfcf; white-space:pre-wrap; }
+      #appwrap { display:none; width:min(1000px, 96vw); }
+      #status { color:#ddd; font-size:13px; margin:10px 0; }
+      #rootlog { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:10px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#dcdcdc; font-size:12px; max-height:36vh; overflow:auto; white-space:pre-wrap; }
+      #root { min-height: 60vh; }
     </style>
   </head>
   <body>
@@ -29,12 +31,15 @@
       <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
       <div class="error" id="err"></div>
       <button id="enter">Enter</button>
-      <div id="bootlog"></div>
-      <div class="meta">Preset passphrase is configured. You can change the PBKDF2 parameters later by editing this file.</div>
+      <div class="meta">Preset passphrase configured. You can change it later by editing this file.</div>
     </div>
 
-    <!-- App mount point (hidden until unlocked) -->
-    <div id="root">Loading app…</div>
+    <!-- Visible after unlock -->
+    <div id="appwrap">
+      <div id="status">Loading app…</div>
+      <div id="rootlog"></div>
+      <div id="root"></div>
+    </div>
 
     <script>
     // --- Client-side gate (PBKDF2-SHA-256). Soft protection only. ---
@@ -43,7 +48,9 @@
     const ITER = 120000;
     const PASS_HASH = "3c0f4a2d6d4ec4f9337c81bce5f49b115c2cca94aab196885e5a08491a1b5b55";  // derived from password 'usmacro25'
 
-    const boot = (msg) => { const el = document.getElementById('bootlog'); el.textContent += (el.textContent ? "\n" : "") + msg; console.log("[gate]", msg); };
+    const logEl = () => document.getElementById('rootlog');
+    const statusEl = () => document.getElementById('status');
+    const boot = (msg) => { const el = logEl(); if (el) { el.textContent += (el.textContent ? "\n" : "") + msg; } console.log("[gate]", msg); };
 
     async function deriveHex(pass, saltB64, iter) {
       const enc = new TextEncoder();
@@ -63,7 +70,7 @@
         if (hex === PASS_HASH) {
           saveUnlock();
           document.getElementById("gate").style.display = "none";
-          document.getElementById("root").style.display = "block";
+          document.getElementById("appwrap").style.display = "block";
           await loadApp();
         } else {
           document.getElementById("err").textContent = "Incorrect passphrase.";
@@ -87,23 +94,27 @@
     async function loadApp() {
       boot("Starting loader…");
       try {
+        statusEl().textContent = "Loading libraries…";
         await loadScript("https://cdn.tailwindcss.com");
         await loadScript("https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js");
-        // Try app.secure.jsx, then fall back to app.jsx if missing
+        statusEl().textContent = "Loading app code…";
         try {
           await loadScript("app.secure.jsx", { type:"text/babel", "data-plugins":"transform-react-jsx" });
+          boot("Found app.secure.jsx");
         } catch (e) {
           boot("app.secure.jsx missing — trying app.jsx");
           await loadScript("app.jsx", { type:"text/babel", "data-plugins":"transform-react-jsx" });
         }
-        if (window.Babel && window.Babel.transformScriptTags) window.Babel.transformScriptTags();
-        boot("Babel transform complete.");
+        if (window.Babel && window.Babel.transformScriptTags) { window.Babel.transformScriptTags(); boot("Babel transform complete."); }
+        statusEl().textContent = "App loaded. If nothing appears, check console for React errors inside app code.";
       } catch (e) {
-        document.getElementById("err").textContent = "Loader error: " + e.message;
+        const msg = "Loader error: " + e.message;
+        boot(msg);
+        statusEl().textContent = msg;
       }
     }
 
@@ -112,7 +123,7 @@
 
     if (hasUnlock()) {
       document.getElementById("gate").style.display = "none";
-      document.getElementById("root").style.display = "block";
+      document.getElementById("appwrap").style.display = "block";
       loadApp();
     }
     </script>
