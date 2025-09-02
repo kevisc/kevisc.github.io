@@ -55,7 +55,11 @@ function TextInput({ value, onChange, placeholder }) {
 
 function CountryPicker({ options, value, onChange }) {
   const [q, setQ] = useState("");
-  const filtered = useMemo(()=> options.filter(o=> (o.name.toLowerCase().includes(q.toLowerCase()) || o.code.toLowerCase().includes(q.toLowerCase()))), [q, options]);
+  const filtered = useMemo(function(){ 
+    return options.filter(function(o){ 
+      return (o.name.toLowerCase().includes(q.toLowerCase()) || o.code.toLowerCase().includes(q.toLowerCase()));
+    }); 
+  }, [q, options]);
   function toggle(code){ onChange(value.includes(code) ? value.filter(c=>c!==code) : [...value, code]); }
   return (
     <div className="border border-neutral-700 rounded-xl p-2 max-h-64 overflow-auto bg-neutral-950">
@@ -112,10 +116,10 @@ const COUNTRIES = [
 async function fetchWorldBank(indicator, countries, startYear, endYear) {
   if (!countries.length) return [];
   const clist = countries.join(";");
-  const url = new URL(`https://api.worldbank.org/v2/country/${clist}/indicator/${indicator}`);
+  const url = new URL("https://api.worldbank.org/v2/country/" + clist + "/indicator/" + indicator);
   url.searchParams.set("format", "json");
   url.searchParams.set("per_page", "20000");
-  if (startYear && endYear) url.searchParams.set("date", `${startYear}:${endYear}`);
+  if (startYear && endYear) url.searchParams.set("date", startYear + ":" + endYear);
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error("World Bank HTTP " + res.status);
   const j = await res.json();
@@ -143,25 +147,25 @@ async function fetchOECD_SDMX(url) {
   const dims = j.structure.dimensions.series;
   const timeDim = j.structure.dimensions.observation.find(d=>d.id==="TIME_PERIOD");
   const geoDim = dims.find(d => ["LOCATION","GEO","COUNTRY"].includes(d.id)) || dims[0];
-  const geoCodes = geoDim.values.map((v,i)=>({index:i, code:v.id, name:v.name}));
-  const timeIndexToYear = (idx) => timeDim.values[idx]?.id || String(idx);
+  const geoCodes = geoDim.values.map(function(v,i){ return {index:i, code:v.id, name:v.name}; });
+  const timeIndexToYear = function(idx){ return (timeDim.values[idx] && timeDim.values[idx].id) ? timeDim.values[idx].id : String(idx); };
   const outByYear = new Map();
   for (const key in ds.series) {
     const s = ds.series[key];
-    const idxs = key.split(":").map(n=>parseInt(n,10));
+    const idxs = key.split(":").map(function(n){ return parseInt(n,10); });
     const geo = geoCodes[idxs[geoDim.keyPosition]].code;
-    if (!s?.observations) continue;
+    if (!s || !s.observations) continue;
     for (const tIdxStr in s.observations) {
       const tIdx = parseInt(tIdxStr,10);
       const year = timeIndexToYear(tIdx);
-      const val = s.observations[tIdxStr]?.[0];
+      const val = s.observations[tIdxStr] ? s.observations[tIdxStr][0] : null;
       if (val==null) continue;
       const obj = outByYear.get(year) || { date: year };
       obj[geo] = val;
       outByYear.set(year, obj);
     }
   }
-  return Array.from(outByYear.values()).sort((a,b)=>a.date.localeCompare(b.date));
+  return Array.from(outByYear.values()).sort(function(a,b){ return a.date.localeCompare(b.date); });
 }
 
 function indexAtStart(data, countries){
@@ -187,7 +191,7 @@ function yoy(data, countries){
     const prev = String(Number(row.date)-1);
     const rowPrev = byYear.get(prev);
     countries.forEach(c => {
-      const v = row[c]; const p = rowPrev?.[c];
+      const v = row[c]; const p = rowPrev ? rowPrev[c] : null;
       out[c] = (v!=null && p!=null && p!==0) ? ((v/p - 1)*100) : null;
     });
     return out;
@@ -218,12 +222,10 @@ function movingAverage(data, countries, windowYears){
 const COLORS = ["#60a5fa","#a78bfa","#34d399","#f472b6","#f59e0b","#ef4444","#22c55e","#93c5fd","#fde047","#14b8a6","#38bdf8","#d946ef","#84cc16","#fb7185","#06b6d4"];
 
 function exportCSV(data, countries, filename="education.csv"){
-  // Build CSV safely — avoid literal newlines in string literals to prevent parser issues.
   const esc = (v) => {
     if (v == null) return "";
     const s = String(v);
-    const needsQuote = /[",
-]/.test(s); // checks for comma, quote, CR or LF
+    const needsQuote = /[",\r\n]/.test(s);
     return needsQuote ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
   const header = ["date", ...countries];
@@ -231,20 +233,7 @@ function exportCSV(data, countries, filename="education.csv"){
   for (const r of data) {
     rows.push([esc(r.date), ...countries.map(c => esc(r[c]))].join(","));
   }
-  const csv = rows.join(`
-`);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-  const csv = rows.join(`
-`);
+  const csv = rows.join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
