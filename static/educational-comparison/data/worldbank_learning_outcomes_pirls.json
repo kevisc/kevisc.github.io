@@ -1,0 +1,77 @@
+{
+  "group": "PIRLS",
+  "source": "World Bank EdStats via Indicators API",
+  "api_url_template": "https://api.worldbank.org/v2/country/{COUNTRY_LIST}/indicator/{INDICATOR}?format=json&per_page=20000",
+  "country_list_default": [
+    "USA",
+    "DEU",
+    "FRA",
+    "CHE",
+    "SWE",
+    "NOR",
+    "FIN",
+    "DNK",
+    "GBR",
+    "IRL",
+    "NLD",
+    "BEL",
+    "AUT",
+    "ITA",
+    "ESP",
+    "PRT",
+    "GRC",
+    "POL",
+    "CZE",
+    "HUN",
+    "SVK",
+    "SVN",
+    "EST",
+    "LVA",
+    "LTU",
+    "ISL",
+    "CAN",
+    "AUS",
+    "NZL",
+    "JPN",
+    "KOR",
+    "SGP",
+    "CHN",
+    "HKG",
+    "TWN",
+    "RUS",
+    "TUR",
+    "BRA",
+    "ARG",
+    "CHL",
+    "MEX",
+    "COL",
+    "ZAF",
+    "IND",
+    "IDN",
+    "MYS",
+    "THA",
+    "VNM",
+    "PHL",
+    "ARE",
+    "SAU",
+    "ISR"
+  ],
+  "indicators": [
+    {
+      "code": "LO.PIRLS.REA",
+      "name": "PIRLS: Mean performance on reading (grade 4) (score)"
+    },
+    {
+      "code": "LO.PIRLS.REA.FE",
+      "name": "PIRLS: Mean performance on reading, female (score)"
+    },
+    {
+      "code": "LO.PIRLS.REA.MA",
+      "name": "PIRLS: Mean performance on reading, male (score)"
+    },
+    {
+      "code": "LO.PIRLS.REA.INT",
+      "name": "PIRLS: International benchmark (share or score; see metadata)"
+    }
+  ]
+}
