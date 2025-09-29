@@ -2,15 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Inflation & Productivity — Net Inflation Visualizer</title>
+<title>Net Inflation Visualizer</title>
 <meta name="robots" content="noindex, nofollow"/>
-<link rel="preconnect" href="https://cdn.jsdelivr.net"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/300.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/400.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/600.css">
 <style>
 :root{--bg:#0b0c0f;--panel:#131722;--panel2:#0f1320;--text:#e8edf6;--muted:#9aa6bf;--accent:#ff7a00;--border:#263042}
-*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,var(--bg),#0c111b);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,var(--bg),#0c111b);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
 .wrap{max-width:1200px;margin:0 auto;padding:18px}header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
 .grid{display:grid;grid-template-columns:320px 1fr;gap:14px;margin-top:14px}@media(max-width:960px){.grid{grid-template-columns:1fr}}
@@ -18,16 +14,16 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
 .btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 10px;cursor:pointer}.btn:hover{border-color:var(--accent)}
 .small{font-size:12px;color:var(--muted)}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right}th:first-child,td:first-child{text-align:left}
 .accent{color:var(--accent)}.badge{border:1px solid var(--border);background:var(--panel2);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted)}
-.note{background:var(--panel2);border:1px dashed var(--border);border-radius:12px;padding:12px;color:var(--muted);font-size:12px}.chart-h{height:260px}.chart-h-sm{height:200px}
+.note{background:var(--panel2);border:1px dashed var(--border);border-radius:12px;padding:12px;color:var(--muted);font-size:12px}.chart-box{height:260px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:8px}
 .tabs{display:flex;gap:8px;margin-top:10px;margin-bottom:6px}.tab{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{border-color:var(--accent)}.hidden{display:none}
 .treadmill-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}.treadmill{position:relative;height:140px;border:none;border-radius:12px;background:transparent;overflow:hidden;flex:1;min-width:260px;max-width:520px}
 .belt{position:absolute;left:0;right:0;bottom:22px;height:36px;background:repeating-linear-gradient(90deg,#1e2434 0 20px,#283148 20px 40px);animation:belt-move var(--belt-duration,6s) linear infinite}
 .rollers{position:absolute;left:10px;right:10px;bottom:10px;height:12px;border-radius:6px;background:#1c2232;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
 .cat{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);font-size:46px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));animation:cat-bob var(--cat-duration,1.2s) ease-in-out infinite}
 .treadmill.deflate .belt{animation-direction:reverse}.tip{position:absolute;pointer-events:none;background:rgba(20,24,35,.92);color:#e8edf6;border:1px solid var(--border);padding:6px 8px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .12s}
+svg{width:100%;height:100%} .tooltip{position:absolute;pointer-events:none;background:rgba(20,24,35,.92);color:#e8edf6;border:1px solid var(--border);padding:6px 8px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .12s}
 @keyframes belt-move{from{background-position:0 0}to{background-position:400px 0}}@keyframes cat-bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-4px)}}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -63,9 +59,9 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
         <div><h3 style="margin:0">Decomposition and CPI</h3></div>
         <div class="small">Aggregate: <span id="agg" class="accent">0.0%</span></div>
       </div>
-      <div class="chart-h"><canvas id="bars"></canvas></div>
+      <div class="chart-box" id="barsBox"><svg id="barsSvg" viewBox="0 0 800 260" preserveAspectRatio="none"></svg></div>
       <div class="row" style="margin-top:10px">
-        <div class="chart-h-sm"><canvas id="waterfall"></canvas></div>
+        <div class="chart-box" style="flex:1"><svg id="wfSvg" viewBox="0 0 800 200" preserveAspectRatio="none"></svg></div>
       </div>
       <div style="margin-top:12px">
         <table id="table"><thead><tr><th>Good</th><th>Weight</th><th>ΔM (%)</th><th>ΔA (%)</th><th>Net (%)</th><th>Index</th></tr></thead><tbody></tbody></table>
@@ -102,7 +98,7 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
       <div style="min-width:200px;flex:1"><label>Annual rate</label><input id="biasRate" type="range" min="-20" max="30" step="0.1" value="5"></div>
       <div style="min-width:200px;flex:1"><label>Years</label><input id="biasYears" type="range" min="1" max="40" step="1" value="10"></div>
     </div>
-    <div class="chart-h" style="margin-top:8px"><canvas id="cashChart"></canvas></div>
+    <div class="chart-box"><svg id="cashSvg" viewBox="0 0 800 260" preserveAspectRatio="none"></svg></div>
   </section>
 
   <section class="card" style="margin-top:12px">
@@ -116,7 +112,7 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
       <div style="min-width:180px;flex:1"><label>Term (years)</label><input id="affTerm" type="range" min="10" max="40" step="1" value="30"></div>
       <div style="min-width:180px;flex:1"><label>Down payment (%)</label><input id="affDown" type="range" min="0" max="50" step="1" value="20"></div>
     </div>
-    <div class="chart-h" style="margin-top:8px"><canvas id="affChart"></canvas></div>
+    <div class="chart-box"><svg id="affSvg" viewBox="0 0 800 260" preserveAspectRatio="none"></svg></div>
     <div class="note" style="margin-top:10px">Holding the payment budget constant, lower rates raise the loan PV, making higher house prices appear “affordable”.</div>
   </section>
 
@@ -129,369 +125,9 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
     </ul>
   </section>
 </div>
+<div id="tooltip" class="tooltip"></div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function(){
-  // Tabs
-  var tabs=document.querySelectorAll('.tab');
-  var panes=document.querySelectorAll('.tabpane');
-  function showTab(id){
-    var i,j;
-    for(i=0;i<panes.length;i++){ panes[i].classList.toggle('hidden', panes[i].id!==id); }
-    for(j=0;j<tabs.length;j++){ var on=tabs[j].dataset.tab===id; tabs[j].classList.toggle('active', on); tabs[j].setAttribute('aria-selected', on?'true':'false'); }
-  }
-  var t;
-  for(t=0;t<tabs.length;t++){ (function(btn){ btn.addEventListener('click', function(){ showTab(btn.dataset.tab); }); })(tabs[t]); }
-  showTab('tab-net');
-
-  // State & examples
-  var state={ money:10, goods:[] };
-  var EX=[{name:'Bread',prod:2,weight:0.12},{name:'Smartphones',prod:20,weight:0.08},{name:'Electricity',prod:3,weight:0.07},{name:'Healthcare',prod:-1,weight:0.17},{name:'Education',prod:0.5,weight:0.10},{name:'Housing',prod:1,weight:0.30},{name:'Restaurants',prod:1.5,weight:0.16}];
-  var moneyEl=document.getElementById('money');
-  var moneyVal=document.getElementById('moneyVal');
-  var goodsC=document.getElementById('goods');
-  var tableBody=document.querySelector('#table tbody');
-  var aggEl=document.getElementById('agg');
-
-  function normalize(){
-    var s=0, i;
-    for(i=0;i<state.goods.length;i++){ s += (+state.goods[i].weight||0); }
-    if(!s) s=1;
-    for(i=0;i<state.goods.length;i++){ state.goods[i].weight = +(state.goods[i].weight/s).toFixed(3); }
-  }
-
-  function makeRow(g,i){
-    var d=document.createElement('div');
-    d.className='card';
-    d.style.marginBottom='8px';
-    d.innerHTML=''
-      + '<div class="row" style="align-items:center;justify-content:space-between">'
-      + '  <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">'
-      + '    <input data-k="name" style="min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px" value="'+g.name+'">'
-      + '    <div style="width:160px">'
-      + '      <label>Productivity ΔA (%)</label>'
-      + '      <input data-k="prod" type="range" min="-10" max="30" step="0.1" value="'+g.prod+'">'
-      + '      <div class="small">Current: <span class="accent" data-k="prodVal">'+g.prod.toFixed(1)+'%</span></div>'
-      + '    </div>'
-      + '    <div style="width:160px">'
-      + '      <label>Weight</label>'
-      + '      <input data-k="weight" type="range" min="0" max="1" step="0.01" value="'+g.weight+'">'
-      + '      <div class="small">Current: <span class="accent" data-k="weightVal">'+g.weight.toFixed(2)+'</span></div>'
-      + '    </div>'
-      + '  </div>'
-      + '  <div class="row">'
-      + '    <button class="btn" data-act="up">▲</button>'
-      + '    <button class="btn" data-act="down">▼</button>'
-      + '    <button class="btn" data-act="del">Delete</button>'
-      + '  </div>'
-      + '</div>';
-
-    var inputs=d.querySelectorAll('input');
-    var k;
-    for(k=0;k<inputs.length;k++){
-      (function(inp){
-        inp.addEventListener('input', function(){
-          var key=inp.getAttribute('data-k');
-          if(key==='name'){ state.goods[i].name=inp.value; }
-          if(key==='prod'){ state.goods[i].prod=+inp.value; d.querySelector('[data-k="prodVal"]').textContent=(+inp.value).toFixed(1)+'%'; }
-          if(key==='weight'){ state.goods[i].weight=+inp.value; d.querySelector('[data-k="weightVal"]').textContent=(+inp.value).toFixed(2); normalize(); render(); }
-          recompute();
-        });
-      })(inputs[k]);
-    }
-
-    var btns=d.querySelectorAll('button');
-    var b;
-    for(b=0;b<btns.length;b++){
-      (function(btn){
-        btn.addEventListener('click', function(){
-          var act=btn.getAttribute('data-act');
-          if(act==='del'){ state.goods.splice(i,1); render(); recompute(); return; }
-          if(act==='up' && i>0){ var tmp=state.goods[i-1]; state.goods[i-1]=state.goods[i]; state.goods[i]=tmp; render(); recompute(); }
-          if(act==='down' && i<state.goods.length-1){ var tmp2=state.goods[i+1]; state.goods[i+1]=state.goods[i]; state.goods[i]=tmp2; render(); recompute(); }
-        });
-      })(btns[b]);
-    }
-
-    return d;
-  }
-
-  function render(){
-    goodsC.innerHTML='';
-    var i;
-    for(i=0;i<state.goods.length;i++){ goodsC.appendChild(makeRow(state.goods[i], i)); }
-  }
-
-  function reset(){
-    state.goods=JSON.parse(JSON.stringify(EX));
-    normalize();
-    render();
-    recompute();
-  }
-
-  document.getElementById('addGood').addEventListener('click', function(){
-    state.goods.push({name:'New good', prod:0, weight:0.1});
-    normalize(); render(); recompute();
-  });
-  document.getElementById('resetGoods').addEventListener('click', reset);
-  reset();
-
-  moneyEl.addEventListener('input', function(){
-    state.money=+moneyEl.value; moneyVal.textContent=state.money.toFixed(1)+'%'; recompute();
-  });
-
-  // Charts
-  var barsCtx=document.getElementById('bars').getContext('2d');
-  var wfCtx=document.getElementById('waterfall').getContext('2d');
-
-  var barsChart=new Chart(barsCtx, {
-    type:'bar',
-    data:{ labels:[], datasets:[{ label:'Net (%)', data:[], borderWidth:1 }]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      scales:{ y:{ ticks:{ callback:function(v){ return v+'%'; } } } },
-      plugins:{
-        legend:{display:false},
-        tooltip:{ callbacks:{
-          title:function(it){ return it && it[0] ? it[0].label : ''; },
-          label:function(ctx){ return (typeof ctx.raw==='number' ? ctx.raw.toFixed(2) : ctx.raw) + '%'; },
-          afterLabel:function(ctx){
-            var i=ctx.dataIndex;
-            var isAgg = (i === ctx.chart.data.labels.length-1);
-            if(isAgg) return 'Aggregate of weighted nets';
-            var g=state.goods[i];
-            return g ? ('ΔM '+state.money.toFixed(1)+'%  −  ΔA '+(+g.prod).toFixed(1)+'%') : '';
-          }
-        } }
-      }
-    }
-  });
-
-  var wfChart=new Chart(wfCtx, {
-    type:'bar',
-    data:{ labels:['Start (100)','+ ΔM','− ΔA','Result'], datasets:[{ data:[100,0,0,0] }]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{ callbacks:{
-          title:function(it){ return it && it[0] ? it[0].label : ''; },
-          label:function(ctx){
-            var i=ctx.dataIndex; var v=+ctx.raw||0;
-            if(i===0) return 'Start: '+v.toFixed(2);
-            if(i===1) return '+ΔM: '+v.toFixed(2);
-            if(i===2) return '−ΔA: '+v.toFixed(2);
-            if(i===3) return 'Result: '+v.toFixed(2);
-            return v.toFixed(2);
-          }
-        } }
-      },
-      scales:{ y:{ beginAtZero:true } }
-    }
-  });
-
-  function recompute(){
-    var M=+state.money;
-    var rows=[];
-    var i;
-    for(i=0;i<state.goods.length;i++){
-      var g=state.goods[i];
-      var net=M-(+g.prod);
-      var idx=100*(1+net/100);
-      rows.push({ name:g.name, weight:+g.weight, M:M, A:+g.prod, net:net, idx:idx });
-    }
-
-    var wsum=0, j; for(j=0;j<rows.length;j++){ wsum+=rows[j].weight; } if(!wsum) wsum=1;
-    var agg=0, k; for(k=0;k<rows.length;k++){ agg+=rows[k].net*(rows[k].weight/wsum); }
-    aggEl.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
-
-    var labels=[], nets=[], a;
-    for(a=0;a<rows.length;a++){ labels.push(rows[a].name); nets.push(rows[a].net); }
-    labels.push('Aggregate'); nets.push(agg);
-    barsChart.data.labels=labels; barsChart.data.datasets[0].data=nets; barsChart.update();
-
-    if(rows.length){
-      var rowsCopy=rows.slice();
-      rowsCopy.sort(function(x,y){ return Math.abs(y.net)-Math.abs(x.net); });
-      var sel=rowsCopy[0];
-      var afterM=100*(1+sel.M/100);
-      var afterA=afterM*(1-sel.A/100);
-      wfChart.data.labels=[sel.name+': start (100)','+ ΔM = '+sel.M+'%','− ΔA = '+sel.A+'%','Result'];
-      wfChart.data.datasets[0].data=[100, afterM-100, -(afterM-afterA), afterA];
-      wfChart.update();
-    }
-
-    // Table
-    var html='', r;
-    for(r=0;r<rows.length;r++){
-      var row=rows[r];
-      html+='<tr><td>'+row.name+'</td><td>'+row.weight.toFixed(2)+'</td><td>'+row.M.toFixed(1)+'</td><td>'+row.A.toFixed(1)+'</td><td>'+row.net.toFixed(2)+'</td><td>'+row.idx.toFixed(2)+'</td></tr>';
-    }
-    var tbody=document.querySelector('#table tbody');
-    if(tbody){ tbody.innerHTML=html; }
-
-    // Treadmill
-    var tread=document.getElementById('treadmill');
-    var tval=document.getElementById('treadVal');
-    var cat=document.getElementById('tcat');
-    var ttip=document.getElementById('treadTip');
-    if(tread && tval && cat){
-      tval.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
-      var rate=Math.abs(agg);
-      var beltDur=Math.max(0.6, Math.min(12, 8/(rate+0.5)));
-      var catDur=Math.max(0.4, Math.min(2.2, 1.6/(rate+0.3)));
-      tread.style.setProperty('--belt-duration', beltDur+'s');
-      cat.style.setProperty('--cat-duration', catDur+'s');
-      if(agg<0){ tread.classList.add('deflate'); } else { tread.classList.remove('deflate'); }
-      if(ttip){ ttip.textContent='Aggregate: '+(Math.round(agg*100)/100).toFixed(2)+'%'; }
-    }
-  }
-  recompute();
-
-  // Treadmill tooltip
-  (function(){
-    var tread=document.getElementById('treadmill');
-    var tip=document.getElementById('treadTip');
-    if(!tread || !tip) return;
-    tread.addEventListener('mousemove', function(e){
-      var r=tread.getBoundingClientRect();
-      tip.style.left=(e.clientX - r.left + 12)+'px';
-      tip.style.top=(e.clientY - r.top - 12)+'px';
-      tip.style.opacity='1';
-    });
-    tread.addEventListener('mouseleave', function(){ tip.style.opacity='0'; });
-  })();
-
-  // Bias: $100 over time
-  var cashCanvas=document.getElementById('cashChart');
-  if(cashCanvas){
-    var cashCtx=cashCanvas.getContext('2d');
-    var cashChart=new Chart(cashCtx, {
-      type:'line',
-      data:{ labels:[], datasets:[{ label:'$100 nominal', data:[], borderWidth:2, pointRadius:0 }]},
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return '$'+(+ctx.raw).toFixed(2); } } } },
-        scales:{ y:{ ticks:{ callback:function(v){ return '$'+v; } } } }
-      }
-    });
-    var biasRate=document.getElementById('biasRate');
-    var biasYears=document.getElementById('biasYears');
-    var yearsVal=document.getElementById('yearsVal');
-    var rateVal=document.getElementById('rateVal');
-    var cashVal=document.getElementById('cashVal');
-    var cashHover=document.getElementById('cashHover');
-
-    function recomputeCash(){
-      var r=+biasRate.value/100;
-      var T=+biasYears.value;
-      yearsVal.textContent=String(T);
-      rateVal.textContent=(+(r*100).toFixed(1))+'%';
-      var labels=[], data=[], i;
-      for(i=0;i<=T;i++){ labels.push('t'+i); data.push(+(100*Math.pow(1+r,i)).toFixed(2)); }
-      cashChart.data.labels=labels; cashChart.data.datasets[0].data=data; cashChart.update();
-      cashVal.textContent='$'+data[data.length-1].toFixed(2);
-      cashHover.textContent='—';
-    }
-    biasRate.addEventListener('input', recomputeCash);
-    biasYears.addEventListener('input', recomputeCash);
-    recomputeCash();
-
-    cashCanvas.addEventListener('mousemove', function(evt){
-      var pts=cashChart.getElementsAtEventForMode(evt,'nearest',{intersect:false},false);
-      if(pts && pts.length){
-        var i=pts[0].index;
-        var v=cashChart.data.datasets[0].data[i];
-        cashHover.textContent='$'+(+v).toFixed(2)+' at t='+i;
-      } else {
-        cashHover.textContent='—';
-      }
-    });
-    cashCanvas.addEventListener('mouseleave', function(){ cashHover.textContent='—'; });
-  }
-
-  // Bias: affordability
-  var affCanvas=document.getElementById('affChart');
-  if(affCanvas){
-    var affCtx=affCanvas.getContext('2d');
-    var affChart=new Chart(affCtx, {
-      type:'line',
-      data:{ labels:[], datasets:[{ label:'Max affordable price', data:[], borderWidth:2, pointRadius:0 }]},
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return '$'+Math.round(+ctx.raw).toLocaleString(); } } } },
-        scales:{ y:{ ticks:{ callback:function(v){ return '$'+Number(v).toLocaleString(); } } } }
-      }
-    });
-
-    var affBudget=document.getElementById('affBudget');
-    var affRate=document.getElementById('affRate');
-    var affTerm=document.getElementById('affTerm');
-    var affDown=document.getElementById('affDown');
-    var affRateVal=document.getElementById('affRateVal');
-    var affBudVal=document.getElementById('affBudVal');
-    var affTermVal=document.getElementById('affTermVal');
-    var affDownVal=document.getElementById('affDownVal');
-    var affPriceVal=document.getElementById('affPriceVal');
-    var affHover=document.getElementById('affHover');
-
-    function paymentToPrincipal(pmt, annualRatePct, years){
-      var n=years*12;
-      var r=(annualRatePct/100)/12;
-      if(r<=0) return pmt*n;
-      return pmt * (1 - Math.pow(1+r, -n)) / r;
-    }
-    function fmtMoney(x){ return '$'+Math.round(x).toLocaleString(); }
-
-    function recomputeAff(){
-      var pmt=+affBudget.value;
-      var years=+affTerm.value;
-      var dp=+affDown.value/100;
-      var sel=+affRate.value;
-
-      affBudVal.textContent=fmtMoney(pmt);
-      affTermVal.textContent=years;
-      affDownVal.textContent=Math.round(dp*100)+'%';
-      affRateVal.textContent=sel.toFixed(1)+'%';
-
-      var labels=[], data=[], r;
-      for(r=1; r<=12.0001; r+=0.25){
-        labels.push(r.toFixed(2)+'%');
-        var loan=paymentToPrincipal(pmt, r, years);
-        var price=loan/(1-dp);
-        data.push(Math.max(0,price));
-      }
-      affChart.data.labels=labels;
-      affChart.data.datasets[0].data=data;
-      affChart.update();
-
-      var selPrice=paymentToPrincipal(pmt, sel, years)/(1-dp);
-      affPriceVal.textContent=fmtMoney(selPrice);
-      affHover.textContent='—';
-    }
-    affBudget.addEventListener('input',recomputeAff);
-    affRate.addEventListener('input',recomputeAff);
-    affTerm.addEventListener('input',recomputeAff);
-    affDown.addEventListener('input',recomputeAff);
-    recomputeAff();
-
-    affCanvas.addEventListener('mousemove', function(evt){
-      var c=Chart.getChart(affCanvas);
-      if(!c) return;
-      var pts=c.getElementsAtEventForMode(evt,'nearest',{intersect:false},false);
-      if(pts && pts.length){
-        var i=pts[0].index;
-        var v=c.data.datasets[0].data[i];
-        var lab=c.data.labels[i] || '';
-        affHover.textContent=lab+': $'+Math.round(+v).toLocaleString();
-      } else {
-        affHover.textContent='—';
-      }
-    });
-    affCanvas.addEventListener('mouseleave', function(){ affHover.textContent='—'; });
-  }
-});
-</script>
+<script src="app.js" defer></script>
 </body>
 </html>
