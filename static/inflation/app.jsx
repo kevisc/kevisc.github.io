@@ -4,7 +4,8 @@
 function $(sel){ return document.querySelector(sel); }
 function $all(sel){ return Array.prototype.slice.call(document.querySelectorAll(sel)); }
 
-document.addEventListener('DOMContentLoaded', function(){
+function __ready(fn){ if(document.readyState!=='loading'){ fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+__ready(function(){
   // Tabs
   var tabs=$all('.tab'), panes=$all('.tabpane');
   function showTab(id){
