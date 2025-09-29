@@ -131,52 +131,354 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   // Tabs
-  var tabs=document.querySelectorAll('.tab'), panes=document.querySelectorAll('.tabpane');
-  function showTab(id){ panes.forEach(function(p){p.classList.toggle('hidden',p.id!==id)}); tabs.forEach(function(b){var on=b.dataset.tab===id; b.classList.toggle('active',on); b.setAttribute('aria-selected',on?'true':'false');});}
-  tabs.forEach(function(b){b.addEventListener('click',function(){showTab(b.dataset.tab)})}); showTab('tab-net');
+  var tabs=document.querySelectorAll('.tab');
+  var panes=document.querySelectorAll('.tabpane');
+  function showTab(id){
+    for(var i=0;i<panes.length;i++){ panes[i].classList.toggle('hidden', panes[i].id!==id); }
+    for(var j=0;j<tabs.length;j++){ var on=tabs[j].dataset.tab===id; tabs[j].classList.toggle('active', on); tabs[j].setAttribute('aria-selected', on?'true':'false'); }
+  }
+  for(var t=0;t<tabs.length;t++){ (function(btn){ btn.addEventListener('click', function(){ showTab(btn.dataset.tab); }); })(tabs[t]); }
+  showTab('tab-net');
 
   // State & examples
-  var state={money:10,goods:[]};
-  var EX=[{name:'Bread',prod:2,weight:.12},{name:'Smartphones',prod:20,weight:.08},{name:'Electricity',prod:3,weight:.07},{name:'Healthcare',prod:-1,weight:.17},{name:'Education',prod:.5,weight:.10},{name:'Housing',prod:1,weight:.30},{name:'Restaurants',prod:1.5,weight:.16}];
-  var moneyEl=document.getElementById('money'), moneyVal=document.getElementById('moneyVal'), goodsC=document.getElementById('goods'), tableBody=document.querySelector('#table tbody'), aggEl=document.getElementById('agg');
-  function normalize(){var s=state.goods.reduce(function(a,g){return a+(+g.weight||0)},0)||1; state.goods.forEach(function(g){g.weight=+(g.weight/s).toFixed(3)})}
-  function makeRow(g,i){var d=document.createElement('div'); d.className='card'; d.style.marginBottom='8px'; d.innerHTML='\\\n    <div class=\"row\" style=\"align-items:center;justify-content:space-between\">\\\n      <div class=\"row\" style=\"align-items:center;gap:8px;flex-wrap:wrap\">\\\n        <input data-k=\"name\" style=\"min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px\" value=\"'+g.name+'\">\\\n        <div style=\"width:160px\"><label>Productivity ΔA (%)</label><input data-k=\"prod\" type=\"range\" min=\"-10\" max=\"30\" step=\"0.1\" value=\"'+g.prod+'\"><div class=\"small\">Current: <span class=\"accent\" data-k=\"prodVal\">'+g.prod.toFixed(1)+'%</span></div></div>\\\n        <div style=\"width:160px\"><label>Weight</label><input data-k=\"weight\" type=\"range\" min=\"0\" max=\"1\" step=\"0.01\" value=\"'+g.weight+'\"><div class=\"small\">Current: <span class=\"accent\" data-k=\"weightVal\">'+g.weight.toFixed(2)+'</span></div></div>\\\n      </div>\\\n      <div class=\"row\"><button class=\"btn\" data-act=\"up\">▲</button><button class=\"btn\" data-act=\"down\">▼</button><button class=\"btn\" data-act=\"del\">Delete</button></div>\\\n    </div>';
-    d.querySelectorAll('input').forEach(function(inp){inp.addEventListener('input',function(){var k=inp.getAttribute('data-k'); if(k==='name')state.goods[i].name=inp.value; if(k==='prod'){state.goods[i].prod=+inp.value; d.querySelector('[data-k=\"prodVal\"]').textContent=(+inp.value).toFixed(1)+'%'} if(k==='weight'){state.goods[i].weight=+inp.value; d.querySelector('[data-k=\"weightVal\"]').textContent=(+inp.value).toFixed(2); normalize(); render()} recompute()})});
-    d.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){var a=b.getAttribute('data-act'); if(a==='del'){state.goods.splice(i,1); render(); recompute()} if(a==='up'&&i>0){var tmp=state.goods[i-1]; state.goods[i-1]=state.goods[i]; state.goods[i]=tmp; render(); recompute()} if(a==='down'&&i<state.goods.length-1){var t2=state.goods[i+1]; state.goods[i+1]=state.goods[i]; state.goods[i]=t2; render(); recompute()}})});
+  var state={ money:10, goods:[] };
+  var EX=[{name:'Bread',prod:2,weight:0.12},{name:'Smartphones',prod:20,weight:0.08},{name:'Electricity',prod:3,weight:0.07},{name:'Healthcare',prod:-1,weight:0.17},{name:'Education',prod:0.5,weight:0.10},{name:'Housing',prod:1,weight:0.30},{name:'Restaurants',prod:1.5,weight:0.16}];
+  var moneyEl=document.getElementById('money');
+  var moneyVal=document.getElementById('moneyVal');
+  var goodsC=document.getElementById('goods');
+  var tableBody=document.querySelector('#table tbody');
+  var aggEl=document.getElementById('agg');
+
+  function normalize(){
+    var s=0, i;
+    for(i=0;i<state.goods.length;i++){ s += (+state.goods[i].weight||0); }
+    if(!s) s=1;
+    for(i=0;i<state.goods.length;i++){ state.goods[i].weight = +(state.goods[i].weight/s).toFixed(3); }
+  }
+
+  function makeRow(g,i){
+    var d=document.createElement('div');
+    d.className='card';
+    d.style.marginBottom='8px';
+    d.innerHTML=''
+      + '<div class="row" style="align-items:center;justify-content:space-between">'
+      + '  <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">'
+      + '    <input data-k="name" style="min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px" value="'+g.name+'">'
+      + '    <div style="width:160px">'
+      + '      <label>Productivity ΔA (%)</label>'
+      + '      <input data-k="prod" type="range" min="-10" max="30" step="0.1" value="'+g.prod+'">'
+      + '      <div class="small">Current: <span class="accent" data-k="prodVal">'+g.prod.toFixed(1)+'%</span></div>'
+      + '    </div>'
+      + '    <div style="width:160px">'
+      + '      <label>Weight</label>'
+      + '      <input data-k="weight" type="range" min="0" max="1" step="0.01" value="'+g.weight+'">'
+      + '      <div class="small">Current: <span class="accent" data-k="weightVal">'+g.weight.toFixed(2)+'</span></div>'
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="row">'
+      + '    <button class="btn" data-act="up">▲</button>'
+      + '    <button class="btn" data-act="down">▼</button>'
+      + '    <button class="btn" data-act="del">Delete</button>'
+      + '  </div>'
+      + '</div>';
+
+    var inputs=d.querySelectorAll('input');
+    for(var k=0;k<inputs.length;k++){
+      (function(inp){
+        inp.addEventListener('input', function(){
+          var key=inp.getAttribute('data-k');
+          if(key==='name'){ state.goods[i].name=inp.value; }
+          if(key==='prod'){ state.goods[i].prod=+inp.value; d.querySelector('[data-k="prodVal"]').textContent=(+inp.value).toFixed(1)+'%'; }
+          if(key==='weight'){ state.goods[i].weight=+inp.value; d.querySelector('[data-k="weightVal"]').textContent=(+inp.value).toFixed(2); normalize(); render(); }
+          recompute();
+        });
+      })(inputs[k]);
+    }
+
+    var btns=d.querySelectorAll('button');
+    for(var b=0;b<btns.length;b++){
+      (function(btn){
+        btn.addEventListener('click', function(){
+          var act=btn.getAttribute('data-act');
+          if(act==='del'){ state.goods.splice(i,1); render(); recompute(); return; }
+          if(act==='up' && i>0){ var tmp=state.goods[i-1]; state.goods[i-1]=state.goods[i]; state.goods[i]=tmp; render(); recompute(); }
+          if(act==='down' && i<state.goods.length-1){ var tmp2=state.goods[i+1]; state.goods[i+1]=state.goods[i]; state.goods[i]=tmp2; render(); recompute(); }
+        });
+      })(btns[b]);
+    }
+
     return d;
   }
-  function render(){ goodsC.innerHTML=''; state.goods.forEach(function(g,i){goodsC.appendChild(makeRow(g,i))}); }
-  function reset(){ state.goods=JSON.parse(JSON.stringify(EX)); normalize(); render(); recompute(); }
-  document.getElementById('addGood').addEventListener('click',function(){state.goods.push({name:'New good',prod:0,weight:.1}); normalize(); render(); recompute()});
-  document.getElementById('resetGoods').addEventListener('click',reset); reset();
-  moneyEl.addEventListener('input',function(){state.money=+moneyEl.value; moneyVal.textContent=state.money.toFixed(1)+'%'; recompute()});
+
+  function render(){
+    goodsC.innerHTML='';
+    for(var i=0;i<state.goods.length;i++){ goodsC.appendChild(makeRow(state.goods[i], i)); }
+  }
+
+  function reset(){
+    state.goods=JSON.parse(JSON.stringify(EX));
+    normalize();
+    render();
+    recompute();
+  }
+
+  document.getElementById('addGood').addEventListener('click', function(){
+    state.goods.push({name:'New good', prod:0, weight:0.1});
+    normalize(); render(); recompute();
+  });
+  document.getElementById('resetGoods').addEventListener('click', reset);
+  reset();
+
+  moneyEl.addEventListener('input', function(){
+    state.money=+moneyEl.value; moneyVal.textContent=state.money.toFixed(1)+'%'; recompute();
+  });
 
   // Charts
   var barsCtx=document.getElementById('bars').getContext('2d');
   var wfCtx=document.getElementById('waterfall').getContext('2d');
-  var barsChart=new Chart(barsCtx,{type:'bar',data:{labels:[],datasets:[{label:'Net (%)',data:[],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:function(v){return v+'%'}}}},plugins:{legend:{display:false},tooltip:{callbacks:{title:function(it){return it[0]?it[0].label:''},label:function(ctx){return (typeof ctx.raw==='number'?ctx.raw.toFixed(2):ctx.raw)+'%'},afterLabel:function(ctx){var i=ctx.dataIndex,isAgg=i===ctx.chart.data.labels.length-1;if(isAgg)return 'Aggregate of weighted nets';var g=state.goods[i];return g?'ΔM '+state.money.toFixed(1)+'%  −  ΔA '+(+g.prod).toFixed(1)+'%':''}}}}});
-  var wfChart=new Chart(wfCtx,{type:'bar',data:{labels:['Start (100)','+ ΔM','− ΔA','Result'],datasets:[{data:[100,0,0,0]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:function(it){return it[0]?it[0].label:''},label:function(ctx){var i=ctx.dataIndex,v=+ctx.raw||0;if(i===0)return 'Start: '+v.toFixed(2);if(i===1)return '+ΔM: '+v.toFixed(2);if(i===2)return '−ΔA: '+v.toFixed(2);if(i===3)return 'Result: '+v.toFixed(2);return v.toFixed(2)}}}},scales:{y:{beginAtZero:true}}});
+
+  var barsChart=new Chart(barsCtx, {
+    type:'bar',
+    data:{ labels:[], datasets:[{ label:'Net (%)', data:[], borderWidth:1 }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{ y:{ ticks:{ callback:function(v){ return v+'%'; } } } },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{
+          title:function(it){ return it && it[0] ? it[0].label : ''; },
+          label:function(ctx){ return (typeof ctx.raw==='number' ? ctx.raw.toFixed(2) : ctx.raw) + '%'; },
+          afterLabel:function(ctx){
+            var i=ctx.dataIndex;
+            var isAgg = (i === ctx.chart.data.labels.length-1);
+            if(isAgg) return 'Aggregate of weighted nets';
+            var g=state.goods[i];
+            return g ? ('ΔM '+state.money.toFixed(1)+'%  −  ΔA '+(+g.prod).toFixed(1)+'%') : '';
+          }
+        } }
+      }
+    }
+  });
+
+  var wfChart=new Chart(wfCtx, {
+    type:'bar',
+    data:{ labels:['Start (100)','+ ΔM','− ΔA','Result'], datasets:[{ data:[100,0,0,0] }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{
+          title:function(it){ return it && it[0] ? it[0].label : ''; },
+          label:function(ctx){
+            var i=ctx.dataIndex; var v=+ctx.raw||0;
+            if(i===0) return 'Start: '+v.toFixed(2);
+            if(i===1) return '+ΔM: '+v.toFixed(2);
+            if(i===2) return '−ΔA: '+v.toFixed(2);
+            if(i===3) return 'Result: '+v.toFixed(2);
+            return v.toFixed(2);
+          }
+        } }
+      },
+      scales:{ y:{ beginAtZero:true } }
+    }
+  });
 
   function recompute(){
-    var M=+state.money; var rows=state.goods.map(function(g){return {name:g.name,weight:+g.weight,M:M,A:+g.prod,net:M-(+g.prod),idx:100*(1+(M-(+g.prod))/100)}});
-    var wsum=rows.reduce(function(a,r){return a+r.weight},0)||1; var agg=rows.reduce(function(a,r){return a+r.net*(r.weight/wsum)},0);
+    var M=+state.money;
+    var rows=[];
+    for(var i=0;i<state.goods.length;i++){
+      var g=state.goods[i];
+      var net=M-(+g.prod);
+      var idx=100*(1+net/100);
+      rows.push({ name:g.name, weight:+g.weight, M:M, A:+g.prod, net:net, idx:idx });
+    }
+
+    var wsum=0; for(var j=0;j<rows.length;j++){ wsum+=rows[j].weight; } if(!wsum) wsum=1;
+    var agg=0; for(var k=0;k<rows.length;k++){ agg+=rows[k].net*(rows[k].weight/wsum); }
     aggEl.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
-    barsChart.data.labels=rows.map(function(r){return r.name}).concat(['Aggregate']); barsChart.data.datasets[0].data=rows.map(function(r){return r.net}).concat([agg]); barsChart.update();
-    if(rows.length){ var sel=rows.slice().sort(function(a,b){return Math.abs(b.net)-Math.abs(a.net)})[0]; var afterM=100*(1+sel.M/100), afterA=afterM*(1-sel.A/100); wfChart.data.labels=[sel.name+': start (100)','+ ΔM = '+sel.M+'%','− ΔA = '+sel.A+'%','Result']; wfChart.data.datasets[0].data=[100,afterM-100,-(afterM-afterA),afterA]; wfChart.update(); }
-    tableBody.innerHTML=rows.map(function(r){return '<tr><td>'+r.name+'</td><td>'+r.weight.toFixed(2)+'</td><td>'+r.M.toFixed(1)+'</td><td>'+r.A.toFixed(1)+'</td><td>'+r.net.toFixed(2)+'</td><td>'+r.idx.toFixed(2)+'</td></tr>'}).join('');
-    var tread=document.getElementById('treadmill'), tval=document.getElementById('treadVal'), cat=document.getElementById('tcat'), ttip=document.getElementById('treadTip');
-    if(tread&&tval&&cat){ tval.textContent=(Math.round(agg*100)/100).toFixed(2)+'%'; var rate=Math.abs(agg); var beltDur=Math.max(.6,Math.min(12,8/(rate+.5))); var catDur=Math.max(.4,Math.min(2.2,1.6/(rate+.3))); tread.style.setProperty('--belt-duration',beltDur+'s'); cat.style.setProperty('--cat-duration',catDur+'s'); tread.classList.toggle('deflate',agg<0); if(ttip) ttip.textContent='Aggregate: '+(Math.round(agg*100)/100).toFixed(2)+'%'; }
+
+    var labels=[], nets=[];
+    for(var a=0;a<rows.length;a++){ labels.push(rows[a].name); nets.push(rows[a].net); }
+    labels.push('Aggregate'); nets.push(agg);
+    barsChart.data.labels=labels; barsChart.data.datasets[0].data=nets; barsChart.update();
+
+    if(rows.length){
+      var sel=rows.slice().sort(function(x,y){ return Math.abs(y.net)-Math.abs(x.net); })[0];
+      var afterM=100*(1+sel.M/100);
+      var afterA=afterM*(1-sel.A/100);
+      wfChart.data.labels=[sel.name+': start (100)','+ ΔM = '+sel.M+'%','− ΔA = '+sel.A+'%','Result'];
+      wfChart.data.datasets[0].data=[100, afterM-100, -(afterM-afterA), afterA];
+      wfChart.update();
+    }
+
+    var html='';
+    for(var r=0;r<rows.length;r++){
+      var row=rows[r];
+      html+='<tr><td>'+row.name+'</td><td>'+row.weight.toFixed(2)+'</td><td>'+row.M.toFixed(1)+'</td><td>'+row.A.toFixed(1)+'</td><td>'+row.net.toFixed(2)+'</td><td>'+row.idx.toFixed(2)+'</td></tr>';
+    }
+    tableBody.innerHTML=html;
+
+    // Treadmill
+    var tread=document.getElementById('treadmill');
+    var tval=document.getElementById('treadVal');
+    var cat=document.getElementById('tcat');
+    var ttip=document.getElementById('treadTip');
+    if(tread && tval && cat){
+      tval.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
+      var rate=Math.abs(agg);
+      var beltDur=Math.max(0.6, Math.min(12, 8/(rate+0.5)));
+      var catDur=Math.max(0.4, Math.min(2.2, 1.6/(rate+0.3)));
+      tread.style.setProperty('--belt-duration', beltDur+'s');
+      cat.style.setProperty('--cat-duration', catDur+'s');
+      if(agg<0){ tread.classList.add('deflate'); } else { tread.classList.remove('deflate'); }
+      if(ttip){ ttip.textContent='Aggregate: '+(Math.round(agg*100)/100).toFixed(2)+'%'; }
+    }
   }
   recompute();
 
   // Treadmill tooltip
-  (function(){var tread=document.getElementById('treadmill'), tip=document.getElementById('treadTip'); if(!tread||!tip)return; tread.addEventListener('mousemove',function(e){var r=tread.getBoundingClientRect(); tip.style.left=(e.clientX-r.left+12)+'px'; tip.style.top=(e.clientY-r.top-12)+'px'; tip.style.opacity='1'}); tread.addEventListener('mouseleave',function(){tip.style.opacity='0'})})();
+  (function(){
+    var tread=document.getElementById('treadmill');
+    var tip=document.getElementById('treadTip');
+    if(!tread || !tip) return;
+    tread.addEventListener('mousemove', function(e){
+      var r=tread.getBoundingClientRect();
+      tip.style.left=(e.clientX - r.left + 12)+'px';
+      tip.style.top=(e.clientY - r.top - 12)+'px';
+      tip.style.opacity='1';
+    });
+    tread.addEventListener('mouseleave', function(){ tip.style.opacity='0'; });
+  })();
 
-  // Bias tab charts ($100 over time)
-  var cashCanvas=document.getElementById('cashChart'); if(cashCanvas){ var cashCtx=cashCanvas.getContext('2d'); var cashChart=new Chart(cashCtx,{type:'line',data:{labels:[],datasets:[{label:'$100 nominal',data:[],borderWidth:2,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return '$'+(+ctx.raw).toFixed(2)}}}},scales:{y:{ticks:{callback:function(v){return '$'+v}}}}}); var biasRate=document.getElementById('biasRate'), biasYears=document.getElementById('biasYears'), yearsVal=document.getElementById('yearsVal'), rateVal=document.getElementById('rateVal'), cashVal=document.getElementById('cashVal'), cashHover=document.getElementById('cashHover'); function rec(){ var r=+biasRate.value/100, T=+biasYears.value; yearsVal.textContent=String(T); rateVal.textContent=(+(r*100).toFixed(1))+'%'; var labels=Array.from({length:T+1},function(_,i){return i}); var data=labels.map(function(_,t){return +(100*Math.pow(1+r,t)).toFixed(2)}); cashChart.data.labels=labels.map(function(y){return 't'+y}); cashChart.data.datasets[0].data=data; cashChart.update(); cashVal.textContent='$'+data[data.length-1].toFixed(2); cashHover.textContent='—'; } biasRate.addEventListener('input',rec); biasYears.addEventListener('input',rec); rec(); cashCanvas.addEventListener('mousemove',function(evt){ var pts=cashChart.getElementsAtEventForMode(evt,'nearest',{intersect:false},false); if(pts&&pts.length){ var i=pts[0].index, v=cashChart.data.datasets[0].data[i]; cashHover.textContent='$'+(+v).toFixed(2)+' at t='+i; } else cashHover.textContent='—'; }); cashCanvas.addEventListener('mouseleave',function(){ cashHover.textContent='—'; }); }
+  // Bias: $100 over time
+  var cashCanvas=document.getElementById('cashChart');
+  if(cashCanvas){
+    var cashCtx=cashCanvas.getContext('2d');
+    var cashChart=new Chart(cashCtx, {
+      type:'line',
+      data:{ labels:[], datasets:[{ label:'$100 nominal', data:[], borderWidth:2, pointRadius:0 }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return '$'+(+ctx.raw).toFixed(2); } } } },
+        scales:{ y:{ ticks:{ callback:function(v){ return '$'+v; } } } }
+      }
+    });
+    var biasRate=document.getElementById('biasRate');
+    var biasYears=document.getElementById('biasYears');
+    var yearsVal=document.getElementById('yearsVal');
+    var rateVal=document.getElementById('rateVal');
+    var cashVal=document.getElementById('cashVal');
+    var cashHover=document.getElementById('cashHover');
 
-  // Bias tab charts (affordability)
-  var affCanvas=document.getElementById('affChart'); if(affCanvas){ var ctx=affCanvas.getContext('2d'); var chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Max affordable price',data:[],borderWidth:2,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return '$'+Math.round(+ctx.raw).toLocaleString()}}}},scales:{y:{ticks:{callback:function(v){return '$'+Number(v).toLocaleString()}}}}}); var affBudget=document.getElementById('affBudget'), affRate=document.getElementById('affRate'), affTerm=document.getElementById('affTerm'), affDown=document.getElementById('affDown'), affRateVal=document.getElementById('affRateVal'), affBudVal=document.getElementById('affBudVal'), affTermVal=document.getElementById('affTermVal'), affDownVal=document.getElementById('affDownVal'), affPriceVal=document.getElementById('affPriceVal'), affHover=document.getElementById('affHover'); function P(pmt,apr,yrs){ var n=yrs*12, r=(apr/100)/12; return r<=0? pmt*n : pmt*(1-Math.pow(1+r,-n))/r; } function fmt(x){ return '$'+Math.round(x).toLocaleString(); } function recA(){ var p=+affBudget.value, yrs=+affTerm.value, dp=+affDown.value/100, sel=+affRate.value; affBudVal.textContent=fmt(p); affTermVal.textContent=yrs; affDownVal.textContent=Math.round(dp*100)+'%'; affRateVal.textContent=sel.toFixed(1)+'%'; var labels=[], data=[]; for(var r=1;r<=12.0001;r+=0.25){ labels.push(r.toFixed(2)+'%'); var loan=P(p,r,yrs), price=loan/(1-dp); data.push(Math.max(0,price)); } chart.data.labels=labels; chart.data.datasets[0].data=data; chart.update(); var priceSel=P(p,sel,yrs)/(1-dp); affPriceVal.textContent=fmt(priceSel); affHover.textContent='—'; } affBudget.addEventListener('input',recA); affRate.addEventListener('input',recA); affTerm.addEventListener('input',recA); affDown.addEventListener('input',recA); recA(); affCanvas.addEventListener('mousemove',function(evt){ var c=Chart.getChart(affCanvas); if(!c)return; var pts=c.getElementsAtEventForMode(evt,'nearest',{intersect:false},false); if(pts&&pts.length){ var i=pts[0].index, v=c.data.datasets[0].data[i], lab=c.data.labels[i]||''; affHover.textContent=lab+': $'+Math.round(+v).toLocaleString(); } else affHover.textContent='—'; }); affCanvas.addEventListener('mouseleave',function(){ affHover.textContent='—'; }); }
+    function recomputeCash(){
+      var r=+biasRate.value/100;
+      var T=+biasYears.value;
+      yearsVal.textContent=String(T);
+      rateVal.textContent=(+(r*100).toFixed(1))+'%';
+      var labels=[], data=[];
+      for(var i=0;i<=T;i++){ labels.push('t'+i); data.push(+(100*Math.pow(1+r,i)).toFixed(2)); }
+      cashChart.data.labels=labels; cashChart.data.datasets[0].data=data; cashChart.update();
+      cashVal.textContent='$'+data[data.length-1].toFixed(2);
+      cashHover.textContent='—';
+    }
+    biasRate.addEventListener('input', recomputeCash);
+    biasYears.addEventListener('input', recomputeCash);
+    recomputeCash();
+
+    cashCanvas.addEventListener('mousemove', function(evt){
+      var pts=cashChart.getElementsAtEventForMode(evt,'nearest',{intersect:false},false);
+      if(pts && pts.length){
+        var i=pts[0].index;
+        var v=cashChart.data.datasets[0].data[i];
+        cashHover.textContent='$'+(+v).toFixed(2)+' at t='+i;
+      } else {
+        cashHover.textContent='—';
+      }
+    });
+    cashCanvas.addEventListener('mouseleave', function(){ cashHover.textContent='—'; });
+  }
+
+  // Bias: affordability
+  var affCanvas=document.getElementById('affChart');
+  if(affCanvas){
+    var affCtx=affCanvas.getContext('2d');
+    var affChart=new Chart(affCtx, {
+      type:'line',
+      data:{ labels:[], datasets:[{ label:'Max affordable price', data:[], borderWidth:2, pointRadius:0 }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return '$'+Math.round(+ctx.raw).toLocaleString(); } } } },
+        scales:{ y:{ ticks:{ callback:function(v){ return '$'+Number(v).toLocaleString(); } } } }
+      }
+    });
+
+    var affBudget=document.getElementById('affBudget');
+    var affRate=document.getElementById('affRate');
+    var affTerm=document.getElementById('affTerm');
+    var affDown=document.getElementById('affDown');
+    var affRateVal=document.getElementById('affRateVal');
+    var affBudVal=document.getElementById('affBudVal');
+    var affTermVal=document.getElementById('affTermVal');
+    var affDownVal=document.getElementById('affDownVal');
+    var affPriceVal=document.getElementById('affPriceVal');
+    var affHover=document.getElementById('affHover');
+
+    function paymentToPrincipal(pmt, annualRatePct, years){
+      var n=years*12;
+      var r=(annualRatePct/100)/12;
+      if(r<=0) return pmt*n;
+      return pmt * (1 - Math.pow(1+r, -n)) / r;
+    }
+    function fmtMoney(x){ return '$'+Math.round(x).toLocaleString(); }
+
+    function recomputeAff(){
+      var pmt=+affBudget.value;
+      var years=+affTerm.value;
+      var dp=+affDown.value/100;
+      var sel=+affRate.value;
+
+      affBudVal.textContent=fmtMoney(pmt);
+      affTermVal.textContent=years;
+      affDownVal.textContent=Math.round(dp*100)+'%';
+      affRateVal.textContent=sel.toFixed(1)+'%';
+
+      var labels=[], data=[];
+      var r;
+      for(r=1; r<=12.0001; r+=0.25){
+        labels.push(r.toFixed(2)+'%');
+        var loan=paymentToPrincipal(pmt, r, years);
+        var price=loan/(1-dp);
+        data.push(Math.max(0,price));
+      }
+      affChart.data.labels=labels;
+      affChart.data.datasets[0].data=data;
+      affChart.update();
+
+      var selPrice=paymentToPrincipal(pmt, sel, years)/(1-dp);
+      affPriceVal.textContent=fmtMoney(selPrice);
+      affHover.textContent='—';
+    }
+    affBudget.addEventListener('input',recomputeAff);
+    affRate.addEventListener('input',recomputeAff);
+    affTerm.addEventListener('input',recomputeAff);
+    affDown.addEventListener('input',recomputeAff);
+    recomputeAff();
+
+    affCanvas.addEventListener('mousemove', function(evt){
+      var c=Chart.getChart(affCanvas);
+      if(!c) return;
+      var pts=c.getElementsAtEventForMode(evt,'nearest',{intersect:false},false);
+      if(pts && pts.length){
+        var i=pts[0].index;
+        var v=c.data.datasets[0].data[i];
+        var lab=c.data.labels[i] || '';
+        affHover.textContent=lab+': $'+Math.round(+v).toLocaleString();
+      } else {
+        affHover.textContent='—';
+      }
+    });
+    affCanvas.addEventListener('mouseleave', function(){ affHover.textContent='—'; });
+  }
 });
 </script>
 </body>
