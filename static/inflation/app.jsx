@@ -95,8 +95,19 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   function hideTip(){ tooltip.style.opacity='0'; }
 
-  // Axis with ticks & gridlines
-  function drawAxes(svg, W, H, pad, yMin, yMax, yTicks, xTicks, xLabeler){
+  // Number formatter for y-axis (compact notation)
+  function compactMoney(n){
+    n = +n;
+    var a = Math.abs(n);
+    if (a >= 1e12) return (n/1e12).toFixed(2)+'T';
+    if (a >= 1e9)  return (n/1e9).toFixed(2)+'B';
+    if (a >= 1e6)  return (n/1e6).toFixed(2)+'M';
+    if (a >= 1e3)  return (n/1e3).toFixed(2)+'K';
+    return (Math.round(n*100)/100).toString();
+  }
+
+  // Axis with ticks & gridlines; yLabelFmt optional
+  function drawAxes(svg, W, H, pad, yMin, yMax, yTicks, xTicks, xLabeler, yLabelFmt){
     // Axes
     line(svg, pad, H-pad, W-pad, H-pad, '#c9d2e3',1); // X
     line(svg, pad, pad, pad, H-pad, '#c9d2e3',1);     // Y
@@ -106,7 +117,8 @@ document.addEventListener('DOMContentLoaded', function(){
       var y = H - pad - (H-2*pad)*(i/yTicks);
       line(svg, pad, y, W-pad, y, '#263042',1);
       var v = yMin + (yMax-yMin)*(i/yTicks);
-      text(svg, pad-6, y+4, (Math.round(v*10)/10)+'', 'end');
+      var lab = yLabelFmt ? yLabelFmt(v) : (Math.round(v*10)/10)+'';
+      text(svg, pad-8, y+4, lab, 'end');
     }
     // X ticks (optional)
     if(xTicks && xTicks.length){
@@ -123,12 +135,11 @@ document.addEventListener('DOMContentLoaded', function(){
   // ---------- Charts ----------
   function drawBars(rows, agg){
     var svg = $('#barsSvg'); empty(svg);
-    var W=800,H=300, pad=36;
+    var W=800,H=300, pad=48; // a bit larger left pad for labels
     var min=0,max=0,i; for(i=0;i<rows.length;i++){ if(rows[i].net<min)min=rows[i].net; if(rows[i].net>max)max=rows[i].net; }
     if(agg<min)min=agg; if(agg>max)max=agg;
     if(min===max){ min-=1; max+=1; }
-    // axes & grid (5 y ticks)
-    drawAxes(svg,W,H,pad,min,max,5,[],null);
+    drawAxes(svg,W,H,pad,min,max,5,[],null,function(v){ return (Math.round(v*10)/10)+'%'; });
     var labels = rows.map(function(r){return r.name}).concat(['Aggregate']);
     var values = rows.map(function(r){return r.net}).concat([agg]);
     var n=labels.length, bw=Math.max(14, (W-2*pad)/n - 8), gap=((W-2*pad)-n*bw)/(n-1>0?(n-1):1);
@@ -143,65 +154,57 @@ document.addEventListener('DOMContentLoaded', function(){
       var color = idx===labels.length-1 ? '#ff7a00' : '#5aa9ff';
       var r = rect(svg, x, top, bw, h, null, color);
       text(svg, x+bw/2, H-8, labels[idx], 'middle');
-      // hover
       (function(lbl,val){
         r.addEventListener('mousemove', function(ev){ showTip(ev.clientX+8, ev.clientY-10, lbl+': '+val.toFixed(2)+'%'); });
         r.addEventListener('mouseleave', hideTip);
       })(labels[idx], v);
       x += bw + gap;
     }
-    // zero axis
     line(svg, pad, zero, W-pad, zero, '#c9d2e3',1);
   }
 
   function drawCash(ratePct, years){
     var svg=$('#cashSvg'); empty(svg);
-    var W=800,H=300,pad=40;
+    var W=800,H=300,pad=64; // more left pad for big labels
     var T=years, r=ratePct/100;
     var vals=[], t;
     for(t=0;t<=T;t++) vals.push(+(100*Math.pow(1+r,t)).toFixed(2));
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
     if(min===max){ min-=1; max+=1; }
-    // axes & grid
-    var xTicks=[]; for(t=0;t<=T;t+=max>=20?5:1){ xTicks.push({t:t/T, v:t}); }
-    drawAxes(svg,W,H,pad,min,max,5,xTicks,function(it){ return 't'+it.v; });
-    // line
+    var xTicks=[]; for(t=0;t<=T;t+=max>=20?5:1){ xTicks.push({t:(T? t/T : 0), v:t}); }
+    drawAxes(svg,W,H,pad,min,max,5,xTicks,function(it){ return 't'+it.v; }, function(v){ return '$'+compactMoney(v); });
     var pts=[];
     for(t=0;t<=T;t++){
-      var x=pad + (W-2*pad)*(t/T);
+      var x=pad + (W-2*pad)*(T? t/T : 0);
       var y=H-pad - (vals[t]-min)*(H-2*pad)/(max-min);
       pts.push([x,y]);
     }
     polyline(svg, pts, '#ff7a00');
-    // hover
     svg.addEventListener('mousemove', function(ev){
       var rectB=svg.getBoundingClientRect();
       var mx=ev.clientX-rectB.left, best=0, bestd=1e9;
       var i; for(i=0;i<pts.length;i++){ var dx=Math.abs(pts[i][0]-mx); if(dx<bestd){bestd=dx; best=i;} }
-      $('#cashHover').textContent='$'+vals[best].toFixed(2)+' at t='+best;
+      $('#cashHover').textContent='$'+(Math.round(vals[best]*100)/100).toFixed(2)+' at t='+best;
     });
     svg.addEventListener('mouseleave', function(){ $('#cashHover').textContent='—'; });
-    $('#cashVal').textContent='$'+vals[vals.length-1].toFixed(2);
+    $('#cashVal').textContent='$'+(Math.round(vals[vals.length-1]*100)/100).toFixed(2);
   }
 
   function drawAff(pmt, rateSel, years, downPct){
     var svg=$('#affSvg'); empty(svg);
-    var W=800,H=300,pad=40;
+    var W=800,H=300,pad=64;
     function loanPV(p,apr,yrs){ var n=yrs*12, r=(apr/100)/12; return r<=0? p*n : p*(1-Math.pow(1+r,-n))/r; }
     function priceAtRate(r){ return loanPV(pmt,r,years)/(1-downPct/100); }
     var labels=[], rates=[], vals=[], r;
     for(r=1;r<=12.0001;r+=0.25){ rates.push(+r.toFixed(2)); vals.push(priceAtRate(r)); labels.push(r.toFixed(2)+'%'); }
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
-    // axes & grid
     var xTicks=[], i;
     for(i=0;i<rates.length;i+=8){ xTicks.push({t:i/(rates.length-1), v:labels[i]}); }
-    drawAxes(svg,W,H,pad,min,max,5,xTicks,function(it){ return it.v; });
-    // line
+    drawAxes(svg,W,H,pad,min,max,5,xTicks,function(it){ return it.v; }, function(v){ return '$'+compactMoney(v); });
     var pts=[]; for(i=0;i<vals.length;i++){ var x=pad+(W-2*pad)*(i/(vals.length-1)); var y=H-pad - (vals[i]-min)*(H-2*pad)/(max-min || 1); pts.push([x,y]); }
     polyline(svg, pts, '#5aa9ff');
     var selPrice=priceAtRate(rateSel);
     $('#affPriceVal').textContent='$'+Math.round(selPrice).toLocaleString();
-    // hover
     svg.addEventListener('mousemove', function(ev){
       var rectB=svg.getBoundingClientRect();
       var mx=ev.clientX-rectB.left, best=0, bestd=1e9;
@@ -217,13 +220,10 @@ document.addEventListener('DOMContentLoaded', function(){
     var wsum=rows.reduce(function(a,r){return a+r.weight;},0)||1;
     var agg=rows.reduce(function(a,r){return a+r.net*(r.weight/wsum);},0);
     aggEl.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
-    // table
     tbody.innerHTML=rows.map(function(r){
       return '<tr><td>'+r.name+'</td><td>'+r.weight.toFixed(2)+'</td><td>'+r.M.toFixed(1)+'</td><td>'+r.A.toFixed(1)+'</td><td>'+r.net.toFixed(2)+'</td><td>'+r.idx.toFixed(2)+'</td></tr>';
     }).join('');
-    // bars
     drawBars(rows, agg);
-    // treadmill
     var tread=$('#treadmill'), tval=$('#treadVal'), cat=$('#tcat'), tip=$('#treadTip');
     tval.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
     var rate=Math.abs(agg); var beltDur=Math.max(0.6, Math.min(12, 8/(rate+0.5))); var catDur=Math.max(0.4, Math.min(2.2, 1.6/(rate+0.3)));
@@ -233,7 +233,6 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   recompute();
 
-  // treadmill tooltip
   (function(){ var tread=$('#treadmill'), tip=$('#treadTip'); tread.addEventListener('mousemove', function(e){ var r=tread.getBoundingClientRect(); tip.style.left=(e.clientX-r.left+12)+'px'; tip.style.top=(e.clientY-r.top-12)+'px'; tip.style.opacity='1';}); tread.addEventListener('mouseleave', function(){ tip.style.opacity='0';}); })();
 
   // Bias $100
