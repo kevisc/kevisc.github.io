@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Net Inflation Visualizer</title>
+<title>Inflation & Productivity — Net Inflation Visualizer</title>
 <meta name="robots" content="noindex, nofollow"/>
 <link rel="preconnect" href="https://cdn.jsdelivr.net"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/300.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/600.css">
 <style>
 :root{--bg:#0b0c0f;--panel:#131722;--panel2:#0f1320;--text:#e8edf6;--muted:#9aa6bf;--accent:#ff7a00;--border:#263042}
-*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,var(--bg),#0c111b);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,var(--bg),#0c111b);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
 .wrap{max-width:1200px;margin:0 auto;padding:18px}header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
 .grid{display:grid;grid-template-columns:320px 1fr;gap:14px;margin-top:14px}@media(max-width:960px){.grid{grid-template-columns:1fr}}
@@ -17,7 +20,7 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[ty
 .accent{color:var(--accent)}.badge{border:1px solid var(--border);background:var(--panel2);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted)}
 .note{background:var(--panel2);border:1px dashed var(--border);border-radius:12px;padding:12px;color:var(--muted);font-size:12px}.chart-h{height:260px}.chart-h-sm{height:200px}
 .tabs{display:flex;gap:8px;margin-top:10px;margin-bottom:6px}.tab{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{border-color:var(--accent)}.hidden{display:none}
-/*Treadmill*/.treadmill-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}.treadmill{position:relative;height:140px;border:none;border-radius:12px;background:transparent;overflow:hidden;flex:1;min-width:260px;max-width:520px}
+.treadmill-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}.treadmill{position:relative;height:140px;border:none;border-radius:12px;background:transparent;overflow:hidden;flex:1;min-width:260px;max-width:520px}
 .belt{position:absolute;left:0;right:0;bottom:22px;height:36px;background:repeating-linear-gradient(90deg,#1e2434 0 20px,#283148 20px 40px);animation:belt-move var(--belt-duration,6s) linear infinite}
 .rollers{position:absolute;left:10px;right:10px;bottom:10px;height:12px;border-radius:6px;background:#1c2232;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
 .cat{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);font-size:46px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));animation:cat-bob var(--cat-duration,1.2s) ease-in-out infinite}
@@ -134,10 +137,12 @@ document.addEventListener('DOMContentLoaded', function(){
   var tabs=document.querySelectorAll('.tab');
   var panes=document.querySelectorAll('.tabpane');
   function showTab(id){
-    for(var i=0;i<panes.length;i++){ panes[i].classList.toggle('hidden', panes[i].id!==id); }
-    for(var j=0;j<tabs.length;j++){ var on=tabs[j].dataset.tab===id; tabs[j].classList.toggle('active', on); tabs[j].setAttribute('aria-selected', on?'true':'false'); }
+    var i,j;
+    for(i=0;i<panes.length;i++){ panes[i].classList.toggle('hidden', panes[i].id!==id); }
+    for(j=0;j<tabs.length;j++){ var on=tabs[j].dataset.tab===id; tabs[j].classList.toggle('active', on); tabs[j].setAttribute('aria-selected', on?'true':'false'); }
   }
-  for(var t=0;t<tabs.length;t++){ (function(btn){ btn.addEventListener('click', function(){ showTab(btn.dataset.tab); }); })(tabs[t]); }
+  var t;
+  for(t=0;t<tabs.length;t++){ (function(btn){ btn.addEventListener('click', function(){ showTab(btn.dataset.tab); }); })(tabs[t]); }
   showTab('tab-net');
 
   // State & examples
@@ -183,7 +188,8 @@ document.addEventListener('DOMContentLoaded', function(){
       + '</div>';
 
     var inputs=d.querySelectorAll('input');
-    for(var k=0;k<inputs.length;k++){
+    var k;
+    for(k=0;k<inputs.length;k++){
       (function(inp){
         inp.addEventListener('input', function(){
           var key=inp.getAttribute('data-k');
@@ -196,7 +202,8 @@ document.addEventListener('DOMContentLoaded', function(){
     }
 
     var btns=d.querySelectorAll('button');
-    for(var b=0;b<btns.length;b++){
+    var b;
+    for(b=0;b<btns.length;b++){
       (function(btn){
         btn.addEventListener('click', function(){
           var act=btn.getAttribute('data-act');
@@ -212,7 +219,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function render(){
     goodsC.innerHTML='';
-    for(var i=0;i<state.goods.length;i++){ goodsC.appendChild(makeRow(state.goods[i], i)); }
+    var i;
+    for(i=0;i<state.goods.length;i++){ goodsC.appendChild(makeRow(state.goods[i], i)); }
   }
 
   function reset(){
@@ -286,24 +294,27 @@ document.addEventListener('DOMContentLoaded', function(){
   function recompute(){
     var M=+state.money;
     var rows=[];
-    for(var i=0;i<state.goods.length;i++){
+    var i;
+    for(i=0;i<state.goods.length;i++){
       var g=state.goods[i];
       var net=M-(+g.prod);
       var idx=100*(1+net/100);
       rows.push({ name:g.name, weight:+g.weight, M:M, A:+g.prod, net:net, idx:idx });
     }
 
-    var wsum=0; for(var j=0;j<rows.length;j++){ wsum+=rows[j].weight; } if(!wsum) wsum=1;
-    var agg=0; for(var k=0;k<rows.length;k++){ agg+=rows[k].net*(rows[k].weight/wsum); }
+    var wsum=0, j; for(j=0;j<rows.length;j++){ wsum+=rows[j].weight; } if(!wsum) wsum=1;
+    var agg=0, k; for(k=0;k<rows.length;k++){ agg+=rows[k].net*(rows[k].weight/wsum); }
     aggEl.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
 
-    var labels=[], nets=[];
-    for(var a=0;a<rows.length;a++){ labels.push(rows[a].name); nets.push(rows[a].net); }
+    var labels=[], nets=[], a;
+    for(a=0;a<rows.length;a++){ labels.push(rows[a].name); nets.push(rows[a].net); }
     labels.push('Aggregate'); nets.push(agg);
     barsChart.data.labels=labels; barsChart.data.datasets[0].data=nets; barsChart.update();
 
     if(rows.length){
-      var sel=rows.slice().sort(function(x,y){ return Math.abs(y.net)-Math.abs(x.net); })[0];
+      var rowsCopy=rows.slice();
+      rowsCopy.sort(function(x,y){ return Math.abs(y.net)-Math.abs(x.net); });
+      var sel=rowsCopy[0];
       var afterM=100*(1+sel.M/100);
       var afterA=afterM*(1-sel.A/100);
       wfChart.data.labels=[sel.name+': start (100)','+ ΔM = '+sel.M+'%','− ΔA = '+sel.A+'%','Result'];
@@ -311,12 +322,14 @@ document.addEventListener('DOMContentLoaded', function(){
       wfChart.update();
     }
 
-    var html='';
-    for(var r=0;r<rows.length;r++){
+    // Table
+    var html='', r;
+    for(r=0;r<rows.length;r++){
       var row=rows[r];
       html+='<tr><td>'+row.name+'</td><td>'+row.weight.toFixed(2)+'</td><td>'+row.M.toFixed(1)+'</td><td>'+row.A.toFixed(1)+'</td><td>'+row.net.toFixed(2)+'</td><td>'+row.idx.toFixed(2)+'</td></tr>';
     }
-    tableBody.innerHTML=html;
+    var tbody=document.querySelector('#table tbody');
+    if(tbody){ tbody.innerHTML=html; }
 
     // Treadmill
     var tread=document.getElementById('treadmill');
@@ -375,8 +388,8 @@ document.addEventListener('DOMContentLoaded', function(){
       var T=+biasYears.value;
       yearsVal.textContent=String(T);
       rateVal.textContent=(+(r*100).toFixed(1))+'%';
-      var labels=[], data=[];
-      for(var i=0;i<=T;i++){ labels.push('t'+i); data.push(+(100*Math.pow(1+r,i)).toFixed(2)); }
+      var labels=[], data=[], i;
+      for(i=0;i<=T;i++){ labels.push('t'+i); data.push(+(100*Math.pow(1+r,i)).toFixed(2)); }
       cashChart.data.labels=labels; cashChart.data.datasets[0].data=data; cashChart.update();
       cashVal.textContent='$'+data[data.length-1].toFixed(2);
       cashHover.textContent='—';
@@ -442,8 +455,7 @@ document.addEventListener('DOMContentLoaded', function(){
       affDownVal.textContent=Math.round(dp*100)+'%';
       affRateVal.textContent=sel.toFixed(1)+'%';
 
-      var labels=[], data=[];
-      var r;
+      var labels=[], data=[], r;
       for(r=1; r<=12.0001; r+=0.25){
         labels.push(r.toFixed(2)+'%');
         var loan=paymentToPrincipal(pmt, r, years);
