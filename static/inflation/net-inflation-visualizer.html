@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Net Inflation Visualizer</title>
+<meta name="robots" content="noindex, nofollow"/>
+<link rel="preconnect" href="https://cdn.jsdelivr.net"/>
+<style>
+:root{--bg:#0b0c0f;--panel:#131722;--panel2:#0f1320;--text:#e8edf6;--muted:#9aa6bf;--accent:#ff7a00;--border:#263042}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,var(--bg),#0c111b);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
+.wrap{max-width:1200px;margin:0 auto;padding:18px}header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
+.grid{display:grid;grid-template-columns:320px 1fr;gap:14px;margin-top:14px}@media(max-width:960px){.grid{grid-template-columns:1fr}}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[type=range]{width:100%}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 10px;cursor:pointer}.btn:hover{border-color:var(--accent)}
+.small{font-size:12px;color:var(--muted)}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right}th:first-child,td:first-child{text-align:left}
+.accent{color:var(--accent)}.badge{border:1px solid var(--border);background:var(--panel2);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted)}
+.note{background:var(--panel2);border:1px dashed var(--border);border-radius:12px;padding:12px;color:var(--muted);font-size:12px}.chart-h{height:260px}.chart-h-sm{height:200px}
+.tabs{display:flex;gap:8px;margin-top:10px;margin-bottom:6px}.tab{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{border-color:var(--accent)}.hidden{display:none}
+/*Treadmill*/.treadmill-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}.treadmill{position:relative;height:140px;border:none;border-radius:12px;background:transparent;overflow:hidden;flex:1;min-width:260px;max-width:520px}
+.belt{position:absolute;left:0;right:0;bottom:22px;height:36px;background:repeating-linear-gradient(90deg,#1e2434 0 20px,#283148 20px 40px);animation:belt-move var(--belt-duration,6s) linear infinite}
+.rollers{position:absolute;left:10px;right:10px;bottom:10px;height:12px;border-radius:6px;background:#1c2232;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
+.cat{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);font-size:46px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));animation:cat-bob var(--cat-duration,1.2s) ease-in-out infinite}
+.treadmill.deflate .belt{animation-direction:reverse}.tip{position:absolute;pointer-events:none;background:rgba(20,24,35,.92);color:#e8edf6;border:1px solid var(--border);padding:6px 8px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .12s}
+@keyframes belt-move{from{background-position:0 0}to{background-position:400px 0}}@keyframes cat-bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-4px)}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header><h1>Net Inflation Visualizer</h1><span class="badge">static • client-side</span><span class="small">Shows how <span class="accent">money growth</span> and <span class="accent">productivity change</span> combine into net price changes.</span></header>
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button class="tab active" data-tab="tab-net" role="tab" aria-selected="true">Net inflation</button>
+  <button class="tab" data-tab="tab-bias" role="tab" aria-selected="false">Inflation biases</button>
+</nav>
+
+<div id="tab-net" class="tabpane">
+  <div class="grid">
+    <section class="card">
+      <h3 style="margin:0 0 8px 0">Global settings</h3>
+      <div class="row" style="margin-bottom:8px">
+        <div style="flex:1">
+          <label>Money supply growth (ΔM) — %</label>
+          <input id="money" type="range" min="-10" max="30" step="0.1" value="10">
+          <div class="row"><div class="small">Current: <span id="moneyVal" class="accent">10.0%</span></div></div>
+        </div>
+      </div>
+      <div class="note">Net price change ≈ ΔM − ΔA. When ΔM = ΔA, the price is stable.</div>
+      <h3 style="margin:12px 0 6px 0">Goods / sectors</h3>
+      <div class="small" style="margin-bottom:8px">Set each good’s ΔA (%) and weight.</div>
+      <div id="goods"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="addGood">+ Add good</button>
+        <button class="btn" id="resetGoods">Reset examples</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div><h3 style="margin:0">Decomposition and CPI</h3></div>
+        <div class="small">Aggregate: <span id="agg" class="accent">0.0%</span></div>
+      </div>
+      <div class="chart-h"><canvas id="bars"></canvas></div>
+      <div class="row" style="margin-top:10px">
+        <div class="chart-h-sm"><canvas id="waterfall"></canvas></div>
+      </div>
+      <div style="margin-top:12px">
+        <table id="table"><thead><tr><th>Good</th><th>Weight</th><th>ΔM (%)</th><th>ΔA (%)</th><th>Net (%)</th><th>Index</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin:0 0 6px 0">How to read</h3>
+    <ul class="small"><li><b>Orange bar</b>: net = ΔM − ΔA.</li><li><b>Waterfall</b>: 100 → +ΔM → −ΔA → result.</li><li><b>Aggregate</b>: weighted average across goods.</li></ul>
+    <div class="treadmill-card" style="margin-top:12px">
+      <div class="treadmill" id="treadmill"><div class="tip" id="treadTip">Aggregate: 0.00%</div><div class="belt"></div><div class="rollers"></div><div class="cat" id="tcat">🐈‍⬛</div></div>
+      <div class="small">Aggregate: <span id="treadVal" class="accent">0.00%</span></div>
+    </div>
+  </section>
+</div>
+
+<div id="tab-bias" class="tabpane hidden">
+  <section class="card">
+    <h3 style="margin:0 0 8px 0">Inflationary biases (aggregate > 0)</h3>
+    <ul class="small" style="margin:8px 0 0 18px">
+      <li><b>Money illusion & anchoring</b>: slow wage/price adjustment; nominal anchors lag.</li>
+      <li><b>Contract stickiness</b>: loans, rents, salaries need renegotiation to preserve real value.</li>
+      <li><b>Spend-now bias</b>: higher opportunity cost of cash encourages consumption.</li>
+    </ul>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div><h3 style="margin:0">$100 over time (compounded annually)</h3></div>
+      <div class="small">Value after <span id="yearsVal" class="accent">10</span> years at <span id="rateVal" class="accent">5.0%</span>: <span id="cashVal" class="accent">$162.89</span> · Hover: <span id="cashHover" class="accent">—</span></div>
+    </div>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <div style="min-width:200px;flex:1"><label>Annual rate</label><input id="biasRate" type="range" min="-20" max="30" step="0.1" value="5"></div>
+      <div style="min-width:200px;flex:1"><label>Years</label><input id="biasYears" type="range" min="1" max="40" step="1" value="10"></div>
+    </div>
+    <div class="chart-h" style="margin-top:8px"><canvas id="cashChart"></canvas></div>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div><h3 style="margin:0">Affordable house price vs. mortgage rate</h3></div>
+      <div class="small">At <span id="affRateVal" class="accent">5.0%</span>, budget <span id="affBudVal" class="accent">$2,500</span>, term <span id="affTermVal" class="accent">30</span>y, down <span id="affDownVal" class="accent">20%</span> → Max: <span id="affPriceVal" class="accent">$0</span> · Hover: <span id="affHover" class="accent">—</span></div>
+    </div>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <div style="min-width:220px;flex:1"><label>Monthly budget</label><input id="affBudget" type="range" min="500" max="10000" step="50" value="2500"></div>
+      <div style="min-width:220px;flex:1"><label>Mortgage rate</label><input id="affRate" type="range" min="1" max="12" step="0.1" value="5"></div>
+      <div style="min-width:180px;flex:1"><label>Term (years)</label><input id="affTerm" type="range" min="10" max="40" step="1" value="30"></div>
+      <div style="min-width:180px;flex:1"><label>Down payment (%)</label><input id="affDown" type="range" min="0" max="50" step="1" value="20"></div>
+    </div>
+    <div class="chart-h" style="margin-top:8px"><canvas id="affChart"></canvas></div>
+    <div class="note" style="margin-top:10px">Holding the payment budget constant, lower rates raise the loan PV, making higher house prices appear “affordable”.</div>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <h3 style="margin:0 0 8px 0">Deflationary effects (aggregate < 0)</h3>
+    <ul class="small" style="margin:8px 0 0 18px">
+      <li><b>Intertemporal substitution</b>: defers purchases; saving looks better.</li>
+      <li><b>Debt burden rises</b> in real terms; fixed payments weigh more.</li>
+      <li><b>Sources</b>: <i>benign</i> productivity/efficiency vs. <i>bad deflation</i> from deleveraging after over‑leverage (e.g., 1920).</li>
+    </ul>
+  </section>
+</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Tabs
+  var tabs=document.querySelectorAll('.tab'), panes=document.querySelectorAll('.tabpane');
+  function showTab(id){ panes.forEach(p=>p.classList.toggle('hidden',p.id!==id)); tabs.forEach(b=>{const on=b.dataset.tab===id; b.classList.toggle('active',on); b.setAttribute('aria-selected',on?'true':'false');});}
+  tabs.forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab))); showTab('tab-net');
+
+  // State & examples
+  var state={money:10,goods:[]};
+  var EX=[{name:'Bread',prod:2,weight:.12},{name:'Smartphones',prod:20,weight:.08},{name:'Electricity',prod:3,weight:.07},{name:'Healthcare',prod:-1,weight:.17},{name:'Education',prod:.5,weight:.10},{name:'Housing',prod:1,weight:.30},{name:'Restaurants',prod:1.5,weight:.16}];
+  var moneyEl=document.getElementById('money'), moneyVal=document.getElementById('moneyVal'), goodsC=document.getElementById('goods'), tableBody=document.querySelector('#table tbody'), aggEl=document.getElementById('agg');
+  function normalize(){const s=state.goods.reduce((a,g)=>a+(+g.weight||0),0)||1; state.goods.forEach(g=>g.weight=+(g.weight/s).toFixed(3));}
+  function makeRow(g,i){const d=document.createElement('div'); d.className='card'; d.style.marginBottom='8px'; d.innerHTML=`
+    <div class="row" style="align-items:center;justify-content:space-between">
+      <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">
+        <input data-k="name" style="min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px" value="${g.name}">
+        <div style="width:160px"><label>Productivity ΔA (%)</label><input data-k="prod" type="range" min="-10" max="30" step="0.1" value="${g.prod}"><div class="small">Current: <span class="accent" data-k="prodVal">${g.prod.toFixed(1)}%</span></div></div>
+        <div style="width:160px"><label>Weight</label><input data-k="weight" type="range" min="0" max="1" step="0.01" value="${g.weight}"><div class="small">Current: <span class="accent" data-k="weightVal">${g.weight.toFixed(2)}</span></div></div>
+      </div>
+      <div class="row"><button class="btn" data-act="up">▲</button><button class="btn" data-act="down">▼</button><button class="btn" data-act="del">Delete</button></div>
+    </div>`;
+    d.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{const k=inp.dataset.k; if(k==='name')state.goods[i].name=inp.value; if(k==='prod'){state.goods[i].prod=+inp.value; d.querySelector('[data-k="prodVal"]').textContent=(+inp.value).toFixed(1)+'%';} if(k==='weight'){state.goods[i].weight=+inp.value; d.querySelector('[data-k="weightVal"]').textContent=(+inp.value).toFixed(2); normalize(); render();} recompute();}));
+    d.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.act; if(a==='del'){state.goods.splice(i,1); render(); recompute();} if(a==='up'&&i>0){[state.goods[i-1],state.goods[i]]=[state.goods[i],state.goods[i-1]]; render(); recompute();} if(a==='down'&&i<state.goods.length-1){[state.goods[i+1],state.goods[i]]=[state.goods[i],state.goods[i+1]]; render(); recompute();}}));
+    return d;
+  }
+  function render(){ goodsC.innerHTML=''; state.goods.forEach((g,i)=>goodsC.appendChild(makeRow(g,i))); }
+  function reset(){ state.goods=JSON.parse(JSON.stringify(EX)); normalize(); render(); recompute(); }
+  document.getElementById('addGood').addEventListener('click',()=>{state.goods.push({name:'New good',prod:0,weight:.1}); normalize(); render(); recompute();});
+  document.getElementById('resetGoods').addEventListener('click',reset); reset();
+  moneyEl.addEventListener('input',()=>{state.money=+moneyEl.value; moneyVal.textContent=state.money.toFixed(1)+'%'; recompute();});
+
+  // Charts
+  const barsCtx=document.getElementById('bars').getContext('2d');
+  const wfCtx=document.getElementById('waterfall').getContext('2d');
+  const barsChart=new Chart(barsCtx,{type:'bar',data:{labels:[],datasets:[{label:'Net (%)',data:[],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>v+'%'}}},plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0]?.label||'',label:ctx=> (typeof ctx.raw==='number'?ctx.raw.toFixed(2):ctx.raw)+'%',afterLabel:ctx=>{const i=ctx.dataIndex, isAgg=i===ctx.chart.data.labels.length-1; if(isAgg)return 'Aggregate of weighted nets'; const g=state.goods[i]; return g?`ΔM ${state.money.toFixed(1)}%  −  ΔA ${(+g.prod).toFixed(1)}%`:'';}}}}});
+  const wfChart=new Chart(wfCtx,{type:'bar',data:{labels:['Start (100)','+ ΔM','− ΔA','Result'],datasets:[{data:[100,0,0,0]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0]?.label||'',label:ctx=>{const i=ctx.dataIndex, v=+ctx.raw||0; if(i===0)return 'Start: '+v.toFixed(2); if(i===1)return '+ΔM: '+v.toFixed(2); if(i===2)return '−ΔA: '+v.toFixed(2); if(i===3)return 'Result: '+v.toFixed(2); return v.toFixed(2);}}}},scales:{y:{beginAtZero:true}}});
+
+  function recompute(){
+    const M=+state.money; const rows=state.goods.map(g=>({name:g.name,weight:+g.weight,M,A:+g.prod,net:M-(+g.prod),idx:100*(1+(M-(+g.prod))/100)}));
+    const wsum=rows.reduce((a,r)=>a+r.weight,0)||1; const agg=rows.reduce((a,r)=>a+r.net*(r.weight/wsum),0);
+    aggEl.textContent=(Math.round(agg*100)/100).toFixed(2)+'%';
+    barsChart.data.labels=rows.map(r=>r.name).concat(['Aggregate']); barsChart.data.datasets[0].data=rows.map(r=>r.net).concat([agg]); barsChart.update();
+    if(rows.length){const sel=rows.slice().sort((a,b)=>Math.abs(b.net)-Math.abs(a.net))[0]; const afterM=100*(1+sel.M/100), afterA=afterM*(1-sel.A/100); wfChart.data.labels=[`${sel.name}: start (100)`,`+ ΔM = ${sel.M}%`,`− ΔA = ${sel.A}%`,'Result']; wfChart.data.datasets[0].data=[100,afterM-100,-(afterM-afterA),afterA]; wfChart.update();}
+    tableBody.innerHTML=rows.map(r=>`<tr><td>${r.name}</td><td>${r.weight.toFixed(2)}</td><td>${r.M.toFixed(1)}</td><td>${r.A.toFixed(1)}</td><td>${r.net.toFixed(2)}</td><td>${r.idx.toFixed(2)}</td></tr>`).join('');
+    const tread=document.getElementById('treadmill'), tval=document.getElementById('treadVal'), cat=document.getElementById('tcat'), ttip=document.getElementById('treadTip');
+    if(tread&&tval&&cat){ tval.textContent=(Math.round(agg*100)/100).toFixed(2)+'%'; const rate=Math.abs(agg); const beltDur=Math.max(.6,Math.min(12,8/(rate+.5))); const catDur=Math.max(.4,Math.min(2.2,1.6/(rate+.3))); tread.style.setProperty('--belt-duration',beltDur+'s'); cat.style.setProperty('--cat-duration',catDur+'s'); tread.classList.toggle('deflate',agg<0); if(ttip) ttip.textContent='Aggregate: '+(Math.round(agg*100)/100).toFixed(2)+'%'; }
+  }
+  recompute();
+
+  // Treadmill tooltip
+  (function(){const tread=document.getElementById('treadmill'), tip=document.getElementById('treadTip'); if(!tread||!tip)return; tread.addEventListener('mousemove',e=>{const r=tread.getBoundingClientRect(); tip.style.left=(e.clientX-r.left+12)+'px'; tip.style.top=(e.clientY-r.top-12)+'px'; tip.style.opacity='1';}); tread.addEventListener('mouseleave',()=>tip.style.opacity='0');})();
+
+  // Bias tab charts
+  const cashCanvas=document.getElementById('cashChart'); if(cashCanvas){ const cashCtx=cashCanvas.getContext('2d'); const cashChart=new Chart(cashCtx,{type:'line',data:{labels:[],datasets:[{label:'$100 nominal',data:[],borderWidth:2,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'$'+(+ctx.raw).toFixed(2)}}},scales:{y:{ticks:{callback:v=>'$'+v}}}}); const biasRate=document.getElementById('biasRate'), biasYears=document.getElementById('biasYears'), yearsVal=document.getElementById('yearsVal'), rateVal=document.getElementById('rateVal'), cashVal=document.getElementById('cashVal'), cashHover=document.getElementById('cashHover'); function rec(){ const r=+biasRate.value/100, T=+biasYears.value; yearsVal.textContent=String(T); rateVal.textContent=(+(r*100).toFixed(1))+'%'; const labels=Array.from({length:T+1},(_,i)=>i); const data=labels.map((_,t)=>+(100*Math.pow(1+r,t)).toFixed(2)); cashChart.data.labels=labels.map(y=>'t'+y); cashChart.data.datasets[0].data=data; cashChart.update(); cashVal.textContent='$'+data[data.length-1].toFixed(2); cashHover.textContent='—'; } biasRate.addEventListener('input',rec); biasYears.addEventListener('input',rec); rec(); cashCanvas.addEventListener('mousemove',evt=>{const pts=cashChart.getElementsAtEventForMode(evt,'nearest',{intersect:false},false); if(pts&&pts.length){const i=pts[0].index, v=cashChart.data.datasets[0].data[i]; cashHover.textContent='$'+(+v).toFixed(2)+' at t='+i;} else cashHover.textContent='—';}); cashCanvas.addEventListener('mouseleave',()=>cashHover.textContent='—'); }
+  const affCanvas=document.getElementById('affChart'); if(affCanvas){ const ctx=affCanvas.getContext('2d'); const chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Max affordable price',data:[],borderWidth:2,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'$'+Math.round(+ctx.raw).toLocaleString()}}},scales:{y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()}}}}); const affBudget=document.getElementById('affBudget'), affRate=document.getElementById('affRate'), affTerm=document.getElementById('affTerm'), affDown=document.getElementById('affDown'), affRateVal=document.getElementById('affRateVal'), affBudVal=document.getElementById('affBudVal'), affTermVal=document.getElementById('affTermVal'), affDownVal=document.getElementById('affDownVal'), affPriceVal=document.getElementById('affPriceVal'), affHover=document.getElementById('affHover'); function P(pmt,apr,yrs){const n=yrs*12,r=(apr/100)/12; return r<=0? pmt*n : pmt*(1-Math.pow(1+r,-n))/r;} function fmt(x){return '$'+Math.round(x).toLocaleString();} function rec(){ const p=+affBudget.value, yrs=+affTerm.value, dp=+affDown.value/100, sel=+affRate.value; affBudVal.textContent=fmt(p); affTermVal.textContent=yrs; affDownVal.textContent=Math.round(dp*100)+'%'; affRateVal.textContent=sel.toFixed(1)+'%'; const labels=[], data=[]; for(let r=1;r<=12.0001;r+=0.25){ labels.push(r.toFixed(2)+'%'); const loan=P(p,r,yrs), price=loan/(1-dp); data.push(Math.max(0,price)); } chart.data.labels=labels; chart.data.datasets[0].data=data; chart.update(); const priceSel=P(p,sel,yrs)/(1-dp); affPriceVal.textContent=fmt(priceSel); affHover.textContent='—'; } affBudget.addEventListener('input',rec); affRate.addEventListener('input',rec); affTerm.addEventListener('input',rec); affDown.addEventListener('input',rec); rec(); affCanvas.addEventListener('mousemove',evt=>{const c=Chart.getChart(affCanvas); if(!c)return; const pts=c.getElementsAtEventForMode(evt,'nearest',{intersect:false},false); if(pts&&pts.length){const i=pts[0].index, v=c.data.datasets[0].data[i], lab=c.data.labels[i]||''; affHover.textContent=lab+': $'+Math.round(+v).toLocaleString();} else affHover.textContent='—';}); affCanvas.addEventListener('mouseleave',()=>affHover.textContent='—'); }
+
+  // Console self-tests
+  (function(){try{ const approx=(a,b,eps=1e-6)=>Math.abs(a-b)<=eps; const backup=JSON.parse(JSON.stringify(state)); const restore=()=>{state=backup; normalize(); render(); recompute();}; // 1
+    state.money=10; state.goods=[{name:'T',prod:10,weight:1}]; render(); recompute(); const net0=barsChart.data.datasets[0].data[0]; const aggv=parseFloat(aggEl.textContent); console.assert(approx(net0,0)&&approx(aggv,0),'Test1 failed');
+    // 2
+    state.money=8; state.goods=[{name:'A',prod:3,weight:.25},{name:'B',prod:10,weight:.75}]; normalize(); render(); recompute(); const expected=5*.25+(-2)*.75; const agg2=parseFloat(aggEl.textContent); console.assert(approx(agg2,expected),'Test2 failed');
+    // 3
+    state.money=12; state.goods=[{name:'A',prod:0,weight:.5},{name:'B',prod:20,weight:.5}]; render(); recompute(); const wfds=(wfChart.data.datasets[0].data)||[]; const afterM=100*(1+12/100), afterA=afterM*(1-0/100); const okWF=approx(wfds[0],100)&&approx(wfds[1],afterM-100)&&approx(wfds[2],-(afterM-afterA))&&approx(wfds[3],afterA); console.assert(okWF,'Test3 failed');
+    // 4
+    state.money=6; state.goods=[{name:'X',prod:1,weight:.5},{name:'Y',prod:4,weight:.5}]; render(); recompute(); const nLabels=barsChart.data.labels.length, nGoods=state.goods.length, aggBar=barsChart.data.datasets[0].data.at?barsChart.data.datasets[0].data.at(-1):barsChart.data.datasets[0].data[barsChart.data.datasets[0].data.length-1]; const aggShown=parseFloat(aggEl.textContent); console.assert(nLabels===nGoods+1 && approx(aggBar,aggShown),'Test4 failed');
+    // 5
+    state.money=0; state.goods=[{name:'Z',prod:2,weight:1}]; render(); recompute(); const deflated=document.getElementById('treadmill').classList.contains('deflate'); console.assert(deflated===true,'Test5 failed');
+    // 6
+    const P=(p,ann,yrs)=>{const n=yrs*12,r=(ann/100)/12; return r<=0?p*n:p*(1-Math.pow(1+r,-n))/r;}; const price3=P(2500,3,30)/(1-.2), price6=P(2500,6,30)/(1-.2); console.assert(price3>price6,'Test6 failed');
+    restore(); console.log('%cAll console tests passed','color:#66d98b'); }catch(e){ console.warn('Console tests error:',e); } })();
+});
+</script>
+</body>
+</html>

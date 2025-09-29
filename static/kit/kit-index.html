@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>KiT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Tailwind (Play CDN) for the utility classes used by KiT -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React 18 & ReactDOM 18 (UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel Standalone so we can run JSX in the browser (no build step) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- QRCode UMD (window.QRCode) -->
+    <script src="https://unpkg.com/qrcode@1.5.4/build/qrcode.min.js"></script>
+
+    <style>
+      html, body, #app { height: 100%; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- KiT app (React code adapted for CDN) -->
+    <script type="text/babel">
+      const {useState, useEffect, useMemo} = React;
+
+      /**
+       * KiT Marketplace MVP (no backend) — Lightning + On-chain BTC + Comments + Help
+       * CDN edition: uses window.QRCode, no imports/exports
+       */
+
+      // -------------------- Utilities --------------------
+      const ls = {
+        get(key, fallback) {
+          try {
+            const v = JSON.parse(localStorage.getItem(key) ?? "null");
+            return v ?? fallback;
+          } catch {
+            return fallback;
+          }
+        },
+        set(key, value) {
+          localStorage.setItem(key, JSON.stringify(value));
+        },
+      };
+
+      const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+      function timeRemaining(iso) {
+        const now = new Date();
+        const end = new Date(iso);
+        const ms = end.getTime() - now.getTime();
+        if (ms <= 0) return "Expired";
+        const s = Math.floor(ms / 1000);
+        const days = Math.floor(s / 86400);
+        const hours = Math.floor((s % 86400) / 3600);
+        const minutes = Math.floor((s % 3600) / 60);
+        const seconds = s % 60;
+        if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        if (minutes > 0) return `${minutes}m ${seconds}s`;
+        return `${seconds}s`;
+      }
+
+      function sortActiveByExpiry(list, nowMs, query) {
+        const q = (query || "").trim().toLowerCase();
+        const active = (list || []).filter((L) => new Date(L.expiry_date).getTime() > nowMs);
+        const filtered = q
+          ? active.filter((L) =>
+              [L.title, L.description, L.price, L.payment_lightning, L.payment_bolt11, L.payment_btc]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase()
+                .includes(q)
+            )
+          : active;
+        return filtered.sort(
+          (a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+        );
+      }
+
+      function isValidLightningAddress(s) {
+        if (!s) return true; // optional
+        return /.+@.+\\..+/.test(String(s));
+      }
+
+      function computeNearestAllowedDays(msRemaining, allowed = [1, 3, 5]) {
+        const days = Math.max(0, Math.ceil(msRemaining / 86400000));
+        if (days === 0) return allowed[0];
+        return allowed.reduce(
+          (prev, cur) => (Math.abs(cur - days) < Math.abs(prev - days) ? cur : prev),
+          allowed[0]
+        );
+      }
+
+      function choosePaymentQrValue(lightning, bolt11, btc) {
+        return (lightning && lightning.trim()) || (bolt11 && bolt11.trim()) || (btc && btc.trim()) || "";
+      }
+
+      function computeExpiryOnSubmit(initialExpiryISO, selectedDays) {
+        if (initialExpiryISO) return initialExpiryISO; // immutable when editing
+        return new Date(Date.now() + Number(selectedDays) * 86400000).toISOString();
+      }
+
+      function canDeleteCommentHelper(comment, listing, auth) {
+        if (!auth?.currentUser) return false;
+        if (auth.currentUser.is_admin) return true; // admin can delete any
+        return (
+          comment.user_id === auth.currentUser.id ||
+          (listing && (listing.owner_id === auth.currentUser.id || listing.owner_name === auth.currentUser.username))
+        );
+      }
+
+      // -------------------- Demo Auth --------------------
+      function useAuth() {
+        const [currentUser, setCurrentUser] = useState(() => ls.get("mp_current_user", null));
+        const [users, setUsers] = useState(() => ls.get("mp_users", []));
+
+        useEffect(() => { ls.set("mp_current_user", currentUser); }, [currentUser]);
+        useEffect(() => { ls.set("mp_users", users); }, [users]);
+
+        const register = (username, password) => {
+          if (!username || !password) throw new Error("Username and password required");
+          if (users.some((u) => u.username === username)) throw new Error("Username already exists");
+          const isFirst = users.length === 0; // first user becomes admin (demo)
+          const user = { id: genId(), username, password, is_admin: isFirst };
+          setUsers((prev) => [...prev, user]);
+          setCurrentUser({ id: user.id, username: user.username, is_admin: user.is_admin });
+        };
+        const login = (username, password) => {
+          const u = users.find((u) => u.username === username && u.password === password);
+          if (!u) throw new Error("Invalid credentials");
+          setCurrentUser({ id: u.id, username: u.username, is_admin: !!u.is_admin });
+        };
+        const logout = () => setCurrentUser(null);
+
+        return { currentUser, register, login, logout };
+      }
+
+      // -------------------- Listings Store --------------------
+      const isOwner = (L, auth) =>
+        !!auth.currentUser && (L.owner_id === auth.currentUser.id || L.owner_name === auth.currentUser.username);
+
+      function useListings() {
+        const [listings, setListings] = useState(() => ls.get("mp_listings", []));
+
+        useEffect(() => { ls.set("mp_listings", listings); }, [listings]);
+
+        // Auto-expire sweep every 15s (hard delete expired)
+        useEffect(() => {
+          const sweep = () => {
+            const now = Date.now();
+            setListings((prev) => prev.filter((L) => new Date(L.expiry_date).getTime() > now));
+          };
+          sweep();
+          const id = setInterval(sweep, 15000);
+          return () => clearInterval(id);
+        }, []);
+
+        const create = (payload) => {
+          const L = { id: genId(), created_at: new Date().toISOString(), ...payload };
+          setListings((prev) => [L, ...prev]);
+        };
+        const update = (id, updates) => setListings((prev) => prev.map((L) => (L.id === id ? { ...L, ...updates } : L)));
+        const remove = (id) => setListings((prev) => prev.filter((L) => L.id !== id));
+
+        return { listings, create, update, remove };
+      }
+
+      // -------------------- Comments Store --------------------
+      function useComments() {
+        const [comments, setComments] = useState(() => ls.get("mp_comments", []));
+        useEffect(() => { ls.set("mp_comments", comments); }, [comments]);
+
+        const add = ({ listing_id, user_id, username, text, offer }) => {
+          const C = { id: genId(), listing_id, user_id, username, text, offer: offer ?? "", created_at: new Date().toISOString() };
+          setComments((prev) => [C, ...prev]);
+        };
+        const remove = (id) => setComments((prev) => prev.filter((c) => c.id !== id));
+
+        return { comments, add, remove };
+      }
+
+      // -------------------- UI Helpers --------------------
+      function CopyButton({ text, label = "Copy" }) {
+        const [ok, setOk] = useState(false);
+        const copy = async () => {
+          const val = String(text ?? "");
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(val);
+            } else {
+              const ta = document.createElement("textarea");
+              ta.value = val;
+              ta.style.position = "fixed";
+              ta.style.left = "-9999px";
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+            }
+            setOk(true);
+            setTimeout(() => setOk(false), 1200);
+          } catch (e) {
+            alert("Copy failed. Please copy manually.");
+          }
+        };
+        return (
+          <button className="rounded-xl border px-2.5 py-1 text-xs hover:bg-slate-50 transition" onClick={copy} title={String(text ?? "")}>
+            {ok ? "Copied" : label}
+          </button>
+        );
+      }
+
+      function QR({ value, size = 164, className = "" }) {
+        const [dataUrl, setDataUrl] = useState("");
+        useEffect(() => {
+          let mounted = true;
+          (async () => {
+            try {
+              const url = await window.QRCode.toDataURL(String(value || ""), { margin: 0, width: size });
+              if (mounted) setDataUrl(url);
+            } catch (err) {
+              console.warn("QR generation failed:", err);
+            }
+          })();
+          return () => { mounted = false; };
+        }, [value, size]);
+        if (!value) return null;
+        return <img src={dataUrl} alt="QR" className={className} />;
+      }
+
+      // -------------------- UI Components --------------------
+      function AuthPanel({ auth }) {
+        const [mode, setMode] = useState("login");
+        const [username, setUsername] = useState("");
+        const [password, setPassword] = useState("");
+        const [error, setError] = useState("");
+
+        const submit = (e) => {
+          e.preventDefault();
+          setError("");
+          try {
+            if (mode === "register") auth.register(username.trim(), password);
+            else auth.login(username.trim(), password);
+          } catch (err) { setError(err.message); }
+        };
+
+        return (
+          <div className="max-w-md w-full bg-white/80 backdrop-blur p-5 rounded-2xl shadow ring-1 ring-slate-200/70">
+            <h2 className="text-xl font-semibold mb-3">{mode === "register" ? "Create account" : "Sign in"}</h2>
+            <form onSubmit={submit} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium">Username</label>
+                <input className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Password</label>
+                <input type="password" className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </div>
+              {error && <div className="text-red-600 text-sm">{error}</div>}
+              <button type="submit" className="w-full rounded-lg bg-black text-white py-2 font-medium">{mode === "register" ? "Register" : "Login"}</button>
+            </form>
+            <div className="text-sm mt-3 text-center">
+              {mode === "register" ? (
+                <button className="underline" onClick={() => setMode("login")}>Have an account? Sign in</button>
+              ) : (
+                <button className="underline" onClick={() => setMode("register")}>New here? Create an account</button>
+              )}
+            </div>
+            <p className="text-xs mt-3 text-gray-600">Prototype: credentials are stored locally for demo only.</p>
+          </div>
+        );
+      }
+
+      function ListingForm({ onSubmit, initial, onCancel }) {
+        const [title, setTitle] = useState(initial?.title ?? "");
+        const [description, setDescription] = useState(initial?.description ?? "");
+        const [price, setPrice] = useState(initial?.price ?? "");
+        const [paymentLightning, setPaymentLightning] = useState(initial?.payment_lightning ?? "");
+        const [paymentBolt11, setPaymentBolt11] = useState(initial?.payment_bolt11 ?? "");
+        const [paymentBtc, setPaymentBtc] = useState(initial?.payment_btc ?? "");
+        const allowedDays = [1, 3, 5];
+        const computeDefaultDays = () => {
+          if (initial?.expiry_date) {
+            const diffMs = new Date(initial.expiry_date).getTime() - Date.now();
+            return computeNearestAllowedDays(diffMs, allowedDays);
+          }
+          return 3;
+        };
+        const [expiryDays, setExpiryDays] = useState(computeDefaultDays());
+        const [imageDataUrl, setImageDataUrl] = useState(initial?.image_url ?? "");
+
+        const handleFile = (file) => {
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (e) => setImageDataUrl(String(e.target?.result ?? ""));
+          reader.readAsDataURL(file);
+        };
+
+        const submit = (e) => {
+          e.preventDefault();
+          const expiryISO = computeExpiryOnSubmit(initial?.expiry_date || "", expiryDays);
+          if (!initial && ![1, 3, 5].includes(Number(expiryDays))) {
+            alert("Invalid expiry option.");
+            return;
+          }
+          if (!isValidLightningAddress(paymentLightning)) {
+            alert("Lightning address should look like name@domain");
+            return;
+          }
+
+          onSubmit({
+            title: title.trim(),
+            description: description.trim(),
+            price: String(price).trim(),
+            expiry_date: expiryISO,
+            image_url: imageDataUrl,
+            payment_lightning: paymentLightning.trim(),
+            payment_bolt11: paymentBolt11.trim(),
+            payment_btc: paymentBtc.trim(),
+          });
+        };
+
+        return (
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Title</label>
+                <input className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={title} onChange={(e) => setTitle(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Price (optional)</label>
+                <input className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g., 25" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Expires in</label>
+                {initial?.expiry_date ? (
+                  <div className="mt-1 text-sm text-slate-700">
+                    {new Date(initial.expiry_date).toLocaleString()} <span className="text-slate-500">(expiry cannot be edited)</span>
+                  </div>
+                ) : (
+                  <select className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={expiryDays} onChange={(e) => setExpiryDays(parseInt(e.target.value, 10))} required>
+                    <option value={1}>1 day</option>
+                    <option value={3}>3 days</option>
+                    <option value={5}>5 days</option>
+                  </select>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Image</label>
+                <input type="file" accept="image/*" className="mt-1 w-full" onChange={(e) => handleFile(e.target.files?.[0])} />
+                {imageDataUrl && <img src={imageDataUrl} alt="preview" className="mt-2 h-32 w-full object-cover rounded-lg border" />}
+              </div>
+            </div>
+
+            {/* Payments */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Lightning address (LUD-16)</label>
+                <input className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={paymentLightning} onChange={(e) => setPaymentLightning(e.target.value)} placeholder="name@yourdomain.tld" />
+                <p className="text-xs text-slate-500 mt-1">Wallets can read this address; if both address and invoice are present, the QR prefers the address.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium">BOLT11 invoice (optional)</label>
+                <textarea className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 min-h-[80px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={paymentBolt11} onChange={(e) => setPaymentBolt11(e.target.value)} placeholder="Paste a static invoice if you generated one in your wallet" />
+                <p className="text-xs text-slate-500 mt-1">Static invoices can expire; update as needed.</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium">Bitcoin (on-chain) address (optional)</label>
+                <input className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={paymentBtc} onChange={(e) => setPaymentBtc(e.target.value)} placeholder="bc1q... (P2WPKH/P2TR)" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Description</label>
+              <textarea className="mt-1 w-full rounded-xl border border-slate-300/70 px-3 py-2 min-h-[100px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional details" />
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" className="rounded-lg bg-black text-white px-4 py-2">Save</button>
+              {onCancel && <button type="button" className="rounded-lg border px-4 py-2" onClick={onCancel}>Cancel</button>}
+            </div>
+          </form>
+        );
+      }
+
+      function ListingCard({ listing, onOpen, canEdit, onEdit }) {
+        return (
+          <div className="group bg-white rounded-2xl ring-1 ring-slate-200/70 shadow-sm overflow-hidden flex flex-col hover:shadow-lg transition transform hover:-translate-y-0.5">
+            <div className="relative aspect-video bg-gray-100 overflow-hidden">
+              {listing.image_url ? (
+                <img src={listing.image_url} alt={listing.title} className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full grid place-items-center text-gray-400">No image</div>
+              )}
+              <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full">
+                ends in {timeRemaining(listing.expiry_date)}
+              </div>
+            </div>
+            <div className="p-3 flex-1 flex flex-col">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold line-clamp-1">{listing.title}</h3>
+                {listing.price && <span className="text-sm font-medium bg-gray-100 px-2 py-0.5 rounded">{listing.price}</span>}
+              </div>
+              <div className="mt-2 text-sm text-gray-600 line-clamp-2">{listing.description || ""}</div>
+              <div className="mt-auto pt-3 flex items-center justify-between">
+                <button onClick={() => onOpen(listing)} className="text-sm underline">View</button>
+                {canEdit && (
+                  <div className="flex gap-2">
+                    <button onClick={() => onEdit(listing)} className="text-sm rounded-xl border px-2.5 py-1 hover:bg-slate-50 transition">Edit</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function Modal({ open, onClose, children, title }) {
+        if (!open) return null;
+        return (
+          <div className="fixed inset-0 z-50 grid place-items-center p-4">
+            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold">{title}</h3>
+                <button onClick={onClose} className="rounded-full border w-8 h-8 grid place-items-center">x</button>
+              </div>
+              {children}
+            </div>
+          </div>
+        );
+      }
+
+      // -------------------- Main App --------------------
+      function MarketplaceApp() {
+        const auth = useAuth();
+        const { listings, create, update, remove } = useListings();
+        const { comments, add: addComment, remove: removeComment } = useComments();
+        const [query, setQuery] = useState("");
+        const [showCreate, setShowCreate] = useState(false);
+        const [editing, setEditing] = useState(null);
+        const [viewing, setViewing] = useState(null);
+        const [showHelp, setShowHelp] = useState(false);
+
+        const now = Date.now();
+        const feed = useMemo(() => sortActiveByExpiry(listings, now, query), [listings, query, now]);
+
+        const onCreate = (data) => {
+          if (!auth.currentUser) { alert("Please sign in to create listings."); return; }
+          create({ ...data, owner_id: auth.currentUser.id, owner_name: auth.currentUser.username });
+          setShowCreate(false);
+        };
+
+        const onEditSave = (id, data) => { update(id, data); setEditing(null); };
+        const canEdit = (L) => isOwner(L, auth);
+
+        const commentsFor = (listingId) => comments.filter((c) => c.listing_id === listingId);
+        const canDeleteComment = (c, listing) => canDeleteCommentHelper(c, listing, auth);
+
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, "Noto Sans", ui-sans-serif, system-ui' }}>
+            <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
+              <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+                <div className="font-semibold text-lg tracking-tight">KiT</div>
+                <button className="ml-3 text-xs underline" onClick={() => setShowHelp(true)}>Help</button>
+                <div className="ml-auto flex items-center gap-3">
+                  {auth.currentUser ? (
+                    <>
+                      <span className="text-sm">Signed in as <strong>{auth.currentUser.username}</strong>{auth.currentUser.is_admin ? " · admin" : ""}</span>
+                      <button className="rounded-xl border px-3 py-1.5 text-sm hover:bg-slate-50 transition" onClick={auth.logout}>Logout</button>
+                      <button className="rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-3 py-1.5 text-sm shadow hover:shadow-md transition" onClick={() => setShowCreate(true)}>New listing</button>
+                    </>
+                  ) : <></>}
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-6xl mx-auto px-4 py-6">
+              {!auth.currentUser && (
+                <div className="mb-8 grid place-items-center"><AuthPanel auth={auth} /></div>
+              )}
+
+              <div className="mb-4 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="relative flex-1">
+                  <input className="w-full rounded-2xl border border-slate-300/70 px-4 py-2 pr-10 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" placeholder="Search listings..." value={query} onChange={(e) => setQuery(e.target.value)} />
+                </div>
+                {auth.currentUser && (
+                  <button className="rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-4 py-2 shadow hover:shadow-md transition" onClick={() => setShowCreate(true)}>+ Create listing</button>
+                )}
+              </div>
+
+              {feed.length === 0 ? (
+                <div className="text-center text-gray-600 py-12">No active listings. {auth.currentUser ? "Create the first one!" : "Sign in to create listings."}</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {feed.map((L) => (
+                    <ListingCard key={L.id} listing={L} canEdit={canEdit(L)} onOpen={setViewing} onEdit={(l) => setEditing(l)} />
+                  ))}
+                </div>
+              )}
+            </main>
+
+            <Modal open={showCreate} onClose={() => setShowCreate(false)} title="New listing">
+              <ListingForm onSubmit={onCreate} onCancel={() => setShowCreate(false)} />
+            </Modal>
+
+            <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit listing">
+              {editing && (
+                <>
+                  <ListingForm initial={editing} onSubmit={(data) => onEditSave(editing.id, data)} onCancel={() => setEditing(null)} />
+                  {canEdit(editing) && (
+                    <div className="mt-4 flex justify-between">
+                      <button className="rounded border px-3 py-1.5 text-sm text-red-600"
+                        onClick={() => {
+                          if (!isOwner(editing, auth)) { alert("You can only delete your own listing."); return; }
+                          if (confirm("Delete this listing?")) { remove(editing.id); setEditing(null); }
+                        }}>
+                        Delete listing
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </Modal>
+
+            <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing?.title ?? "Listing"}>
+              {viewing && (
+                <div className="space-y-4">
+                  <div className="aspect-video bg-gray-100 rounded-xl overflow-hidden">
+                    {viewing.image_url ? (
+                      <img src={viewing.image_url} alt={viewing.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full grid place-items-center text-gray-400">No image</div>
+                    )}
+                  </div>
+
+                  {(viewing.payment_lightning || viewing.payment_bolt11 || viewing.payment_btc) && (
+                    <div className="rounded-2xl border p-3">
+                      <h4 className="font-medium mb-2">Pay with Bitcoin</h4>
+
+                      {viewing.payment_lightning && (
+                        <div className="mb-3">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">Lightning address:</span>
+                            <code className="px-1.5 py-0.5 bg-slate-100 rounded">{viewing.payment_lightning}</code>
+                            <CopyButton text={viewing.payment_lightning} label="Copy address" />
+                          </div>
+                          <div className="mt-2"><QR value={viewing.payment_lightning} /></div>
+                          {viewing.payment_bolt11 && <p className="text-[11px] text-slate-500 mt-1">QR shows the Lightning address (preferred) even if BOLT11 is also provided.</p>}
+                        </div>
+                      )}
+
+                      {viewing.payment_bolt11 && (
+                        <div className="mb-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">BOLT11 invoice:</span>
+                            <CopyButton text={viewing.payment_bolt11} />
+                          </div>
+                          <div className="mt-2"><QR value={choosePaymentQrValue(viewing.payment_lightning, viewing.payment_bolt11, "")} /></div>
+                          <p className="text-[11px] text-slate-500 mt-1">Note: If both address and invoice are present, the QR displays the address.</p>
+                        </div>
+                      )}
+
+                      {viewing.payment_btc && (
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">Bitcoin address:</span>
+                            <code className="px-1.5 py-0.5 bg-slate-100 rounded">{viewing.payment_btc}</code>
+                            <CopyButton text={viewing.payment_btc} label="Copy BTC" />
+                          </div>
+                          <div className="mt-2"><QR value={viewing.payment_btc} /></div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="text-sm text-gray-600">Seller: <strong>{viewing.owner_name}</strong></div>
+                  {viewing.price && <div className="text-sm">Price: <strong>{viewing.price}</strong></div>}
+                  <div className="text-sm">Ends: {new Date(viewing.expiry_date).toLocaleString()} ({timeRemaining(viewing.expiry_date)})</div>
+                  {viewing.description && <p className="whitespace-pre-wrap text-gray-800">{viewing.description}</p>}
+
+                  <div className="pt-2">
+                    <h4 className="font-medium mb-2">Comments & Offers</h4>
+                    {auth.currentUser ? (
+                      <CommentComposer onSubmit={(text, offer) => addComment({ listing_id: viewing.id, user_id: auth.currentUser.id, username: auth.currentUser.username, text, offer })} />
+                    ) : (
+                      <div className="text-sm text-slate-600">Sign in to post a question or make an offer.</div>
+                    )}
+                    <div className="mt-3 space-y-2 max-h-72 overflow-auto pr-1">
+                      {commentsFor(viewing.id).length === 0 ? (
+                        <div className="text-sm text-slate-500">No comments yet.</div>
+                      ) : (
+                        commentsFor(viewing.id).map((c) => (
+                          <div key={c.id} className="rounded-xl border p-2 text-sm">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{c.username}</div>
+                              <div className="text-[11px] text-slate-500">{new Date(c.created_at).toLocaleString()}</div>
+                            </div>
+                            {c.offer && <div className="mt-1">Offer: <strong>{c.offer}</strong></div>}
+                            <div className="mt-1 whitespace-pre-wrap">{c.text}</div>
+                            {canDeleteComment(c, viewing) && (
+                              <div className="mt-2">
+                                <button className="text-[11px] rounded border px-2 py-0.5" onClick={() => removeComment(c.id)}>Delete</button>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {canEdit(viewing) && (
+                    <div className="pt-2 flex gap-2">
+                      <button className="rounded-xl border px-3 py-1.5 text-sm hover:bg-slate-50 transition" onClick={() => { setEditing(viewing); setViewing(null); }}>
+                        Edit
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Modal>
+
+            <Modal open={showHelp} onClose={() => setShowHelp(false)} title="KiT Help & Info">
+              <div className="space-y-2 text-sm">
+                <p><strong>Creating listings:</strong> Title, optional price, image, and choose expiry (1/3/5 days). Expiry cannot be edited later.</p>
+                <p><strong>Payments:</strong> Add a Lightning address, a BOLT11 invoice, and/or a Bitcoin on-chain address. If both a Lightning address and invoice are present, the QR displays the address.</p>
+                <p><strong>Comments:</strong> Signed-in users can ask questions or make offers. Comment authors can delete their own comments. Listing owners can delete any comment under their listing. Admins can delete any comment.</p>
+                <p><strong>Deleting listings:</strong> Only the owner can delete, and only from Edit mode. Expired listings are removed automatically.</p>
+                <p><strong>Privacy:</strong> This is a demo; data is stored locally in your browser.</p>
+              </div>
+            </Modal>
+
+            <footer className="text-center text-xs text-gray-500 py-6">KiT · Prototype for Canvas · Local only · Replace with real backend before production</footer>
+          </div>
+        );
+      }
+
+      function CommentComposer({ onSubmit }) {
+        const [text, setText] = useState("");
+        const [offer, setOffer] = useState("");
+        return (
+          <div className="rounded-2xl border p-2">
+            <div className="grid md:grid-cols-5 gap-2">
+              <div className="md:col-span-3">
+                <input className="w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask a question..." />
+              </div>
+              <div className="md:col-span-1">
+                <input className="w-full rounded-xl border border-slate-300/70 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60" value={offer} onChange={(e) => setOffer(e.target.value)} placeholder="Offer (optional)" />
+              </div>
+              <div className="md:col-span-1 flex items-center">
+                <button className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-3 py-2 shadow hover:shadow-md transition"
+                  onClick={() => { if (!text.trim() && !offer.trim()) return; onSubmit(text.trim(), offer.trim()); setText(""); setOffer(""); }}>
+                  Post
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // -------------------- Self-tests (console) --------------------
+      function runSelfTests() {
+        const results = [];
+        const push = (name, pass, details = "") => {
+          results.push({ name, pass, details });
+          const tag = pass ? "%cPASS" : "%cFAIL";
+          const color = pass ? "color: #16a34a;" : "color:#dc2626;";
+          console.log(tag, color, name, details);
+        };
+
+        const futureISO = new Date(Date.now() + 90 * 1000).toISOString();
+        const pastISO = new Date(Date.now() - 1000).toISOString();
+        push("timeRemaining future not Expired", timeRemaining(futureISO) !== "Expired");
+        push("timeRemaining past Expired", timeRemaining(pastISO) === "Expired");
+
+        const authMock = { currentUser: { id: "u1", username: "alice" } };
+        push("isOwner by id", isOwner({ owner_id: "u1", owner_name: "alice" }, authMock) === true);
+        push("isOwner by username", isOwner({ owner_id: "u2", owner_name: "alice" }, authMock) === true);
+        push("isOwner false", isOwner({ owner_id: "u2", owner_name: "bob" }, authMock) === false);
+
+        const nowMs = Date.now();
+        const listings = [
+          { id: "a", title: "A", description: "", price: "", expiry_date: new Date(nowMs + 3000).toISOString() },
+          { id: "b", title: "B", description: "", price: "", expiry_date: new Date(nowMs + 1000).toISOString() },
+          { id: "c", title: "C", description: "", price: "", expiry_date: new Date(nowMs + 10_000).toISOString() },
+          { id: "d", title: "D", description: "", price: "", expiry_date: new Date(nowMs - 1000).toISOString() },
+        ];
+        const sorted = sortActiveByExpiry(listings, nowMs, "");
+        push("sortActiveByExpiry filters expired", sorted.length === 3);
+        push("sortActiveByExpiry order", sorted[0].id === "b" && sorted[1].id === "a" && sorted[2].id === "c");
+
+        const btcList = [{ id: "x", title: "X", description: "", price: "", expiry_date: new Date(nowMs + 5000).toISOString(), payment_btc: "bc1qxyz" }];
+        const filteredByBtc = sortActiveByExpiry(btcList, nowMs, "bc1q");
+        push("search matches on-chain btc", filteredByBtc.length === 1 && filteredByBtc[0].id === "x");
+
+        push("valid LUD16 passes", isValidLightningAddress("alice@example.com") === true);
+        push("invalid LUD16 fails", isValidLightningAddress("alice@@example") === false);
+        push("empty LUD16 allowed", isValidLightningAddress("") === true);
+
+        push("nearest days 2d -> 1 or 3 (prefers closer)", [1,3,5].includes(computeNearestAllowedDays(2*86400000)));
+        push("nearest days from 0 -> 1", computeNearestAllowedDays(0) === 1);
+
+        push("QR prefers lightning over bolt11", choosePaymentQrValue("a@b.com", "lnbc1invoice", "") === "a@b.com");
+        push("QR falls back to bolt11 when no lightning", choosePaymentQrValue("", "lnbc1invoice", "") === "lnbc1invoice");
+        push("QR falls back to btc when neither lightning/bolt11", choosePaymentQrValue("", "", "bc1q123") === "bc1q123");
+
+        const isoFromNow = computeExpiryOnSubmit("", 1);
+        push("expiry computed for create", typeof isoFromNow === "string" && isoFromNow.endsWith("Z"));
+        const immutableEdit = computeExpiryOnSubmit("2030-01-01T00:00:00.000Z", 5);
+        push("expiry immutable on edit", immutableEdit === "2030-01-01T00:00:00.000Z");
+
+        const listingOwner = { owner_id: "u1", owner_name: "alice" };
+        const commentByAlice = { user_id: "u1" };
+        const commentByBob = { user_id: "u2" };
+        push("author can delete own comment", canDeleteCommentHelper(commentByAlice, listingOwner, authMock) === true);
+        push("listing owner can delete others' comments", canDeleteCommentHelper(commentByBob, listingOwner, authMock) === true);
+        push("non-owner cannot delete others' comments", canDeleteCommentHelper(commentByBob, listingOwner, { currentUser: { id: "u3", username: "eve" } }) === false);
+        push("admin can delete any comment", canDeleteCommentHelper(commentByBob, listingOwner, { currentUser: { id: "admin", username: "root", is_admin: true } }) === true);
+
+        console.log("Self-tests:", results.every(r => r.pass) ? "ALL PASS" : "SOME FAIL", results);
+      }
+
+      if (typeof window !== "undefined") {
+        try { runSelfTests(); } catch (err) { console.warn("Self-tests encountered an error:", err); }
+      }
+
+      // Mount
+      const root = ReactDOM.createRoot(document.getElementById("app"));
+      root.render(React.createElement(MarketplaceApp));
+    </script>
+  </body>
+</html>
