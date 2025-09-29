@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // ---------- Charts ----------
   function drawBars(rows, agg){
     var svg = $('#barsSvg'); empty(svg);
-    var W=800,H=300, pad=48; // a bit larger left pad for labels
+    var W=800,H=300, pad=48; // wider left pad for labels
     var min=0,max=0,i; for(i=0;i<rows.length;i++){ if(rows[i].net<min)min=rows[i].net; if(rows[i].net>max)max=rows[i].net; }
     if(agg<min)min=agg; if(agg>max)max=agg;
     if(min===max){ min-=1; max+=1; }
@@ -144,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function(){
     var values = rows.map(function(r){return r.net}).concat([agg]);
     var n=labels.length, bw=Math.max(14, (W-2*pad)/n - 8), gap=((W-2*pad)-n*bw)/(n-1>0?(n-1):1);
     var zero = H - pad - (0 - min) * (H-2*pad) / (max - min || 1);
-    // bars
     var x=pad, idx;
     for(idx=0;idx<labels.length;idx++){
       var v=values[idx];
@@ -165,13 +164,13 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function drawCash(ratePct, years){
     var svg=$('#cashSvg'); empty(svg);
-    var W=800,H=300,pad=64; // more left pad for big labels
+    var W=800,H=300,pad=64;
     var T=years, r=ratePct/100;
     var vals=[], t;
     for(t=0;t<=T;t++) vals.push(+(100*Math.pow(1+r,t)).toFixed(2));
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
     if(min===max){ min-=1; max+=1; }
-    var xTicks=[]; for(t=0;t<=T;t+=max>=20?5:1){ xTicks.push({t:(T? t/T : 0), v:t}); }
+    var xTicks=[]; for(t=0;t<=T;t+=(T>=20?5:1)){ xTicks.push({t:(T? t/T : 0), v:t}); }
     drawAxes(svg,W,H,pad,min,max,5,xTicks,function(it){ return 't'+it.v; }, function(v){ return '$'+compactMoney(v); });
     var pts=[];
     for(t=0;t<=T;t++){
