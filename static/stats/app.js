@@ -1,10 +1,13 @@
-/* Cross-Section vs Panel Estimation — Demonstrator (Hugo static-friendly) */
-const {useMemo, useState} = React;
-const {
+// Cross‑Section vs Panel Estimation — ESM build (no Babel, no UMD)
+// Drop alongside index.html under /static/stats/ and open /stats/
+
+import React, { useMemo, useState } from "https://esm.sh/react@18";
+import { createRoot } from "https://esm.sh/react-dom@18/client";
+import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   LineChart, Line, ReferenceLine, ResponsiveContainer,
   BarChart, Bar, ComposedChart, ErrorBar, Area
-} = Recharts;
+} from "https://esm.sh/recharts@2.12.7?external=react,react-dom";
 
 // ====================== Utilities ====================== //
 const mulberry32 = (a) => () => { let t = (a += 0x6d2b79f5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -20,6 +23,7 @@ const toCSV = (rows, header) => {
   return head + "\\n" + body;
 };
 
+// Weighted LS helper
 function wlsSimple(x, y, w) {
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN,fitted:[],resid:[] };
   const sw=w.reduce((a,b)=>a+b,0);
@@ -33,6 +37,7 @@ function wlsSimple(x, y, w) {
   return { beta, se, n, alpha, resid, fitted:x.map(v=>alpha+beta*v) };
 }
 
+// ----- Estimators ----- //
 function olsSimple(x, y) {
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN,fitted:[],resid:[] };
   const mx=x.reduce((a,b)=>a+b,0)/n, my=y.reduce((a,b)=>a+b,0)/n; let sxx=0,sxy=0;
@@ -63,6 +68,7 @@ function feWithin(personIds, x, y) {
   if(xw.length<3) return { beta:NaN,se:NaN,n:xw.length,alpha:NaN,fitted:[],resid:[] }; return olsSimple(xw,yw);
 }
 
+// Robust (Huber) IRLS, single regressor with intercept
 function huberIRLS(x, y, c=1.345, maxIter=30){
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN };
   let fit=olsSimple(x,y);
@@ -77,29 +83,32 @@ function huberIRLS(x, y, c=1.345, maxIter=30){
   return fit;
 }
 
+// Bayesian linear regression (Normal–Inverse-Gamma prior)
 function bayesPosterior(x, y){
   const n=x.length; if(n<3) return { betaMean:NaN, betaSE:NaN, ci:[NaN,NaN], alphaMean:NaN };
-  const v0a=100, v0b=10; const a0=2, b0=1;
+  const v0a=100, v0b=10; const a0=2, b0=1; // weakly informative
   let sumx=0,sumxx=0,sumy=0,sumxy=0,sumyy=0; for(let i=0;i<n;i++){ const xi=x[i], yi=y[i]; sumx+=xi; sumxx+=xi*xi; sumy+=yi; sumxy+=xi*yi; sumyy+=yi*yi; }
   const V0Inv00=1/v0a, V0Inv11=1/v0b; const XtX00=n, XtX01=sumx, XtX11=sumxx;
   const VnInv00=V0Inv00+XtX00, VnInv01=0+XtX01, VnInv11=V0Inv11+XtX11; const det=VnInv00*VnInv11 - VnInv01*VnInv01;
-  const Vn00= VnInv11/det, Vn01= -VnInv01/det, Vn11= VnInv00/det;
+  const Vn00= VnInv11/det, Vn01= -VnInv01/det, Vn11= VnInv00/det; // inverse of 2x2
   const m0a=0, m0b=0;
   const z0 = (0 + sumy), z1 = (0 + sumxy);
   const mna = Vn00*z0 + Vn01*z1; const mnb = Vn01*z0 + Vn11*z1;
   const an = a0 + n/2;
   const quad = (mna*(VnInv00*mna+VnInv01*mnb) + mnb*(VnInv01*mna+VnInv11*mnb));
   const bn = b0 + 0.5*(sumyy - quad);
-  const scale = bn/(an-1);
+  const scale = bn/(an-1); // E[sigma2 | y]
   const varBeta = scale * Vn11; const seBeta = Math.sqrt(Math.max(0,varBeta));
   const ci = [mnb - 1.96*seBeta, mnb + 1.96*seBeta];
   return { betaMean:mnb, betaSE:seBeta, ci, alphaMean:mna, an, bn };
 }
 
+// Normal helpers
 function erf(x){const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911; const s=x<0?-1:1; x=Math.abs(x); const t=1/(1+p*x); const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x)); return s*y;} 
 const phi = (z)=> 0.5*(1+erf(z/Math.SQRT2));
 function erfinv(x){ const a=0.147; const ln = Math.log(1-x*x); const s = (2/(Math.PI*a) + ln/2); const res = Math.sign(x)*Math.sqrt( Math.sqrt(s*s - ln/a) - s ); return res; }
 
+// ====================== Small UI helpers ====================== //
 function Slider({label,min,max,step,value,onChange}){
   return (<div><div className="flex items-center justify-between mb-1"><label className="text-sm text-neutral-300">{label}</label><span className="text-xs text-neutral-400">{min}–{max}</span></div><input type="range" min={min} max={max} step={step} value={value} onChange={(e)=>onChange(parseFloat(e.target.value))} className="w-full accent-neutral-200"/></div>);
 }
@@ -107,7 +116,9 @@ function ResultCard({title,value,ci,details,foot,warn,large}){
   return (<div className={`bg-neutral-900/60 border rounded-2xl ${large? 'p-5':'p-4'} ${warn? 'border-red-800':'border-neutral-800'}`}><div className="text-sm text-neutral-400">{title}</div><div className={`${large? 'text-3xl':'text-2xl'} font-semibold mt-1`}>{value}</div>{ci&&<div className="text-xs text-neutral-400 mt-1">95% interval: {ci}</div>}{details&&<div className="text-xs text-neutral-400 mt-1">{details}</div>}{foot&&<div className="text-xs text-neutral-500 mt-2">{foot}</div>}</div>);
 }
 function PresetButton({onClick,label}){ return (<button onClick={onClick} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">{label}</button>); }
+const applyPreset = (name) => console.log("Preset clicked:", name);
 
+// ====================== Main Component ====================== //
 function App(){
   const [tab,setTab]=useState("sim");
   const [vizTab,setVizTab]=useState('trajectories');
@@ -115,11 +126,13 @@ function App(){
 
   const [scenario,setScenario]=useState({ id:"Custom", title:"Custom scenario", d:"Treatment (D)", y:"Outcome (Y)", desc:"Tweak controls to explore biases.", issues:["Selection","Trends/Shocks","Serial correlation","Measurement error"]});
 
+  // Core params
   const [seed,setSeed]=useState(42); const [N,setN]=useState(600); const [T,setT]=useState(8);
   const [betaTrue,setBetaTrue]=useState(0.6); const [betaHet,setBetaHet]=useState(0.0);
   const [sigmaU,setSigmaU]=useState(1.2); const [sigmaE,setSigmaE]=useState(1.0); const [sigmaME,setSigmaME]=useState(0.3);
   const [pBase,setPBase]=useState(0.5); const [rhoSel,setRhoSel]=useState(1.0); const [switchRate,setSwitchRate]=useState(0.25);
 
+  // Assumptions
   const [timeTrendOn,setTimeTrendOn]=useState(true); const [timeTrendSlope,setTimeTrendSlope]=useState(0.05);
   const [shockAllOn,setShockAllOn]=useState(false); const [shockAllWave,setShockAllWave]=useState(5); const [shockAllSize,setShockAllSize]=useState(0.8);
   const [shockTreatOn,setShockTreatOn]=useState(false); const [shockTreatWave,setShockTreatWave]=useState(6); const [shockTreatSize,setShockTreatSize]=useState(0.8);
@@ -132,6 +145,7 @@ function App(){
 
   const rng = useMemo(()=>mulberry32(seed),[seed]);
 
+  // ---------- Simulate data ---------- //
   const sim = useMemo(()=>{
     const persons = Array.from({length:N},(_,i)=>i); const u = persons.map(()=>rnorm(rng,0,sigmaU));
     const alpha = Math.log(pBase/(1-pBase)); const uSD = sigmaU<=0?1:sigmaU; const rows=[];
@@ -158,6 +172,7 @@ function App(){
     return rows;
   },[N,T,betaTrue,betaHet,sigmaU,sigmaE,sigmaME,pBase,rhoSel,switchRate,timeTrendOn,timeTrendSlope,shockAllOn,shockAllWave,shockAllSize,shockTreatOn,shockTreatWave,shockTreatSize,ar1On,rhoE,dynSelOn,gammaDY,misclassOn,misclassP,attritionOn,attrBase,attrSlope,rng,expOutcomeOn,expScale,heteroOn,heteroDWeight,heteroUWeight]);
 
+  // ---------- Derived & estimators ---------- //
   const cross = useMemo(()=>sim.filter(r=>r.wave===1),[sim]); const pooled = sim;
   const xCross = cross.map(r=>r.D), xPooled = pooled.map(r=>r.D), idsPooled = pooled.map(r=>r.pid);
   const yCross = cross.map(r=>r.y), yPooled = pooled.map(r=>r.y);
@@ -172,7 +187,7 @@ function App(){
   const csCI = ci(cs.beta, cs.se), pooledCI = ci(pooledOLS.beta, pooledOLS.se), feCI = ci(fe.beta, fe.se);
 
   const scatterData = cross.map((r,idx)=>({ x:r.D, y:r.y, pid:r.pid, key:idx }));
-  const fitLine = React.useMemo(()=>{ if(!isFinite(cs.beta)) return null; return [{x:0,y:cs.alpha},{x:1,y:cs.alpha+cs.beta}]; },[cs]);
+  const fitLine = useMemo(()=>{ if(!isFinite(cs.beta)) return null; return [{x:0,y:cs.alpha},{x:1,y:cs.alpha+cs.beta}]; },[cs]);
 
   const spaghetti = useMemo(()=>{
     const ids = Array.from(new Set(pooled.map(r=>r.pid)));
@@ -194,21 +209,53 @@ function App(){
   const shareSwitchers = useMemo(()=>{ let c=0; idsUnique.forEach(id=>{ const rows=pooled.filter(r=>r.pid===id); const any=rows.some((r,i)=> i>0 && r.D!==rows[i-1].D); if(any) c++; }); return idsUnique.length? c/idsUnique.length : NaN; },[pooled,idsUnique]);
   const attritionRate = useMemo(()=>{ const fewer=idsUnique.filter(id=> pooled.filter(r=>r.pid===id).length < T ).length; return idsUnique.length? fewer/idsUnique.length : NaN; },[pooled,idsUnique,T]);
 
-  const dens = useMemo(()=>{
-    const yAll = yPooled; if(!yAll.length) return { data:[], stats:null, prev:[] };
-    const minY=Math.min(...yAll), maxY=Math.max(...yAll); const bins=30; const w=(maxY-minY)/(bins||1) || 1;
-    const centers = Array.from({length:bins},(_,i)=>minY + (i+0.5)*w);
-    const y0 = pooled.filter(r=>r.D===0).map(r=>r.y); const y1 = pooled.filter(r=>r.D===1).map(r=>r.y);
-    const hist = (arr)=>{ const c=new Array(bins).fill(0); if(arr.length===0) return c; arr.forEach(v=>{ const idx=Math.max(0,Math.min(bins-1, Math.floor((v-minY)/w))); c[idx]++; }); const tot=arr.length*w; return c.map(v=> v/(tot||1)); };
-    const d0=hist(y0), d1=hist(y1);
-    const data = centers.map((x,i)=>({x, d0:d0[i], d1:d1[i]}));
-    const prev = Array.from({length:T},(_,t)=>{ const rows=pooled.filter(r=>r.wave===t+1); if(!rows.length) return {t:t+1,p:NaN}; const p=rows.reduce((s,r)=>s+(r.D?1:0),0)/rows.length; return {t:t+1,p}; });
-    const stats = {
-      y_min:Math.min(...yAll), y_max:Math.max(...yAll), y_med:quantile(yAll,0.5), y_mean:yAll.reduce((a,b)=>a+b,0)/yAll.length,
-      y0_med:quantile(y0,0.5), y1_med:quantile(y1,0.5), n0:y0.length, n1:y1.length
-    };
-    return { data, stats, prev };
-  },[yPooled,pooled,T]);
+  const hausman = useMemo(()=>{ if(!(isFinite(pooledOLS.beta)&&isFinite(pooledOLS.se)&&isFinite(fe.beta)&&isFinite(fe.se))) return { z:NaN,p:NaN,diff:NaN }; const diff=pooledOLS.beta-fe.beta; const seDiff=Math.sqrt(pooledOLS.se**2 + fe.se**2); const z=diff/(seDiff||NaN); const p=isFinite(z)? 2*(1-phi(Math.abs(z))) : NaN; return { z, p, diff }; },[pooledOLS,fe]);
+  const bp = useMemo(()=>{ const r2=residPoints.map(d=>d.resid**2); if(r2.length<3) return { LM:NaN,p:NaN }; const f=olsSimple(xPooled,r2); const m=r2.reduce((a,b)=>a+b,0)/r2.length; const sst=r2.reduce((s,v)=>s+(v-m)**2,0); const ssr=r2.reduce((s,v,i)=>s+(v-(f.alpha+f.beta*xPooled[i]))**2,0); const R2=sst===0?0:1-ssr/sst; const LM=r2.length*R2; const p=2*(1-phi(Math.sqrt(LM))); return { LM, p }; },[residPoints,xPooled]);
+  const pretrend = useMemo(()=>{ const t=[]; const gaps=[]; for(let w=1; w<=T; w++){ const rows=pooled.filter(r=>r.wave===w); if(!rows.length) continue; const y1=rows.filter(r=>r.D===1).map(r=>r.y); const y0=rows.filter(r=>r.D===0).map(r=>r.y); if(y1.length<5||y0.length<5) continue; const m1=y1.reduce((a,b)=>a+b,0)/y1.length; const m0=y0.reduce((a,b)=>a+b,0)/y0.length; t.push(w); gaps.push(m1-m0); } if(t.length<3) return { slope:NaN,p:NaN }; const f=olsSimple(t,gaps); const z=f.se? f.beta/f.se : NaN; const p=isFinite(z)? 2*(1-phi(Math.abs(z))) : NaN; return { slope:f.beta, p }; },[pooled,T]);
+  const meanAR1 = useMemo(()=>{ const by=new Map(); residPoints.forEach(d=>{ if(!by.has(d.pid)) by.set(d.pid,[]); by.get(d.pid).push(d); }); let sum=0,cnt=0; by.forEach(arr=>{ const s=arr.sort((a,b)=>a.wave-b.wave); const y1=[], y2=[]; for(let i=1;i<s.length;i++){ y1.push(s[i-1].resid); y2.push(s[i].resid); } if(y1.length>1){ const m1=y1.reduce((a,b)=>a+b,0)/y1.length, m2=y2.reduce((a,b)=>a+b,0)/y2.length; let num=0,den=0; for(let i=0;i<y1.length;i++){ num+=(y1[i]-m1)*(y2[i]-m2); den+=(y1[i]-m1)**2; } if(den>0){ sum+=num/den; cnt++; } } }); return cnt? sum/cnt : NaN; },[residPoints]);
+
+  const huberPooled = useMemo(()=> huberIRLS(xPooled,yPooled), [xPooled,yPooled]);
+  const bayesPooled = useMemo(()=> bayesPosterior(xPooled,yPooled), [xPooled,yPooled]);
+
+  const diag = useMemo(()=>{ const warns=[]; const sugg=new Set(); const push=(l,m,f)=>{warns.push({lvl:l,msg:m,fix:f}); if(f) sugg.add(f);};
+    if(rhoSel>0.5 || (isFinite(iccEmp)&&iccEmp>0.6)) push("🔴","High selection potential (large ρ or ICC): cross-section/pooled likely biased.","Prefer FE; add controls or IV.");
+    if(timeTrendOn || shockAllOn) push("🟠","Time trends or common shocks present.","Add time FE or detrend; consider DiD.");
+    if(shockTreatOn) push("🔴","Treat-specific shock active: parallel trends violated.","Use event-study with group×time FE; test pre-trends.");
+    if(ar1On || (isFinite(meanAR1)&&Math.abs(meanAR1)>0.2)) push("🟠","Serial correlation in errors.","Cluster SEs at unit level; model AR terms.");
+    if(sigmaME>0.8 || misclassOn) push("🟠","Strong measurement error/misclassification.","Instrument/correct using validation; reliability adjustments.");
+    if(dynSelOn) push("🔴","Dynamic selection (Y→D) enabled.","Lagged controls/GMM (Arellano–Bond), IV, or design-based ID.");
+    if(isFinite(shareSwitchers) && shareSwitchers<0.15) push("🟠","Few switchers → FE weakly identified.","Increase T; consider pooled + controls/IV.");
+    if(attritionOn && isFinite(attritionRate) && attritionRate>0.15) push("🟠",`Nontrivial attrition (${(attritionRate*100).toFixed(0)}%).`,`Model attrition, IPW, or bounds.`);
+    if(heteroOn || (isFinite(bp.LM) && bp.p<0.05)) push("🟠","Heteroskedasticity suspected (BP).","Use robust/clustered SEs or model variance.");
+    if(isFinite(hausman.z) && Math.abs(hausman.z)>1.96) push("🔴","FE vs pooled discrepancy significant (Hausman-style).","Prefer FE; add controls or IV.");
+    if(isFinite(pretrend.slope) && pretrend.p<0.05) push("🔴","Pretrend in outcome gap over time.","Add group×time FE or validate parallel trends.");
+    if(!warns.length) warns.push({lvl:"🟢",msg:"No major red flags detected.",fix:"Still cluster SEs for panels; inspect residuals & ICC."});
+    return { warns, suggestions:Array.from(sugg) };
+  },[rhoSel,iccEmp,timeTrendOn,shockAllOn,shockTreatOn,ar1On,sigmaME,misclassOn,dynSelOn,shareSwitchers,attritionOn,attritionRate,heteroOn,bp,hausman,pretrend,meanAR1]);
+
+  const selfTests = useMemo(()=>{
+    const R = [];
+    try{ const rows=[{a:1,b:2},{a:'a\"b',b:4}], header=['a','b']; const csv=toCSV(rows,header); const lines=csv.split('\\n'); R.push({name:'CSV header/rows',pass:lines.length===3,detail:String(lines.length)}); R.push({name:'CSV quote escape',pass:csv.includes('\"a\"\"b\"'),detail:lines[1]}); }catch(e){ R.push({name:'CSV',pass:false,detail:String(e)}); }
+    try{ const d=olsSimple([0,0,0,0],[1,2,3,4]); R.push({name:'OLS constant regressor',pass:Number.isNaN(d.beta),detail:`beta=${d.beta}`}); }catch(e){ R.push({name:'OLS const',pass:false,detail:String(e)}); }
+    try{ const x=[0,1,2,3], y=x.map(v=>3+2*v); const f=olsSimple(x,y); R.push({name:'OLS exact recovery',pass:Math.abs(f.beta-2)<1e-12 && Math.abs(f.alpha-3)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'OLS recover',pass:false,detail:String(e)}); }
+    try{ const ids=[1,1,2,2], x=[0,1,0,1], y=[0,1,2,3]; const f=feWithin(ids,x,y); R.push({name:'FE exact recovery',pass:Math.abs(f.beta-1)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE',pass:false,detail:String(e)}); }
+    try{ const ids=[1,1,2,2], x=[0,0,1,1], y=[0,0,1,1]; const f=feWithin(ids,x,y); R.push({name:'FE needs switchers',pass:Number.isNaN(f.beta),detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE switchers',pass:false,detail:String(e)}); }
+    try{ const x=[0,1,2,3,100], y=[0,2,4,6,0]; const ols=olsSimple(x,y); const hub=huberIRLS(x,y); R.push({name:'Huber vs OLS (outlier)',pass:Math.abs(hub.beta-2)<Math.abs(ols.beta-2),detail:`ols=${ols.beta}, huber=${hub.beta}`}); }catch(e){ R.push({name:'Huber',pass:false,detail:String(e)}); }
+    try{ const x=[0,1,2,3,4,5,6,7,8,9], y=x.map(v=>1+0.5*v + (v%2?1:-1)*0.01); const b=bayesPosterior(x,y); R.push({name:'Bayes finite',pass:isFinite(b.betaMean) && isFinite(b.betaSE),detail:`b=${b.betaMean}`}); }catch(e){ R.push({name:'Bayes',pass:false,detail:String(e)}); }
+    return R;
+  },[]);
+
+  const downloadCSV = () => { const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"]; const csv=toCSV(pooled,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url); };
+
+  const TabButton = ({id,children}) => (
+    <button onClick={()=>setTab(id)} className={`px-3 py-2 rounded-lg border ${tab===id? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>{children}</button>
+  );
+  const AnalysisPill = ({id,label}) => (
+    <button onClick={()=>setAnalysisTab(id)} className={`px-2.5 py-1 rounded-md text-xs border ${analysisTab===id? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>{label}</button>
+  );
+  const VizPill = ({id,label}) => (
+    <button onClick={()=>setVizTab(id)} className={`px-2.5 py-1 rounded-md text-xs border ${vizTab===id? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>{label}</button>
+  );
 
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-neutral-100">
@@ -216,7 +263,7 @@ function App(){
         <header className="mb-4 md:mb-6">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cross-Section vs Panel Estimation — Demonstrator</h1>
           <p className="text-neutral-300 mt-2 max-w-4xl">Explore how cross-sectional, pooled, fixed-effects, robust, and Bayesian estimators behave under realistic panel data-generating processes. Toggle selection, trends, shocks, serial correlation, dynamics, misclassification, heterogeneity, and attrition.</p>
-          <div className="mt-4 flex gap-2"><button onClick={()=>setTab('sim')} className={`px-3 py-2 rounded-lg border ${tab==='sim'? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>Simulator</button><button onClick={()=>setTab('info')} className={`px-3 py-2 rounded-lg border ${tab==='info'? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>Info</button></div>
+          <div className="mt-4 flex gap-2"><TabButton id="sim">Simulator</TabButton><TabButton id="info">Info</TabButton></div>
         </header>
 
         {tab==='sim'? (
@@ -245,29 +292,25 @@ function App(){
                 <Slider label={`Measurement error SD (σₘₑ): ${sigmaME.toFixed(2)}`} min={0} max={3} step={0.05} value={sigmaME} onChange={setSigmaME} />
                 <Slider label={`Base prevalence P(D=1): ${pBase.toFixed(2)}`} min={0.05} max={0.95} step={0.01} value={pBase} onChange={setPBase} />
                 <Slider label={`Selection strength (ρ): ${rhoSel.toFixed(2)}`} min={0} max={2} step={0.05} value={rhoSel} onChange={setRhoSel} />
-                <Slider label={`Switch rate: ${switchRate.toFixed(2)}`} min={0} max={1} step={0.05} value={switchRate} onChange={setSwitchRate} />
+                <Slider label={`Switch rate: ${switchRate.toFixed(2)}`} min={0} max={1} step={0.05} value={switchRate} />
 
                 <div className="pt-2 grid grid-cols-1 gap-2">
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={()=>console.log('Preset: Tutoring bias')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Tutoring bias</button>
-                    <button onClick={()=>console.log('Preset: RCT')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: RCT</button>
-                    <button onClick={()=>console.log('Preset: Noisy survey')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Noisy survey</button>
-                    <button onClick={()=>console.log('Preset: Policy (DiD viol.)')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Policy (DiD viol.)</button>
-                    <button onClick={()=>console.log('Preset: Heterog. TE')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Heterog. TE</button>
+                    <PresetButton onClick={()=>applyPreset('SelectionBias')} label="Preset: Tutoring bias" />
+                    <PresetButton onClick={()=>applyPreset('RandomizedClean')} label="Preset: RCT" />
+                    <PresetButton onClick={()=>applyPreset('MeasurementError')} label="Preset: Noisy survey" />
+                    <PresetButton onClick={()=>applyPreset('PolicyDIDViolation')} label="Preset: Policy (DiD viol.)" />
+                    <PresetButton onClick={()=>applyPreset('HeterogeneousTE')} label="Preset: Heterog. TE" />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={()=>console.log('Preset: OLS nonlinearity')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: OLS nonlinearity</button>
-                    <button onClick={()=>console.log('Preset: OLS heterosked.')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: OLS heterosked.</button>
-                    <button onClick={()=>console.log('Preset: Pure trend')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Pure trend</button>
-                    <button onClick={()=>console.log('Preset: Reverse causality')} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Reverse causality</button>
+                    <PresetButton onClick={()=>applyPreset('OLS_Nonlinear')} label="Preset: OLS nonlinearity" />
+                    <PresetButton onClick={()=>applyPreset('OLS_Heteroskedastic')} label="Preset: OLS heterosked." />
+                    <PresetButton onClick={()=>applyPreset('TrendOnly')} label="Preset: Pure trend" />
+                    <PresetButton onClick={()=>applyPreset('ReverseCausality')} label="Preset: Reverse causality" />
                   </div>
                 </div>
 
-                <div className="pt-3"><button onClick={()=>{
-                  const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"];
-                  const csv=toCSV(pooled,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-                  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url);
-                }} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full">Download simulated CSV</button></div>
+                <div className="pt-3"><button onClick={downloadCSV} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full">Download simulated CSV</button></div>
                 <p className="text-xs text-neutral-400">FE uses within-person changes (non-switchers do not identify β). Robust = Huber IRLS.
                 Bayesian uses a weakly-informative Normal–Inverse-Gamma prior for pooled OLS.</p>
               </div>
@@ -282,7 +325,7 @@ function App(){
                   <h3 className="font-semibold mb-2">Model notation</h3>
                   <pre className="whitespace-pre-wrap text-neutral-200 leading-5">{`
 βᵢ = β + β_h·(uᵢ/σᵤ)    (β=${fmt(betaTrue,2)}, β_h=${fmt(betaHet,2)}, σᵤ=${fmt(sigmaU,2)})
-Outcome base:  y*ᵢₜ = βᵢ·Dᵢₜ + uᵢ + eᵢₜ + γ·t + ξ·1{t=${shockAllWave}} + τ·Dᵢₜ·1{t=${shockTreatWave}}
+Outcome base:  y*ᵢₜ = βᵢ·Dᵢₜ + uᵢ + eᵢₜ + γ·t + ξ·1{t=${5}} + τ·Dᵢₜ·1{t=${6}}
 Observed Y:   yᵢₜ = ${expOutcomeOn? 'exp(κ·y*ᵢₜ)' : 'y*ᵢₜ'} + νᵢₜ   (κ=${expOutcomeOn?fmt(expScale,2):'0'},  σₘₑ=${fmt(sigmaME,2)})
 Errors:       eᵢₜ = ${ar1On?`ρₑ·eᵢ,ₜ₋₁ + ηᵢₜ (ρₑ=${fmt(rhoE,2)})`:'ηᵢₜ (i.i.d.)'}  with σₑ=${fmt(sigmaE,2)}
 Treatment:    Pr(Dᵢₜ=1 | uᵢ, y*ᵢ,ₜ₋₁) = logit⁻¹(α + ρ·(uᵢ/σᵤ) + γ_dy·tanh(y*ᵢ,ₜ₋₁)), α=logit(${fmt(pBase,2)})
@@ -427,9 +470,14 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                 <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4">
                   <h3 className="font-semibold mb-2">Diagnostic report</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="md:col-span-2"><ul className="space-y-1">{/* simple heuristic messages kept minimal for static app */}<li>• Inspect serial correlation and heteroskedasticity; prefer FE when selection on levels is strong.</li></ul></div>
+                    <div className="md:col-span-2"><ul className="space-y-1"><li>• Inspect serial correlation and heteroskedasticity; prefer FE when selection on levels is strong.</li></ul></div>
                     <div className="md:col-span-1"><div className="font-medium mb-1">Suggested remedies</div><ul className="list-disc pl-5 space-y-1 text-neutral-300"><li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID where plausible</li></ul></div>
                   </div>
+                </div>
+
+                <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4 text-sm">
+                  <h3 className="font-semibold mb-2">Developer self-tests</h3>
+                  <ul className="list-disc pl-5 space-y-1">{selfTests.map((t,i)=>(<li key={i}><span className={t.pass? 'text-green-400':'text-red-400'}>{t.pass? 'PASS':'FAIL'}</span>{": "}{t.name} <span className="text-neutral-400">({t.detail})</span></li>))}</ul>
                 </div>
               </div>
             </section>
@@ -440,7 +488,7 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
             <div className="text-sm space-y-3 text-neutral-200">
               <p>This demo contrasts <span className="font-medium">cross-sectional</span>, <span className="font-medium">pooled</span>, and <span className="font-medium">fixed-effects</span> estimators, and adds <span className="font-medium">robust</span> and <span className="font-medium">Bayesian</span> alternatives, on synthetic panel data.</p>
               <p className="text-neutral-300">Current scenario: <span className="font-medium">{scenario.title}</span>. D = {scenario.d}; Y = {scenario.y}.</p>
-              <pre className="whitespace-pre-wrap text-xs text-neutral-300">{`DGP (compact): βᵢ=β+β_h(uᵢ/σᵤ);  y*ᵢₜ=βᵢDᵢₜ+uᵢ+eᵢₜ+γt+ξ1{t=${5}}+τDᵢₜ1{t=${6}};  y= ${expOutcomeOn?'exp(κy*)':'y*'} +ν.`}</pre>
+              <pre className="whitespace-pre-wrap text-xs text-neutral-300">{`DGP (compact): βᵢ=β+β_h(uᵢ/σᵤ);  y*ᵢₜ=βᵢDᵢₜ+uᵢ+eᵢₜ+γt+ξ1{t=5}+τDᵢₜ1{t=6};  y= ${expOutcomeOn?'exp(κy*)':'y*'} +ν.`}</pre>
             </div>
           </section>
         )}
@@ -451,4 +499,4 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<App />);
