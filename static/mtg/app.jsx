@@ -79,7 +79,7 @@ function LoginScreen() {
 function MainMenu() {
   const div = document.createElement('div');
   div.className = 'min-h-screen bg-gray-900 flex items-center justify-center p-8';
-  div.innerHTML = `<div class="text-center"><div class="flex justify-between items-center mb-8"><div></div><h1 class="text-4xl font-bold text-gray-100">Player ${state.currentPlayer}</h1><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.LogOut()} Logout</button></div><div class="grid gap-4 max-w-md mx-auto"><button id="createBtn" class="bg-gray-800 hover:bg-gray-700 text-gray-100 px-8 py-6 rounded-lg font-semibold text-lg border border-gray-700 transition">Create Cards</button><button id="buildBtn" class="bg-gray-800 hover:bg-gray-700 text-gray-100 px-8 py-6 rounded-lg font-semibold text-lg border border-gray-700 transition">Build Deck</button><button id="playBtn" class="bg-gray-800 hover:bg-gray-700 text-gray-100 px-8 py-6 rounded-lg font-semibold text-lg border border-gray-700 transition">Play Game</button></div></div>`;
+  div.innerHTML = '<div class="text-center"><div class="flex justify-between items-center mb-8"><div></div><h1 class="text-4xl font-bold text-gray-100">Player ' + state.currentPlayer + '</h1><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.LogOut() + ' Logout</button></div><div class="grid gap-4 max-w-md mx-auto"><button id="createBtn" class="bg-gray-800 hover:bg-gray-700 text-gray-100 px-8 py-6 rounded-lg font-semibold text-lg border border-gray-700 transition">Create Cards</button><button id="buildBtn" class="bg-gray-800 hover:bg-gray-700 text-gray-100 px-8 py-6 rounded-lg font-semibold text-lg border border-gray-700 transition">Build Deck</button><button id="playBtn" class="bg-gray-800 hover:bg-gray-700 text-gray-100 px-8 py-6 rounded-lg font-semibold text-lg border border-gray-700 transition">Play Game</button></div></div>';
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
   div.querySelector('#createBtn').onclick = () => { state.screen = 'creator'; render(); };
   div.querySelector('#buildBtn').onclick = () => { state.screen = 'builder'; render(); };
@@ -92,9 +92,9 @@ function CardCreator() {
   const div = document.createElement('div');
   div.className = 'min-h-screen bg-gray-900 p-8';
   
-  const cardsHtml = state.cards.map((c, idx) => `<div class="relative group"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">${c.name || 'Unnamed'}</h3><p class="text-xs text-gray-300 text-center">${c.type}</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">${c.image ? `<img src="${c.image}" alt="${c.name}" class="w-full h-full object-cover rounded-lg">` : '<div class="text-gray-500 text-4xl">🃏</div>'}</div>${c.type === 'Monster' ? `<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ${c.attack}</span><span class="text-gray-100 font-semibold text-sm">DEF: ${c.defense}</span></div>` : ''}<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">${c.effect || 'No effect'}</p></div></div><div class="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition"><button class="editCard bg-gray-700 p-2 rounded hover:bg-gray-600 border border-gray-600" data-id="${idx}">${Icon.Edit3()}</button><button class="delCard bg-gray-700 p-2 rounded hover:bg-gray-600 border border-gray-600" data-id="${idx}">${Icon.Trash2()}</button></div></div>`).join('');
+  const cardsHtml = state.cards.map((c, idx) => '<div class="relative group"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">' + (c.name || 'Unnamed') + '</h3><p class="text-xs text-gray-300 text-center">' + c.type + '</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">' + (c.image ? '<img src="' + c.image + '" alt="' + c.name + '" class="w-full h-full object-cover rounded-lg">' : '<div class="text-gray-500 text-4xl">🃏</div>') + '</div>' + (c.type === 'Monster' ? '<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ' + c.attack + '</span><span class="text-gray-100 font-semibold text-sm">DEF: ' + c.defense + '</span></div>' : '') + '<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">' + (c.effect || 'No effect') + '</p></div></div><div class="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition"><button class="editCard bg-gray-700 p-2 rounded hover:bg-gray-600 border border-gray-600" data-id="' + idx + '">' + Icon.Edit3() + '</button><button class="delCard bg-gray-700 p-2 rounded hover:bg-gray-600 border border-gray-600" data-id="' + idx + '">' + Icon.Trash2() + '</button></div></div>').join('');
 
-  div.innerHTML = `<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.ArrowLeft()} Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.LogOut()} Logout</button></div><div class="max-w-6xl mx-auto"><h1 class="text-3xl font-bold text-gray-100 mb-8">${state.editingCard ? 'Edit Card' : 'Create New Card'}</h1><div class="grid md:grid-cols-2 gap-8"><div class="bg-gray-800 rounded-lg p-6 border border-gray-700"><div class="space-y-4"><div><label class="block text-gray-300 mb-2 text-sm">Card Name</label><input id="cardName" type="text" value="${formData.name}" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div><div><label class="block text-gray-300 mb-2 text-sm">Type</label><select id="cardType" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"><option value="Monster">Monster</option><option value="Spell">Spell</option><option value="Trap">Trap</option></select></div><div id="monsterStats" ${formData.type !== 'Monster' ? 'style="display:none"' : ''}><div><label class="block text-gray-300 mb-2 text-sm">Attack</label><input id="cardAtk" type="number" value="${formData.attack}" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div><div class="mt-4"><label class="block text-gray-300 mb-2 text-sm">Defense</label><input id="cardDef" type="number" value="${formData.defense}" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div></div><div><label class="block text-gray-300 mb-2 text-sm">Effect Description</label><textarea id="cardEffect" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500 h-24">${formData.effect}</textarea></div><div><label class="block text-gray-300 mb-2 text-sm">Card Image</label><input id="cardImage" type="file" accept="image/*" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div><button id="submitCard" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-100 py-3 rounded-lg font-semibold transition border border-gray-600">${state.editingCard ? 'Update Card' : 'Create Card'}</button></div></div><div><h2 class="text-xl font-bold text-gray-100 mb-4">Preview</h2><div id="preview"></div></div></div><div class="mt-12"><h2 class="text-xl font-bold text-gray-100 mb-4">Your Cards</h2><div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="cardGrid">${cardsHtml}</div></div></div>`;
+  div.innerHTML = '<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.ArrowLeft() + ' Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.LogOut() + ' Logout</button></div><div class="max-w-6xl mx-auto"><h1 class="text-3xl font-bold text-gray-100 mb-8">' + (state.editingCard ? 'Edit Card' : 'Create New Card') + '</h1><div class="grid md:grid-cols-2 gap-8"><div class="bg-gray-800 rounded-lg p-6 border border-gray-700"><div class="space-y-4"><div><label class="block text-gray-300 mb-2 text-sm">Card Name</label><input id="cardName" type="text" value="' + formData.name + '" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div><div><label class="block text-gray-300 mb-2 text-sm">Type</label><select id="cardType" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"><option value="Monster">Monster</option><option value="Spell">Spell</option><option value="Trap">Trap</option></select></div><div id="monsterStats" style="' + (formData.type !== 'Monster' ? 'display:none' : '') + '"><div><label class="block text-gray-300 mb-2 text-sm">Attack</label><input id="cardAtk" type="number" value="' + formData.attack + '" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div><div class="mt-4"><label class="block text-gray-300 mb-2 text-sm">Defense</label><input id="cardDef" type="number" value="' + formData.defense + '" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div></div><div><label class="block text-gray-300 mb-2 text-sm">Effect Description</label><textarea id="cardEffect" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500 h-24">' + formData.effect + '</textarea></div><div><label class="block text-gray-300 mb-2 text-sm">Card Image</label><input id="cardImage" type="file" accept="image/*" class="w-full px-4 py-2 rounded bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500"></div><button id="submitCard" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-100 py-3 rounded-lg font-semibold transition border border-gray-600">' + (state.editingCard ? 'Update Card' : 'Create Card') + '</button></div></div><div><h2 class="text-xl font-bold text-gray-100 mb-4">Preview</h2><div id="preview"></div></div></div><div class="mt-12"><h2 class="text-xl font-bold text-gray-100 mb-4">Your Cards</h2><div class="grid grid-cols-2 md:grid-cols-4 gap-4">' + cardsHtml + '</div></div></div>';
 
   div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
@@ -107,7 +107,7 @@ function CardCreator() {
     formData.defense = parseInt(div.querySelector('#cardDef').value) || 0;
     formData.effect = div.querySelector('#cardEffect').value;
     div.querySelector('#monsterStats').style.display = formData.type === 'Monster' ? 'block' : 'none';
-    div.querySelector('#preview').innerHTML = `<div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">${formData.name || 'Unnamed'}</h3><p class="text-xs text-gray-300 text-center">${formData.type}</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">${formData.image ? `<img src="${formData.image}" alt="${formData.name}" class="w-full h-full object-cover rounded-lg">` : '<div class="text-gray-500 text-4xl">🃏</div>'}</div>${formData.type === 'Monster' ? `<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ${formData.attack}</span><span class="text-gray-100 font-semibold text-sm">DEF: ${formData.defense}</span></div>` : ''}<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">${formData.effect || 'No effect'}</p></div></div>`;
+    div.querySelector('#preview').innerHTML = '<div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">' + (formData.name || 'Unnamed') + '</h3><p class="text-xs text-gray-300 text-center">' + formData.type + '</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">' + (formData.image ? '<img src="' + formData.image + '" class="w-full h-full object-cover rounded-lg">' : '<div class="text-gray-500 text-4xl">🃏</div>') + '</div>' + (formData.type === 'Monster' ? '<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ' + formData.attack + '</span><span class="text-gray-100 font-semibold text-sm">DEF: ' + formData.defense + '</span></div>' : '') + '<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">' + (formData.effect || 'No effect') + '</p></div></div>';
   };
 
   div.querySelector('#cardName').oninput = updatePreview;
@@ -121,42 +121,60 @@ function CardCreator() {
   };
   div.querySelector('#submitCard').onclick = () => {
     if (state.editingCard) {
-      state.cards[state.cards.findIndex(c => c.id === state.editingCard.id)] = { ...formData, id: state.editingCard.id };
+      state.cards[state.cards.findIndex(c => c.id === state.editingCard.id)] = Object.assign({}, formData, { id: state.editingCard.id });
       state.editingCard = null;
     } else {
-      state.cards.push({ ...formData, id: Date.now() });
+      state.cards.push(Object.assign({}, formData, { id: Date.now() }));
     }
     render();
   };
-  div.querySelectorAll('.editCard').forEach(btn => {
-    btn.onclick = () => { state.editingCard = state.cards[parseInt(btn.dataset.id)]; render(); window.scrollTo(0, 0); };
-  });
-  div.querySelectorAll('.delCard').forEach(btn => {
-    btn.onclick = () => { state.cards.splice(parseInt(btn.dataset.id), 1); render(); };
-  });
+  
+  const editBtns = div.querySelectorAll('.editCard');
+  for (var i = 0; i < editBtns.length; i++) {
+    editBtns[i].onclick = (function(idx) {
+      return function() { state.editingCard = state.cards[idx]; render(); window.scrollTo(0, 0); };
+    })(i);
+  }
+  
+  const delBtns = div.querySelectorAll('.delCard');
+  for (var j = 0; j < delBtns.length; j++) {
+    delBtns[j].onclick = (function(idx) {
+      return function() { state.cards.splice(idx, 1); render(); };
+    })(j);
+  }
 
   updatePreview();
   return div;
 }
 
 function DeckBuilder() {
-  const playerKey = `player${state.currentPlayer}`;
+  const playerKey = 'player' + state.currentPlayer;
   const div = document.createElement('div');
   div.className = 'min-h-screen bg-gray-900 p-8';
 
-  const availCards = state.cards.map((c, idx) => `<div class="relative"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">${c.name}</h3><p class="text-xs text-gray-300 text-center">${c.type}</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">${c.image ? `<img src="${c.image}" class="w-full h-full object-cover rounded-lg">` : '<div class="text-gray-500 text-4xl">🃏</div>'}</div>${c.type === 'Monster' ? `<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ${c.attack}</span><span class="text-gray-100 font-semibold text-sm">DEF: ${c.defense}</span></div>` : ''}<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">${c.effect}</p></div></div><button class="addCard absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full hover:bg-gray-600 transition border border-gray-600" data-id="${idx}">${Icon.Plus()}</button></div>`).join('');
-  const deckCards = state.decks[playerKey].length === 0 ? '<p class="text-gray-500 text-center py-8">No cards in deck</p>' : state.decks[playerKey].map((c, idx) => `<div class="relative"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">${c.name}</h3><p class="text-xs text-gray-300 text-center">${c.type}</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">${c.image ? `<img src="${c.image}" class="w-full h-full object-cover rounded-lg">` : '<div class="text-gray-500 text-4xl">🃏</div>'}</div>${c.type === 'Monster' ? `<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ${c.attack}</span><span class="text-gray-100 font-semibold text-sm">DEF: ${c.defense}</span></div>` : ''}<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">${c.effect}</p></div></div><button class="remCard absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full hover:bg-gray-600 transition border border-gray-600" data-id="${idx}">${Icon.Trash2()}</button></div>`).join('');
+  const availCards = state.cards.map((c, idx) => '<div class="relative"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">' + c.name + '</h3><p class="text-xs text-gray-300 text-center">' + c.type + '</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">' + (c.image ? '<img src="' + c.image + '" class="w-full h-full object-cover rounded-lg">' : '<div class="text-gray-500 text-4xl">🃏</div>') + '</div>' + (c.type === 'Monster' ? '<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ' + c.attack + '</span><span class="text-gray-100 font-semibold text-sm">DEF: ' + c.defense + '</span></div>' : '') + '<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">' + c.effect + '</p></div></div><button class="addCard absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full hover:bg-gray-600 transition border border-gray-600" data-id="' + idx + '">' + Icon.Plus() + '</button></div>').join('');
+  
+  const deckCards = state.decks[playerKey].length === 0 ? '<p class="text-gray-500 text-center py-8">No cards in deck</p>' : state.decks[playerKey].map((c, idx) => '<div class="relative"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">' + c.name + '</h3><p class="text-xs text-gray-300 text-center">' + c.type + '</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">' + (c.image ? '<img src="' + c.image + '" class="w-full h-full object-cover rounded-lg">' : '<div class="text-gray-500 text-4xl">🃏</div>') + '</div>' + (c.type === 'Monster' ? '<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ' + c.attack + '</span><span class="text-gray-100 font-semibold text-sm">DEF: ' + c.defense + '</span></div>' : '') + '<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">' + c.effect + '</p></div></div><button class="remCard absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full hover:bg-gray-600 transition border border-gray-600" data-id="' + idx + '">' + Icon.Trash2() + '</button></div>').join('');
 
-  div.innerHTML = `<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.ArrowLeft()} Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.LogOut()} Logout</button></div><div class="max-w-7xl mx-auto"><h1 class="text-3xl font-bold text-gray-100 mb-8">Player ${state.currentPlayer} Deck Builder (${state.decks[playerKey].length} cards)</h1><div class="grid md:grid-cols-2 gap-8"><div><h2 class="text-xl font-bold text-gray-100 mb-4">Available Cards</h2><div class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700"><div class="grid grid-cols-2 gap-4">${availCards}</div></div></div><div><h2 class="text-xl font-bold text-gray-100 mb-4">Your Deck</h2><div class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700"><div class="grid grid-cols-2 gap-4">${deckCards}</div></div></div></div></div>`;
+  div.innerHTML = '<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.ArrowLeft() + ' Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.LogOut() + ' Logout</button></div><div class="max-w-7xl mx-auto"><h1 class="text-3xl font-bold text-gray-100 mb-8">Player ' + state.currentPlayer + ' Deck Builder (' + state.decks[playerKey].length + ' cards)</h1><div class="grid md:grid-cols-2 gap-8"><div><h2 class="text-xl font-bold text-gray-100 mb-4">Available Cards</h2><div class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700"><div class="grid grid-cols-2 gap-4">' + availCards + '</div></div></div><div><h2 class="text-xl font-bold text-gray-100 mb-4">Your Deck</h2><div class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700"><div class="grid grid-cols-2 gap-4">' + deckCards + '</div></div></div></div></div>';
 
   div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
-  div.querySelectorAll('.addCard').forEach(btn => {
-    btn.onclick = () => { state.decks[playerKey].push({ ...state.cards[parseInt(btn.dataset.id)], deckId: Date.now() }); render(); };
-  });
-  div.querySelectorAll('.remCard').forEach(btn => {
-    btn.onclick = () => { state.decks[playerKey].splice(parseInt(btn.dataset.id), 1); render(); };
-  });
+  
+  const addBtns = div.querySelectorAll('.addCard');
+  for (var i = 0; i < addBtns.length; i++) {
+    addBtns[i].onclick = (function(idx) {
+      return function() { state.decks[playerKey].push(Object.assign({}, state.cards[idx], { deckId: Date.now() })); render(); };
+    })(i);
+  }
+  
+  const remBtns = div.querySelectorAll('.remCard');
+  for (var j = 0; j < remBtns.length; j++) {
+    remBtns[j].onclick = (function(idx) {
+      return function() { state.decks[playerKey].splice(idx, 1); render(); };
+    })(j);
+  }
+  
   return div;
 }
 
@@ -165,25 +183,103 @@ function GameBoard() {
   
   if (!state.gameStarted) {
     div.className = 'min-h-screen bg-gray-900 p-8';
-    div.innerHTML = `<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.ArrowLeft()} Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">${Icon.LogOut()} Logout</button></div><div class="max-w-4xl mx-auto text-center"><h1 class="text-3xl font-bold text-gray-100 mb-8">Ready to Play?</h1><p class="text-gray-400 mb-8">Make sure both players have built their decks before starting.</p><button id="startBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-8 py-4 rounded-lg font-semibold border border-gray-600 transition ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}" ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'disabled' : ''}>Start Game</button>${(state.decks.player1.length === 0 || state.decks.player2.length === 0) ? '<p class="text-red-400 mt-4">Both players need cards in their decks!</p>' : ''}</div>`;
+    div.innerHTML = '<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.ArrowLeft() + ' Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.LogOut() + ' Logout</button></div><div class="max-w-4xl mx-auto text-center"><h1 class="text-3xl font-bold text-gray-100 mb-8">Ready to Play?</h1><p class="text-gray-400 mb-8">Make sure both players have built their decks before starting.</p><button id="startBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-8 py-4 rounded-lg font-semibold border border-gray-600 transition ' + (state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'disabled' : '') + '>Start Game</button>' + ((state.decks.player1.length === 0 || state.decks.player2.length === 0) ? '<p class="text-red-400 mt-4">Both players need cards in their decks!</p>' : '') + '</div>';
+    
     div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
     div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
     div.querySelector('#startBtn').onclick = () => {
-      const shuffleDeck = (deck) => { const shuffled = [...deck]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; };
-      const p1Deck = shuffleDeck(state.decks.player1.map((c, i) => ({ ...c, gameId: `p1-${i}` })));
-      const p2Deck = shuffleDeck(state.decks.player2.map((c, i) => ({ ...c, gameId: `p2-${i}` })));
-      state.gameState = { player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p1Deck, health: 20 }, player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p2Deck, health: 20 } };
-      state.activePlayer = 1; state.gameStarted = true; render();
+      const shuffleDeck = function(deck) { 
+        const shuffled = deck.slice(); 
+        for (var i = shuffled.length - 1; i > 0; i--) { 
+          var j = Math.floor(Math.random() * (i + 1)); 
+          var temp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = temp;
+        } 
+        return shuffled; 
+      };
+      
+      const p1Deck = shuffleDeck(state.decks.player1.map(function(c, i) { return Object.assign({}, c, { gameId: 'p1-' + i }); }));
+      const p2Deck = shuffleDeck(state.decks.player2.map(function(c, i) { return Object.assign({}, c, { gameId: 'p2-' + i }); }));
+      
+      state.gameState = { 
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p1Deck, health: 20 }, 
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p2Deck, health: 20 } 
+      };
+      state.activePlayer = 1; 
+      state.gameStarted = true; 
+      render();
     };
     return div;
   }
 
-  const opponent = state.currentPlayer === 1 ? 2 : 1;
-  const opponentKey = `player${opponent}`;
-  const myKey = `player${state.currentPlayer}`;
+  const playerKey = 'player' + state.currentPlayer;
+  const myHealth = state.gameState[playerKey].health;
+  const myHand = state.gameState[playerKey].hand.length;
+  const myDeck = state.gameState[playerKey].deck.length;
+  
+  div.className = 'min-h-screen bg-gray-900 p-8 text-center';
+  
+  const winnerHtml = state.winner ? '<div class="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700 max-w-md mx-auto"><h2 class="text-2xl font-bold text-gray-100 mb-4">' + (state.winner === state.currentPlayer ? 'You Win!' : 'You Lose!') + '</h2><p class="text-gray-400 mb-4">Player ' + state.winner + ' is victorious!</p><button id="returnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Return to Menu</button></div>' : '';
+  
+  div.innerHTML = '<h1 class="text-3xl font-bold text-gray-100 mb-8">Game In Progress</h1><p class="text-gray-400 mb-4">Player ' + state.currentPlayer + ' View</p><p class="text-gray-400 mb-4">Health: ' + myHealth + '</p><p class="text-gray-400 mb-4">Hand: ' + myHand + ' cards</p><p class="text-gray-400 mb-4">Deck: ' + myDeck + ' cards</p><button id="drawBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition mr-4">Draw Card</button><button id="minusHealth" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition mr-4">-1 Health</button><button id="endTurnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition mr-4">End Turn</button><button id="exitBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Exit Game</button>' + winnerHtml;
+  
+  div.querySelector('#drawBtn').onclick = () => {
+    if (state.gameState[playerKey].deck.length > 0) {
+      const randomIndex = Math.floor(Math.random() * state.gameState[playerKey].deck.length);
+      const drawnCard = state.gameState[playerKey].deck[randomIndex];
+      state.gameState[playerKey].deck = state.gameState[playerKey].deck.filter((c, i) => i !== randomIndex);
+      state.gameState[playerKey].hand.push(drawnCard);
+      render();
+    }
+  };
+  
+  div.querySelector('#minusHealth').onclick = () => {
+    state.gameState[playerKey].health = Math.max(0, state.gameState[playerKey].health - 1);
+    checkWinner();
+    render();
+  };
+  
+  div.querySelector('#endTurnBtn').onclick = () => {
+    state.activePlayer = state.activePlayer === 1 ? 2 : 1;
+    render();
+  };
+  
+  div.querySelector('#exitBtn').onclick = () => {
+    state.screen = 'menu';
+    state.gameStarted = false;
+    state.winner = null;
+    state.gameState = {
+      player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 },
+      player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 }
+    };
+    render();
+  };
+  
+  if (state.winner && div.querySelector('#returnBtn')) {
+    div.querySelector('#returnBtn').onclick = () => {
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.gameState = {
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 },
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 }
+      };
+      render();
+    };
+  }
+  
+  return div;
+}
 
-  div.className = 'min-h-screen bg-gradient-to-b from-gray-800 to-gray-900 p-4';
-  
-  const winnerModal = state.winner ? `<div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50"><div class="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center"><h2 class="text-3xl font-bold text-gray-100 mb-4">${state.winner === state.currentPlayer ? 'You Win!' : 'You Lose!'}</h2><p class="text-gray-400 mb-6">Player ${state.winner} is victorious!</p><button id="returnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Return to Menu</button></div></div>` : '';
-  
-  div.innerHTML = `<div class="flex justify-between items-center mb-4"><button id="exitBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">${Icon.ArrowLeft()} Exit</button><div class="flex items-center gap-4"><span class="text-gray-400 text-sm">${state.activePlayer === state.currentPlayer ? 'YOUR TURN' : `Player ${state.activePlayer}'s Turn`}</span>${state.activePlayer === state.currentPlayer ? '<button id="endTurnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-4 py-2 rounded font-semibold text-sm border border-gray-600 transition">End Turn</button>' : ''}</div></div><div class="max-w-7xl mx-auto"><div class="mb-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-bold text-gray-100">Player ${opponent}</h2><div class="flex items-center gap-4"><div class="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded border border-gray-600">${Icon.Heart()}<span class="text-gray-100 font-bold">${state.gameState[opponentKey].health}</span></div><div class="text-gray-400 text-sm">Hand: ${state.gameState[opponentKey].hand.length} | Deck: ${state.gameState[opponentKey].deck.length}</div></div></div><div class="mb-2"><div class="flex gap-1 mb-2">${state.gameState[opponentKey].hand.map(() => '<div class="w-16 h-24 bg-gray-700 rounded border-2 border-gray-600"></div>').join('')}</div></div><div class="mb-2"><h3 class="text-gray-400 text-sm mb-1">Upper Field</h3><div class="bg-gray-700/30 rounded-lg p-2 min-h-[120px] border border-gray-600"><div class="flex gap-2 overflow-x-auto" id="oppUpper"></div></div></div><div class="mb-2"><h3 class="text-gray-400 text-sm mb-1">Lower Field</h3><div class="bg-gray-700/30 rounded-lg p-2 min-h-[120px] border border-gray-600"><div class="flex gap-2 overflow
+function __ready(fn) { 
+  if (document.readyState !== 'loading') { 
+    fn(); 
+  } else { 
+    document.addEventListener('DOMContentLoaded', fn); 
+  } 
+}
+
+__ready(function() {
+  render();
+});
+
+})();
