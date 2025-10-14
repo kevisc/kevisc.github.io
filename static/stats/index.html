@@ -3,17 +3,14 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Cross-Section vs Panel — Self‑Contained</title>
+<title>Cross-Section vs Panel — Self-Contained (ASCII)</title>
 <style>
   :root {
     --bg: #0a0a0a;
     --panel: #121212;
     --muted: #9aa0a6;
     --text: #e5e7eb;
-    --accent: #d1d5db;
     --border: #262626;
-    --green: #22c55e;
-    --red: #ef4444;
   }
   html, body { height:100%; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
@@ -30,31 +27,21 @@
   .chip.active { background:#1f1f1f; border-color:#3a3a3a; }
   .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
-  .grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; }
-  label { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin:6px 0 4px; }
-  input[type=range] { width:100%; }
   .cards { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
   @media(max-width: 900px){ .cards{ grid-template-columns: 1fr 1fr; } }
   .card { background:#101010; border:1px solid var(--border); border-radius:14px; padding:12px; }
   .card .title { font-size:12px; color:var(--muted); }
   .card .value { font-size:22px; margin-top:6px; }
   .card .foot { font-size:12px; color:#8a8a8a; margin-top:6px; }
-  .warn { border-color:#6b1d1d; }
   svg { width:100%; height:100%; display:block; }
-  .chart { height: 400px; background:#0c0c0c; border:1px solid var(--border); border-radius:12px; padding:8px; }
-  .axis text { fill: #9aa0a6; font-size: 11px; }
-  .axis line, .axis path { stroke: #2a2a2a; }
-  .grid line { stroke:#1e1e1e; }
-  .tick line { stroke:#2a2a2a; }
-  .legend { font-size: 12px; color: var(--muted); }
-  pre { white-space: pre-wrap; background:#0e0e0e; border:1px solid var(--border); padding:8px; border-radius:10px; }
+  .chart { height: 380px; background:#0c0c0c; border:1px solid var(--border); border-radius:12px; padding:8px; }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>Cross-Section vs Panel Estimation — Self‑Contained Demonstrator</h1>
-    <p class="muted">No external libraries. SVG charts. Explore how cross-sectional, pooled, fixed-effects, robust, and Bayesian estimators behave with realistic panel DGPs.</p>
+    <h1>Cross-Section vs Panel Estimation (Self-Contained, ASCII)</h1>
+    <p class="muted">No external libraries. SVG charts. Explore cross-sectional vs panel estimators under realistic data-generating processes.</p>
     <div class="mt-3">
       <button class="btn" id="tab-sim">Simulator</button>
       <button class="btn" id="tab-info">Info</button>
@@ -65,9 +52,7 @@
   <section id="sim" class="mt-4">
     <div class="row">
       <div class="panel">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h2>Simulation Settings</h2>
-        </div>
+        <h2>Simulation Settings</h2>
         <div class="mt-2">
           <span class="muted" style="font-size:12px;">Analysis:</span>
           <span id="mode-descriptives" class="chip active">Descriptives</span>
@@ -81,19 +66,19 @@
           <input type="range" min="50" max="4000" step="50" id="N">
           <label>Waves (T): <span id="lblT"></span></label>
           <input type="range" min="2" max="16" step="1" id="T">
-          <label>True effect β: <span id="lblB"></span></label>
+          <label>True effect beta: <span id="lblB"></span></label>
           <input type="range" min="-2" max="2" step="0.05" id="betaTrue">
-          <label>Heterogeneity β×u (β_h): <span id="lblBh"></span></label>
+          <label>Effect heterogeneity beta_h: <span id="lblBh"></span></label>
           <input type="range" min="-2" max="2" step="0.05" id="betaHet">
-          <label>Between-person SD (σ_u): <span id="lblSu"></span></label>
+          <label>Between-person SD (sigma_u): <span id="lblSu"></span></label>
           <input type="range" min="0" max="3" step="0.05" id="sigmaU">
-          <label>Within-person SD (σ_e): <span id="lblSe"></span></label>
+          <label>Within-person SD (sigma_e): <span id="lblSe"></span></label>
           <input type="range" min="0" max="3" step="0.05" id="sigmaE">
-          <label>Measurement error SD (σ_me): <span id="lblSme"></span></label>
+          <label>Measurement error SD (sigma_me): <span id="lblSme"></span></label>
           <input type="range" min="0" max="3" step="0.05" id="sigmaME">
           <label>Base prevalence P(D=1): <span id="lblP"></span></label>
           <input type="range" min="0.05" max="0.95" step="0.01" id="pBase">
-          <label>Selection strength (ρ): <span id="lblRho"></span></label>
+          <label>Selection strength (rho): <span id="lblRho"></span></label>
           <input type="range" min="0" max="2" step="0.05" id="rhoSel">
           <label>Switch rate: <span id="lblSw"></span></label>
           <input type="range" min="0" max="1" step="0.05" id="switchRate">
@@ -118,32 +103,32 @@
             <div class="muted" style="font-size:12px; margin-bottom:6px;">Toggles</div>
             <div class="grid-2">
               <label><span>Time trend on</span><input type="checkbox" id="timeTrendOn"></label>
-              <label>Trend slope γ: <span id="lblTrend"></span></label>
+              <label>Trend slope gamma: <span id="lblTrend"></span></label>
               <input type="range" min="0" max="0.2" step="0.01" id="timeTrendSlope">
 
               <label><span>Common shock</span><input type="checkbox" id="shockAllOn"></label>
               <label>Shock wave</label><input type="number" id="shockAllWave" min="1" value="5">
-              <label>Shock size ξ</label><input type="number" id="shockAllSize" step="0.1" value="0.8">
+              <label>Shock size xi</label><input type="number" id="shockAllSize" step="0.1" value="0.8">
 
               <label><span>Treat shock</span><input type="checkbox" id="shockTreatOn"></label>
               <label>Treat shock wave</label><input type="number" id="shockTreatWave" min="1" value="6">
-              <label>Treat shock size τ</label><input type="number" id="shockTreatSize" step="0.1" value="0.8">
+              <label>Treat shock size tau</label><input type="number" id="shockTreatSize" step="0.1" value="0.8">
 
               <label><span>AR(1) errors</span><input type="checkbox" id="ar1On"></label>
-              <label>ρ_e</label><input type="number" id="rhoE" step="0.05" value="0.5">
+              <label>rho_e</label><input type="number" id="rhoE" step="0.05" value="0.5">
 
               <label><span>Dynamic selection</span><input type="checkbox" id="dynSelOn"></label>
-              <label>γ_dy</label><input type="number" id="gammaDY" step="0.1" value="0.5">
+              <label>gamma_dy</label><input type="number" id="gammaDY" step="0.1" value="0.5">
 
               <label><span>Misclassification</span><input type="checkbox" id="misclassOn"></label>
               <label>p_m</label><input type="number" id="misclassP" step="0.01" value="0.15">
 
               <label><span>Attrition</span><input type="checkbox" id="attritionOn"></label>
-              <label>α_attr</label><input type="number" id="attrBase" step="0.01" value="0.02">
-              <label>β_attr</label><input type="number" id="attrSlope" step="0.05" value="0.15">
+              <label>a_attr</label><input type="number" id="attrBase" step="0.01" value="0.02">
+              <label>b_attr</label><input type="number" id="attrSlope" step="0.05" value="0.15">
 
               <label><span>Exp outcome</span><input type="checkbox" id="expOutcomeOn"></label>
-              <label>κ</label><input type="number" id="expScale" step="0.05" value="0.35">
+              <label>kappa</label><input type="number" id="expScale" step="0.05" value="0.35">
 
               <label><span>Heteroskedasticity</span><input type="checkbox" id="heteroOn"></label>
               <label>weight D</label><input type="number" id="heteroDWeight" step="0.1" value="0.8">
@@ -156,7 +141,7 @@
           <button class="btn" id="btn-download">Download simulated CSV</button>
         </div>
 
-        <p class="muted mt-2" style="font-size:12px;">FE uses within-person changes; robust = Huber IRLS; Bayesian uses Normal–Inverse-Gamma conjugate prior.</p>
+        <p class="muted mt-2" style="font-size:12px;">FE uses within-person changes; robust = Huber IRLS; Bayesian uses Normal-Inverse-Gamma conjugate prior.</p>
       </div>
 
       <div>
@@ -170,7 +155,7 @@
 
           <div class="grid-2">
             <div>
-              <h2>Cross-section — Outcome vs Treatment</h2>
+              <h2>Cross-section: Outcome vs Treatment</h2>
               <div class="chart" id="chart-scatter"></div>
             </div>
             <div>
@@ -183,9 +168,9 @@
           <div id="estimatesArea" class="mt-3" style="display:none;">
             <div class="grid-2">
               <div>
-                <h2>Estimator β</h2>
+                <h2>Estimator beta</h2>
                 <div class="chart" id="chart-bars"></div>
-                <div class="muted" style="font-size:12px; margin-top:6px;">Dashed line is true β.</div>
+                <div class="muted" style="font-size:12px; margin-top:6px;">Dashed line is true beta.</div>
               </div>
               <div class="panel" style="background:#0f0f0f;">
                 <h2>Variance & composition</h2>
@@ -239,101 +224,508 @@
 
 <script>
 "use strict";
-const mulberry32=(a)=>()=>{let t=a+=0x6d2b79f5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
-const logistic=(z)=>1/(1+Math.exp(-z));
-const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-const mean=(a)=>a.length?a.reduce((x,y)=>x+y,0)/a.length:NaN;
-const variance=(a)=>{const n=a.length;if(n<=1)return 0;const m=mean(a);return a.reduce((s,v)=>s+(v-m)*(v-m),0)/(n-1)};
-const quantile=(a,q)=>{if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y);const p=(s.length-1)*q;const lo=Math.floor(p),hi=Math.ceil(p);if(lo===hi)return s[lo];return s[lo]*(hi-p)+s[hi]*(p-lo)};
-const rnorm=(rng,m=0,s=1)=>{let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();const z=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);return m+s*z};
-const fmt=(x,d=3)=>Number.isNaN(x)||x===undefined||!isFinite(x)?"—":Number(x).toFixed(d);
-const phi=(z)=>.5*(1+erf(z/Math.SQRT2));
-function erf(x){const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911;const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+p*x);const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));return s*y}
-function erfinv(x){const a=.147;const ln=Math.log(1-x*x);const s=2/(Math.PI*a)+ln/2;const r=Math.sign(x)*Math.sqrt(Math.sqrt(s*s-ln/a)-s);return r}
-const ci=(b,se)=>[b-1.96*(se||NaN),b+1.96*(se||NaN)];
+function mulberry32(a){return function(){var t=a+=0x6d2b79f5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function logistic(z){return 1/(1+Math.exp(-z));}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x));}
+function mean(a){return a.length?a.reduce(function(x,y){return x+y},0)/a.length:NaN;}
+function variance(a){var n=a.length;if(n<=1)return 0;var m=mean(a);var s=0;for(var i=0;i<n;i++){var v=a[i]-m;s+=v*v;}return s/(n-1);}
+function quantile(a,q){if(!a.length)return NaN;var s=a.slice().sort(function(x,y){return x-y});var p=(s.length-1)*q;var lo=Math.floor(p),hi=Math.ceil(p);if(lo===hi)return s[lo];return s[lo]*(hi-p)+s[hi]*(p-lo);}
+function rnorm(rng,m,s){if(m===void 0)m=0;if(s===void 0)s=1;var u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();var z=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);return m+s*z;}
+function fmt(x,d){if(d===void 0)d=3;return (Number.isNaN(x)||x===void 0||!isFinite(x))?"-":Number(x).toFixed(d);}
+function erf(x){var a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;var s=x<0?-1:1;x=Math.abs(x);var t=1/(1+p*x);var y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));return s*y;}
+function erfinv(x){var a=0.147;var ln=Math.log(1-x*x);var s=2/(Math.PI*a)+ln/2;var r=Math.sign(x)*Math.sqrt(Math.sqrt(s*s-ln/a)-s);return r;}
+function phi(z){return 0.5*(1+erf(z/Math.SQRT2));}
+function ci(b,se){return [b-1.96*(se||NaN), b+1.96*(se||NaN)];}
 
-function olsSimple(x,y){const n=x.length;if(n<3)return{beta:NaN,se:NaN,n,alpha:NaN,resid:[],fitted:[]};const mx=mean(x),my=mean(y);let sxx=0,sxy=0;for(let i=0;i<n;i++){const dx=x[i]-mx;sxx+=dx*dx;sxy+=dx*(y[i]-my)}if(sxx===0)return{beta:NaN,se:NaN,n,alpha:NaN,resid:[],fitted:[]};const beta=sxy/sxx,alpha=my-beta*mx;const fitted=new Array(n),resid=new Array(n);let rss=0;for(let i=0;i<n;i++){const f=alpha+beta*x[i];fitted[i]=f;const r=y[i]-f;resid[i]=r;rss+=r*r}const sigma2=rss/(n-2);const se=Math.sqrt(sigma2/sxx);return{beta,se,n,alpha,resid,fitted}}
-function wlsSimple(x,y,w){const n=x.length;if(n<3)return{beta:NaN,se:NaN,n,alpha:NaN};const sw=w.reduce((a,b)=>a+b,0);const mx=x.reduce((s,v,i)=>s+w[i]*v,0)/sw,my=y.reduce((s,v,i)=>s+w[i]*v,0)/sw;let sxx=0,sxy=0;for(let i=0;i<n;i++){const dx=x[i]-mx;sxx+=w[i]*dx*dx;sxy+=w[i]*dx*(y[i]-my)}if(sxx===0)return{beta:NaN,se:NaN,n,alpha:NaN};const beta=sxy/sxx,alpha=my-beta*mx;let rss=0;for(let i=0;i<n;i++){const r=y[i]-(alpha+beta*x[i]);rss+=w[i]*r*r}const sigma2=rss/Math.max(1,n-2);const se=Math.sqrt(sigma2/sxx);return{beta,se,n,alpha}}
-function feWithin(ids,x,y){const uniq=Array.from(new Set(ids));const X=[],Y=[];for(const id of uniq){const idx=[];for(let i=0;i<ids.length;i++)if(ids[i]===id)idx.push(i);const mx=idx.reduce((s,j)=>s+x[j],0)/idx.length,my=idx.reduce((s,j)=>s+y[j],0)/idx.length;let varx=0;for(const j of idx)varx+=(x[j]-mx)**2;if(varx===0)continue;for(const j of idx){X.push(x[j]-mx);Y.push(y[j]-my)}}if(X.length<3)return{beta:NaN,se:NaN,n:X.length,alpha:NaN};return olsSimple(X,Y)}
-function huberIRLS(x,y,c=1.345,maxIter=30){let fit=olsSimple(x,y);const mad=(arr)=>{const med=quantile(arr,0.5);const m=quantile(arr.map(v=>Math.abs(v-med)),0.5);return m||1e-6};for(let it=0;it<maxIter;it++){const s=1.4826*mad(fit.resid);const w=fit.resid.map(r=>{const t=Math.abs(r/(s||1e-6));return t>c?c/t:1});fit=wlsSimple(x,y,w);if(!Number.isFinite(fit.beta))break}return fit}
-function bayesPosterior(x,y){const n=x.length;if(n<3)return{betaMean:NaN,betaSE:NaN,ci:[NaN,NaN],alphaMean:NaN};const v0a=100,v0b=10;const a0=2,b0=1;let sumx=0,sumxx=0,sumy=0,sumxy=0,sumyy=0;for(let i=0;i<n;i++){const xi=x[i],yi=y[i];sumx+=xi;sumxx+=xi*xi;sumy+=yi;sumxy+=xi*yi;sumyy+=yi*yi}const V0Inv00=1/v0a,V0Inv11=1/v0b;const XtX00=n,XtX01=sumx,XtX11=sumxx;const VnInv00=V0Inv00+XtX00,VnInv01=0+XtX01,VnInv11=V0Inv11+XtX11;const det=VnInv00*VnInv11-VnInv01*VnInv01;const Vn00=VnInv11/det,Vn01=-VnInv01/det,Vn11=VnInv00/det;const mna=Vn00*(0+sumy)+Vn01*(0+sumxy);const mnb=Vn01*(0+sumy)+Vn11*(0+sumxy);const an=a0+n/2;const quad=mna*(VnInv00*mna+VnInv01*mnb)+mnb*(VnInv01*mna+VnInv11*mnb);const bn=b0+.5*(sumyy-quad);const scale=bn/(an-1);const varBeta=scale*Vn11;const seBeta=Math.sqrt(Math.max(0,varBeta));const cInt=[mnb-1.96*seBeta,mnb+1.96*seBeta];return{betaMean:mnb,betaSE:seBeta,ci:cInt,alphaMean:mna,an,bn}}
+function olsSimple(x,y){
+  var n=x.length;if(n<3)return {beta:NaN,se:NaN,n:n,alpha:NaN,resid:[],fitted:[]};
+  var mx=mean(x), my=mean(y), sxx=0, sxy=0;
+  for(var i=0;i<n;i++){ var dx=x[i]-mx; sxx+=dx*dx; sxy+=dx*(y[i]-my); }
+  if(sxx===0) return {beta:NaN,se:NaN,n:n,alpha:NaN,resid:[],fitted:[]};
+  var beta=sxy/sxx, alpha=my-beta*mx, fitted=new Array(n), resid=new Array(n), rss=0;
+  for(i=0;i<n;i++){ var f=alpha+beta*x[i]; fitted[i]=f; var r=y[i]-f; resid[i]=r; rss+=r*r; }
+  var sigma2=rss/(n-2), se=Math.sqrt(sigma2/sxx);
+  return {beta:beta,se:se,n:n,alpha:alpha,resid:resid,fitted:fitted};
+}
+function wlsSimple(x,y,w){
+  var n=x.length;if(n<3)return {beta:NaN,se:NaN,n:n,alpha:NaN};
+  var sw=w.reduce(function(a,b){return a+b},0);
+  var mx=x.reduce(function(s,v,i){return s+w[i]*v},0)/sw;
+  var my=y.reduce(function(s,v,i){return s+w[i]*v},0)/sw;
+  var sxx=0,sxy=0;
+  for(var i=0;i<n;i++){ var dx=x[i]-mx; sxx+=w[i]*dx*dx; sxy+=w[i]*dx*(y[i]-my); }
+  if(sxx===0)return {beta:NaN,se:NaN,n:n,alpha:NaN};
+  var beta=sxy/sxx, alpha=my-beta*mx, rss=0;
+  for(i=0;i<n;i++){ var r=y[i]-(alpha+beta*x[i]); rss+=w[i]*r*r; }
+  var sigma2=rss/Math.max(1,n-2), se=Math.sqrt(sigma2/sxx);
+  return {beta:beta,se:se,n:n,alpha:alpha};
+}
+function feWithin(ids,x,y){
+  var uniq=[], seen={}; for(var i=0;i<ids.length;i++){ var id=ids[i]; if(!seen[id]){ seen[id]=1; uniq.push(id); } }
+  var X=[], Y=[];
+  for(var u=0; u<uniq.length; u++){
+    var idu=uniq[u], idx=[];
+    for(i=0;i<ids.length;i++) if(ids[i]===idu) idx.push(i);
+    var mx=0,my=0; for(i=0;i<idx.length;i++){ mx+=x[idx[i]]; my+=y[idx[i]]; } mx/=idx.length; my/=idx.length;
+    var varx=0; for(i=0;i<idx.length;i++) varx+=(x[idx[i]]-mx)*(x[idx[i]]-mx);
+    if(varx===0) continue;
+    for(i=0;i<idx.length;i++){ X.push(x[idx[i]]-mx); Y.push(y[idx[i]]-my); }
+  }
+  if(X.length<3) return {beta:NaN,se:NaN,n:X.length,alpha:NaN};
+  return olsSimple(X,Y);
+}
+function huberIRLS(x,y,c,maxIter){
+  if(c===void 0)c=1.345; if(maxIter===void 0)maxIter=30;
+  var fit=olsSimple(x,y);
+  function medAbsDev(arr){
+    var m=quantile(arr,0.5);
+    var dev=arr.map(function(v){return Math.abs(v-m)});
+    return quantile(dev,0.5)||1e-6;
+  }
+  for(var it=0; it<maxIter; it++){
+    var s = 1.4826 * medAbsDev(fit.resid);
+    var w = fit.resid.map(function(r){ var t=Math.abs(r/(s||1e-6)); return t>c? c/t : 1; });
+    fit = wlsSimple(x,y,w);
+    if(!isFinite(fit.beta)) break;
+  }
+  return fit;
+}
+function bayesPosterior(x,y){
+  var n=x.length; if(n<3) return {betaMean:NaN,betaSE:NaN,ci:[NaN,NaN],alphaMean:NaN};
+  var v0a=100, v0b=10, a0=2, b0=1;
+  var sumx=0,sumxx=0,sumy=0,sumxy=0,sumyy=0;
+  for(var i=0;i<n;i++){ var xi=x[i], yi=y[i]; sumx+=xi; sumxx+=xi*xi; sumy+=yi; sumxy+=xi*yi; sumyy+=yi*yi; }
+  var V0Inv00=1/v0a, V0Inv11=1/v0b;
+  var XtX00=n, XtX01=sumx, XtX11=sumxx;
+  var VnInv00=V0Inv00+XtX00, VnInv01=0+XtX01, VnInv11=V0Inv11+XtX11;
+  var det=VnInv00*VnInv11 - VnInv01*VnInv01;
+  var Vn00= VnInv11/det, Vn01= -VnInv01/det, Vn11= VnInv00/det;
+  var mna = Vn00*(0 + sumy) + Vn01*(0 + sumxy);
+  var mnb = Vn01*(0 + sumy) + Vn11*(0 + sumxy);
+  var an = a0 + n/2;
+  var quad = (mna*(VnInv00*mna+VnInv01*mnb) + mnb*(VnInv01*mna+VnInv11*mnb));
+  var bn = b0 + 0.5*(sumyy - quad);
+  var scale = bn/(an-1);
+  var varBeta = scale * Vn11; var seBeta = Math.sqrt(Math.max(0,varBeta));
+  var cInt = [mnb - 1.96*seBeta, mnb + 1.96*seBeta];
+  return { betaMean:mnb, betaSE:seBeta, ci:cInt, alphaMean:mna, an:an, bn:bn };
+}
 
-function createSVG(w,h){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${w} ${h}`);svg.setAttribute("width","100%");svg.setAttribute("height","100%");return svg}
-function line(x1,y1,x2,y2,cls,stroke="#6b7280",sw=1){const el=document.createElementNS("http://www.w3.org/2000/svg","line");el.setAttribute("x1",x1);el.setAttribute("y1",y1);el.setAttribute("x2",x2);el.setAttribute("y2",y2);el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",sw);if(cls)el.setAttribute("class",cls);return el}
-function rect(x,y,w,h,fill="#60a5fa"){const el=document.createElementNS("http://www.w3.org/2000/svg","rect");el.setAttribute("x",x);el.setAttribute("y",y);el.setAttribute("width",w);el.setAttribute("height",h);el.setAttribute("fill",fill);return el}
-function circle(x,y,r,fill="#cbd5e1",op=.8){const el=document.createElementNS("http://www.w3.org/2000/svg","circle");el.setAttribute("cx",x);el.setAttribute("cy",y);el.setAttribute("r",r);el.setAttribute("fill",fill);el.setAttribute("fill-opacity",op);return el}
-function polyline(points,stroke="#93c5fd",sw=1,op=1){const el=document.createElementNS("http://www.w3.org/2000/svg","polyline");el.setAttribute("points",points.map(p=>p[0]+","+p[1]).join(" "));el.setAttribute("fill","none");el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",sw);el.setAttribute("stroke-opacity",op);return el}
-function textSVG(x,y,txt,fill="#9aa0a6",fs=10,anchor="middle"){const el=document.createElementNS("http://www.w3.org/2000/svg","text");el.setAttribute("x",x);el.setAttribute("y",y);el.setAttribute("fill",fill);el.setAttribute("font-size",fs);el.setAttribute("text-anchor",anchor);el.textContent=txt;return el}
-function axis(svg,x,y,len,horizontal,ticks){if(horizontal){svg.appendChild(line(x,y,x+len,y,"axis","#374151",1));ticks.forEach(t=>{const tx=x+t.pos*len;svg.appendChild(line(tx,y,tx,y+4,"tick","#4b5563",1));svg.appendChild(textSVG(tx,y+14,t.label,"#9aa0a6",10,"middle"))})}else{svg.appendChild(line(x,y-len,x,y,"axis","#374151",1));ticks.forEach(t=>{const ty=y-t.pos*len;svg.appendChild(line(x-4,ty,x,ty,"tick","#4b5563",1));svg.appendChild(textSVG(x-6,ty+3,t.label,"#9aa0a6",10,"end"))})}}
-function scaleLinear(d0,d1,r0,r1){const d=d1-d0||1e-9;const m=(r1-r0)/d;return (v)=>r0+(v-d0)*m}
+function createSVG(w,h){ var svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("viewBox","0 0 "+w+" "+h); svg.setAttribute("width","100%"); svg.setAttribute("height","100%"); return svg; }
+function lineEl(x1,y1,x2,y2,stroke,sw){ if(stroke===void 0)stroke="#6b7280"; if(sw===void 0)sw=1; var el=document.createElementNS("http://www.w3.org/2000/svg","line"); el.setAttribute("x1",x1); el.setAttribute("y1",y1); el.setAttribute("x2",x2); el.setAttribute("y2",y2); el.setAttribute("stroke",stroke); el.setAttribute("stroke-width",sw); return el; }
+function rectEl(x,y,w,h,fill){ if(fill===void 0)fill="#60a5fa"; var el=document.createElementNS("http://www.w3.org/2000/svg","rect"); el.setAttribute("x",x); el.setAttribute("y",y); el.setAttribute("width",w); el.setAttribute("height",h); el.setAttribute("fill",fill); return el; }
+function circleEl(x,y,r,fill,op){ if(fill===void 0)fill="#cbd5e1"; if(op===void 0)op=0.8; var el=document.createElementNS("http://www.w3.org/2000/svg","circle"); el.setAttribute("cx",x); el.setAttribute("cy",y); el.setAttribute("r",r); el.setAttribute("fill",fill); el.setAttribute("fill-opacity",op); return el; }
+function polylineEl(points,stroke,sw,op){ if(stroke===void 0)stroke="#93c5fd"; if(sw===void 0)sw=1; if(op===void 0)op=1; var el=document.createElementNS("http://www.w3.org/2000/svg","polyline"); el.setAttribute("points", points.map(function(p){return p[0]+","+p[1]}).join(" ")); el.setAttribute("fill","none"); el.setAttribute("stroke",stroke); el.setAttribute("stroke-width",sw); el.setAttribute("stroke-opacity",op); return el; }
+function textEl(x,y,txt,fill,fs,anchor){ if(fill===void 0)fill="#9aa0a6"; if(fs===void 0)fs=10; if(anchor===void 0)anchor="middle"; var el=document.createElementNS("http://www.w3.org/2000/svg","text"); el.setAttribute("x",x); el.setAttribute("y",y); el.setAttribute("fill",fill); el.setAttribute("font-size",fs); el.setAttribute("text-anchor",anchor); el.textContent = txt; return el; }
 
-const S={seed:42,N:600,T:8,betaTrue:.6,betaHet:0,sigmaU:1.2,sigmaE:1.0,sigmaME:.3,pBase:.5,rhoSel:1.0,switchRate:.25,timeTrendOn:true,timeTrendSlope:.05,shockAllOn:false,shockAllWave:5,shockAllSize:.8,shockTreatOn:false,shockTreatWave:6,shockTreatSize:.8,ar1On:false,rhoE:.5,dynSelOn:false,gammaDY:.5,misclassOn:false,misclassP:.15,attritionOn:false,attrBase:.02,attrSlope:.15,expOutcomeOn:false,expScale:.35,heteroOn:false,heteroDWeight:.8,heteroUWeight:.4,mode:"descriptives",viz:"trajectories"};
+function axis(svg, x, y, len, horizontal, ticks){
+  if(horizontal){
+    svg.appendChild(lineEl(x,y, x+len,y, "#374151", 1));
+    for(var i=0;i<ticks.length;i++){
+      var t=ticks[i], tx = x + t.pos * len;
+      svg.appendChild(lineEl(tx,y, tx,y+4, "#4b5563", 1));
+      svg.appendChild(textEl(tx, y+14, t.label, "#9aa0a6", 10, "middle"));
+    }
+  }else{
+    svg.appendChild(lineEl(x,y-len, x,y, "#374151", 1));
+    for(var j=0;j<ticks.length;j++){
+      var tt=ticks[j], ty = y - tt.pos * len;
+      svg.appendChild(lineEl(x-4,ty, x,ty, "#4b5563", 1));
+      svg.appendChild(textEl(x-6, ty+3, tt.label, "#9aa0a6", 10, "end"));
+    }
+  }
+}
+function scaleLinear(d0,d1,r0,r1){ var d=d1-d0 || 1e-9; var m=(r1-r0)/d; return function(v){ return r0 + (v-d0)*m; }; }
 
-function updateLabels(){document.getElementById("lblN").textContent=S.N;document.getElementById("lblT").textContent=S.T;document.getElementById("lblB").textContent=S.betaTrue.toFixed(2);document.getElementById("lblBh").textContent=S.betaHet.toFixed(2);document.getElementById("lblSu").textContent=S.sigmaU.toFixed(2);document.getElementById("lblSe").textContent=S.sigmaE.toFixed(2);document.getElementById("lblSme").textContent=S.sigmaME.toFixed(2);document.getElementById("lblP").textContent=S.pBase.toFixed(2);document.getElementById("lblRho").textContent=S.rhoSel.toFixed(2);document.getElementById("lblSw").textContent=S.switchRate.toFixed(2);document.getElementById("lblTrend").textContent=S.timeTrendSlope.toFixed(2)}
+var S = { seed:42,N:600,T:8,betaTrue:0.6,betaHet:0.0,sigmaU:1.2,sigmaE:1.0,sigmaME:0.3,pBase:0.5,rhoSel:1.0,switchRate:0.25,timeTrendOn:true,timeTrendSlope:0.05,shockAllOn:false,shockAllWave:5,shockAllSize:0.8,shockTreatOn:false,shockTreatWave:6,shockTreatSize:0.8,ar1On:false,rhoE:0.5,dynSelOn:false,gammaDY:0.5,misclassOn:false,misclassP:0.15,attritionOn:false,attrBase:0.02,attrSlope:0.15,expOutcomeOn:false,expScale:0.35,heteroOn:false,heteroDWeight:0.8,heteroUWeight:0.4,mode:"descriptives",viz:"trajectories"};
 
-function simulate(){const rng=mulberry32(S.seed);const persons=new Array(S.N).fill(0).map((_,i)=>i);const u=persons.map(()=>rnorm(rng,0,S.sigmaU));const alpha=Math.log(S.pBase/(1-S.pBase));const uSD=S.sigmaU<=0?1:S.sigmaU;const rows=[];for(let i=0;i<S.N;i++){const p_i=clamp(logistic(alpha+S.rhoSel*(u[i]/uSD)),.01,.99);let D_prev=rng()<p_i?1:0;let e_prev=rnorm(rng,0,S.sigmaE);let yLag=0;for(let t=0;t<S.T;t++){let p_now=p_i;if(S.dynSelOn&&t>0)p_now=clamp(logistic(alpha+S.rhoSel*(u[i]/uSD)+S.gammaDY*Math.tanh(yLag)),.01,.99);if(t>0&&rng()<S.switchRate)D_prev=rng()<p_now?1:0;const D_true=D_prev;const heteroScale=S.heteroOn?(1+S.heteroDWeight*D_true+S.heteroUWeight*Math.abs(u[i])):1;const e_it=S.ar1On?(S.rhoE*e_prev+rnorm(rng,0,S.sigmaE*Math.sqrt(1-S.rhoE*S.rhoE)*heteroScale)):rnorm(rng,0,S.sigmaE*heteroScale);e_prev=e_it;const trend=S.timeTrendOn?S.timeTrendSlope*(t+1):0;const shockC=S.shockAllOn&&(t+1)===S.shockAllWave?S.shockAllSize:0;const shockT=S.shockTreatOn&&(t+1)===S.shockTreatWave&&D_true===1?S.shockTreatSize:0;const beta_i=S.betaTrue+S.betaHet*(u[i]/uSD);const yStar=beta_i*D_true+u[i]+e_it+trend+shockC+shockT;const base=S.expOutcomeOn?Math.exp(S.expScale*yStar):yStar;const y=base+rnorm(rng,0,S.sigmaME);const D=(S.misclassOn&&Math.random()<S.misclassP)?1-D_true:D_true;rows.push({pid:i,wave:t+1,D_true,D,u:u[i],e:e_it,yStar,y,trend,shockCommon:shockC,shockTreat:shockT});if(S.attritionOn&&t<S.T-1){const dropP=clamp(S.attrBase+S.attrSlope*logistic(-yStar),0,.95);if(Math.random()<dropP)break}yLag=yStar}}return rows}
+function updateLabels(){
+  document.getElementById("lblN").textContent = String(S.N);
+  document.getElementById("lblT").textContent = String(S.T);
+  document.getElementById("lblB").textContent = S.betaTrue.toFixed(2);
+  document.getElementById("lblBh").textContent = S.betaHet.toFixed(2);
+  document.getElementById("lblSu").textContent = S.sigmaU.toFixed(2);
+  document.getElementById("lblSe").textContent = S.sigmaE.toFixed(2);
+  document.getElementById("lblSme").textContent = S.sigmaME.toFixed(2);
+  document.getElementById("lblP").textContent = S.pBase.toFixed(2);
+  document.getElementById("lblRho").textContent = S.rhoSel.toFixed(2);
+  document.getElementById("lblSw").textContent = S.switchRate.toFixed(2);
+  document.getElementById("lblTrend").textContent = S.timeTrendSlope.toFixed(2);
+}
 
+function simulate(){
+  var rng = mulberry32(S.seed);
+  var persons = []; for(var i=0;i<S.N;i++) persons.push(i);
+  var u = persons.map(function(){ return rnorm(rng,0,S.sigmaU); });
+  var alpha = Math.log(S.pBase/(1-S.pBase));
+  var uSD = S.sigmaU<=0?1:S.sigmaU;
+  var rows = [];
+  for(i=0;i<S.N;i++){
+    var p_i = clamp(logistic(alpha + S.rhoSel*(u[i]/uSD)), 0.01, 0.99);
+    var D_prev = rng()<p_i?1:0, e_prev=rnorm(rng,0,S.sigmaE), yLag=0;
+    for(var t=0;t<S.T;t++){
+      var p_now = p_i;
+      if(S.dynSelOn && t>0) p_now = clamp(logistic(alpha + S.rhoSel*(u[i]/uSD) + S.gammaDY*Math.tanh(yLag)), 0.01, 0.99);
+      if(t>0 && rng()<S.switchRate) D_prev = rng()<p_now?1:0;
+      var D_true=D_prev;
+      var heteroScale = S.heteroOn ? (1 + S.heteroDWeight*D_true + S.heteroUWeight*Math.abs(u[i])) : 1;
+      var e_it = S.ar1On ? (S.rhoE*e_prev + rnorm(rng,0,S.sigmaE*Math.sqrt(1-S.rhoE*S.rhoE)*heteroScale)) : rnorm(rng,0,S.sigmaE*heteroScale);
+      e_prev=e_it;
+      var trend = S.timeTrendOn ? S.timeTrendSlope*(t+1) : 0;
+      var shockC = (S.shockAllOn && (t+1)===S.shockAllWave) ? S.shockAllSize : 0;
+      var shockT = (S.shockTreatOn && (t+1)===S.shockTreatWave && D_true===1) ? S.shockTreatSize : 0;
+      var beta_i = S.betaTrue + S.betaHet*(u[i]/uSD);
+      var yStar = beta_i*D_true + u[i] + e_it + trend + shockC + shockT;
+      var base = S.expOutcomeOn ? Math.exp(S.expScale*yStar) : yStar;
+      var y = base + rnorm(rng,0,S.sigmaME);
+      var D = (S.misclassOn && Math.random()<S.misclassP) ? 1-D_true : D_true;
+      rows.push({ pid:i, wave:t+1, D_true:D_true, D:D, u:u[i], e:e_it, yStar:yStar, y:y, trend:trend, shockCommon:shockC, shockTreat:shockT });
+      if(S.attritionOn && t<S.T-1){ var dropP = clamp(S.attrBase + S.attrSlope*logistic(-yStar), 0, 0.95); if(Math.random()<dropP) break; }
+      yLag=yStar;
+    }
+  }
+  return rows;
+}
 
-function renderNotation(sim){
+function renderNotation(){
   var lines = [];
-  lines.push("beta_i = beta + beta_h*(u_i/sigma_u)    (beta=" + S.betaTrue.toFixed(2) + ", beta_h=" + S.betaHet.toFixed(2) + ", sigma_u=" + S.sigmaU.toFixed(2) + ")");
-  lines.push("Outcome base:  y*_it = beta_i*D_it + u_i + e_it + gamma*t + xi*1{t=" + S.shockAllWave + "} + tau*D_it*1{t=" + S.shockTreatWave + "}");
-  lines.push("Observed Y:   y_it = " + (S.expOutcomeOn ? "exp(kappa*y*_it)" : "y*_it") + " + nu_it   (kappa=" + (S.expOutcomeOn ? S.expScale.toFixed(2) : "0") + ",  sigma_me=" + S.sigmaME.toFixed(2) + ")");
+  lines.push("beta_i = beta + beta_h*(u_i/sigma_u)   (beta="+S.betaTrue.toFixed(2)+", beta_h="+S.betaHet.toFixed(2)+", sigma_u="+S.sigmaU.toFixed(2)+")");
+  lines.push("Outcome base:  y*_it = beta_i*D_it + u_i + e_it + gamma*t + xi*1{t="+S.shockAllWave+"} + tau*D_it*1{t="+S.shockTreatWave+"}");
+  lines.push("Observed Y:   y_it = " + (S.expOutcomeOn ? "exp(kappa*y*_it)" : "y*_it") + " + nu_it   (kappa=" + (S.expOutcomeOn ? S.expScale.toFixed(2) : "0") + ", sigma_me=" + S.sigmaME.toFixed(2) + ")");
   lines.push("Errors:       e_it = " + (S.ar1On ? ("rho_e*e_i,t-1 + eta_it (rho_e=" + S.rhoE.toFixed(2) + ")") : "eta_it (i.i.d.)") + "  with sigma_e=" + S.sigmaE.toFixed(2));
   lines.push("Treatment:    Pr(D_it=1 | u_i, y*_i,t-1) = logit^{-1}(alpha + rho*(u_i/sigma_u) + gamma_dy*tanh(y*_i,t-1)), alpha=logit(" + S.pBase.toFixed(2) + ")");
-  lines.push("Misclass:     Dtilde_it = D_it w.p. (1 - p_m), else 1 - D_it  (p_m=" + (S.misclassOn ? S.misclassP.toFixed(2) : "0") + ")");
-  lines.push("Estimators:   Cross-section (wave 1), pooled, fixed-effects (within); Robust (Huber) & Bayesian pooled.");
-  document.getElementById("notation").textContent = lines.join("
-");
+  lines.push("Misclass:     Dtilde_it = D_it with prob (1 - p_m), else 1 - D_it  (p_m=" + (S.misclassOn ? S.misclassP.toFixed(2) : "0") + ")");
+  lines.push("Estimators:   Cross-section (wave 1), pooled, fixed-effects (within); Robust (Huber) and Bayesian pooled.");
+  document.getElementById("notation").textContent = lines.join("\n");
 }
 
+function drawScatter(el,data,fit){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var svg=createSVG(w,h);
+  var yMin=Math.min.apply(null,data.map(function(d){return d.y;}));
+  var yMax=Math.max.apply(null,data.map(function(d){return d.y;}));
+  var xs=scaleLinear(0,1, m.l, w-m.r);
+  var ys=scaleLinear(yMin,yMax, h-m.b, m.t);
+  for(var i=0;i<=10;i++){ var x=m.l+i*(w-m.l-m.r)/10; svg.appendChild(lineEl(x,m.t, x,h-m.b, "#111",1)); }
+  for(var j=0;j<=10;j++){ var y=m.t+j*(h-m.t-m.b)/10; svg.appendChild(lineEl(m.l,y, w-m.r,y, "#111",1)); }
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:"0"},{pos:1,label:"1"}]);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(yMin + p*(yMax-yMin))}; });
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(i=0;i<data.length;i++){ svg.appendChild(circleEl(xs(data[i].x), ys(data[i].y), 2, "#a3a3a3", 0.9)); }
+  if(fit && isFinite(fit.beta)){
+    var p1=[xs(0), ys(fit.alpha)], p2=[xs(1), ys(fit.alpha+fit.beta)];
+    svg.appendChild(polylineEl([p1,p2], "#93c5fd", 2, 1));
+  }
+  el.appendChild(svg);
+}
 
-function drawScatter(container,data,fit){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const svg=createSVG(w,h);const yMin=Math.min(...data.map(d=>d.y));const yMax=Math.max(...data.map(d=>d.y));const xs=scaleLinear(0,1,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"grid","#111"))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"grid","#111"))}axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:"0"},{pos:1,label:"1"}]);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(const d of data){svg.appendChild(circle(xs(d.x),ys(d.y),2,"#a3a3a3",.9))}if(fit){const p1=[xs(0),ys(fit.alpha)],p2=[xs(1),ys(fit.alpha+fit.beta)];svg.appendChild(polyline([p1,p2],"#93c5fd",2))}container.appendChild(svg)}
-function drawLines(container,spaghetti,summary,T){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const allY=spaghetti.flatMap(s=>s.series.map(p=>p.y)).concat(summary.flatMap(s=>[s.mean,s.median,s.p25,s.p75]));const yMin=Math.min(...allY),yMax=Math.max(...allY);const xs=scaleLinear(1,T,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);const svg=createSVG(w,h);for(let i=0;i<=T-1;i++){const x=xs(1+i*(T-1)/(T-1));svg.appendChild(line(x,m.t,x,h-m.b,"grid","#111"))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"grid","#111"))}const xTicks=[];for(let t=1;t<=T;t++)xTicks.push({pos:(t-1)/(T-1),label:String(t)});axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);spaghetti.forEach(s=>{const pts=s.series.map(p=>[xs(p.t),ys(p.y)]);svg.appendChild(polyline(pts,"#6b7280",1,.6))});function pathFor(key,color){const pts=summary.map(s=>[xs(s.t),ys(s[key])]);svg.appendChild(polyline(pts,color,2.5,1))}pathFor("mean","#93c5fd");pathFor("median","#e5e7eb");pathFor("p25","#a78bfa");pathFor("p75","#a78bfa");container.appendChild(svg)}
-function drawBars(container,rows,betaTrue){container.innerHTML="";const w=520,h=380,m={l:50,r:10,t:10,b:60};const yVals=rows.map(r=>r.b).concat([betaTrue]);const yMin=Math.min(...yVals),yMax=Math.max(...yVals);const xs=scaleLinear(0,rows.length,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);const svg=createSVG(w,h);const xTicks=rows.map((r,i)=>({pos:(i+.5)/rows.length,label:r.name}));axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);const bw=(w-m.l-m.r)/rows.length-12;rows.forEach((r,i)=>{const x=m.l+i*((w-m.l-m.r)/rows.length)+6;const y=ys(Math.max(0,r.b));const y0=ys(0);const height=Math.abs(y-y0);const top=Math.min(y,y0);svg.appendChild(rect(x,top,bw,height,"#60a5fa"))});const ytrue=ys(betaTrue);svg.appendChild(line(m.l,ytrue,w-m.r,ytrue,null,"#f87171",2));container.appendChild(svg)}
-function drawResiduals(container,points){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const xs=scaleLinear(Math.min(...points.map(d=>d.fit)),Math.max(...points.map(d=>d.fit)),m.l,w-m.r);const ys=scaleLinear(Math.min(...points.map(d=>d.resid)),Math.max(...points.map(d=>d.resid)),h-m.b,m.t);const svg=createSVG(w,h);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"grid","#111"))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"grid","#111"))}const xTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(Math.min(...points.map(d=>d.fit))+p*(Math.max(...points.map(d=>d.fit))-Math.min(...points.map(d=>d.fit)))}));axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(Math.min(...points.map(d=>d.resid))+p*(Math.max(...points.map(d=>d.resid))-Math.min(...points.map(d=>d.resid)))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(const d of points){svg.appendChild(circle(xs(d.fit),ys(d.resid),2,"#a3a3a3",.9))}const y0=ys(0);svg.appendChild(line(m.l,y0,w-m.r,y0,null,"#94a3b8",1.5));container.appendChild(svg)}
-function drawHist(container,resid){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};if(resid.length===0){container.textContent="No data";return}const mn=Math.min(...resid),mx=Math.max(...resid),bins=20;const width=(mx-mn)/bins||1;const cnt=new Array(bins).fill(0);resid.forEach(v=>{const i=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/width)));cnt[i]++});const xs=scaleLinear(0,bins,m.l,w-m.r);const ys=scaleLinear(0,Math.max(...cnt),h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(mn)},{pos:1,label:fmt(mx)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:"0"},{pos:1,label:String(Math.max(...cnt))}]);const bw=(w-m.l-m.r)/bins-2;for(let i=0;i<bins;i++){const x=xs(i)+1,y=ys(cnt[i]),y0=ys(0);svg.appendChild(rect(x,y,bw,y0-y,"#93c5fd"))}container.appendChild(svg)}
-function drawQQ(container,resid){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const r=[...resid].sort((a,b)=>a-b);if(r.length<5){container.textContent="Not enough data";return}const n=r.length;const pts=[];for(let i=0;i<n;i++){const p=(i+.5)/n;const z=Math.SQRT2*erfinv(2*p-1);pts.push({theor:z,sample:r[i]})}const xs=scaleLinear(pts[0].theor,pts[pts.length-1].theor,m.l,w-m.r);const ys=scaleLinear(r[0],r[r.length-1],h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);const d1=[xs(pts[0].theor),ys(r[0])],d2=[xs(pts[pts.length-1].theor),ys(r[r.length-1])];const ref=[d1,d2];const svgRef=polyline(ref,"#94a3b8",1.5);svg.appendChild(svgRef);for(const p of pts){svg.appendChild(circle(xs(p.theor),ys(p.sample),2,"#a3a3a3",.9))}container.appendChild(svg)}
+function drawLines(el,spaghetti,summary,T){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var allY=[];
+  for(var s=0;s<spaghetti.length;s++){ for(var q=0;q<spaghetti[s].series.length;q++){ allY.push(spaghetti[s].series[q].y); } }
+  for(var r=0;r<summary.length;r++){ allY.push(summary[r].mean, summary[r].median, summary[r].p25, summary[r].p75); }
+  var yMin=Math.min.apply(null,allY), yMax=Math.max.apply(null,allY);
+  var xs=scaleLinear(1,T, m.l, w-m.r);
+  var ys=scaleLinear(yMin,yMax, h-m.b, m.t);
+  var svg=createSVG(w,h);
+  for(var i=0;i<=T-1;i++){ var x=xs(1 + i*(T-1)/(T-1)); svg.appendChild(lineEl(x,m.t, x,h-m.b, "#111",1)); }
+  for(var j=0;j<=10;j++){ var y=m.t+j*(h-m.t-m.b)/10; svg.appendChild(lineEl(m.l,y, w-m.r,y, "#111",1)); }
+  var xTicks=[]; for(i=1;i<=T;i++) xTicks.push({pos:(i-1)/(T-1), label:String(i)});
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(yMin + p*(yMax-yMin))}; });
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(s=0;s<spaghetti.length;s++){
+    var pts=[]; for(q=0;q<spaghetti[s].series.length;q++){ pts.push([xs(spaghetti[s].series[q].t), ys(spaghetti[s].series[q].y)]); }
+    svg.appendChild(polylineEl(pts,"#6b7280",1,0.6));
+  }
+  function pathFor(key,color){
+    var pts=[], i; for(i=0;i<summary.length;i++){ pts.push([xs(summary[i].t), ys(summary[i][key])]); }
+    svg.appendChild(polylineEl(pts,color,2.5,1));
+  }
+  pathFor("mean","#93c5fd"); pathFor("median","#e5e7eb"); pathFor("p25","#a78bfa"); pathFor("p75","#a78bfa");
+  el.appendChild(svg);
+}
 
-function computeAndRender(){updateLabels();const sim=simulate();const cross=sim.filter(r=>r.wave===1);const pooled=sim;const xCross=cross.map(r=>r.D),yCross=cross.map(r=>r.y);const xPooled=pooled.map(r=>r.D),yPooled=pooled.map(r=>r.y);const idsPooled=pooled.map(r=>r.pid);const cs=olsSimple(xCross,yCross);const pooledOLS=olsSimple(xPooled,yPooled);const fe=feWithin(idsPooled,xPooled,yPooled);const hub=huberIRLS(xPooled,yPooled);const bayes=bayesPosterior(xPooled,yPooled);const scatterData=cross.map(r=>({x:r.D,y:r.y}));drawScatter(document.getElementById("chart-scatter"),scatterData,cs);const ids=Array.from(new Set(pooled.map(r=>r.pid)));const k=Math.min(20,ids.length);const rand=mulberry32(1234+S.seed);const chosen=new Set;while(chosen.size<k&&ids.length>0)chosen.add(Math.floor(rand()*ids.length));const chosenIds=Array.from(chosen).map(i=>ids[i]);const spaghetti=chosenIds.map(id=>({id,series:pooled.filter(r=>r.pid===id).map(r=>({t:r.wave,y:r.y}))}));const summary=[];for(let t=1;t<=S.T;t++){const arr=pooled.filter(r=>r.wave===t).map(r=>r.y);if(arr.length){summary.push({t,mean:mean(arr),median:quantile(arr,0.5),p25:quantile(arr,0.25),p75:quantile(arr,0.75)})}}drawLines(document.getElementById("chart-lines"),spaghetti,summary,S.T);const estRows=[];if(S.mode==="frequentist"){if(Number.isFinite(cs.beta)&&Number.isFinite(cs.se))estRows.push({name:"Cross-section",b:cs.beta});if(Number.isFinite(pooledOLS.beta)&&Number.isFinite(pooledOLS.se))estRows.push({name:"Pooled",b:pooledOLS.beta});if(Number.isFinite(fe.beta)&&Number.isFinite(fe.se))estRows.push({name:"Fixed Effects",b:fe.beta})}else if(S.mode==="robust"){estRows.push({name:"Pooled OLS",b:pooledOLS.beta});estRows.push({name:"Huber robust",b:hub.beta})}else if(S.mode==="bayesian"){estRows.push({name:"Bayesian pooled",b:bayes.betaMean});estRows.push({name:"Frequentist pooled",b:pooledOLS.beta})}if(S.viz==="estimates"||S.mode!=="descriptives"){drawBars(document.getElementById("chart-bars"),estRows,S.betaTrue)}const iccTrue=(S.sigmaU**2)/(S.sigmaU**2+S.sigmaE**2+S.sigmaME**2);const by=new Map;for(const r of pooled){if(!by.has(r.pid))by.set(r.pid,[]);by.get(r.pid).push(r.y)}const means=[],wVars=[];by.forEach(arr=>{const m=mean(arr);means.push(m);const v=arr.reduce((s,v)=>s+(v-m)*(v-m),0)/Math.max(1,arr.length-1);wVars.push(v)});const vb=variance(means);const vw=wVars.length?wVars.reduce((a,b)=>a+b,0)/wVars.length:0;const tot=vb+vw;const iccEmp=tot===0?NaN:vb/tot;const idsUnique=Array.from(new Set(pooled.map(r=>r.pid)));let nSwitch=0;idsUnique.forEach(id=>{const rows=pooled.filter(r=>r.pid===id);const any=rows.some((r,i)=>i>0&&r.D!==rows[i-1].D);if(any)nSwitch++});const shareSwitchers=idsUnique.length?nSwitch/idsUnique.length:NaN;const attritionRate=idsUnique.length?idsUnique.filter(id=>pooled.filter(r=>r.pid===id).length<S.T).length/idsUnique.length:NaN;document.getElementById("varianceList").innerHTML=`
-    <li><b>True ICC:</b> ${fmt(iccTrue)}</li>
-    <li><b>Empirical ICC:</b> ${fmt(iccEmp)}</li>
-    <li><b>Switchers:</b> ${Number.isFinite(shareSwitchers)?(shareSwitchers*100).toFixed(0)+'%':'—'}</li>
-    <li><b>Attrition:</b> ${Number.isFinite(attritionRate)?(attritionRate*100).toFixed(0)+'%':'—'}</li>
-  `;const residPoints=pooled.map(r=>({fit:pooledOLS.alpha+pooledOLS.beta*r.D,resid:r.y-(pooledOLS.alpha+pooledOLS.beta*r.D)}));drawResiduals(document.getElementById("chart-rvf"),residPoints);drawHist(document.getElementById("chart-hist"),residPoints.map(d=>d.resid));drawQQ(document.getElementById("chart-qq"),residPoints.map(d=>d.resid));const cards=[];function addCard(title,value,ciVals,foot,warn){cards.push({title,value,ciVals,foot,warn})}const csCI=ci(cs.beta,cs.se),pooledCI=ci(pooledOLS.beta,pooledOLS.se),feCI=ci(fe.beta,fe.se);if(S.mode!=="descriptives"){addCard("True β",fmt(S.betaTrue),null,"",false);if(S.mode==="frequentist"){addCard("Cross-section OLS",fmt(cs.beta),`${fmt(csCI[0])} … ${fmt(csCI[1])}`,`n=${cs.n}`,Number.isNaN(cs.beta));addCard("Pooled OLS",fmt(pooledOLS.beta),`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`,`n=${pooledOLS.n}`,Number.isNaN(pooledOLS.beta));addCard("Fixed Effects (within)",fmt(fe.beta),`${fmt(feCI[0])} … ${fmt(feCI[1])}`,`obs=${fe.n}`,Number.isNaN(fe.beta))}else if(S.mode==="robust"){addCard("Cross-section OLS",fmt(cs.beta),`${fmt(csCI[0])} … ${fmt(csCI[1])}`,`n=${cs.n}`,false);addCard("Pooled (Huber robust)",fmt(hub.beta),`±1.96·SE ≈ ${fmt(1.96*(hub.se||NaN))}`,"n=" + (xPooled && xPooled.length ? xPooled.length : ""),Number.isNaN(hub.beta));addCard("Fixed Effects (within)",fmt(fe.beta),`${fmt(feCI[0])} … ${fmt(feCI[1])}`,`obs=${fe.n}`,false)}else if(S.mode==="bayesian"){addCard("Bayesian pooled β (mean)",fmt(bayes.betaMean),`${fmt(bayes.ci[0])} … ${fmt(bayes.ci[1])}`,`SE≈${fmt(bayes.betaSE)}`,false);addCard("Frequentist pooled β",fmt(pooledOLS.beta),`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`,`SE=${fmt(pooledOLS.se)}`,false);addCard("Cross-section OLS",fmt(cs.beta),`${fmt(csCI[0])} … ${fmt(csCI[1])}`,`n=${cs.n}`,false)}}const cardsDiv=document.getElementById("cards");cardsDiv.innerHTML="";for(const c of cards){const el=document.createElement("div");el.className="card"+(c.warn?" warn":"");el.innerHTML=`<div class="title">${c.title}</div><div class="value">${c.value}</div>${c.ciVals?`<div class="muted" style="font-size:12px;margin-top:4px;">95% interval: ${c.ciVals}</div>`:""}${c.foot?`<div class="foot">${c.foot}</div>`:""}`;cardsDiv.appendChild(el)}const rep=[];const sugg=new Set;const push=(lvl,msg,fix)=>{rep.push({lvl,msg,fix});if(fix)sugg.add(fix)};if(S.rhoSel>.5)push("🔴","High selection potential (large ρ): cross-section/pooled likely biased.","Prefer FE; add controls or IV.");if(S.timeTrendOn||S.shockAllOn)push("🟠","Time trends or common shocks present.","Add time FE or detrend; consider DiD.");if(S.shockTreatOn)push("🔴","Treat-specific shock active: parallel trends violated.","Use event-study with group×time FE; test pre-trends.");if(S.ar1On)push("🟠","Serial correlation in errors.","Cluster SEs at unit level; model AR terms.");if(S.sigmaME>.8||S.misclassOn)push("🟠","Strong measurement error/misclassification.","Instrument/correct using validation; reliability adjustments.");if(S.dynSelOn)push("🔴","Dynamic selection (Y→D) enabled.","Lagged controls/GMM (Arellano–Bond), IV, or design-based ID.");if(Number.isFinite(shareSwitchers)&&shareSwitchers<.15)push("🟠","Few switchers → FE weakly identified.","Increase T; pooled + controls/IV.");if(S.attritionOn&&Number.isFinite(attritionRate)&&attritionRate>.15)push("🟠",`Nontrivial attrition (${(attritionRate*100).toFixed(0)}%).`,"Model attrition, IPW, or bounds.");if(!rep.length)push("🟢","No major red flags detected.","Still cluster SEs for panels; inspect residuals & ICC.");document.getElementById("report").innerHTML=`
-    <div class="grid-2">
-      <div>${rep.map(w=>`<div>${w.lvl} ${w.msg}</div>`).join("")}</div>
-      <div><div style="margin-bottom:6px;"><b>Suggested remedies</b></div><ul>${Array.from(sugg).map(s=>`<li>${s}</li>`).join("")||"<li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID</li>"}</ul></div>
-    </div>
-  `;document.getElementById("estimatesArea").style.display=S.viz==="estimates"?"block":"none";document.getElementById("diagArea").style.display=S.viz==="diagnostics"?"block":"none";renderNotation(sim)}
+function drawBars(el,rows,betaTrue){
+  el.innerHTML="";
+  var w=520,h=360,m={l:50,r:10,t:10,b:60};
+  var yVals=rows.map(function(r){return r.b;}).concat([betaTrue]);
+  var yMin=Math.min.apply(null,yVals), yMax=Math.max.apply(null,yVals);
+  var xs=scaleLinear(0, rows.length, m.l, w-m.r);
+  var ys=scaleLinear(yMin, yMax, h-m.b, m.t);
+  var svg=createSVG(w,h);
+  var xTicks = rows.map(function(r,i){ return {pos:(i+0.5)/rows.length, label:r.name}; });
+  axis(svg, m.l, h-m.b, w-m.l-m.r, true, xTicks);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(yMin + p*(yMax-yMin))}; });
+  axis(svg, m.l, h-m.b, h-m.t-m.b, false, yTicks);
+  var bw = (w-m.l-m.r)/rows.length - 12;
+  for(var i=0;i<rows.length;i++){
+    var x = m.l + i*((w-m.l-m.r)/rows.length) + 6;
+    var y = ys(Math.max(0, rows[i].b));
+    var y0 = ys(0);
+    var height = Math.abs(y - y0);
+    var top = Math.min(y, y0);
+    svg.appendChild(rectEl(x, top, bw, height, "#60a5fa"));
+  }
+  var ytrue = ys(betaTrue);
+  svg.appendChild(lineEl(m.l, ytrue, w-m.r, ytrue, "#f87171", 2));
+  el.appendChild(svg);
+}
 
-function bindRange(id,key){const el=document.getElementById(id);el.value=S[key];el.addEventListener("input",e=>{S[key]=parseFloat(e.target.value);computeAndRender()})}
-function bindCheck(id,key){const el=document.getElementById(id);el.checked=S[key];el.addEventListener("change",e=>{S[key]=!!e.target.checked;computeAndRender()})}
-function bindNum(id,key){const el=document.getElementById(id);el.value=S[key];el.addEventListener("change",e=>{S[key]=parseFloat(e.target.value);computeAndRender()})}
+function drawResiduals(el, points){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var fitVals=points.map(function(d){return d.fit;});
+  var resVals=points.map(function(d){return d.resid;});
+  var xs=scaleLinear(Math.min.apply(null,fitVals), Math.max.apply(null,fitVals), m.l, w-m.r);
+  var ys=scaleLinear(Math.min.apply(null,resVals), Math.max.apply(null,resVals), h-m.b, m.t);
+  var svg=createSVG(w,h);
+  for(var i=0;i<=10;i++){ var x=m.l + i*(w-m.l-m.r)/10; svg.appendChild(lineEl(x,m.t, x,h-m.b, "#111",1)); }
+  for(var j=0;j<=10;j++){ var y=m.t + j*(h-m.t-m.b)/10; svg.appendChild(lineEl(m.l,y, w-m.r,y, "#111",1)); }
+  var xTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(Math.min.apply(null,fitVals) + p*(Math.max.apply(null,fitVals)-Math.min.apply(null,fitVals)))}; });
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(Math.min.apply(null,resVals) + p*(Math.max.apply(null,resVals)-Math.min.apply(null,resVals)))}; });
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(var k=0;k<points.length;k++){ svg.appendChild(circleEl(xs(points[k].fit), ys(points[k].resid), 2, "#a3a3a3", 0.9)); }
+  var y0 = ys(0); svg.appendChild(lineEl(m.l,y0, w-m.r,y0, "#94a3b8", 1.5));
+  el.appendChild(svg);
+}
 
-function setMode(mode){S.mode=mode;["mode-descriptives","mode-freq","mode-robust","mode-bayes"].forEach(id=>document.getElementById(id).classList.remove("active"));if(mode==="descriptives")document.getElementById("mode-descriptives").classList.add("active");if(mode==="frequentist")document.getElementById("mode-freq").classList.add("active");if(mode==="robust")document.getElementById("mode-robust").classList.add("active");if(mode==="bayesian")document.getElementById("mode-bayes").classList.add("active");computeAndRender()}
-function setViz(v){S.viz=v;["viz-trajectories","viz-estimates","viz-diagnostics"].forEach(id=>document.getElementById(id).classList.remove("active"));if(v==="trajectories")document.getElementById("viz-trajectories").classList.add("active");if(v==="estimates")document.getElementById("viz-estimates").classList.add("active");if(v==="diagnostics")document.getElementById("viz-diagnostics").classList.add("active");computeAndRender()}
+function drawHist(el, resid){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  if(resid.length===0){ el.textContent="No data"; return; }
+  var mn=Math.min.apply(null,resid), mx=Math.max.apply(null,resid), bins=20;
+  var width=(mx-mn)/bins || 1;
+  var cnt=new Array(bins).fill(0);
+  for(var i=0;i<resid.length;i++){ var v=resid[i]; var idx=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/width))); cnt[idx]++; }
+  var xs=scaleLinear(0,bins, m.l, w-m.r);
+  var ys=scaleLinear(0, Math.max.apply(null,cnt), h-m.b, m.t);
+  var svg=createSVG(w,h);
+  axis(svg, m.l, h-m.b, w-m.l-m.r, true, [{pos:0,label:fmt(mn)},{pos:1,label:fmt(mx)}]);
+  axis(svg, m.l, h-m.b, h-m.t-m.b, false, [{pos:0,label:"0"},{pos:1,label:String(Math.max.apply(null,cnt))}]);
+  var bw=(w-m.l-m.r)/bins-2;
+  for(i=0;i<bins;i++){
+    var x = xs(i)+1, y = ys(cnt[i]), y0 = ys(0);
+    svg.appendChild(rectEl(x, y, bw, y0-y, "#93c5fd"));
+  }
+  el.appendChild(svg);
+}
 
-function init(){
-  document.getElementById("tab-sim").addEventListener("click",()=>{document.getElementById("sim").style.display="block";document.getElementById("info").style.display="none"});
-  document.getElementById("tab-info").addEventListener("click",()=>{document.getElementById("sim").style.display="none";document.getElementById("info").style.display="block"});
-  document.getElementById("btn-refresh").addEventListener("click",()=>{location.search="?v="+Date.now()});
-  document.getElementById("mode-descriptives").addEventListener("click",()=>setMode("descriptives"));
-  document.getElementById("mode-freq").addEventListener("click",()=>setMode("frequentist"));
-  document.getElementById("mode-robust").addEventListener("click",()=>setMode("robust"));
-  document.getElementById("mode-bayes").addEventListener("click",()=>setMode("bayesian"));
-  document.getElementById("viz-trajectories").addEventListener("click",()=>setViz("trajectories"));
-  document.getElementById("viz-estimates").addEventListener("click",()=>setViz("estimates"));
-  document.getElementById("viz-diagnostics").addEventListener("click",()=>setViz("diagnostics"));
-  bindRange("N","N");bindRange("T","T");bindRange("betaTrue","betaTrue");bindRange("betaHet","betaHet");bindRange("sigmaU","sigmaU");bindRange("sigmaE","sigmaE");bindRange("sigmaME","sigmaME");bindRange("pBase","pBase");bindRange("rhoSel","rhoSel");bindRange("switchRate","switchRate");bindRange("timeTrendSlope","timeTrendSlope");
-  bindCheck("timeTrendOn","timeTrendOn");bindCheck("shockAllOn","shockAllOn");bindNum("shockAllWave","shockAllWave");bindNum("shockAllSize","shockAllSize");bindCheck("shockTreatOn","shockTreatOn");bindNum("shockTreatWave","shockTreatWave");bindNum("shockTreatSize","shockTreatSize");
-  bindCheck("ar1On","ar1On");bindNum("rhoE","rhoE");bindCheck("dynSelOn","dynSelOn");bindNum("gammaDY","gammaDY");bindCheck("misclassOn","misclassOn");bindNum("misclassP","misclassP");bindCheck("attritionOn","attritionOn");bindNum("attrBase","attrBase");bindNum("attrSlope","attrSlope");
-  bindCheck("expOutcomeOn","expOutcomeOn");bindNum("expScale","expScale");bindCheck("heteroOn","heteroOn");bindNum("heteroDWeight","heteroDWeight");bindNum("heteroUWeight","heteroUWeight");
-  document.getElementById("btn-download").addEventListener("click",()=>{const sim=simulate();const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"];const esc=s=>'"'+String(s).replace(/"/g,'""')+'"';const csv=[header.join(",")].concat(sim.map(r=>header.map(h=>esc(r[h])).join(","))).join("
-");const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="sim_cross_section_vs_panel.csv";a.click();URL.revokeObjectURL(url)});
+function drawQQ(el, resid){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var r = resid.slice().sort(function(a,b){return a-b;});
+  if(r.length<5){ el.textContent="Not enough data"; return; }
+  function erfinv(x){ var a=0.147; var ln=Math.log(1-x*x); var s=2/(Math.PI*a)+ln/2; return Math.sign(x)*Math.sqrt(Math.sqrt(s*s - ln/a) - s); }
+  var n=r.length, pts=[];
+  for(var i=0;i<n;i++){ var p=(i+0.5)/n; var z=Math.SQRT2*erfinv(2*p-1); pts.push({theor:z, sample:r[i]}); }
+  var xs=scaleLinear(pts[0].theor, pts[pts.length-1].theor, m.l, w-m.r);
+  var ys=scaleLinear(r[0], r[r.length-1], h-m.b, m.t);
+  var svg=createSVG(w,h);
+  axis(svg, m.l, h-m.b, w-m.l-m.r, true, [{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);
+  axis(svg, m.l, h-m.b, h-m.t-m.b, false, [{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);
+  var d1=[xs(pts[0].theor), ys(r[0])], d2=[xs(pts[pts.length-1].theor), ys(r[r.length-1])];
+  svg.appendChild(polylineEl([d1,d2], "#94a3b8", 1.5, 1));
+  for(i=0;i<pts.length;i++){ svg.appendChild(circleEl(xs(pts[i].theor), ys(pts[i].sample), 2, "#a3a3a3", 0.9)); }
+  el.appendChild(svg);
+}
+
+function computeAndRender(){
+  updateLabels();
+  var sim = simulate();
+  var cross = sim.filter(function(r){return r.wave===1;});
+  var pooled = sim;
+  var xCross = cross.map(function(r){return r.D;}), yCross = cross.map(function(r){return r.y;});
+  var xPooled = pooled.map(function(r){return r.D;}), yPooled = pooled.map(function(r){return r.y;});
+  var idsPooled = pooled.map(function(r){return r.pid;});
+  var cs = olsSimple(xCross,yCross);
+  var pooledOLS = olsSimple(xPooled,yPooled);
+  var fe = feWithin(idsPooled,xPooled,yPooled);
+  var hub = huberIRLS(xPooled,yPooled);
+  var bayes = bayesPosterior(xPooled,yPooled);
+  var scatterData = cross.map(function(r){return {x:r.D,y:r.y};});
+  drawScatter(document.getElementById("chart-scatter"), scatterData, cs);
+
+  var ids = []; var seen={};
+  for(var i=0;i<pooled.length;i++){ var pid=pooled[i].pid; if(!seen[pid]){ seen[pid]=1; ids.push(pid); } }
+  var k=Math.min(20, ids.length); var rand=mulberry32(1234+S.seed);
+  var chosenIdx = {}; var chosen=[];
+  while(Object.keys(chosenIdx).length<k && ids.length>0){ var idx=Math.floor(rand()*ids.length); if(!chosenIdx[idx]){ chosenIdx[idx]=1; chosen.push(ids[idx]); } }
+  var spaghetti=[], summary=[], t;
+  for(i=0;i<chosen.length;i++){ var id=chosen[i]; var ser=pooled.filter(function(r){return r.pid===id;}).map(function(r){return {t:r.wave,y:r.y};}); spaghetti.push({id:id,series:ser}); }
+  for(t=1;t<=S.T;t++){ var arr=pooled.filter(function(r){return r.wave===t;}).map(function(r){return r.y;}); if(arr.length){ summary.push({t:t, mean:mean(arr), median:quantile(arr,0.5), p25:quantile(arr,0.25), p75:quantile(arr,0.75)}); } }
+  drawLines(document.getElementById("chart-lines"), spaghetti, summary, S.T);
+
+  var estRows=[];
+  if(S.mode==="frequentist"){
+    if(isFinite(cs.beta)&&isFinite(cs.se)) estRows.push({name:"Cross-section", b:cs.beta});
+    if(isFinite(pooledOLS.beta)&&isFinite(pooledOLS.se)) estRows.push({name:"Pooled", b:pooledOLS.beta});
+    if(isFinite(fe.beta)&&isFinite(fe.se)) estRows.push({name:"Fixed Effects", b:fe.beta});
+  }else if(S.mode==="robust"){
+    estRows.push({name:"Pooled OLS", b:pooledOLS.beta});
+    estRows.push({name:"Huber robust", b:hub.beta});
+  }else if(S.mode==="bayesian"){
+    estRows.push({name:"Bayesian pooled", b:bayes.betaMean});
+    estRows.push({name:"Frequentist pooled", b:pooledOLS.beta});
+  }
+  if(S.viz==="estimates"||S.mode!=="descriptives"){ drawBars(document.getElementById("chart-bars"), estRows, S.betaTrue); }
+
+  var iccTrue = (S.sigmaU*S.sigmaU) / (S.sigmaU*S.sigmaU + S.sigmaE*S.sigmaE + S.sigmaME*S.sigmaME);
+  var by={}, means=[], wVars=[];
+  for(i=0;i<pooled.length;i++){ var r=pooled[i]; if(!by[r.pid]) by[r.pid]=[]; by[r.pid].push(r.y); }
+  for(var kpid in by){ var arr=by[kpid]; var m=mean(arr); means.push(m); var vv=0; for(var j=0;j<arr.length;j++){ vv+=(arr[j]-m)*(arr[j]-m); } vv/=Math.max(1,arr.length-1); wVars.push(vv); }
+  var vb=variance(means), vw=wVars.length? wVars.reduce(function(a,b){return a+b},0)/wVars.length : 0; var tot=vb+vw; var iccEmp = tot===0? NaN : vb/tot;
+
+  var idsUnique = Object.keys(by);
+  var nSwitch=0;
+  for(i=0;i<idsUnique.length;i++){ var rows=pooled.filter(function(r){return r.pid===parseInt(idsUnique[i]);}); var any=false; for(j=1;j<rows.length;j++){ if(rows[j].D!==rows[j-1].D){ any=true; break; } } if(any) nSwitch++; }
+  var shareSwitchers = idsUnique.length? nSwitch/idsUnique.length : NaN;
+  var attrMap={}, attrFew=0;
+  for(i=0;i<pooled.length;i++){ var pid2=pooled[i].pid; attrMap[pid2]=(attrMap[pid2]||0)+1; }
+  for(var key in attrMap){ if(attrMap[key]<S.T) attrFew++; }
+  var attritionRate = idsUnique.length? attrFew/idsUnique.length : NaN;
+
+  var vhtml = "";
+  vhtml += "<li><b>True ICC:</b> " + fmt(iccTrue) + "</li>";
+  vhtml += "<li><b>Empirical ICC:</b> " + fmt(iccEmp) + "</li>";
+  vhtml += "<li><b>Switchers:</b> " + (isFinite(shareSwitchers)? (shareSwitchers*100).toFixed(0)+"%" : "-") + "</li>";
+  vhtml += "<li><b>Attrition:</b> " + (isFinite(attritionRate)? (attritionRate*100).toFixed(0)+"%" : "-") + "</li>";
+  document.getElementById("varianceList").innerHTML = vhtml;
+
+  var residPoints = pooled.map(function(r){ var f=pooledOLS.alpha + pooledOLS.beta*r.D; return {fit:f, resid:r.y-f}; });
+  drawResiduals(document.getElementById("chart-rvf"), residPoints);
+  var residuals = residPoints.map(function(d){return d.resid;});
+  drawHist(document.getElementById("chart-hist"), residuals);
+  drawQQ(document.getElementById("chart-qq"), residuals);
+
+  var cards=[];
+  function addCard(title,value,ciVals,foot){ cards.push({title:title,value:value,ciVals:ciVals,foot:foot}); }
+  var csCI = ci(cs.beta, cs.se), pooledCI = ci(pooledOLS.beta, pooledOLS.se), feCI = ci(fe.beta, fe.se);
+  if(S.mode!=="descriptives"){
+    addCard("True beta", fmt(S.betaTrue), "", "");
+    if(S.mode==="frequentist"){
+      addCard("Cross-section OLS", fmt(cs.beta), fmt(csCI[0])+" ... "+fmt(csCI[1]), "n="+cs.n);
+      addCard("Pooled OLS", fmt(pooledOLS.beta), fmt(pooledCI[0])+" ... "+fmt(pooledCI[1]), "n="+pooledOLS.n);
+      addCard("Fixed Effects (within)", fmt(fe.beta), fmt(feCI[0])+" ... "+fmt(feCI[1]), "obs="+fe.n);
+    } else if(S.mode==="robust"){
+      addCard("Cross-section OLS", fmt(cs.beta), fmt(csCI[0])+" ... "+fmt(csCI[1]), "n="+cs.n);
+      addCard("Pooled (Huber robust)", fmt(hub.beta), "approx +/- 1.96*SE", "n="+xPooled.length);
+      addCard("Fixed Effects (within)", fmt(fe.beta), fmt(feCI[0])+" ... "+fmt(feCI[1]), "obs="+fe.n);
+    } else if(S.mode==="bayesian"){
+      addCard("Bayesian pooled beta (mean)", fmt(bayes.betaMean), fmt(bayes.ci[0])+" ... "+fmt(bayes.ci[1]), "SE="+fmt(bayes.betaSE));
+      addCard("Frequentist pooled beta", fmt(pooledOLS.beta), fmt(pooledCI[0])+" ... "+fmt(pooledCI[1]), "SE="+fmt(pooledOLS.se));
+      addCard("Cross-section OLS", fmt(cs.beta), fmt(csCI[0])+" ... "+fmt(csCI[1]), "n="+cs.n);
+    }
+  }
+  var cardsDiv=document.getElementById("cards"); cardsDiv.innerHTML="";
+  for(i=0;i<cards.length;i++){
+    var c=cards[i];
+    var html="";
+    html += "<div class=\"card\">";
+    html += "<div class=\"title\">"+c.title+"</div>";
+    html += "<div class=\"value\">"+c.value+"</div>";
+    if(c.ciVals){ html += "<div class=\"muted\" style=\"font-size:12px;margin-top:4px;\">95% interval: "+c.ciVals+"</div>"; }
+    if(c.foot){ html += "<div class=\"foot\">"+c.foot+"</div>"; }
+    html += "</div>";
+    var wrap=document.createElement("div"); wrap.innerHTML=html; cardsDiv.appendChild(wrap.firstChild);
+  }
+
+  var rep=[], sugg={};
+  function push(lvl,msg,fix){ rep.push({lvl:lvl,msg:msg,fix:fix}); if(fix) sugg[fix]=1; }
+  if(S.rhoSel>0.5) push("HIGH","Selection likely (rho large). Cross-section/pooled may be biased.","Prefer FE; add controls or IV.");
+  if(S.timeTrendOn||S.shockAllOn) push("MED","Trends or common shocks present.","Add time FE or detrend; consider DiD.");
+  if(S.shockTreatOn) push("HIGH","Treatment-specific shock breaks parallel trends.","Use event-study with group x time FE; test pre-trends.");
+  if(S.ar1On) push("MED","Serial correlation in errors.","Cluster SEs at unit level; model AR terms.");
+  if(S.sigmaME>0.8||S.misclassOn) push("MED","Strong measurement error/misclassification.","Use validation, reliability correction, IV.");
+  if(S.dynSelOn) push("HIGH","Dynamic selection enabled (Y->D).","Lagged controls/GMM, IV, or design-based ID.");
+  if(isFinite(shareSwitchers) && shareSwitchers<0.15) push("MED","Few switchers -> FE weakly identified.","Increase T; pooled + controls/IV.");
+  if(S.attritionOn && isFinite(attritionRate) && attritionRate>0.15) push("MED","Nontrivial attrition.","Model attrition, IPW, or bounds.");
+  if(rep.length===0) push("LOW","No major red flags detected.","Cluster SEs for panels; inspect residuals & ICC.");
+  var repHtml = "<div class=\"grid-2\"><div>";
+  for(i=0;i<rep.length;i++){ repHtml += "<div>"+rep[i].lvl+": "+rep[i].msg+"</div>"; }
+  repHtml += "</div><div><div style=\"margin-bottom:6px;\"><b>Suggested remedies</b></div><ul>";
+  var keys=Object.keys(sugg);
+  if(keys.length===0){ repHtml += "<li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID</li>"; }
+  else { for(i=0;i<keys.length;i++){ repHtml += "<li>"+keys[i]+"</li>"; } }
+  repHtml += "</ul></div></div>";
+  document.getElementById("report").innerHTML = repHtml;
+
+  document.getElementById("estimatesArea").style.display = (S.viz==="estimates") ? "block" : "none";
+  document.getElementById("diagArea").style.display = (S.viz==="diagnostics") ? "block" : "none";
+  renderNotation();
+}
+
+function bindRange(id,key){ var el=document.getElementById(id); el.value=S[key]; el.addEventListener("input", function(e){ S[key]=parseFloat(e.target.value); computeAndRender(); }); }
+function bindCheck(id,key){ var el=document.getElementById(id); el.checked=S[key]; el.addEventListener("change", function(e){ S[key]=!!e.target.checked; computeAndRender(); }); }
+function bindNum(id,key){ var el=document.getElementById(id); el.value=S[key]; el.addEventListener("change", function(e){ S[key]=parseFloat(e.target.value); computeAndRender(); }); }
+
+function setMode(mode){
+  S.mode=mode;
+  var ids=["mode-descriptives","mode-freq","mode-robust","mode-bayes"];
+  for(var i=0;i<ids.length;i++) document.getElementById(ids[i]).classList.remove("active");
+  if(mode==="descriptives") document.getElementById("mode-descriptives").classList.add("active");
+  if(mode==="frequentist") document.getElementById("mode-freq").classList.add("active");
+  if(mode==="robust") document.getElementById("mode-robust").classList.add("active");
+  if(mode==="bayesian") document.getElementById("mode-bayes").classList.add("active");
   computeAndRender();
 }
-window.addEventListener("DOMContentLoaded",init);
+function setViz(v){
+  S.viz=v;
+  var ids=["viz-trajectories","viz-estimates","viz-diagnostics"];
+  for(var i=0;i<ids.length;i++) document.getElementById(ids[i]).classList.remove("active");
+  if(v==="trajectories") document.getElementById("viz-trajectories").classList.add("active");
+  if(v==="estimates") document.getElementById("viz-estimates").classList.add("active");
+  if(v==="diagnostics") document.getElementById("viz-diagnostics").classList.add("active");
+  computeAndRender();
+}
+
+function init(){
+  document.getElementById("tab-sim").addEventListener("click", function(){ document.getElementById("sim").style.display="block"; document.getElementById("info").style.display="none"; });
+  document.getElementById("tab-info").addEventListener("click", function(){ document.getElementById("sim").style.display="none"; document.getElementById("info").style.display="block"; });
+  document.getElementById("btn-refresh").addEventListener("click", function(){ location.search="?v="+Date.now(); });
+
+  document.getElementById("mode-descriptives").addEventListener("click", function(){ setMode("descriptives"); });
+  document.getElementById("mode-freq").addEventListener("click", function(){ setMode("frequentist"); });
+  document.getElementById("mode-robust").addEventListener("click", function(){ setMode("robust"); });
+  document.getElementById("mode-bayes").addEventListener("click", function(){ setMode("bayesian"); });
+
+  document.getElementById("viz-trajectories").addEventListener("click", function(){ setViz("trajectories"); });
+  document.getElementById("viz-estimates").addEventListener("click", function(){ setViz("estimates"); });
+  document.getElementById("viz-diagnostics").addEventListener("click", function(){ setViz("diagnostics"); });
+
+  bindRange("N","N"); bindRange("T","T"); bindRange("betaTrue","betaTrue"); bindRange("betaHet","betaHet");
+  bindRange("sigmaU","sigmaU"); bindRange("sigmaE","sigmaE"); bindRange("sigmaME","sigmaME");
+  bindRange("pBase","pBase"); bindRange("rhoSel","rhoSel"); bindRange("switchRate","switchRate");
+  bindRange("timeTrendSlope","timeTrendSlope");
+
+  bindCheck("timeTrendOn","timeTrendOn");
+  bindCheck("shockAllOn","shockAllOn"); bindNum("shockAllWave","shockAllWave"); bindNum("shockAllSize","shockAllSize");
+  bindCheck("shockTreatOn","shockTreatOn"); bindNum("shockTreatWave","shockTreatWave"); bindNum("shockTreatSize","shockTreatSize");
+  bindCheck("ar1On","ar1On"); bindNum("rhoE","rhoE");
+  bindCheck("dynSelOn","dynSelOn"); bindNum("gammaDY","gammaDY");
+  bindCheck("misclassOn","misclassOn"); bindNum("misclassP","misclassP");
+  bindCheck("attritionOn","attritionOn"); bindNum("attrBase","attrBase"); bindNum("attrSlope","attrSlope");
+  bindCheck("expOutcomeOn","expOutcomeOn"); bindNum("expScale","expScale");
+  bindCheck("heteroOn","heteroOn"); bindNum("heteroDWeight","heteroDWeight"); bindNum("heteroUWeight","heteroUWeight");
+
+  document.getElementById("btn-download").addEventListener("click", function(){
+    var sim = simulate();
+    var header = ["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"];
+    function esc(s){ return '"' + String(s).replace(/"/g,'""') + '"'; }
+    var csv = [header.join(",")].concat(sim.map(function(r){ return header.map(function(h){ return esc(r[h]); }).join(","); })).join("\n");
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href=url; a.download="sim_cross_section_vs_panel.csv"; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  computeAndRender();
+}
+
+window.addEventListener("DOMContentLoaded", init);
 </script>
 </body>
 </html>
