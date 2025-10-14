@@ -262,21 +262,19 @@ function DeckBuilder() {
     allAvailCards[l].onclick = (function(idx) {
       return function() { 
         state.decks[playerKey].push(Object.assign({}, state.cards[idx], { deckId: Date.now() + Math.random() })); 
+        state.hoveredCard = null;
         render(); 
       };
     })(l);
     
-    allAvailCards[l].onmouseenter = (function(card) {
+    allAvailCards[l].onmouseenter = (function(idx) {
       return function() {
-        const idx = parseInt(card.getAttribute('data-card-idx'));
         state.hoveredCard = state.cards[idx];
-        render();
       };
-    })(allAvailCards[l]);
+    })(l);
     
     allAvailCards[l].onmouseleave = function() {
       state.hoveredCard = null;
-      render();
     };
   }
   
