@@ -251,18 +251,33 @@ function DeckBuilder() {
   }
 
   // Add hover handlers for all cards in deck builder
-  const allCards = div.querySelectorAll('.deckCard, .availCard');
-  for (var k = 0; k < allCards.length; k++) {
-    allCards[k].onmouseenter = (function(card) {
+  const allDeckCards = div.querySelectorAll('.deckCard');
+  for (var k = 0; k < allDeckCards.length; k++) {
+    allDeckCards[k].onmouseenter = (function(card) {
       return function() {
         const idx = parseInt(card.getAttribute('data-card-idx'));
-        const location = card.getAttribute('data-location');
-        state.hoveredCard = location === 'deck' ? state.decks[playerKey][idx] : state.cards[idx];
+        state.hoveredCard = state.decks[playerKey][idx];
         render();
       };
-    })(allCards[k]);
+    })(allDeckCards[k]);
     
-    allCards[k].onmouseleave = function() {
+    allDeckCards[k].onmouseleave = function() {
+      state.hoveredCard = null;
+      render();
+    };
+  }
+  
+  const allAvailCards = div.querySelectorAll('.availCard');
+  for (var l = 0; l < allAvailCards.length; l++) {
+    allAvailCards[l].onmouseenter = (function(card) {
+      return function() {
+        const idx = parseInt(card.getAttribute('data-card-idx'));
+        state.hoveredCard = state.cards[idx];
+        render();
+      };
+    })(allAvailCards[l]);
+    
+    allAvailCards[l].onmouseleave = function() {
       state.hoveredCard = null;
       render();
     };
