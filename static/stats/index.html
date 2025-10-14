@@ -143,6 +143,11 @@
         </div>
 
         <div class="panel mt-3">
+          <h2>Explanation & math</h2>
+          <div id="explain" class="muted"></div>
+        </div>
+
+        <div class="panel mt-3">
           <h2>Model notation</h2>
           <pre id="notation"></pre>
         </div>
@@ -325,9 +330,68 @@ function scaleLinear(d0,d1,r0,r1){var d=d1-d0||1e-9;var m=(r1-r0)/d;return funct
 function drawScatter(container,data,fit){container.innerHTML="";var w=520,h=360,m={l:40,r:10,t:10,b:30};var yMin=Math.min.apply(null,data.map(function(d){return d.y}));var yMax=Math.max.apply(null,data.map(function(d){return d.y}));var xs=scaleLinear(0,1,m.l,w-m.r);var ys=scaleLinear(yMin,yMax,h-m.b,m.t);var svg=createSVG(w,h);for(var i=0;i<=10;i++){var x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"#111",1))}for(i=0;i<=10;i++){var y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"#111",1))}axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:"0"},{pos:1,label:"1"}]);var yTicks=[0,.25,.5,.75,1].map(function(p){return {pos:p,label:fmt(yMin+p*(yMax-yMin))}});axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(i=0;i<data.length;i++){svg.appendChild(circle(xs(data[i].x),ys(data[i].y),2,"#a3a3a3",.9))}if(fit&&isFinite(fit.beta)){var p1=[xs(0),ys(fit.alpha)],p2=[xs(1),ys(fit.alpha+fit.beta)];svg.appendChild(polyline([p1,p2],"#93c5fd",2,1))}container.appendChild(svg)}
 function drawLines(container,spaghetti,summary,T){container.innerHTML="";var w=520,h=360,m={l:40,r:10,t:10,b:30};var allY=[];for(var s=0;s<spaghetti.length;s++){for(var q=0;q<spaghetti[s].series.length;q++){allY.push(spaghetti[s].series[q].y)}}for(var r=0;r<summary.length;r++){allY.push(summary[r].mean,summary[r].median,summary[r].p25,summary[r].p75)}var yMin=Math.min.apply(null,allY),yMax=Math.max.apply(null,allY);var xs=scaleLinear(1,T,m.l,w-m.r);var ys=scaleLinear(yMin,yMax,h-m.b,m.t);var svg=createSVG(w,h);for(var i=0;i<=T-1;i++){var x=xs(1+i*(T-1)/(T-1));svg.appendChild(line(x,m.t,x,h-m.b,"#111",1))}for(i=0;i<=10;i++){var y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"#111",1))}var xTicks=[];for(i=1;i<=T;i++)xTicks.push({pos:(i-1)/(T-1),label:String(i)});axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);var yTicks=[0,.25,.5,.75,1].map(function(p){return {pos:p,label:fmt(yMin+p*(yMax-yMin))}});axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(s=0;s<spaghetti.length;s++){var pts=[];for(q=0;q<spaghetti[s].series.length;q++){pts.push([xs(spaghetti[s].series[q].t),ys(spaghetti[s].series[q].y)])}svg.appendChild(polyline(pts,"#6b7280",1,.6))}function pathFor(key,color){var pts=[];for(i=0;i<summary.length;i++){pts.push([xs(summary[i].t),ys(summary[i][key])])}svg.appendChild(polyline(pts,color,2.5,1))}pathFor("mean","#93c5fd");pathFor("median","#e5e7eb");pathFor("p25","#a78bfa");pathFor("p75","#a78bfa");container.appendChild(svg)}
 function drawBarsWithCI(container,rows,betaTrue){container.innerHTML="";var w=520,h=360,m={l:60,r:10,t:10,b:80};var allY=[betaTrue];for(var i=0;i<rows.length;i++){if(isFinite(rows[i].b))allY.push(rows[i].b);if(rows[i].se&&isFinite(rows[i].se)){var c=ci(rows[i].b,rows[i].se);allY.push(c[0],c[1])}}var yMin=Math.min.apply(null,allY),yMax=Math.max.apply(null,allY);var xs=scaleLinear(0,rows.length,m.l,w-m.r);var ys=scaleLinear(yMin,yMax,h-m.b,m.t);var svg=createSVG(w,h);var xTicks=[];for(i=0;i<rows.length;i++){xTicks.push({pos:(i+0.5)/rows.length,label:rows[i].name})}axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);var yTicks=[0,.25,.5,.75,1].map(function(p){return {pos:p,label:fmt(yMin+p*(yMax-yMin))}});axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);var bw=(w-m.l-m.r)/rows.length-12;for(i=0;i<rows.length;i++){var x=m.l+i*((w-m.l-m.r)/rows.length)+6;var y=ys(Math.max(0,rows[i].b));var y0=ys(0);var height=Math.abs(y-y0);var top=Math.min(y,y0);svg.appendChild(rect(x,top,bw,height,"#60a5fa"));if(rows[i].se&&isFinite(rows[i].se)){var C=ci(rows[i].b,rows[i].se);var ylo=ys(C[0]), yhi=ys(C[1]);var cx=x+bw/2;svg.appendChild(line(cx,ylo,cx,yhi,"#cbd5e1",2));svg.appendChild(line(cx-6,ylo,cx+6,ylo,"#cbd5e1",2));svg.appendChild(line(cx-6,yhi,cx+6,yhi,"#cbd5e1",2));}}var ytrue=ys(betaTrue);svg.appendChild(line(m.l,ytrue,w-m.r,ytrue,"#f87171",2));container.appendChild(svg)}
-function drawResiduals(container,points){container.innerHTML="";var w=520,h=360,m={l:40,r:10,t:10,b:30};var xs=scaleLinear(Math.min.apply(null,points.map(function(d){return d.fit})),Math.max.apply(null,points.map(function(d){return d.fit})),m.l,w-m.r);var ys=scaleLinear(Math.min.apply(null,points.map(function(d){return d.resid})),Math.max.apply(null,points.map(function(d){return d.resid})),h-m.b,m.t);var svg=createSVG(w,h);for(var i=0;i<=10;i++){var x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"#111",1))}for(i=0;i<=10;i++){var y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"#111",1))}var xTicks=[0,.25,.5,.75,1].map(function(p){return {pos:p,label:fmt(Math.min.apply(null,points.map(function(d){return d.fit})) + p*(Math.max.apply(null,points.map(function(d){return d.fit}))-Math.min.apply(null,points.map(function(d){return d.fit})) ))}});axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);var yTicks=[0,.25,.5,.75,1].map(function(p){return {pos:p,label:fmt(Math.min.apply(null,points.map(function(d){return d.resid})) + p*(Math.max.apply(null,points.map(function(d){return d.resid}))-Math.min.apply(null,points.map(function(d){return d.resid})) )}});axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(i=0;i<points.length;i++){svg.appendChild(circle(xs(points[i].fit),ys(points[i].resid),2,"#a3a3a3",.9))}var y0=ys(0);svg.appendChild(line(m.l,y0,w-m.r,y0,"#94a3b8",1.5));container.appendChild(svg)}
+
+function drawResiduals(container,points){
+  container.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  if(!points || points.length===0){ container.textContent="No data"; return; }
+  var fitMin=points[0].fit, fitMax=points[0].fit, rMin=points[0].resid, rMax=points[0].resid;
+  for(var i=1;i<points.length;i++){
+    if(points[i].fit<fitMin) fitMin=points[i].fit;
+    if(points[i].fit>fitMax) fitMax=points[i].fit;
+    if(points[i].resid<rMin) rMin=points[i].resid;
+    if(points[i].resid>rMax) rMax=points[i].resid;
+  }
+  var xs=scaleLinear(fitMin,fitMax,m.l,w-m.r);
+  var ys=scaleLinear(rMin,rMax,h-m.b,m.t);
+  var svg=createSVG(w,h);
+  for(i=0;i<=10;i++){ var x=m.l+i*(w-m.l-m.r)/10; svg.appendChild(line(x,m.t,x,h-m.b,"#111",1)); }
+  for(i=0;i<=10;i++){ var y=m.t+i*(h-m.t-m.b)/10; svg.appendChild(line(m.l,y,w-m.r,y,"#111",1)); }
+  var xTicks=[], yTicks=[], steps=[0,.25,.5,.75,1];
+  for(i=0;i<steps.length;i++){
+    var p=steps[i];
+    xTicks.push({pos:p,label:fmt(fitMin + p*(fitMax-fitMin))});
+    yTicks.push({pos:p,label:fmt(rMin + p*(rMax-rMin))});
+  }
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(i=0;i<points.length;i++){ svg.appendChild(circle(xs(points[i].fit),ys(points[i].resid),2,"#a3a3a3",.9)); }
+  var y0=ys(0); svg.appendChild(line(m.l,y0,w-m.r,y0,"#94a3b8",1.5));
+  container.appendChild(svg);
+}
+
 function drawHist(container,resid){container.innerHTML="";var w=520,h=360,m={l:40,r:10,t:10,b:30};if(resid.length===0){container.textContent="No data";return}var mn=Math.min.apply(null,resid),mx=Math.max.apply(null,resid),bins=20;var width=(mx-mn)/bins||1;var cnt=new Array(bins);for(var i=0;i<bins;i++)cnt[i]=0;for(i=0;i<resid.length;i++){var v=resid[i];var idx=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/width)));cnt[idx]++}var xs=scaleLinear(0,bins,m.l,w-m.r);var ys=scaleLinear(0,Math.max.apply(null,cnt),h-m.b,m.t);var svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(mn)},{pos:1,label:fmt(mx)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:"0"},{pos:1,label:String(Math.max.apply(null,cnt))}]);var bw=(w-m.l-m.r)/bins-2;for(i=0;i<bins;i++){var x=xs(i)+1,y=ys(cnt[i]),y0=ys(0);svg.appendChild(rect(x,y,bw,y0-y,"#93c5fd"))}container.appendChild(svg)}
 function drawQQ(container,resid){container.innerHTML="";var w=520,h=360,m={l:40,r:10,t:10,b:30};var r=resid.slice().sort(function(a,b){return a-b});if(r.length<5){container.textContent="Not enough data";return}function erfinv(x){var a=0.147;var ln=Math.log(1-x*x);var s=2/(Math.PI*a)+ln/2;return Math.sign(x)*Math.sqrt(Math.sqrt(s*s - ln/a) - s)}var n=r.length,pts=[];for(var i=0;i<n;i++){var p=(i+0.5)/n;var z=Math.SQRT2*erfinv(2*p-1);pts.push({theor:z,sample:r[i]})}var xs=scaleLinear(pts[0].theor,pts[pts.length-1].theor,m.l,w-m.r);var ys=scaleLinear(r[0],r[r.length-1],h-m.b,m.t);var svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);svg.appendChild(polyline([[xs(pts[0].theor),ys(r[0])],[xs(pts[pts.length-1].theor),ys(r[r.length-1])]],"#94a3b8",1.5));for(i=0;i<pts.length;i++){svg.appendChild(circle(xs(pts[i].theor),ys(pts[i].sample),2,"#a3a3a3",.9))}container.appendChild(svg)}
+
+
+function buildExplanation(cs, pooledOLS, fe, re){
+  var parts=[];
+  parts.push("<b>Data generating process</b>: y_it = alpha + beta*D_it + u_i + e_it + gamma*t + noise.");
+  parts.push("Cross-section OLS uses wave 1 only; Pooled OLS stacks waves; FE uses within-person deviations; RE uses quasi-demeaning.");
+  var bullets=[];
+  if(S.rhoSel>0.3){
+    bullets.push("Selection: rho = "+fmt(S.rhoSel)+". D is correlated with u_i, so CS and pooled OLS can be biased. FE removes time-constant u_i; RE assumes corr(D_i., u_i)=0.");
+  } else {
+    bullets.push("Low selection (rho small): bias from corr(D, u_i) is limited; CS/Pooled closer to FE/RE.");
+  }
+  if(S.sigmaME>0.4){
+    bullets.push("Measurement error sigma_me = "+fmt(S.sigmaME)+": attenuates slopes across estimators.");
+  }
+  if(S.timeTrendOn){
+    bullets.push("Time trend gamma = "+fmt(S.timeTrendSlope)+": without time fixed effects, pooled/RE can absorb part of the trend.");
+  }
+  if(S.switchRate<0.15){
+    bullets.push("Low switch rate = "+fmt(S.switchRate)+": little within variation makes FE imprecise (larger SE).");
+  }
+  if(S.pBase<0.15 || S.pBase>0.85){
+    bullets.push("Extreme prevalence p(D=1) = "+fmt(S.pBase)+": limited overlap can reduce precision and stability.");
+  }
+  parts.push("<b>Current estimates</b>:");
+  parts.push("CS b = "+fmt(cs.beta)+", Pooled b = "+fmt(pooledOLS.beta)+", FE b = "+fmt(fe.beta)+", RE b = "+fmt(re.beta)+".");
+  parts.push("<b>Implications</b>:");
+  parts.push("<ul><li>"+bullets.join("</li><li>")+"</li></ul>");
+  document.getElementById("explain").innerHTML = parts.join(" ");
+}
 
 function computeAndRender(){
   updateLabels();
@@ -433,6 +497,7 @@ function computeAndRender(){
   else { for(i=0;i<keys.length;i++){ repHtml += "<li>"+keys[i]+"</li>"; } }
   repHtml += "</ul></div></div>";
   document.getElementById("report").innerHTML = repHtml;
+  buildExplanation(cs, pooledOLS, fe, re);
   renderNotation();
 }
 
