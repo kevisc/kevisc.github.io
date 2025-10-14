@@ -39,9 +39,32 @@
     .card-img { width: 100%; aspect-ratio: 5/7; background: #4b5563; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
     .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 120px; border: 2px solid #4b5563; }
     .game-field.player { background: rgba(34, 197, 94, 0.1); }
-    .hand-card { display: inline-block; margin: 4px; transition: transform 0.2s; }
-    .hand-card:hover { transform: translateY(-8px); }
-    .hand-card img { width: 64px; height: 80px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; }
+    .hand-card { 
+      display: inline-block; 
+      margin: 4px; 
+      transition: transform 0.2s; 
+      cursor: pointer; 
+      position: relative;
+      background: #374151;
+      border-radius: 6px;
+      padding: 2px;
+    }
+    .hand-card:hover { transform: translateY(-8px); background: #4b5563; }
+    .hand-card img { 
+      width: 64px; 
+      height: 80px; 
+      border-radius: 4px; 
+      border: 2px solid #4b5563; 
+      object-fit: cover; 
+      pointer-events: none; 
+      display: block; 
+    }
+    .hand-card.selected { 
+      border: 3px solid #fbbf24; 
+      background: #fbbf24; 
+      box-shadow: 0 0 20px #fbbf24; 
+      padding: 2px; 
+    }
     .hand-card.selected img { border-color: #fbbf24; }
     .field-card { display: inline-block; margin: 4px; }
     .field-card img { width: 60px; height: 84px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; }
@@ -479,20 +502,87 @@ function DeckBuilder() {
   const div = document.createElement('div');
   div.className = 'container';
   
-  const cardImg = (c) => c.image || `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${encodeURIComponent(c.name)}</text></svg>`;
+  const createCardElement = (c, isInDeck) => {
+    const cardDiv = document.createElement('div');
+    cardDiv.className = 'deck-card';
+    
+    const img = document.createElement('img');
+    if (c.image) {
+      img.src = c.image;
+    } else {
+      const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
+      img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
+    }
+    img.alt = c.name;
+    
+    // Add hover to show card details in sidebar
+    cardDiv.onmouseenter = () => {
+      state.hoveredCard = c;
+      updateCardInfo();
+    };
+    
+    cardDiv.appendChild(img);
+    return cardDiv;
+  };
   
-  const deckHtml = state.decks[key].map((c, i) => `
-    <div class="deck-card">
-      <img src="${cardImg(c)}">
-      <button class="remove-btn remCard" data-id="${i}">✕</button>
-    </div>
-  `).join('');
+  const updateCardInfo = () => {
+    const infoDiv = div.querySelector('#cardInfoSidebar');
+    if (!infoDiv) return;
+    
+    if (state.hoveredCard) {
+      const c = state.hoveredCard;
+      infoDiv.innerHTML = `
+        <div class="card-preview">
+          <div class="text-center mb-2" style="font-weight: bold; font-size: 16px;">${c.name}</div>
+          <div class="text-xs text-gray text-center mb-2">${c.type}</div>
+          ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 180px; font-size: 64px;">🃏</div>'}
+          ${c.type === 'Monster' ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-sm"><strong>ATK:</strong> ${c.attack}</span><span class="text-sm"><strong>DEF:</strong> ${c.defense}</span></div>` : ''}
+          <div class="text-sm" style="margin-top: 12px;"><strong>Effect:</strong></div>
+          <div class="text-xs" style="margin-top: 8px; line-height: 1.4;">${c.effect || 'No effect'}</div>
+        </div>
+      `;
+    } else {
+      infoDiv.innerHTML = '<p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card to see details</p>';
+    }
+  };
   
-  const availHtml = state.cards.map((c, i) => `
-    <div class="deck-card addCard" data-id="${i}">
-      <img src="${cardImg(c)}">
-    </div>
-  `).join('');
+  const deckContainer = document.createElement('div');
+  deckContainer.style.cssText = 'background: #1f2937; padding: 16px; border-radius: 8px; min-height: 200px;';
+  
+  if (state.decks[key].length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'text-gray text-center';
+    emptyMsg.style.padding = '32px 0';
+    emptyMsg.textContent = 'No cards in deck';
+    deckContainer.appendChild(emptyMsg);
+  } else {
+    state.decks[key].forEach((c, idx) => {
+      const cardEl = createCardElement(c, true);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        state.decks[key].splice(idx, 1);
+        render();
+      };
+      cardEl.appendChild(removeBtn);
+      deckContainer.appendChild(cardEl);
+    });
+  }
+  
+  const availContainer = document.createElement('div');
+  availContainer.style.cssText = 'background: #1f2937; padding: 16px; border-radius: 8px;';
+  
+  state.cards.forEach((c, idx) => {
+    const cardEl = createCardElement(c, false);
+    cardEl.style.cursor = 'pointer';
+    cardEl.onclick = () => {
+      state.decks[key].push(Object.assign({}, c, { deckId: Date.now() + Math.random() }));
+      render();
+    };
+    availContainer.appendChild(cardEl);
+  });
   
   div.innerHTML = `
     <div class="header">
@@ -507,38 +597,31 @@ function DeckBuilder() {
         <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
       </div>
     </div>
-    <div class="grid grid-2">
+    <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 20px;">
       <div class="card">
         <h3 class="mb-4" style="font-weight: bold;">Main Deck [${state.decks[key].length}]</h3>
-        <div style="background: #1f2937; padding: 16px; border-radius: 8px; min-height: 200px;">
-          ${deckHtml || '<p class="text-gray text-center" style="padding: 32px 0;">No cards in deck</p>'}
-        </div>
+        <div id="deckContainer"></div>
       </div>
       <div class="card">
         <h3 class="mb-4" style="font-weight: bold;">All Cards</h3>
-        <div style="background: #1f2937; padding: 16px; border-radius: 8px;">${availHtml}</div>
+        <div id="availContainer"></div>
+      </div>
+      <div class="card" style="position: sticky; top: 20px; height: fit-content;">
+        <h3 class="mb-4" style="font-weight: bold; text-align: center;">Card Info</h3>
+        <div id="cardInfoSidebar">
+          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card to see details</p>
+        </div>
       </div>
     </div>
   `;
+  
+  div.querySelector('#deckContainer').appendChild(deckContainer);
+  div.querySelector('#availContainer').appendChild(availContainer);
   
   div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
   div.querySelector('#saveDeck').onclick = saveDeck;
   div.querySelector('#loadDeck').onchange = (e) => { if (e.target.files[0]) loadDeck(e.target.files[0]); };
-  
-  div.querySelectorAll('.addCard').forEach((btn, i) => {
-    btn.onclick = () => { 
-      state.decks[key].push(Object.assign({}, state.cards[i], { deckId: Date.now() + Math.random() })); 
-      render(); 
-    };
-  });
-  div.querySelectorAll('.remCard').forEach((btn, i) => {
-    btn.onclick = (e) => { 
-      e.stopPropagation(); 
-      state.decks[key].splice(i, 1); 
-      render(); 
-    };
-  });
   
   return div;
 }
@@ -644,11 +727,29 @@ function GameBoard() {
     return div;
   }
 
-  // Game screen (simplified for length)
+  // Game screen
   const pKey = 'player' + state.currentPlayer;
   const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
   const me = state.gameState[pKey];
   const opp = state.gameState[oKey];
+  
+  const createGameCardImg = (c) => {
+    const img = document.createElement('img');
+    if (c.image) {
+      img.src = c.image;
+    } else {
+      const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
+      img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
+    }
+    img.alt = '';
+    img.style.pointerEvents = 'none';
+    return img;
+  };
+  
+  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
+  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
   
   div.innerHTML = `
     <div style="display: flex; height: 100vh;">
@@ -663,22 +764,22 @@ function GameBoard() {
             <div class="text-red" style="font-weight: bold;">Opponent - LP: ${opp.health}</div>
             <div class="text-xs text-gray">Deck: ${opp.deck.length} | Hand: ${opp.hand.length} | GY: ${opp.graveyard.length}</div>
           </div>
-          <div class="game-field mb-4" style="min-height: 110px;">
+                      <div class="game-field mb-4" style="min-height: 110px;">
             <div class="text-xs text-gray text-center">Opponent Upper Field</div>
-            ${opp.upperField.map((c, i) => `<div class="field-card" data-zone="upperField" data-owner="opp" data-idx="${i}"><img src="${c.image || ''}"></div>`).join('')}
+            ${oppUpperHtml}
           </div>
           <div class="game-field mb-4" style="min-height: 110px;">
             <div class="text-xs text-gray text-center">Opponent Lower Field</div>
-            ${opp.lowerField.map((c, i) => `<div class="field-card" data-zone="lowerField" data-owner="opp" data-idx="${i}"><img src="${c.image || ''}"></div>`).join('')}
+            ${oppLowerHtml}
           </div>
           <div style="border-top: 2px solid #7c3aed; margin: 16px 0;"></div>
           <div class="game-field player mb-4" style="min-height: 110px;">
             <div class="text-xs text-gray text-center">Your Lower Field</div>
-            ${me.lowerField.map((c, i) => `<div class="field-card" data-zone="lowerField" data-owner="me" data-idx="${i}"><img src="${c.image || ''}"></div>`).join('')}
+            ${myLowerHtml}
           </div>
           <div class="game-field player mb-4" style="min-height: 110px;">
             <div class="text-xs text-gray text-center">Your Upper Field</div>
-            ${me.upperField.map((c, i) => `<div class="field-card" data-zone="upperField" data-owner="me" data-idx="${i}"><img src="${c.image || ''}"></div>`).join('')}
+            ${myUpperHtml}
           </div>
           <div class="text-center">
             <div class="text-green" style="font-weight: bold;">You - LP: ${me.health}</div>
@@ -690,8 +791,8 @@ function GameBoard() {
             </div>
           </div>
         </div>
-        <div style="background: #1f2937; padding: 8px; height: 100px; overflow-x: auto; display: flex; justify-content: center; align-items: center;">
-          ${me.hand.map((c, i) => `<div class="hand-card${state.selectedCard === i ? ' selected' : ''}" data-idx="${i}"><img src="${c.image || ''}"></div>`).join('') || '<span class="text-gray text-xs">No cards</span>'}
+        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 100px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; position: relative;">
+          <div style="position: absolute; top: 2px; right: 2px; font-size: 9px; color: #6b7280;">Click cards to select</div>
         </div>
       </div>
       <div class="sidebar">
@@ -708,15 +809,15 @@ function GameBoard() {
       </div>
     </div>
     ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
-      <div style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 16px; z-index: 1000; min-width: 300px;">
-        <div class="text-center mb-4" style="font-weight: bold;">${me.hand[state.selectedCard].name}</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <button class="btn btn-primary text-sm placeCard" data-zone="upper">Upper Field</button>
-          <button class="btn btn-primary text-sm placeCard" data-zone="lower">Lower Field</button>
-          <button id="discardCard" class="btn btn-red text-sm">Discard</button>
-          <button id="toDeck" class="btn btn-green text-sm">To Deck</button>
+      <div id="actionMenu" style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">⭐ ${me.hand[state.selectedCard].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button class="btn btn-primary text-sm placeCard" data-zone="upper" style="padding: 14px; font-weight: bold;">⬆️ Upper Field</button>
+          <button class="btn btn-primary text-sm placeCard" data-zone="lower" style="padding: 14px; font-weight: bold;">⬇️ Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px; font-weight: bold;">🗑️ Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px; font-weight: bold;">📚 To Deck</button>
         </div>
-        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%;">Cancel</button>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px; font-weight: bold;">❌ Cancel</button>
       </div>
     ` : ''}
     ${state.winner ? `
@@ -730,38 +831,223 @@ function GameBoard() {
     ` : ''}
   `;
   
-  div.querySelector('#exitBtn').onclick = () => {
-    if (state.onlineMode) disconnectOnline();
-    state.screen = 'menu';
-    state.gameStarted = false;
-    state.winner = null;
-    state.selectedCard = null;
-    render();
-  };
   
-  div.querySelector('#drawBtn').onclick = () => {
-    if (me.deck.length > 0) {
-      const idx = Math.floor(Math.random() * me.deck.length);
-      me.hand.push(me.deck[idx]);
-      me.deck.splice(idx, 1);
-      sendGameUpdate();
-      render();
+  // Create hand cards with DOM and attach handlers immediately
+  console.log('🎴 Starting hand card creation');
+  console.log('  state.currentPlayer:', state.currentPlayer);
+  console.log('  pKey:', pKey);
+  console.log('  Full gameState:', state.gameState);
+  console.log('  My state object:', me);
+  console.log('  My hand array:', me.hand);
+  console.log('  Hand length:', me.hand.length);
+  
+  const handContainer = div.querySelector('#handContainer');
+  console.log('  handContainer found:', !!handContainer);
+  
+  if (!handContainer) {
+    console.error('❌ ERROR: handContainer not found!');
+    return div;
+  }
+  
+  // CRITICAL: Clear any existing content
+  handContainer.innerHTML = '';
+  console.log('  ✅ Cleared handContainer');
+  
+  if (me.hand.length === 0) {
+    console.log('⚠️ Hand is empty, showing empty message');
+    const emptyMsg = document.createElement('span');
+    emptyMsg.className = 'text-gray text-xs';
+    emptyMsg.textContent = 'No cards in hand - Click Draw!';
+    handContainer.appendChild(emptyMsg);
+  } else {
+    console.log('✅ Hand has', me.hand.length, 'cards, creating card elements...');
+    me.hand.forEach((card, idx) => {
+      console.log(`  → Creating card ${idx}:`, card.name);
+      const cardDiv = document.createElement('div');
+      cardDiv.className = 'hand-card' + (state.selectedCard === idx ? ' selected' : '');
+      cardDiv.dataset.idx = idx;
+      cardDiv.style.cssText = 'z-index: 10; user-select: none; position: relative;';
+      
+      // Add card image
+      cardDiv.appendChild(createGameCardImg(card));
+      
+      // Add a BIG OBVIOUS BUTTON that's definitely clickable
+      const selectBtn = document.createElement('button');
+      selectBtn.textContent = 'SELECT';
+      selectBtn.style.cssText = 'position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); background: lime; color: black; border: 2px solid black; padding: 4px 8px; font-weight: bold; font-size: 10px; cursor: pointer; z-index: 100;';
+      selectBtn.onclick = (e) => {
+        console.log('🟢🟢🟢 SELECT BUTTON CLICKED for card', idx);
+        e.preventDefault();
+        e.stopPropagation();
+        state.selectedCard = state.selectedCard === idx ? null : idx;
+        console.log('  Selection changed to:', state.selectedCard);
+        render();
+      };
+      cardDiv.appendChild(selectBtn);
+      
+      // Also attach to the card div itself
+      cardDiv.onclick = (e) => {
+        // Only if not clicking the button
+        if (e.target === selectBtn) return;
+        console.log('✅✅✅ CARD DIV CLICKED', idx, 'Card:', card.name);
+        e.preventDefault();
+        e.stopPropagation();
+        state.selectedCard = state.selectedCard === idx ? null : idx;
+        console.log('  New selection:', state.selectedCard);
+        render();
+      };
+      
+      cardDiv.onmousedown = (e) => {
+        console.log('🖱️ MOUSEDOWN on card', idx);
+      };
+      
+      // Hover for sidebar
+      cardDiv.onmouseenter = () => {
+        state.hoveredCard = card;
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && state.hoveredCard) {
+          const c = state.hoveredCard;
+          sidebar.innerHTML = `
+            <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+            <div class="card-preview">
+              <div class="text-center mb-2" style="font-weight: bold; font-size: 14px;">${c.name}</div>
+              <div class="text-xs text-gray text-center mb-2">${c.type}</div>
+              ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 150px; font-size: 48px;">🃏</div>'}
+              ${c.type === 'Monster' ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-xs">ATK: ${c.attack}</span><span class="text-xs">DEF: ${c.defense}</span></div>` : ''}
+              <div class="text-xs" style="margin-top: 8px;">${c.effect || 'No effect'}</div>
+            </div>
+          `;
+        }
+      };
+      
+      handContainer.appendChild(cardDiv);
+      console.log(`  → Card ${idx} added with SELECT button`);
+    });
+  }
+  
+  console.log('✅ Finished! handContainer now has', handContainer.children.length, 'children');
+  
+  // Add images to field cards
+  div.querySelectorAll('.field-card').forEach(fieldCard => {
+    const zone = fieldCard.dataset.zone;
+    const owner = fieldCard.dataset.owner;
+    const idx = parseInt(fieldCard.dataset.idx);
+    const card = owner === 'me' ? me[zone][idx] : opp[zone][idx];
+    if (card) {
+      fieldCard.appendChild(createGameCardImg(card));
+      
+      // Attach hover handler to field cards - DON'T CALL RENDER!
+      fieldCard.onmouseenter = () => {
+        state.hoveredCard = card;
+        // Update sidebar directly
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && state.hoveredCard) {
+          const c = state.hoveredCard;
+          sidebar.innerHTML = `
+            <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+            <div class="card-preview">
+              <div class="text-center mb-2" style="font-weight: bold; font-size: 14px;">${c.name}</div>
+              <div class="text-xs text-gray text-center mb-2">${c.type}</div>
+              ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 150px; font-size: 48px;">🃏</div>'}
+              ${c.type === 'Monster' ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-xs">ATK: ${c.attack}</span><span class="text-xs">DEF: ${c.defense}</span></div>` : ''}
+              <div class="text-xs" style="margin-top: 8px;">${c.effect || 'No effect'}</div>
+            </div>
+          `;
+        }
+      };
+      
+      // Attach click handler for your own field cards
+      if (owner === 'me') {
+        fieldCard.onclick = () => {
+          const action = prompt('Move card to:\n1. Hand\n2. Deck\n3. Graveyard\nEnter 1, 2, or 3:');
+          const cardData = me[zone][idx];
+          me[zone].splice(idx, 1);
+          
+          if (action === '1') me.hand.push(cardData);
+          else if (action === '2') me.deck.push(cardData);
+          else if (action === '3') me.graveyard.push(cardData);
+          else { me[zone].splice(idx, 0, cardData); return; }
+          
+          sendGameUpdate();
+          render();
+        };
+      }
     }
-  };
+  });
   
-  div.querySelector('#viewGY').onclick = () => { state.viewingGraveyard = 'me'; render(); };
-  div.querySelector('#minusLP').onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
-  div.querySelector('#plusLP').onclick = () => { me.health++; sendGameUpdate(); render(); };
-  div.querySelector('#endTurn').onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; sendGameUpdate(); render(); };
+  const drawBtn = div.querySelector('#drawBtn');
+  const gyBtn = div.querySelector('#viewGY');
+  const minusBtn = div.querySelector('#minusLP');
+  const plusBtn = div.querySelector('#plusLP');
+  const endBtn = div.querySelector('#endTurn');
+  const exitBtn = div.querySelector('#exitBtn');
+  
+  console.log('Button check - draw:', !!drawBtn, 'gy:', !!gyBtn, 'minus:', !!minusBtn, 'plus:', !!plusBtn, 'end:', !!endBtn, 'exit:', !!exitBtn);
+  
+  if (exitBtn) {
+    exitBtn.onclick = () => {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      render();
+    };
+  }
+  
+  if (drawBtn) {
+    drawBtn.onclick = () => {
+      console.log('🎲 Draw button clicked!');
+      console.log('  Current player:', state.currentPlayer);
+      console.log('  Player key:', pKey);
+      console.log('  Deck size before draw:', me.deck.length);
+      console.log('  Hand size before draw:', me.hand.length);
+      
+      if (me.deck.length > 0) {
+        const idx = Math.floor(Math.random() * me.deck.length);
+        const drawnCard = me.deck[idx];
+        console.log('  Drawing card:', drawnCard.name);
+        me.hand.push(drawnCard);
+        me.deck.splice(idx, 1);
+        console.log('  Hand size after draw:', me.hand.length);
+        console.log('  New hand:', me.hand.map(c => c.name));
+        sendGameUpdate();
+        render();
+      } else {
+        console.log('  ❌ No cards in deck to draw!');
+      }
+    };
+  }
+  
+  if (gyBtn) gyBtn.onclick = () => { state.viewingGraveyard = 'me'; render(); };
+  if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
+  if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
+  if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; sendGameUpdate(); render(); };
+  
   
   // Card action menu handlers
-  if (state.selectedCard !== null) {
+  if (state.selectedCard !== null && me.hand[state.selectedCard]) {
+    console.log('🎯 Card selected! Setting up action menu for card:', state.selectedCard, me.hand[state.selectedCard].name);
+    
+    const actionMenu = div.querySelector('#actionMenu');
+    console.log('Action menu element found:', !!actionMenu);
+    
     const discardBtn = div.querySelector('#discardCard');
     const toDeckBtn = div.querySelector('#toDeck');
     const cancelBtn = div.querySelector('#cancelSelect');
     
+    console.log('✅ Found buttons:', { 
+      discard: !!discardBtn, 
+      toDeck: !!toDeckBtn, 
+      cancel: !!cancelBtn,
+      placeCards: div.querySelectorAll('.placeCard').length
+    });
+    
     if (discardBtn) {
-      discardBtn.onclick = () => {
+      discardBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('🗑️ Discard button clicked!');
         me.graveyard.push(me.hand[state.selectedCard]);
         me.hand.splice(state.selectedCard, 1);
         state.selectedCard = null;
@@ -771,7 +1057,10 @@ function GameBoard() {
     }
     
     if (toDeckBtn) {
-      toDeckBtn.onclick = () => {
+      toDeckBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('📚 To Deck button clicked!');
         me.deck.push(me.hand[state.selectedCard]);
         me.hand.splice(state.selectedCard, 1);
         state.selectedCard = null;
@@ -781,22 +1070,33 @@ function GameBoard() {
     }
     
     if (cancelBtn) {
-      cancelBtn.onclick = () => { 
+      cancelBtn.onclick = (e) => { 
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('❌ Cancel button clicked!');
         state.selectedCard = null; 
         render(); 
       };
     }
     
     div.querySelectorAll('.placeCard').forEach(btn => {
-      btn.onclick = () => {
-        const zone = btn.dataset.zone + 'Field';
-        me[zone].push(me.hand[state.selectedCard]);
+      console.log('Attaching handler to place button:', btn.dataset.zone);
+      btn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const zone = btn.dataset.zone;
+        console.log('⬆️ Place card button clicked! Zone:', zone);
+        const zoneName = zone + 'Field';
+        me[zoneName].push(me.hand[state.selectedCard]);
         me.hand.splice(state.selectedCard, 1);
         state.selectedCard = null;
         sendGameUpdate();
         render();
       };
     });
+    console.log('✅ All action menu handlers attached!');
+  } else {
+    console.log('ℹ️ No card selected, no action menu');
   }
   
   if (state.winner && div.querySelector('#returnBtn')) {
@@ -810,16 +1110,38 @@ function GameBoard() {
     };
   }
   
-  div.querySelectorAll('.hand-card').forEach((card, i) => {
-    card.onclick = () => { 
-      state.selectedCard = state.selectedCard === i ? null : i; 
+  
+  
+  console.log('=== GAME BOARD RENDER ===');
+  console.log('Hand has', me.hand.length, 'cards');
+  console.log('Selected card:', state.selectedCard);
+  
+  const handCards = div.querySelectorAll('.hand-card');
+  console.log('Found', handCards.length, 'hand card elements in DOM');
+  
+  handCards.forEach((cardEl) => {
+    const idx = parseInt(cardEl.dataset.idx);
+    console.log('Setting up handler for hand card', idx, 'element:', cardEl);
+    
+    cardEl.onclick = (e) => { 
+      console.log('✅✅✅ CLICK DETECTED on hand card', idx);
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Current selection:', state.selectedCard);
+      state.selectedCard = state.selectedCard === idx ? null : idx; 
+      console.log('New selection:', state.selectedCard);
       render(); 
     };
-    card.onmouseenter = () => { 
-      state.hoveredCard = me.hand[i]; 
-      render(); 
+    
+    cardEl.onmouseenter = () => { 
+      if (me.hand[idx]) {
+        state.hoveredCard = me.hand[idx]; 
+        render(); 
+      }
     };
   });
+  
+  console.log('✅ Finished attaching handlers to', handCards.length, 'hand cards');
   
   div.querySelectorAll('.field-card').forEach(card => {
     card.onmouseenter = () => {
