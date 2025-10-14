@@ -1,6 +1,4 @@
-/* Cross-Section vs Panel Estimation — JSX + UMD build (fixed)
-   - Removed duplicate declarations of fmt, ci, and ResultCard.
-   - Use this with index.html that loads React/ReactDOM/Recharts UMD + Babel. */
+/* Cross-Section vs Panel Estimation — JSX + UMD build (fmt/ci defined once at top-level) */
 
 const {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -22,7 +20,11 @@ const toCSV = (rows, header) => {
   const body = rows.map(r => header.map(h => esc(r[h])).join(",")).join("\n");
   return head + "\n" + body;
 };
+// ---- single definitions of helpers used across the app ----
+const fmt = (x, d=3) => (Number.isNaN(x)||x===undefined||!isFinite(x)) ? "—" : Number(x).toFixed(d);
+const ci  = (b, se) => [b - 1.96 * (se || NaN), b + 1.96 * (se || NaN)];
 
+// ====================== Estimation helpers ====================== //
 function wlsSimple(x, y, w) {
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN,fitted:[],resid:[] };
   const sw=w.reduce((a,b)=>a+b,0);
@@ -35,7 +37,6 @@ function wlsSimple(x, y, w) {
   const se=Math.sqrt(sigma2/sxx);
   return { beta, se, n, alpha, resid, fitted:x.map(v=>alpha+beta*v) };
 }
-
 function olsSimple(x, y) {
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN,fitted:[],resid:[] };
   const mx=x.reduce((a,b)=>a+b,0)/n, my=y.reduce((a,b)=>a+b,0)/n; let sxx=0,sxy=0;
@@ -65,7 +66,6 @@ function feWithin(personIds, x, y) {
   }
   if(xw.length<3) return { beta:NaN,se:NaN,n:xw.length,alpha:NaN,fitted:[],resid:[] }; return olsSimple(xw,yw);
 }
-
 function huberIRLS(x, y, c=1.345, maxIter=30){
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN };
   let fit=olsSimple(x,y);
@@ -79,7 +79,6 @@ function huberIRLS(x, y, c=1.345, maxIter=30){
   }
   return fit;
 }
-
 function bayesPosterior(x, y){
   const n=x.length; if(n<3) return { betaMean:NaN, betaSE:NaN, ci:[NaN,NaN], alphaMean:NaN };
   const v0a=100, v0b=10; const a0=2, b0=1;
@@ -97,7 +96,6 @@ function bayesPosterior(x, y){
   const ci = [mnb - 1.96*seBeta, mnb + 1.96*seBeta];
   return { betaMean:mnb, betaSE:seBeta, ci, alphaMean:mna, an, bn };
 }
-
 function erf(x){const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911; const s=x<0?-1:1; x=Math.abs(x); const t=1/(1+p*x); const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x)); return s*y;} 
 const phi = (z)=> 0.5*(1+erf(z/Math.SQRT2));
 function erfinv(x){ const a=0.147; const ln = Math.log(1-x*x); const s = (2/(Math.PI*a) + ln/2); const res = Math.sign(x)*Math.sqrt( Math.sqrt(s*s - ln/a) - s ); return res; }
@@ -105,8 +103,8 @@ function erfinv(x){ const a=0.147; const ln = Math.log(1-x*x); const s = (2/(Mat
 function Slider({label,min,max,step,value,onChange}){
   return (<div><div className="flex items-center justify-between mb-1"><label className="text-sm text-neutral-300">{label}</label><span className="text-xs text-neutral-400">{min}–{max}</span></div><input type="range" min={min} max={max} step={step} value={value} onChange={(e)=>onChange(parseFloat(e.target.value))} className="w-full accent-neutral-200"/></div>);
 }
-function ResultCard({title,value,ci,details,foot,warn,large}){
-  return (<div className={`bg-neutral-900/60 border rounded-2xl ${large? 'p-5':'p-4'} ${warn? 'border-red-800':'border-neutral-800'}`}><div className="text-sm text-neutral-400">{title}</div><div className={`${large? 'text-3xl':'text-2xl'} font-semibold mt-1`}>{value}</div>{ci&&<div className="text-xs text-neutral-400 mt-1">95% interval: {ci}</div>}{details&&<div className="text-xs text-neutral-400 mt-1">{details}</div>}{foot&&<div className="text-xs text-neutral-500 mt-2">{foot}</div>}</div>);
+function ResultCard({title,value,ci:ciStr,details,foot,warn,large}){
+  return (<div className={`bg-neutral-900/60 border rounded-2xl ${large? 'p-5':'p-4'} ${warn? 'border-red-800':'border-neutral-800'}`}><div className="text-sm text-neutral-400">{title}</div><div className={`${large? 'text-3xl':'text-2xl'} font-semibold mt-1`}>{value}</div>{ciStr&&<div className="text-xs text-neutral-400 mt-1">95% interval: {ciStr}</div>}{details&&<div className="text-xs text-neutral-400 mt-1">{details}</div>}{foot&&<div className="text-xs text-neutral-500 mt-2">{foot}</div>}</div>);
 }
 function PresetButton({onClick,label}){ return (<button onClick={onClick} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">{label}</button>); }
 
@@ -169,10 +167,6 @@ function App(){
   const fe = React.useMemo(()=> feWithin(idsPooled,xPooled,yPooled), [idsPooled,xPooled,yPooled]);
   const pooledCluster = React.useMemo(()=> olsClusterSE(xPooled,yPooled,idsPooled), [xPooled,yPooled,idsPooled]);
 
-  // Helpers for formatting and intervals (single definitions)
-  const fmt=(x,d=3)=> (Number.isNaN(x)||x===undefined||!isFinite(x))?"—":Number(x).toFixed(d);
-  const ci = (b,se)=> [b-1.96*(se||NaN), b+1.96*(se||NaN)];
-
   const csCI = React.useMemo(()=> ci(cs.beta, cs.se), [cs]);
   const pooledCI = React.useMemo(()=> ci(pooledOLS.beta, pooledOLS.se), [pooledOLS]);
   const feCI = React.useMemo(()=> ci(fe.beta, fe.se), [fe]);
@@ -219,22 +213,6 @@ function App(){
   const huberPooled = React.useMemo(()=> huberIRLS(xPooled,yPooled), [xPooled,yPooled]);
   const bayesPooled = React.useMemo(()=> bayesPosterior(xPooled,yPooled), [xPooled,yPooled]);
 
-  const diag = React.useMemo(()=>{ const warns=[]; const sugg=new Set(); const push=(l,m,f)=>{warns.push({lvl:l,msg:m,fix:f}); if(f) sugg.add(f);};
-    if(rhoSel>0.5 || (isFinite(iccEmp)&&iccEmp>0.6)) push("🔴","High selection potential (large ρ or ICC): cross-section/pooled likely biased.","Prefer FE; add controls or IV.");
-    if(timeTrendOn || shockAllOn) push("🟠","Time trends or common shocks present.","Add time FE or detrend; consider DiD.");
-    if(shockTreatOn) push("🔴","Treat-specific shock active: parallel trends violated.","Use event-study with group×time FE; test pre-trends.");
-    if(ar1On || (isFinite(meanAR1)&&Math.abs(meanAR1)>0.2)) push("🟠","Serial correlation in errors.","Cluster SEs at unit level; model AR terms.");
-    if(sigmaME>0.8 || misclassOn) push("🟠","Strong measurement error/misclassification.","Instrument/correct using validation; reliability adjustments.");
-    if(dynSelOn) push("🔴","Dynamic selection (Y→D) enabled.","Lagged controls/GMM (Arellano–Bond), IV, or design-based ID.");
-    if(isFinite(shareSwitchers) && shareSwitchers<0.15) push("🟠","Few switchers → FE weakly identified.","Increase T; consider pooled + controls/IV.");
-    if(attritionOn && isFinite(attritionRate) && attritionRate>0.15) push("🟠",`Nontrivial attrition (${(attritionRate*100).toFixed(0)}%).`,`Model attrition, IPW, or bounds.`);
-    if(heteroOn || (isFinite(bp.LM) && bp.p<0.05)) push("🟠","Heteroskedasticity suspected (BP).","Use robust/clustered SEs or model variance.");
-    if(isFinite(hausman.z) && Math.abs(hausman.z)>1.96) push("🔴","FE vs pooled discrepancy significant (Hausman-style).","Prefer FE; add controls or IV.");
-    if(isFinite(pretrend.slope) && pretrend.p<0.05) push("🔴","Pretrend in outcome gap over time.","Add group×time FE or validate parallel trends.");
-    if(!warns.length) warns.push({lvl:"🟢",msg:"No major red flags detected.",fix:"Still cluster SEs for panels; inspect residuals & ICC."});
-    return { warns, suggestions:Array.from(sugg) };
-  },[rhoSel,iccEmp,timeTrendOn,shockAllOn,shockTreatOn,ar1On,sigmaME,misclassOn,dynSelOn,shareSwitchers,attritionOn,attritionRate,heteroOn,bp,hausman,pretrend,meanAR1]);
-
   const downloadCSV = () => { const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"]; const csv=toCSV(pooled,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url); };
 
   return (
@@ -256,7 +234,7 @@ function App(){
                 <h2 className="font-semibold">Simulation Settings</h2>
                 <div className="flex gap-2">
                   <button onClick={()=>setSeed(s=>s+1)} className="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700" title="Reseed">Reseed</button>
-                  <button onClick={()=>{ setSeed(42); setN(600); setT(8); setBetaTrue(0.6); setBetaHet(0); setSigmaU(1.2); setSigmaE(1.0); setSigmaME(0.3); setPBase(0.5); setRhoSel(1.0); setSwitchRate(0.25); setTimeTrendOn(true); setTimeTrendSlope(0.05); setShockAllOn(false); setShockTreatOn(false); setAr1On(false); setRhoE(0.5); setDynSelOn(false); setGammaDY(0.5); setMisclassOn(false); setMisclassP(0.15); setAttritionOn(false); setAttrBase(0.02); setAttrSlope(0.15); setExpOutcomeOn(false); setExpScale(0.35); setHeteroOn(false); setHeteroDWeight(0.8); setHeteroUWeight(0.4); setScenario({ id:'Custom', title:'Custom scenario', d:'Treatment (D)', y:'Outcome (Y)', desc:'Tweak controls to explore biases.', issues:['Selection','Trends/Shocks','Serial correlation','Measurement error']}); setAnalysisTab('descriptives'); }} className="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700">Reset</button>
+                  <button onClick={()=>{ location.search='?v='+(Date.now()); }} className="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700" title="Hard refresh">Hard refresh</button>
                 </div>
               </div>
 
@@ -296,7 +274,7 @@ function App(){
               </div>
 
               <div className="pt-3">
-                <button onClick={downloadCSV} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full">Download simulated CSV</button>
+                <button onClick={()=>{ const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"]; const csv=toCSV(sim,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url); }} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full">Download simulated CSV</button>
               </div>
 
               <p className="text-xs text-neutral-400">FE uses within-person changes (non-switchers do not identify β). Robust = Huber IRLS.
@@ -362,11 +340,9 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                             <CartesianGrid strokeDasharray="3 3"/>
                             <XAxis type="number" dataKey="t" domain={[1,T]} allowDecimals={false}/>
                             <YAxis/>
-                            {/* spaghetti */}
                             {spaghetti.map(s=>(
                               <Line key={s.id} data={s.series} dataKey="y" dot={false} type="monotone" />
                             ))}
-                            {/* summary lines */}
                             <Line data={summary} dataKey="mean" dot={false} type="monotone" />
                             <Line data={summary} dataKey="median" dot={false} type="monotone" />
                             <Line data={summary} dataKey="p25" dot={false} type="monotone" />
@@ -396,8 +372,8 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                           const hub = huberIRLS(xPooled,yPooled);
                           if (isFinite(hub.beta) && isFinite(hub.se)) push("Huber robust", hub.beta, hub.se);
                         } else if(analysisTab==='bayesian'){
-                          const bp = bayesPosterior(xPooled,yPooled);
-                          rows.push({name:'Bayesian pooled', b: bp.betaMean, se: bp.betaSE});
+                          const bpost = bayesPosterior(xPooled,yPooled);
+                          rows.push({name:'Bayesian pooled', b: bpost.betaMean, se: bpost.betaSE});
                           rows.push({name:'Frequentist pooled', b: pooledOLS.beta, se: pooledOLS.se});
                         }
                         return (
@@ -492,46 +468,42 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                   <ResultCard title="True β" value={fmt(betaTrue)} details={`Outcome: ${scenario.y} | Treatment: ${scenario.d}`} large />
                   {analysisTab==='frequentist' && (<>
-                    <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={`${fmt(csCI[0])} … ${fmt(csCI[1])}`} foot={`n=${cs.n}`} warn={Number.isNaN(cs.beta)} large />
-                    <ResultCard title={'Pooled OLS'} value={fmt(pooledOLS.beta)} ci={`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`} foot={`n=${pooledOLS.n}`} warn={Number.isNaN(pooledOLS.beta)} large />
-                    <ResultCard title="Fixed Effects (within)" value={fmt(fe.beta)} ci={`${fmt(feCI[0])} … ${fmt(feCI[1])}`} foot={`obs=${fe.n}`} warn={Number.isNaN(fe.beta)} large />
+                    <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={ `${fmt(csCI[0])} … ${fmt(csCI[1])}` } foot={`n=${cs.n}`} warn={Number.isNaN(cs.beta)} large />
+                    <ResultCard title={'Pooled OLS'} value={fmt(pooledOLS.beta)} ci={ `${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}` } foot={`n=${pooledOLS.n}`} warn={Number.isNaN(pooledOLS.beta)} large />
+                    <ResultCard title="Fixed Effects (within)" value={fmt(fe.beta)} ci={ `${fmt(feCI[0])} … ${fmt(feCI[1])}` } foot={`obs=${fe.n}`} warn={Number.isNaN(fe.beta)} large />
                   </>)}
                   {analysisTab==='robust' && (<>
-                    <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={`${fmt(csCI[0])} … ${fmt(csCI[1])}`} foot={`n=${cs.n}`} large />
-                    <ResultCard title={'Pooled (Huber robust)'} value={fmt(huberPooled.beta)} ci={`±1.96·SE ≈ ${fmt(1.96*(huberPooled.se||NaN))}`} foot={`n=${huberPooled.n}`} warn={Number.isNaN(huberPooled.beta)} large />
-                    <ResultCard title="Fixed Effects (within)" value={fmt(fe.beta)} ci={`${fmt(feCI[0])} … ${fmt(feCI[1])}`} foot={`obs=${fe.n}`} large />
+                    <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={ `${fmt(csCI[0])} … ${fmt(csCI[1])}` } foot={`n=${cs.n}`} large />
+                    <ResultCard title={'Pooled (Huber robust)'} value={fmt(huberPooled.beta)} ci={ `±1.96·SE ≈ ${fmt(1.96*(huberPooled.se||NaN))}` } foot={`n=${huberPooled.n}`} warn={Number.isNaN(huberPooled.beta)} large />
+                    <ResultCard title="Fixed Effects (within)" value={fmt(fe.beta)} ci={ `${fmt(feCI[0])} … ${fmt(feCI[1])}` } foot={`obs=${fe.n}`} large />
                   </>)}
                   {analysisTab==='bayesian' && (<>
-                    <ResultCard title={'Bayesian pooled β (mean)'} value={fmt(bayesPooled.betaMean)} ci={`${fmt(bayesPooled.ci[0])} … ${fmt(bayesPooled.ci[1])}`} foot={`SE≈${fmt(bayesPooled.betaSE)}`} large />
-                    <ResultCard title={'Frequentist pooled β'} value={fmt(pooledOLS.beta)} ci={`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`} foot={`SE=${fmt(pooledOLS.se)}`} large />
-                    <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={`${fmt(csCI[0])} … ${fmt(csCI[1])}`} foot={`n=${cs.n}`} large />
+                    <ResultCard title={'Bayesian pooled β (mean)'} value={fmt(bayesPooled.betaMean)} ci={ `${fmt(bayesPooled.ci[0])} … ${fmt(bayesPooled.ci[1])}` } foot={`SE≈${fmt(bayesPooled.betaSE)}`} large />
+                    <ResultCard title={'Frequentist pooled β'} value={fmt(pooledOLS.beta)} ci={ `${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}` } foot={`SE=${fmt(pooledOLS.se)}`} large />
+                    <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={ `${fmt(csCI[0])} … ${fmt(csCI[1])}` } foot={`n=${cs.n}`} large />
                   </>)}
                 </div>
               )}
 
               <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4 mt-4">
                 <h3 className="font-semibold mb-2">Diagnostic report</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="md:col-span-2"><ul className="space-y-1">{diag.warns.map((w,i)=>(<li key={i}>{w.lvl} {w.msg}</li>))}</ul></div>
-                  <div className="md:col-span-1"><div className="font-medium mb-1">Suggested remedies</div><ul className="list-disc pl-5 space-y-1 text-neutral-300">{diag.suggestions.length? diag.suggestions.map((s,i)=>(<li key={i}>{s}</li>)) : (<><li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID where plausible</li></>)}</ul></div>
-                </div>
-              </div>
-
-              <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4 text-sm mt-4">
-                <h3 className="font-semibold mb-2">Developer self-tests</h3>
                 {(() => {
-                  const tests = React.useMemo(()=>{
-                    const R = [];
-                    try{ const rows=[{a:1,b:2},{a:'a\"b',b:4}], header=['a','b']; const csv=toCSV(rows,header); const lines=csv.split('\n'); R.push({name:'CSV header/rows',pass:lines.length===3,detail:String(lines.length)}); R.push({name:'CSV quote escape',pass:csv.includes('\"a\"\"b\"'),detail:lines[1]}); }catch(e){ R.push({name:'CSV',pass:false,detail:String(e)}); }
-                    try{ const d=olsSimple([0,0,0,0],[1,2,3,4]); R.push({name:'OLS constant regressor',pass:Number.isNaN(d.beta),detail:`beta=${d.beta}`}); }catch(e){ R.push({name:'OLS const',pass:false,detail:String(e)}); }
-                    try{ const x=[0,1,2,3], y=x.map(v=>3+2*v); const f=olsSimple(x,y); R.push({name:'OLS exact recovery',pass:Math.abs(f.beta-2)<1e-12 && Math.abs(f.alpha-3)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'OLS recover',pass:false,detail:String(e)}); }
-                    try{ const ids=[1,1,2,2], x=[0,1,0,1], y=[0,1,2,3]; const f=feWithin(ids,x,y); R.push({name:'FE exact recovery',pass:Math.abs(f.beta-1)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE',pass:false,detail:String(e)}); }
-                    try{ const ids=[1,1,2,2], x=[0,0,1,1], y=[0,0,1,1]; const f=feWithin(ids,x,y); R.push({name:'FE needs switchers',pass:Number.isNaN(f.beta),detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE switchers',pass:false,detail:String(e)}); }
-                    try{ const x=[0,1,2,3,100], y=[0,2,4,6,0]; const ols=olsSimple(x,y); const hub=huberIRLS(x,y); R.push({name:'Huber vs OLS (outlier)',pass:Math.abs(hub.beta-2)<Math.abs(ols.beta-2),detail:`ols=${ols.beta}, huber=${hub.beta}`}); }catch(e){ R.push({name:'Huber',pass:false,detail:String(e)}); }
-                    try{ const x=[0,1,2,3,4,5,6,7,8,9], y=x.map(v=>1+0.5*v + (v%2?1:-1)*0.01); const b=bayesPosterior(x,y); R.push({name:'Bayes finite',pass:isFinite(b.betaMean) && isFinite(b.betaSE),detail:`b=${b.betaMean}`}); }catch(e){ R.push({name:'Bayes',pass:false,detail:String(e)}); }
-                    return R;
-                  },[]);
-                  return (<ul className="list-disc pl-5 space-y-1">{tests.map((t,i)=>(<li key={i}><span className={t.pass? 'text-green-400':'text-red-400'}>{t.pass? 'PASS':'FAIL'}</span>{": "}{t.name} <span className="text-neutral-400">({t.detail})</span></li>))}</ul>);
+                  const warns=[]; const sugg=new Set(); const push=(l,m,f)=>{warns.push({lvl:l,msg:m,fix:f}); if(f) sugg.add(f);};
+                  if(rhoSel>0.5) push("🔴","High selection potential (large ρ): cross-section/pooled likely biased.","Prefer FE; add controls or IV.");
+                  if(timeTrendOn || shockAllOn) push("🟠","Time trends or common shocks present.","Add time FE or detrend; consider DiD.");
+                  if(shockTreatOn) push("🔴","Treat-specific shock active: parallel trends violated.","Use event-study with group×time FE; test pre-trends.");
+                  if(ar1On) push("🟠","Serial correlation in errors.","Cluster SEs at unit level; model AR terms.");
+                  if(sigmaME>0.8 || misclassOn) push("🟠","Strong measurement error/misclassification.","Instrument/correct using validation; reliability adjustments.");
+                  if(dynSelOn) push("🔴","Dynamic selection (Y→D) enabled.","Lagged controls/GMM (Arellano–Bond), IV, or design-based ID.");
+                  if(isFinite(shareSwitchers) && shareSwitchers<0.15) push("🟠","Few switchers → FE weakly identified.","Increase T; consider pooled + controls/IV.");
+                  if(attritionOn && isFinite(attritionRate) && attritionRate>0.15) push("🟠",`Nontrivial attrition (${(attritionRate*100).toFixed(0)}%).`,`Model attrition, IPW, or bounds.`);
+                  if(!warns.length) warns.push({lvl:"🟢",msg:"No major red flags detected.",fix:"Still cluster SEs for panels; inspect residuals & ICC."});
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="md:col-span-2"><ul className="space-y-1">{warns.map((w,i)=>(<li key={i}>{w.lvl} {w.msg}</li>))}</ul></div>
+                      <div className="md:col-span-1"><div className="font-medium mb-1">Suggested remedies</div><ul className="list-disc pl-5 space-y-1 text-neutral-300">{Array.from(sugg).length? Array.from(sugg).map((s,i)=>(<li key={i}>{s}</li>)) : (<><li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID where plausible</li></>)}</ul></div>
+                    </div>
+                  );
                 })()}
               </div>
             </div>
