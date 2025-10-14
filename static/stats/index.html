@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Cross-Section vs Panel — Descriptives and OLS/FE/RE</title>
+<title>Cross-Section vs Panel — Descriptives and OLS/FE/RE (v2)</title>
 <style>
   :root { --bg:#0a0a0a; --panel:#121212; --muted:#9aa0a6; --text:#e5e7eb; --border:#262626; }
   html,body{height:100%;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -29,7 +29,7 @@
 <body>
 <div class="container">
   <header>
-    <h1>Cross-Section vs Panel — Descriptives, OLS, FE, RE</h1>
+    <h1>Cross-Section vs Panel — Descriptives, OLS, FE, RE (v2)</h1>
     <p class="muted">Explore how Cross-section, Pooled OLS, Fixed Effects (within), and Random Effects differ on synthetic panel data.</p>
     <div class="mt-3">
       <button class="btn" id="tab-sim">Simulator</button>
@@ -193,61 +193,38 @@ function olsSimple(x,y){
 }
 
 function feWithinFull(ids,x,y){
-  var uniq=[], seen={}; for(var i=0;i<ids.length;i++){ var id=ids[i]; if(!seen[id]){ seen[id]=1; uniq.push(id); } }
+  var uniq=[], seen={}; 
+  for(var i=0;i<ids.length;i++){ var id=ids[i]; if(!seen[id]){ seen[id]=1; uniq.push(id); } }
   var X=[], Y=[], idxById={};
   for(i=0;i<ids.length;i++){ var id2=ids[i]; if(!idxById[id2]) idxById[id2]=[]; idxById[id2].push(i); }
   for(var u=0; u<uniq.length; u++){
     var idu=uniq[u], idx=idxById[idu];
-    var mx=0,my=0; for(i=0;i<idx.length;i++){ mx+=x[idx[i]]; my+=y[idx[i]]; } mx/=idx.length; my/=idx.length;
-    var varx=0; for(i=0;i<idx.length;i++) varx+=(x[idx[i]]-mx)*(x[idx[i]]-mx);
+    var mx=0,my=0; 
+    for(i=0;i<idx.length;i++){ mx+=x[idx[i]]; my+=y[idx[i]]; } 
+    mx/=idx.length; my/=idx.length;
+    var varx=0; 
+    for(i=0;i<idx.length;i++) varx+=(x[idx[i]]-mx)*(x[idx[i]]-mx);
     if(varx===0) continue;
     for(i=0;i<idx.length;i++){ X.push(x[idx[i]]-mx); Y.push(y[idx[i]]-my); }
   }
   if(X.length<3) return {beta:NaN,se:NaN,n:X.length,residWithin:new Array(ids.length).fill(NaN)};
   var fit=olsSimple(X,Y);
+  // compute within residuals aligned to original order (for diagnostics if needed)
   var residWithin=new Array(ids.length).fill(NaN);
-  for(u=0; u=0?h:t.hist[h],0)+1);svg.appendChild(rect(x,y,bw,y0-y,"#93c5fd"))}container.appendChild(svg)}
-function drawQQ(container,resid){container.innerHTML="";const w=520,h=360,m={l:40,r:10,t:10,b:30};const r=[...resid].sort((a,b)=>a-b);if(r.length<5){container.textContent="Not enough data";return}const n=r.length,pts=[];function erfinv(x){const a=.147;const ln=Math.log(1-x*x);const s=2/(Math.PI*a)+ln/2;return Math.sign(x)*Math.sqrt(Math.sqrt(s*s-ln/a)-s)}for(let i=0;i<n;i++){const p=(i+.5)/n;const z=Math.SQRT2*erfinv(2*p-1);pts.push({theor:z,sample:r[i]})}const xs=scaleLinear(pts[0].theor,pts[pts.length-1].theor,m.l,w-m.r);const ys=scaleLinear(r[0],r[r.length-1],h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);svg.appendChild(polyline([[xs(pts[0].theor),ys(r[0])],[xs(pts[pts.length-1].theor),ys(r[r.length-1])]],"#94a3b8",1.5));for(const p of pts){svg.appendChild(circle(xs(p.theor),ys(p.sample),2,"#a3a3a3",.9))}container.appendChild(svg)}
-
-function computeAndRender(){updateLabels();const sim=simulate();const cross=sim.filter(r=>r.wave===1);const pooled=sim;const xCross=cross.map(r=>r.D),yCross=cross.map(r=>r.y);const xPooled=pooled.map(r=>r.D),yPooled=pooled.map(r=>r.y);const idsPooled=pooled.map(r=>r.pid);const cs=olsSimple(xCross,yCross);const pooledOLS=olsSimple(xPooled,yPooled);const fe=feWithinFull(idsPooled,xPooled,yPooled);const re=randomEffects(idsPooled,xPooled,yPooled);drawScatter(document.getElementById("chart-scatter"),cross.map(r=>({x:r.D,y:r.y})),cs);const ids=Array.from(new Set(pooled.map(r=>r.pid)));const k=Math.min(20,ids.length);const rand=mulberry32(1234+S.seed);const chosen=new Set;while(chosen.size<k&&ids.length>0)chosen.add(Math.floor(rand()*ids.length));const chosenIds=Array.from(chosen).map(i=>ids[i]);const spaghetti=chosenIds.map(id=>({id,series:pooled.filter(r=>r.pid===id).map(r=>({t:r.wave,y:r.y}))}));const summary=[];for(let t=1;t<=S.T;t++){const arr=pooled.filter(r=>r.wave===t).map(r=>r.y);if(arr.length){summary.push({t,mean:mean(arr),median:quantile(arr,0.5),p25:quantile(arr,0.25),p75:quantile(arr,0.75)})}}drawLines(document.getElementById("chart-lines"),spaghetti,summary,S.T);if(S.viz==="estimates"||S.mode==="models"){const estRows=[];if(Number.isFinite(cs.beta))estRows.push({name:"Cross-section",b:cs.beta});if(Number.isFinite(pooledOLS.beta))estRows.push({name:"Pooled OLS",b:pooledOLS.beta});if(Number.isFinite(fe.beta))estRows.push({name:"Fixed Effects",b:fe.beta});if(Number.isFinite(re.beta))estRows.push({name:"Random Effects",b:re.beta});drawBars(document.getElementById("chart-bars"),estRows,S.betaTrue)}const iccTrue=(S.sigmaU**2)/(S.sigmaU**2+S.sigmaE**2+S.sigmaME**2);const by=new Map;for(const r of pooled){if(!by.has(r.pid))by.set(r.pid,[]);by.get(r.pid).push(r.y)}const means=[],wVars=[];by.forEach(arr=>{const m=mean(arr);means.push(m);const v=arr.reduce((s,v)=>s+(v-m)*(v-m),0)/Math.max(1,arr.length-1);wVars.push(v)});const vb=variance(means);const vw=wVars.length?wVars.reduce((a,b)=>a+b,0)/wVars.length:0;const tot=vb+vw;const iccEmp=tot===0?NaN:vb/tot;document.getElementById("varianceList").innerHTML="<li><b>True ICC:</b> "+fmt(iccTrue)+"</li><li><b>Empirical ICC:</b> "+fmt(iccEmp)+"</li>";const residPoints=pooled.map(r=>({fit:pooledOLS.alpha+pooledOLS.beta*r.D,resid:r.y-(pooledOLS.alpha+pooledOLS.beta*r.D)}));drawResiduals(document.getElementById("chart-rvf"),residPoints);drawHist(document.getElementById("chart-hist"),residPoints.map(d=>d.resid));drawQQ(document.getElementById("chart-qq"),residPoints.map(d=>d.resid));const cards=[];function addCard(title,value,ciVals,foot){cards.push({title,value,ciVals,foot})}const csCI=ci(cs.beta,cs.se),pooledCI=ci(pooledOLS.beta,pooledOLS.se),feCI=ci(fe.beta,fe.se),reCI=ci(re.beta,re.se);if(S.mode==="models"){addCard("True beta",fmt(S.betaTrue),"","");addCard("Cross-section OLS",fmt(cs.beta),fmt(csCI[0])+" ... "+fmt(csCI[1]),"n="+cs.n);addCard("Pooled OLS",fmt(pooledOLS.beta),fmt(pooledCI[0])+" ... "+fmt(pooledCI[1]),"n="+pooledOLS.n);addCard("Fixed Effects (within)",fmt(fe.beta),fmt(feCI[0])+" ... "+fmt(feCI[1]),"obs="+fe.n);addCard("Random Effects (GLS)",fmt(re.beta),fmt(reCI[0])+" ... "+fmt(reCI[1]),"theta="+fmt(re.theta))}const cardsDiv=document.getElementById("cards");cardsDiv.innerHTML="";for(const c of cards){const el=document.createElement("div");el.className="card";el.innerHTML="<div class=\"title\">"+c.title+"</div><div class=\"value\">"+c.value+"</div>"+(c.ciVals?"<div class=\"muted\" style=\"font-size:12px;margin-top:4px\">95% interval: "+c.ciVals+"</div>":"")+(c.foot?"<div class=\"foot\">"+c.foot+"</div>":"");cardsDiv.appendChild(el)}const rep=[];if(S.rhoSel>0.5)rep.push("Selection likely (rho large): Cross-section and pooled may be biased; FE/RE differ.");if(S.timeTrendOn)rep.push("Time trend on: consider time fixed effects if doing causal questions.");if(S.sigmaME>0.8)rep.push("Strong measurement error can attenuate OLS, FE, and RE.");if(rep.length===0)rep.push("No obvious red flags for demonstration. Compare FE vs RE for differences.");document.getElementById("report").innerHTML="<ul><li>"+rep.join("</li><li>")+"</li></ul>";document.getElementById("estimatesArea").style.display=(S.viz==="estimates"||S.mode==="models")?"block":"none";document.getElementById("diagArea").style.display=(S.viz==="diagnostics")?"block":"none";renderNotation()}
-
-function bindRange(id,key){const el=document.getElementById(id);el.value=S[key];el.addEventListener("input",e=>{S[key]=parseFloat(e.target.value);computeAndRender()})}
-function bindCheck(id,key){const el=document.getElementById(id);el.checked=S[key];el.addEventListener("change",e=>{S[key]=!!e.target.checked;computeAndRender()})}
-
-function setMode(mode){S.mode=mode;["mode-descriptives","mode-models"].forEach(id=>document.getElementById(id).classList.remove("active"));if(mode==="descriptives")document.getElementById("mode-descriptives").classList.add("active");if(mode==="models")document.getElementById("mode-models").classList.add("active");computeAndRender()}
-function setViz(v){S.viz=v;["viz-trajectories","viz-estimates","viz-diagnostics"].forEach(id=>document.getElementById(id).classList.remove("active"));if(v==="trajectories")document.getElementById("viz-trajectories").classList.add("active");if(v==="estimates")document.getElementById("viz-estimates").classList.add("active");if(v==="diagnostics")document.getElementById("viz-diagnostics").classList.add("active");computeAndRender()}
-
-const S={seed:42,N:600,T:8,betaTrue:.6,sigmaU:1.2,sigmaE:1.0,sigmaME:.3,pBase:.5,rhoSel:1.0,switchRate:.25,timeTrendOn:true,timeTrendSlope:.05,mode:"descriptives",viz:"trajectories"};
-
-function simulate(){const rng=mulberry32(S.seed);const persons=new Array(S.N).fill(0).map((_,i)=>i);const u=persons.map(()=>rnorm(rng,0,S.sigmaU));const alpha=Math.log(S.pBase/(1-S.pBase));const rows=[];for(let i=0;i<S.N;i++){const p_i=clamp(logistic(alpha+S.rhoSel*(u[i]/(S.sigmaU||1))),.01,.99);let D=rng()<p_i?1:0;let e_prev=rnorm(rng,0,S.sigmaE);for(let t=0;t<S.T;t++){if(t>0&&rng()<S.switchRate)D=rng()<p_i?1:0;const trend=S.timeTrendOn?S.timeTrendSlope*(t+1):0;const e_it=rnorm(rng,0,S.sigmaE);const yStar=S.betaTrue*D+u[i]+e_it+trend;const y=yStar+rnorm(rng,0,S.sigmaME);rows.push({pid:i,wave:t+1,D,u:u[i],e:e_it,y,yStar,trend})}}return rows}
-
-function renderNotation(){var lines=[];lines.push("Model: y_it = alpha + beta*D_it + u_i + e_it + gamma*t");lines.push("Cross-section OLS uses wave 1 only; pooled OLS stacks all waves; FE uses within-person deviations; RE uses quasi-demeaning with theta.");document.getElementById("notation").textContent=lines.join("\n")}
-
-function applyPreset(name){if(name==="Selection bias"){S.rhoSel=1.5;S.pBase=0.5;S.sigmaME=0.2;S.timeTrendOn=false}
-else if(name==="RCT-like"){S.rhoSel=0.0;S.pBase=0.5;S.switchRate=0.5;S.timeTrendOn=false}
-else if(name==="Noisy survey"){S.sigmaME=1.2;S.rhoSel=0.2;S.timeTrendOn=false}
-else if(name==="Trend and shock"){S.timeTrendOn=true;S.timeTrendSlope=0.08;S.rhoSel=0.6}
-else if(name==="Heterogeneous effects"){S.rhoSel=0.8;S.pBase=0.6;S.sigmaU=1.6}
-else if(name==="Reverse causality"){S.rhoSel=1.0;S.timeTrendOn=true;S.timeTrendSlope=0.03}
-updateLabels();computeAndRender()}
-
-function createSVG(w,h){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox","0 0 "+w+" "+h);svg.setAttribute("width","100%");svg.setAttribute("height","100%");return svg}
-function line(x1,y1,x2,y2,stroke,sw){if(stroke===void 0)stroke="#6b7280";if(sw===void 0)sw=1;const el=document.createElementNS("http://www.w3.org/2000/svg","line");el.setAttribute("x1",x1);el.setAttribute("y1",y1);el.setAttribute("x2",x2);el.setAttribute("y2",y2);el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",sw);return el}
-function rect(x,y,w,h,fill){if(fill===void 0)fill="#60a5fa";const el=document.createElementNS("http://www.w3.org/2000/svg","rect");el.setAttribute("x",x);el.setAttribute("y",y);el.setAttribute("width",w);el.setAttribute("height",h);el.setAttribute("fill",fill);return el}
-function circle(x,y,r,fill,op){if(fill===void 0)fill="#cbd5e1";if(op===void 0)op=.8;const el=document.createElementNS("http://www.w3.org/2000/svg","circle");el.setAttribute("cx",x);el.setAttribute("cy",y);el.setAttribute("r",r);el.setAttribute("fill",fill);el.setAttribute("fill-opacity",op);return el}
-function polyline(points,stroke,sw,op){if(stroke===void 0)stroke="#93c5fd";if(sw===void 0)sw=1;if(op===void 0)op=1;const el=document.createElementNS("http://www.w3.org/2000/svg","polyline");el.setAttribute("points",points.map(p=>p[0]+","+p[1]).join(" "));el.setAttribute("fill","none");el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",sw);el.setAttribute("stroke-opacity",op);return el}
-function textSVG(x,y,txt,fill,fs,anchor){if(fill===void 0)fill="#9aa0a6";if(fs===void 0)fs=10;if(anchor===void 0)anchor="middle";const el=document.createElementNS("http://www.w3.org/2000/svg","text");el.setAttribute("x",x);el.setAttribute("y",y);el.setAttribute("fill",fill);el.setAttribute("font-size",fs);el.setAttribute("text-anchor",anchor);el.textContent=txt;return el}
-function axis(svg,x,y,len,horizontal,ticks){if(horizontal){svg.appendChild(line(x,y,x+len,y,"#374151",1));ticks.forEach(t=>{const tx=x+t.pos*len;svg.appendChild(line(tx,y,tx,y+4,"#4b5563",1));svg.appendChild(textSVG(tx,y+14,t.label,"#9aa0a6",10,"middle"))})}else{svg.appendChild(line(x,y-len,x,y,"#374151",1));ticks.forEach(t=>{const ty=y-t.pos*len;svg.appendChild(line(x-4,ty,x,ty,"#4b5563",1));svg.appendChild(textSVG(x-6,ty+3,t.label,"#9aa0a6",10,"end"))})}}
-function scaleLinear(d0,d1,r0,r1){const d=d1-d0||1e-9;const m=(r1-r0)/d;return v=>r0+(v-d0)*m}
-
-function drawScatter(container,data,fit){container.innerHTML="";const w=520,h=360,m={l:40,r:10,t:10,b:30};const yMin=Math.min(...data.map(d=>d.y));const yMax=Math.max(...data.map(d=>d.y));const xs=scaleLinear(0,1,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;container.appendChild(createSVG(0,0))}const svg=createSVG(w,h);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"#111",1))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"#111",1))}axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:"0"},{pos:1,label:"1"}]);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(const d of data){svg.appendChild(circle(xs(d.x),ys(d.y),2,"#a3a3a3",.9))}if(fit&&isFinite(fit.beta)){const p1=[xs(0),ys(fit.alpha)],p2=[xs(1),ys(fit.alpha+fit.beta)];svg.appendChild(polyline([p1,p2],"#93c5fd",2,1))}container.appendChild(svg)}
-function drawLines(container,spaghetti,summary,T){container.innerHTML="";const w=520,h=360,m={l:40,r:10,t:10,b:30};const allY=spaghetti.flatMap(s=>s.series.map(p=>p.y)).concat(summary.flatMap(s=>[s.mean,s.median,s.p25,s.p75]));const yMin=Math.min(...allY),yMax=Math.max(...allY);const xs=scaleLinear(1,T,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);const svg=createSVG(w,h);for(let i=0;i<=T-1;i++){const x=xs(1+i*(T-1)/(T-1));svg.appendChild(line(x,m.t,x,h-m.b,"#111",1))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"#111",1))}const xTicks=[];for(let t=1;t<=T;t++)xTicks.push({pos:(t-1)/(T-1),label:String(t)});axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);spaghetti.forEach(s=>{const pts=s.series.map(p=>[xs(p.t),ys(p.y)]);svg.appendChild(polyline(pts,"#6b7280",1,.6))});function pathFor(key,color){const pts=summary.map(s=>[xs(s.t),ys(s[key])]);svg.appendChild(polyline(pts,color,2.5,1))}pathFor("mean","#93c5fd");pathFor("median","#e5e7eb");pathFor("p25","#a78bfa");pathFor("p75","#a78bfa");container.appendChild(svg)}
-function drawBars(container,rows,betaTrue){container.innerHTML="";const w=520,h=360,m={l:50,r:10,t:10,b:60};const yVals=rows.map(r=>r.b).concat([betaTrue]);const yMin=Math.min(...yVals),yMax=Math.max(...yVals);const xs=scaleLinear(0,rows.length,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);const svg=createSVG(w,h);const xTicks=rows.map((r,i)=>({pos:(i+.5)/rows.length,label:r.name}));axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);const bw=(w-m.l-m.r)/rows.length-12;rows.forEach((r,i)=>{const x=m.l+i*((w-m.l-m.r)/rows.length)+6;const y=ys(Math.max(0,r.b));const y0=ys(0);const height=Math.abs(y-y0);const top=Math.min(y,y0);svg.appendChild(rect(x,top,bw,height,"#60a5fa"))});const ytrue=ys(betaTrue);svg.appendChild(line(m.l,ytrue,w-m.r,ytrue,"#f87171",2));container.appendChild(svg)}
-function drawResiduals(container,points){container.innerHTML="";const w=520,h=360,m={l:40,r:10,t:10,b:30};const xs=scaleLinear(Math.min(...points.map(d=>d.fit)),Math.max(...points.map(d=>d.fit)),m.l,w-m.r);const ys=scaleLinear(Math.min(...points.map(d=>d.resid)),Math.max(...points.map(d=>d.resid)),h-m.b,m.t);const svg=createSVG(w,h);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"#111",1))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"#111",1))}const xTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(Math.min(...points.map(d=>d.fit))+p*(Math.max(...points.map(d=>d.fit))-Math.min(...points.map(d=>d.fit)))}));axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(Math.min(...points.map(d=>d.resid))+p*(Math.max(...points.map(d=>d.resid))-Math.min(...points.map(d=>d.resid)))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(const d of points){svg.appendChild(circle(xs(d.fit),ys(d.resid),2,"#a3a3a3",.9))}const y0=ys(0);svg.appendChild(line(m.l,y0,w-m.r,y0,"#94a3b8",1.5));container.appendChild(svg)}
-function drawHist(container,resid){container.innerHTML="";const w=520,h=360,m={l:40,r:10,t:10,b:30};if(resid.length===0){container.textContent="No data";return}const mn=Math.min(...resid),mx=Math.max(...resid),bins=20;const width=(mx-mn)/bins||1;const cnt=new Array(bins).fill(0);resid.forEach(v=>{const i=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/width)));cnt[i]++});const xs=scaleLinear(0,bins,m.l,w-m.r);const ys=scaleLinear(0,Math.max(...cnt),h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(mn)},{pos:1,label:fmt(mx)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:"0"},{pos:1,label:String(Math.max(...cnt))}]);const bw=(w-m.l-m.r)/bins-2;for(let i=0;i<bins;i++){const x=xs(i)+1,y=ys(cnt[i]),y0=ys(0);svg.appendChild(rect(x,y,bw,y0-y,"#93c5fd"))}container.appendChild(svg)}
-function drawQQ(container,resid){container.innerHTML="";const w=520,h=360,m={l:40,r:10,t:10,b:30};const r=[...resid].sort((a,b)=>a-b);if(r.length<5){container.textContent="Not enough data";return}const n=r.length,pts=[];function erfinv(x){const a=.147;const ln=Math.log(1-x*x);const s=2/(Math.PI*a)+ln/2;return Math.sign(x)*Math.sqrt(Math.sqrt(s*s-ln/a)-s)}for(let i=0;i<n;i++){const p=(i+.5)/n;const z=Math.SQRT2*erfinv(2*p-1);pts.push({theor:z,sample:r[i]})}const xs=scaleLinear(pts[0].theor,pts[pts.length-1].theor,m.l,w-m.r);const ys=scaleLinear(r[0],r[r.length-1],h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);svg.appendChild(polyline([[xs(pts[0].theor),ys(r[0])],[xs(pts[pts.length-1].theor),ys(r[r.length-1])]],"#94a3b8",1.5));for(const p of pts){svg.appendChild(circle(xs(p.theor),ys(p.sample),2,"#a3a3a3",.9))}container.appendChild(svg)}
-
-function computeAndRender(){updateLabels();const sim=simulate();const cross=sim.filter(r=>r.wave===1);const pooled=sim;const xCross=cross.map(r=>r.D),yCross=cross.map(r=>r.y);const xPooled=pooled.map(r=>r.D),yPooled=pooled.map(r=>r.y);const idsPooled=pooled.map(r=>r.pid);const cs=olsSimple(xCross,yCross);const pooledOLS=olsSimple(xPooled,yPooled);const fe=feWithinFull(idsPooled,xPooled,yPooled);const re=randomEffects(idsPooled,xPooled,yPooled);drawScatter(document.getElementById("chart-scatter"),cross.map(r=>({x:r.D,y:r.y})),cs);const ids=Array.from(new Set(pooled.map(r=>r.pid)));const k=Math.min(20,ids.length);const rand=mulberry32(1234+S.seed);const chosen=new Set;while(chosen.size<k&&ids.length>0)chosen.add(Math.floor(rand()*ids.length));const chosenIds=Array.from(chosen).map(i=>ids[i]);const spaghetti=chosenIds.map(id=>({id,series:pooled.filter(r=>r.pid===id).map(r=>({t:r.wave,y:r.y}))}));const summary=[];for(let t=1;t<=S.T;t++){const arr=pooled.filter(r=>r.wave===t).map(r=>r.y);if(arr.length){summary.push({t,mean:mean(arr),median:quantile(arr,0.5),p25:quantile(arr,0.25),p75:quantile(arr,0.75)})}}drawLines(document.getElementById("chart-lines"),spaghetti,summary,S.T);if(S.viz==="estimates"||S.mode==="models"){const estRows=[];if(Number.isFinite(cs.beta))estRows.push({name:"Cross-section",b:cs.beta});if(Number.isFinite(pooledOLS.beta))estRows.push({name:"Pooled OLS",b:pooledOLS.beta});if(Number.isFinite(fe.beta))estRows.push({name:"Fixed Effects",b:fe.beta});if(Number.isFinite(re.beta))estRows.push({name:"Random Effects",b:re.beta});drawBars(document.getElementById("chart-bars"),estRows,S.betaTrue)}const iccTrue=(S.sigmaU**2)/(S.sigmaU**2+S.sigmaE**2+S.sigmaME**2);const by=new Map;for(const r of pooled){if(!by.has(r.pid))by.set(r.pid,[]);by.get(r.pid).push(r.y)}const means=[],wVars=[];by.forEach(arr=>{const m=mean(arr);means.push(m);const v=arr.reduce((s,v)=>s+(v-m)*(v-m),0)/Math.max(1,arr.length-1);wVars.push(v)});const vb=variance(means);const vw=wVars.length?wVars.reduce((a,b)=>a+b,0)/wVars.length:0;const tot=vb+vw;const iccEmp=tot===0?NaN:vb/tot;document.getElementById("varianceList").innerHTML="<li><b>True ICC:</b> "+fmt(iccTrue)+"</li><li><b>Empirical ICC:</b> "+fmt(iccEmp)+"</li>";const residPoints=pooled.map(r=>({fit:pooledOLS.alpha+pooledOLS.beta*r.D,resid:r.y-(pooledOLS.alpha+pooledOLS.beta*r.D)}));drawResiduals(document.getElementById("chart-rvf"),residPoints);drawHist(document.getElementById("chart-hist"),residPoints.map(d=>d.resid));drawQQ(document.getElementById("chart-qq"),residPoints.map(d=>d.resid));const cards=[];function addCard(title,value,ciVals,foot){cards.push({title,value,ciVals,foot})}const csCI=ci(cs.beta,cs.se),pooledCI=ci(pooledOLS.beta,pooledOLS.se),feCI=ci(fe.beta,fe.se),reCI=ci(re.beta,re.se);if(S.mode==="models"){addCard("True beta",fmt(S.betaTrue),"","");addCard("Cross-section OLS",fmt(cs.beta),fmt(csCI[0])+" ... "+fmt(csCI[1]),"n="+cs.n);addCard("Pooled OLS",fmt(pooledOLS.beta),fmt(pooledCI[0])+" ... "+fmt(pooledCI[1]),"n="+pooledOLS.n);addCard("Fixed Effects (within)",fmt(fe.beta),fmt(feCI[0])+" ... "+fmt(feCI[1]),"obs="+fe.n);addCard("Random Effects (GLS)",fmt(re.beta),fmt(reCI[0])+" ... "+fmt(reCI[1]),"theta="+fmt(re.theta))}const cardsDiv=document.getElementById("cards");cardsDiv.innerHTML="";for(const c of cards){const el=document.createElement("div");el.className="card";el.innerHTML="<div class=\"title\">"+c.title+"</div><div class=\"value\">"+c.value+"</div>"+(c.ciVals?"<div class=\"muted\" style=\"font-size:12px;margin-top:4px\">95% interval: "+c.ciVals+"</div>":"")+(c.foot?"<div class=\"foot\">"+c.foot+"</div>":"");cardsDiv.appendChild(el)}const rep=[];if(S.rhoSel>0.5)rep.push("Selection likely (rho large): Cross-section and pooled may be biased; FE/RE differ.");if(S.timeTrendOn)rep.push("Time trend on: consider time fixed effects if doing causal questions.");if(S.sigmaME>0.8)rep.push("Strong measurement error can attenuate OLS, FE, and RE.");if(rep.length===0)rep.push("No obvious red flags for demonstration. Compare FE vs RE for differences.");document.getElementById("report").innerHTML="<ul><li>"+rep.join("</li><li>")+"</li></ul>";document.getElementById("estimatesArea").style.display=(S.viz==="estimates"||S.mode==="models")?"block":"none";document.getElementById("diagArea").style.display=(S.viz==="diagnostics")?"block":"none";renderNotation()}
+  for(u=0; u<uniq.length; u++){
+    var idw=uniq[u], idxw=idxById[idw];
+    var mxw=0,myw=0; 
+    for(i=0;i<idxw.length;i++){ mxw+=x[idxw[i]]; myw+=y[idxw[i]]; } 
+    mxw/=idxw.length; myw/=idxw.length;
+    for(i=0;i<idxw.length;i++){
+      var xi = x[idxw[i]] - mxw;
+      var yi = y[idxw[i]] - myw;
+      residWithin[idxw[i]] = yi - fit.beta * xi;
+    }
+  }
+  fit.residWithin = residWithin;
+  return fit;
+}
 
 function randomEffects(ids,x,y){
   var n=x.length;
@@ -258,14 +235,15 @@ function randomEffects(ids,x,y){
     for(var j=0;j<idx.length;j++){ sx+=x[idx[j]]; sy+=y[idx[j]]; }
     xbar[idk]=sx/idx.length; ybar[idk]=sy/idx.length; counts[idk]=idx.length;
   }
-  // FE within residuals to estimate sigma_e2
+  // FE within regression to get within residual variance
   var xb=[], yb=[];
   for(idk in by){
     var idx2=by[idk], mx=xbar[idk], my=ybar[idk];
     for(j=0;j<idx2.length;j++){ xb.push(x[idx2[j]]-mx); yb.push(y[idx2[j]]-my); }
   }
   var feFit = olsSimple(xb,yb);
-  // residuals for within
+
+  // within residual variance
   var rssw=0, NT=0;
   for(idk in by){
     var idx3=by[idk], mx2=xbar[idk], my2=ybar[idk];
@@ -281,7 +259,6 @@ function randomEffects(ids,x,y){
   // Between regression on unit means (weighted by counts)
   var xMeans=[], yMeans=[], wts=[];
   for(idk in by){ xMeans.push(xbar[idk]); yMeans.push(ybar[idk]); wts.push(counts[idk]); }
-  // Weighted OLS for between
   var sw=0, mxw=0, myw=0;
   for(j=0;j<xMeans.length;j++){ sw+=wts[j]; mxw+=wts[j]*xMeans[j]; myw+=wts[j]*yMeans[j]; }
   mxw/=sw; myw/=sw;
@@ -290,53 +267,392 @@ function randomEffects(ids,x,y){
   var betaB = sxx===0 ? 0 : sxy/sxx, alphaB = myw - betaB*mxw;
   var rbb=0; for(j=0;j<xMeans.length;j++){ var rb=yMeans[j] - (alphaB + betaB*xMeans[j]); rbb += wts[j]*rb*rb; }
   var s2_between = rbb / Math.max(1, xMeans.length - 2);
-  var Tbar = mean(Object.values(counts));
+  var Tbar = (function(){ var v=0,c=0; for(var k in counts){ v += counts[k]; c+=1; } return c? v/c : 1; })();
   var sigma_u2 = Math.max(0, s2_between - sigma_e2 / Math.max(1e-6, Tbar));
 
-  // theta_i and quasi-demeaning
+  // theta and quasi-demeaning
   var Xq=[], Yq=[];
   for(idk in by){
-    var idx4=by[idk], Ti=counts[idk], th = 1 - Math.sqrt( sigma_e2 / Math.max(1e-9, sigma_e2 + Ti*sigma_u2) );
+    var idx4=by[idk], Ti=counts[idk];
+    var theta = 1 - Math.sqrt( sigma_e2 / Math.max(1e-9, sigma_e2 + Ti*sigma_u2) );
     for(j=0;j<idx4.length;j++){
       var ii=idx4[j];
-      Xq.push( x[ii] - th * xbar[idk] );
-      Yq.push( y[ii] - th * ybar[idk] );
+      Xq.push( x[ii] - theta * xbar[idk] );
+      Yq.push( y[ii] - theta * ybar[idk] );
     }
   }
   var fit = olsSimple(Xq,Yq);
-  fit.theta = isFinite(sigma_u2) ? (1 - Math.sqrt( sigma_e2 / Math.max(1e-9, sigma_e2 + (Tbar||1)*sigma_u2) )) : NaN;
+  fit.theta = (function(){
+    var Ti = Tbar;
+    return 1 - Math.sqrt( sigma_e2 / Math.max(1e-9, sigma_e2 + Ti*sigma_u2) );
+  })();
+  fit.sigma_e2 = sigma_e2;
+  fit.sigma_u2 = sigma_u2;
   return fit;
 }
 
-function updateLabels(){document.getElementById("lblN").textContent=S.N;document.getElementById("lblT").textContent=S.T;document.getElementById("lblB").textContent=S.betaTrue.toFixed(2);document.getElementById("lblSu").textContent=S.sigmaU.toFixed(2);document.getElementById("lblSe").textContent=S.sigmaE.toFixed(2);document.getElementById("lblSme").textContent=S.sigmaME.toFixed(2);document.getElementById("lblP").textContent=S.pBase.toFixed(2);document.getElementById("lblRho").textContent=S.rhoSel.toFixed(2);document.getElementById("lblSw").textContent=S.switchRate.toFixed(2);document.getElementById("lblTrend").textContent=S.timeTrendSlope.toFixed(2)}
+// ---- SVG helpers ----
+function createSVG(w,h){ var svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("viewBox","0 0 "+w+" "+h); svg.setAttribute("width","100%"); svg.setAttribute("height","100%"); return svg; }
+function lineEl(x1,y1,x2,y2,stroke,sw){ if(stroke===void 0)stroke="#6b7280"; if(sw===void 0)sw=1; var el=document.createElementNS("http://www.w3.org/2000/svg","line"); el.setAttribute("x1",x1); el.setAttribute("y1",y1); el.setAttribute("x2",x2); el.setAttribute("y2",y2); el.setAttribute("stroke",stroke); el.setAttribute("stroke-width",sw); return el; }
+function rectEl(x,y,w,h,fill){ if(fill===void 0)fill="#60a5fa"; var el=document.createElementNS("http://www.w3.org/2000/svg","rect"); el.setAttribute("x",x); el.setAttribute("y",y); el.setAttribute("width",w); el.setAttribute("height",h); el.setAttribute("fill",fill); return el; }
+function circleEl(x,y,r,fill,op){ if(fill===void 0)fill="#cbd5e1"; if(op===void 0)op=0.8; var el=document.createElementNS("http://www.w3.org/2000/svg","circle"); el.setAttribute("cx",x); el.setAttribute("cy",y); el.setAttribute("r",r); el.setAttribute("fill",fill); el.setAttribute("fill-opacity",op); return el; }
+function polylineEl(points,stroke,sw,op){ if(stroke===void 0)stroke="#93c5fd"; if(sw===void 0)sw=1; if(op===void 0)op=1; var el=document.createElementNS("http://www.w3.org/2000/svg","polyline"); el.setAttribute("points", points.map(function(p){return p[0]+","+p[1]}).join(" ")); el.setAttribute("fill","none"); el.setAttribute("stroke",stroke); el.setAttribute("stroke-width",sw); el.setAttribute("stroke-opacity",op); return el; }
+function textEl(x,y,txt,fill,fs,anchor){ if(fill===void 0)fill="#9aa0a6"; if(fs===void 0)fs=10; if(anchor===void 0)anchor="middle"; var el=document.createElementNS("http://www.w3.org/2000/svg","text"); el.setAttribute("x",x); el.setAttribute("y",y); el.setAttribute("fill",fill); el.setAttribute("font-size",fs); el.setAttribute("text-anchor",anchor); el.textContent = txt; return el; }
 
-function bindUI(){
-  document.getElementById("mode-descriptives").addEventListener("click",function(){setMode("descriptives")});
-  document.getElementById("mode-models").addEventListener("click",function(){setMode("models")});
-  document.getElementById("viz-trajectories").addEventListener("click",function(){setViz("trajectories")});
-  document.getElementById("viz-estimates").addEventListener("click",function(){setViz("estimates")});
-  document.getElementById("viz-diagnostics").addEventListener("click",function(){setViz("diagnostics")});
+function axis(svg, x, y, len, horizontal, ticks){
+  if(horizontal){
+    svg.appendChild(lineEl(x,y, x+len,y, "#374151", 1));
+    for(var i=0;i<ticks.length;i++){
+      var t=ticks[i], tx = x + t.pos * len;
+      svg.appendChild(lineEl(tx,y, tx,y+4, "#4b5563", 1));
+      svg.appendChild(textEl(tx, y+14, t.label, "#9aa0a6", 10, "middle"));
+    }
+  }else{
+    svg.appendChild(lineEl(x,y-len, x,y, "#374151", 1));
+    for(var j=0;j<ticks.length;j++){
+      var tt=ticks[j], ty = y - tt.pos * len;
+      svg.appendChild(lineEl(x-4,ty, x,ty, "#4b5563", 1));
+      svg.appendChild(textEl(x-6, ty+3, tt.label, "#9aa0a6", 10, "end"));
+    }
+  }
+}
+function scaleLinear(d0,d1,r0,r1){ var d=d1-d0 || 1e-9; var m=(r1-r0)/d; return function(v){ return r0 + (v-d0)*m; }; }
 
-  bindRange("N","N");bindRange("T","T");bindRange("betaTrue","betaTrue");bindRange("sigmaU","sigmaU");bindRange("sigmaE","sigmaE");bindRange("sigmaME","sigmaME");bindRange("pBase","pBase");bindRange("rhoSel","rhoSel");bindRange("switchRate","switchRate");bindRange("timeTrendSlope","timeTrendSlope");bindCheck("timeTrendOn","timeTrendOn");
-
-  document.getElementById("preset-selection").addEventListener("click",function(){applyPreset("Selection bias")});
-  document.getElementById("preset-rct").addEventListener("click",function(){applyPreset("RCT-like")});
-  document.getElementById("preset-noisy").addEventListener("click",function(){applyPreset("Noisy survey")});
-  document.getElementById("preset-trend").addEventListener("click",function(){applyPreset("Trend and shock")});
-  document.getElementById("preset-hetero").addEventListener("click",function(){applyPreset("Heterogeneous effects")});
-  document.getElementById("preset-revcause").addEventListener("click",function(){applyPreset("Reverse causality")});
-
-  document.getElementById("btn-download").addEventListener("click",function(){
-    var sim=simulate();var header=["pid","wave","D","u","e","yStar","y","trend"];function esc(s){return '"'+String(s).replace(/"/g,'""')+'"'};var csv=[header.join(",")].concat(sim.map(function(r){return header.map(function(h){return esc(r[h])}).join(",")})).join("\n");var blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download="sim_panel.csv";a.click();URL.revokeObjectURL(url);
-  });
-
-  document.getElementById("tab-sim").addEventListener("click",function(){document.getElementById("sim").style.display="block";document.getElementById("info").style.display="none"});
-  document.getElementById("tab-info").addEventListener("click",function(){document.getElementById("sim").style.display="none";document.getElementById("info").style.display="block"});
-  document.getElementById("btn-refresh").addEventListener("click",function(){location.search="?v="+Date.now()});
+// ---- Charts ----
+function drawScatter(el,data,fit){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var yMin=Math.min.apply(null,data.map(function(d){return d.y;}));
+  var yMax=Math.max.apply(null,data.map(function(d){return d.y;}));
+  var xs=scaleLinear(0,1, m.l, w-m.r);
+  var ys=scaleLinear(yMin,yMax, h-m.b, m.t);
+  var svg=createSVG(w,h);
+  for(var i=0;i<=10;i++){ var x=m.l+i*(w-m.l-m.r)/10; svg.appendChild(lineEl(x,m.t, x,h-m.b, "#111",1)); }
+  for(var j=0;j<=10;j++){ var y=m.t+j*(h-m.t-m.b)/10; svg.appendChild(lineEl(m.l,y, w-m.r,y, "#111",1)); }
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:"0"},{pos:1,label:"1"}]);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(yMin + p*(yMax-yMin))}; });
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(i=0;i<data.length;i++){ svg.appendChild(circleEl(xs(data[i].x), ys(data[i].y), 2, "#a3a3a3", 0.9)); }
+  if(fit && isFinite(fit.beta)){
+    var p1=[xs(0), ys(fit.alpha)], p2=[xs(1), ys(fit.alpha+fit.beta)];
+    svg.appendChild(polylineEl([p1,p2], "#93c5fd", 2, 1));
+  }
+  el.appendChild(svg);
 }
 
-function init(){bindUI();computeAndRender()}
-window.addEventListener("DOMContentLoaded",init);
+function drawLines(el,spaghetti,summary,T){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var allY=[];
+  for(var s=0;s<spaghetti.length;s++){ for(var q=0;q<spaghetti[s].series.length;q++){ allY.push(spaghetti[s].series[q].y); } }
+  for(var r=0;r<summary.length;r++){ allY.push(summary[r].mean, summary[r].median, summary[r].p25, summary[r].p75); }
+  var yMin=Math.min.apply(null,allY), yMax=Math.max.apply(null,allY);
+  var xs=scaleLinear(1,T, m.l, w-m.r);
+  var ys=scaleLinear(yMin,yMax, h-m.b, m.t);
+  var svg=createSVG(w,h);
+  for(var i=0;i<=T-1;i++){ var x=xs(1 + i*(T-1)/(T-1)); svg.appendChild(lineEl(x,m.t, x,h-m.b, "#111",1)); }
+  for(var j=0;j<=10;j++){ var y=m.t+j*(h-m.t-m.b)/10; svg.appendChild(lineEl(m.l,y, w-m.r,y, "#111",1)); }
+  var xTicks=[]; for(i=1;i<=T;i++) xTicks.push({pos:(i-1)/(T-1), label:String(i)});
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(yMin + p*(yMax-yMin))}; });
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(s=0;s<spaghetti.length;s++){
+    var pts=[]; for(q=0;q<spaghetti[s].series.length;q++){ pts.push([xs(spaghetti[s].series[q].t), ys(spaghetti[s].series[q].y)]); }
+    svg.appendChild(polylineEl(pts,"#6b7280",1,0.6));
+  }
+  function pathFor(key,color){
+    var pts=[], i; for(i=0;i<summary.length;i++){ pts.push([xs(summary[i].t), ys(summary[i][key])]); }
+    svg.appendChild(polylineEl(pts,color,2.5,1));
+  }
+  pathFor("mean","#93c5fd"); pathFor("median","#e5e7eb"); pathFor("p25","#a78bfa"); pathFor("p75","#a78bfa");
+  el.appendChild(svg);
+}
+
+function drawBars(el,rows,betaTrue){
+  el.innerHTML="";
+  var w=520,h=360,m={l:50,r:10,t:10,b:60};
+  var yVals=rows.map(function(r){return r.b;}).concat([betaTrue]);
+  var yMin=Math.min.apply(null,yVals), yMax=Math.max.apply(null,yVals);
+  var xs=scaleLinear(0, rows.length, m.l, w-m.r);
+  var ys=scaleLinear(yMin, yMax, h-m.b, m.t);
+  var svg=createSVG(w,h);
+  var xTicks = rows.map(function(r,i){ return {pos:(i+0.5)/rows.length, label:r.name}; });
+  axis(svg, m.l, h-m.b, w-m.l-m.r, true, xTicks);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(yMin + p*(yMax-yMin))}; });
+  axis(svg, m.l, h-m.b, h-m.t-m.b, false, yTicks);
+  var bw = (w-m.l-m.r)/rows.length - 12;
+  for(var i=0;i<rows.length;i++){
+    var x = m.l + i*((w-m.l-m.r)/rows.length) + 6;
+    var y = ys(Math.max(0, rows[i].b));
+    var y0 = ys(0);
+    var height = Math.abs(y - y0);
+    var top = Math.min(y, y0);
+    svg.appendChild(rectEl(x, top, bw, height, "#60a5fa"));
+  }
+  var ytrue = ys(betaTrue);
+  svg.appendChild(lineEl(m.l, ytrue, w-m.r, ytrue, "#f87171", 2));
+  el.appendChild(svg);
+}
+
+function drawResiduals(el, points){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var fitVals=points.map(function(d){return d.fit;});
+  var resVals=points.map(function(d){return d.resid;});
+  var xs=scaleLinear(Math.min.apply(null,fitVals), Math.max.apply(null,fitVals), m.l, w-m.r);
+  var ys=scaleLinear(Math.min.apply(null,resVals), Math.max.apply(null,resVals), h-m.b, m.t);
+  var svg=createSVG(w,h);
+  for(var i=0;i<=10;i++){ var x=m.l + i*(w-m.l-m.r)/10; svg.appendChild(lineEl(x,m.t, x,h-m.b, "#111",1)); }
+  for(var j=0;j<=10;j++){ var y=m.t + j*(h-m.t-m.b)/10; svg.appendChild(lineEl(m.l,y, w-m.r,y, "#111",1)); }
+  var xTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(Math.min.apply(null,fitVals) + p*(Math.max.apply(null,fitVals)-Math.min.apply(null,fitVals)))}; });
+  axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);
+  var yTicks=[0,0.25,0.5,0.75,1].map(function(p){ return {pos:p, label: fmt(Math.min.apply(null,resVals) + p*(Math.max.apply(null,resVals)-Math.min.apply(null,resVals)))}; });
+  axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);
+  for(var k=0;k<points.length;k++){ svg.appendChild(circleEl(xs(points[k].fit), ys(points[k].resid), 2, "#a3a3a3", 0.9)); }
+  var y0 = ys(0); svg.appendChild(lineEl(m.l,y0, w-m.r,y0, "#94a3b8", 1.5));
+  el.appendChild(svg);
+}
+
+function drawHist(el, resid){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  if(resid.length===0){ el.textContent="No data"; return; }
+  var mn=Math.min.apply(null,resid), mx=Math.max.apply(null,resid), bins=20;
+  var width=(mx-mn)/bins || 1;
+  var cnt=new Array(bins).fill(0);
+  for(var i=0;i<resid.length;i++){ var v=resid[i]; var idx=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/width))); cnt[idx]++; }
+  var xs=scaleLinear(0,bins, m.l, w-m.r);
+  var ys=scaleLinear(0, Math.max.apply(null,cnt), h-m.b, m.t);
+  var svg=createSVG(w,h);
+  axis(svg, m.l, h-m.b, w-m.l-m.r, true, [{pos:0,label:fmt(mn)},{pos:1,label:fmt(mx)}]);
+  axis(svg, m.l, h-m.b, h-m.t-m.b, false, [{pos:0,label:"0"},{pos:1,label:String(Math.max.apply(null,cnt))}]);
+  var bw=(w-m.l-m.r)/bins-2;
+  for(i=0;i<bins;i++){
+    var x = xs(i)+1, y = ys(cnt[i]), y0 = ys(0);
+    svg.appendChild(rectEl(x, y, bw, y0-y, "#93c5fd"));
+  }
+  el.appendChild(svg);
+}
+
+function drawQQ(el, resid){
+  el.innerHTML="";
+  var w=520,h=360,m={l:40,r:10,t:10,b:30};
+  var r = resid.slice().sort(function(a,b){return a-b;});
+  if(r.length<5){ el.textContent="Not enough data"; return; }
+  function erfinv(x){ var a=0.147; var ln=Math.log(1-x*x); var s=2/(Math.PI*a)+ln/2; return Math.sign(x)*Math.sqrt(Math.sqrt(s*s - ln/a) - s); }
+  var n=r.length, pts=[];
+  for(var i=0;i<n;i++){ var p=(i+0.5)/n; var z=Math.SQRT2*erfinv(2*p-1); pts.push({theor:z, sample:r[i]}); }
+  var xs=scaleLinear(pts[0].theor, pts[pts.length-1].theor, m.l, w-m.r);
+  var ys=scaleLinear(r[0], r[r.length-1], h-m.b, m.t);
+  var svg=createSVG(w,h);
+  axis(svg, m.l, h-m.b, w-m.l-m.r, true, [{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);
+  axis(svg, m.l, h-m.b, h-m.t-m.b, false, [{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);
+  var d1=[xs(pts[0].theor), ys(r[0])], d2=[xs(pts[pts.length-1].theor), ys(r[r.length-1])];
+  svg.appendChild(polylineEl([d1,d2], "#94a3b8", 1.5, 1));
+  for(i=0;i<pts.length;i++){ svg.appendChild(circleEl(xs(pts[i].theor), ys(pts[i].sample), 2, "#a3a3a3", 0.9)); }
+  el.appendChild(svg);
+}
+
+// ---- Simulation ----
+var S={seed:42,N:600,T:8,betaTrue:0.6,sigmaU:1.2,sigmaE:1.0,sigmaME:0.3,pBase:0.5,rhoSel:1.0,switchRate:0.25,timeTrendOn:true,timeTrendSlope:0.05,mode:"descriptives",viz:"trajectories"};
+
+function simulate(){
+  var rng = mulberry32(S.seed);
+  var persons = []; for(var i=0;i<S.N;i++) persons.push(i);
+  var u = persons.map(function(){ return rnorm(rng,0,S.sigmaU); });
+  var alpha = Math.log(S.pBase/(1-S.pBase));
+  var rows = [];
+  for(i=0;i<S.N;i++){
+    var p_i = clamp(logistic(alpha + S.rhoSel*(u[i]/(S.sigmaU||1))), 0.01, 0.99);
+    var D = rng()<p_i?1:0;
+    for(var t=0;t<S.T;t++){
+      if(t>0 && rng()<S.switchRate) D = rng()<p_i?1:0;
+      var trend = S.timeTrendOn ? S.timeTrendSlope*(t+1) : 0;
+      var e_it = rnorm(rng,0,S.sigmaE);
+      var yStar = S.betaTrue*D + u[i] + e_it + trend;
+      var y = yStar + rnorm(rng,0,S.sigmaME);
+      rows.push({pid:i,wave:t+1,D:D,u:u[i],e:e_it,y:y,yStar:yStar,trend:trend});
+    }
+  }
+  return rows;
+}
+
+// ---- UI helpers ----
+function updateLabels(){
+  document.getElementById("lblN").textContent = String(S.N);
+  document.getElementById("lblT").textContent = String(S.T);
+  document.getElementById("lblB").textContent = S.betaTrue.toFixed(2);
+  document.getElementById("lblSu").textContent = S.sigmaU.toFixed(2);
+  document.getElementById("lblSe").textContent = S.sigmaE.toFixed(2);
+  document.getElementById("lblSme").textContent = S.sigmaME.toFixed(2);
+  document.getElementById("lblP").textContent = S.pBase.toFixed(2);
+  document.getElementById("lblRho").textContent = S.rhoSel.toFixed(2);
+  document.getElementById("lblSw").textContent = S.switchRate.toFixed(2);
+  document.getElementById("lblTrend").textContent = S.timeTrendSlope.toFixed(2);
+}
+
+function renderNotation(){
+  var lines=[];
+  lines.push("Model: y_it = alpha + beta*D_it + u_i + e_it + gamma*t");
+  lines.push("Cross-section OLS: wave 1 only; Pooled OLS: all waves; FE: within-person deviations; RE: quasi-demeaned GLS.");
+  document.getElementById("notation").textContent = lines.join("\n");
+}
+
+function applyPreset(name){
+  if(name==="Selection bias"){ S.rhoSel=1.5; S.pBase=0.5; S.sigmaME=0.2; S.timeTrendOn=false; }
+  else if(name==="RCT-like"){ S.rhoSel=0.0; S.pBase=0.5; S.switchRate=0.5; S.timeTrendOn=false; }
+  else if(name==="Noisy survey"){ S.sigmaME=1.2; S.rhoSel=0.2; S.timeTrendOn=false; }
+  else if(name==="Trend and shock"){ S.timeTrendOn=true; S.timeTrendSlope=0.08; S.rhoSel=0.6; }
+  else if(name==="Heterogeneous effects"){ S.rhoSel=0.8; S.pBase=0.6; S.sigmaU=1.6; }
+  else if(name==="Reverse causality"){ S.rhoSel=1.0; S.timeTrendOn=true; S.timeTrendSlope=0.03; }
+  updateLabels(); computeAndRender();
+}
+
+// ---- Render orchestration ----
+function computeAndRender(){
+  updateLabels();
+  var sim = simulate();
+  var cross = sim.filter(function(r){return r.wave===1;});
+  var pooled = sim;
+  var xCross = cross.map(function(r){return r.D;}), yCross = cross.map(function(r){return r.y;});
+  var xPooled = pooled.map(function(r){return r.D;}), yPooled = pooled.map(function(r){return r.y;});
+  var idsPooled = pooled.map(function(r){return r.pid;});
+
+  var cs = olsSimple(xCross,yCross);
+  var pooledOLS = olsSimple(xPooled,yPooled);
+  var fe = feWithinFull(idsPooled,xPooled,yPooled);
+  var re = randomEffects(idsPooled,xPooled,yPooled);
+
+  drawScatter(document.getElementById("chart-scatter"), cross.map(function(r){return {x:r.D,y:r.y};}), cs);
+
+  var ids = []; var seen={};
+  for(var i=0;i<pooled.length;i++){ var pid=pooled[i].pid; if(!seen[pid]){ seen[pid]=1; ids.push(pid); } }
+  var k=Math.min(20, ids.length); var rand=mulberry32(1234+S.seed);
+  var chosenIdx = {}; var chosen=[];
+  while(Object.keys(chosenIdx).length<k && ids.length>0){ var idx=Math.floor(rand()*ids.length); if(!chosenIdx[idx]){ chosenIdx[idx]=1; chosen.push(ids[idx]); } }
+  var spaghetti=[], summary=[], t;
+  for(i=0;i<chosen.length;i++){ var id=chosen[i]; var ser=pooled.filter(function(r){return r.pid===id;}).map(function(r){return {t:r.wave,y:r.y};}); spaghetti.push({id:id,series:ser}); }
+  for(t=1;t<=S.T;t++){ var arr=pooled.filter(function(r){return r.wave===t;}).map(function(r){return r.y;}); if(arr.length){ summary.push({t:t, mean:mean(arr), median:quantile(arr,0.5), p25:quantile(arr,0.25), p75:quantile(arr,0.75)}); } }
+  drawLines(document.getElementById("chart-lines"), spaghetti, summary, S.T);
+
+  if(S.viz==="estimates" || S.mode==="models"){
+    var estRows=[];
+    if(isFinite(cs.beta)) estRows.push({name:"Cross-section", b:cs.beta});
+    if(isFinite(pooledOLS.beta)) estRows.push({name:"Pooled OLS", b:pooledOLS.beta});
+    if(isFinite(fe.beta)) estRows.push({name:"Fixed Effects", b:fe.beta});
+    if(isFinite(re.beta)) estRows.push({name:"Random Effects", b:re.beta});
+    drawBars(document.getElementById("chart-bars"), estRows, S.betaTrue);
+  }
+
+  // Variance composition
+  var iccTrue = (S.sigmaU*S.sigmaU) / (S.sigmaU*S.sigmaU + S.sigmaE*S.sigmaE + S.sigmaME*S.sigmaME);
+  var by={}, means=[], wVars=[];
+  for(i=0;i<pooled.length;i++){ var r=pooled[i]; if(!by[r.pid]) by[r.pid]=[]; by[r.pid].push(r.y); }
+  for(var kpid in by){ var arrY=by[kpid]; var m=mean(arrY); means.push(m); var vv=0; for(var j=0;j<arrY.length;j++){ vv+=(arrY[j]-m)*(arrY[j]-m); } vv/=Math.max(1,arrY.length-1); wVars.push(vv); }
+  var vb=variance(means), vw=wVars.length? wVars.reduce(function(a,b){return a+b},0)/wVars.length : 0; var tot=vb+vw; var iccEmp = tot===0? NaN : vb/tot;
+  document.getElementById("varianceList").innerHTML = "<li><b>True ICC:</b> "+fmt(iccTrue)+"</li><li><b>Empirical ICC:</b> "+fmt(iccEmp)+"</li>";
+
+  // Diagnostics
+  var residPoints = pooled.map(function(r){ var f=pooledOLS.alpha + pooledOLS.beta*r.D; return {fit:f, resid:r.y-f}; });
+  drawResiduals(document.getElementById("chart-rvf"), residPoints);
+  var residuals = residPoints.map(function(d){return d.resid;});
+  drawHist(document.getElementById("chart-hist"), residuals);
+  drawQQ(document.getElementById("chart-qq"), residuals);
+
+  // Cards
+  var cards=[];
+  function addCard(title,value,ciVals,foot){ cards.push({title:title,value:value,ciVals:ciVals,foot:foot}); }
+  var csCI = ci(cs.beta, cs.se), pooledCI = ci(pooledOLS.beta, pooledOLS.se), feCI = ci(fe.beta, fe.se), reCI = ci(re.beta, re.se);
+  if(S.mode==="models"){
+    addCard("True beta", fmt(S.betaTrue), "", "");
+    addCard("Cross-section OLS", fmt(cs.beta), fmt(csCI[0])+" ... "+fmt(csCI[1]), "n="+cs.n);
+    addCard("Pooled OLS", fmt(pooledOLS.beta), fmt(pooledCI[0])+" ... "+fmt(pooledCI[1]), "n="+pooledOLS.n);
+    addCard("Fixed Effects (within)", fmt(fe.beta), fmt(feCI[0])+" ... "+fmt(feCI[1]), "obs="+fe.n);
+    addCard("Random Effects (GLS)", fmt(re.beta), fmt(reCI[0])+" ... "+fmt(reCI[1]), "theta="+fmt(re.theta));
+  }
+  var cardsDiv=document.getElementById("cards"); cardsDiv.innerHTML="";
+  for(i=0;i<cards.length;i++){
+    var c=cards[i];
+    var html="";
+    html += "<div class=\"card\">";
+    html += "<div class=\"title\">"+c.title+"</div>";
+    html += "<div class=\"value\">"+c.value+"</div>";
+    if(c.ciVals){ html += "<div class=\"muted\" style=\"font-size:12px;margin-top:4px;\">95% interval: "+c.ciVals+"</div>"; }
+    if(c.foot){ html += "<div class=\"foot\">"+c.foot+"</div>"; }
+    html += "</div>";
+    var wrap=document.createElement("div"); wrap.innerHTML=html; cardsDiv.appendChild(wrap.firstChild);
+  }
+
+  // Report
+  var rep=[];
+  if(S.rhoSel>0.5) rep.push("Selection likely (rho large): Cross-section and pooled may be biased; FE/RE differ.");
+  if(S.timeTrendOn) rep.push("Time trend on: consider time fixed effects if doing causal questions.");
+  if(S.sigmaME>0.8) rep.push("Strong measurement error can attenuate OLS, FE, and RE.");
+  if(rep.length===0) rep.push("No obvious red flags for demonstration. Compare FE vs RE for differences.");
+  document.getElementById("report").innerHTML = "<ul><li>"+rep.join("</li><li>")+"</li></ul>";
+
+  document.getElementById("estimatesArea").style.display = (S.viz==="estimates"||S.mode==="models") ? "block" : "none";
+  document.getElementById("diagArea").style.display = (S.viz==="diagnostics") ? "block" : "none";
+  renderNotation();
+}
+
+// ---- Bindings ----
+function bindRange(id,key){ var el=document.getElementById(id); el.value=S[key]; el.addEventListener("input", function(e){ S[key]=parseFloat(e.target.value); computeAndRender(); }); }
+function bindCheck(id,key){ var el=document.getElementById(id); el.checked=S[key]; el.addEventListener("change", function(e){ S[key]=!!e.target.checked; computeAndRender(); }); }
+
+function setMode(mode){
+  S.mode=mode;
+  var ids=["mode-descriptives","mode-models"];
+  for(var i=0;i<ids.length;i++) document.getElementById(ids[i]).classList.remove("active");
+  if(mode==="descriptives") document.getElementById("mode-descriptives").classList.add("active");
+  if(mode==="models") document.getElementById("mode-models").classList.add("active");
+  computeAndRender();
+}
+function setViz(v){
+  S.viz=v;
+  var ids=["viz-trajectories","viz-estimates","viz-diagnostics"];
+  for(var i=0;i<ids.length;i++) document.getElementById(ids[i]).classList.remove("active");
+  if(v==="trajectories") document.getElementById("viz-trajectories").classList.add("active");
+  if(v==="estimates") document.getElementById("viz-estimates").classList.add("active");
+  if(v==="diagnostics") document.getElementById("viz-diagnostics").classList.add("active");
+  computeAndRender();
+}
+
+function bindUI(){
+  document.getElementById("mode-descriptives").addEventListener("click", function(){ setMode("descriptives"); });
+  document.getElementById("mode-models").addEventListener("click", function(){ setMode("models"); });
+  document.getElementById("viz-trajectories").addEventListener("click", function(){ setViz("trajectories"); });
+  document.getElementById("viz-estimates").addEventListener("click", function(){ setViz("estimates"); });
+  document.getElementById("viz-diagnostics").addEventListener("click", function(){ setViz("diagnostics"); });
+
+  bindRange("N","N"); bindRange("T","T"); bindRange("betaTrue","betaTrue"); bindRange("sigmaU","sigmaU"); bindRange("sigmaE","sigmaE"); bindRange("sigmaME","sigmaME");
+  bindRange("pBase","pBase"); bindRange("rhoSel","rhoSel"); bindRange("switchRate","switchRate"); bindRange("timeTrendSlope","timeTrendSlope"); bindCheck("timeTrendOn","timeTrendOn");
+
+  document.getElementById("preset-selection").addEventListener("click", function(){ applyPreset("Selection bias"); });
+  document.getElementById("preset-rct").addEventListener("click", function(){ applyPreset("RCT-like"); });
+  document.getElementById("preset-noisy").addEventListener("click", function(){ applyPreset("Noisy survey"); });
+  document.getElementById("preset-trend").addEventListener("click", function(){ applyPreset("Trend and shock"); });
+  document.getElementById("preset-hetero").addEventListener("click", function(){ applyPreset("Heterogeneous effects"); });
+  document.getElementById("preset-revcause").addEventListener("click", function(){ applyPreset("Reverse causality"); });
+
+  document.getElementById("btn-download").addEventListener("click", function(){
+    var sim = simulate();
+    var header = ["pid","wave","D","u","e","yStar","y","trend"];
+    function esc(s){ return '"' + String(s).replace(/"/g,'""') + '"'; }
+    var csv = [header.join(",")].concat(sim.map(function(r){ return header.map(function(h){ return esc(r[h]); }).join(","); })).join("\n");
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href=url; a.download="sim_panel.csv"; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("tab-sim").addEventListener("click", function(){ document.getElementById("sim").style.display="block"; document.getElementById("info").style.display="none"; });
+  document.getElementById("tab-info").addEventListener("click", function(){ document.getElementById("sim").style.display="none"; document.getElementById("info").style.display="block"; });
+  document.getElementById("btn-refresh").addEventListener("click", function(){ location.search="?v="+Date.now(); });
+}
+
+function init(){ bindUI(); computeAndRender(); }
+window.addEventListener("DOMContentLoaded", init);
 </script>
 </body>
 </html>
