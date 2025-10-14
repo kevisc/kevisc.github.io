@@ -229,16 +229,6 @@ function DeckBuilder() {
     if (file) loadDeck(file);
   };
   
-  const addBtns = div.querySelectorAll('.addCard');
-  for (var i = 0; i < addBtns.length; i++) {
-    addBtns[i].onclick = (function(idx) {
-      return function() { 
-        state.decks[playerKey].push(Object.assign({}, state.cards[idx], { deckId: Date.now() + Math.random() })); 
-        render(); 
-      };
-    })(i);
-  }
-  
   const remBtns = div.querySelectorAll('.remCard');
   for (var j = 0; j < remBtns.length; j++) {
     remBtns[j].onclick = (function(idx) {
@@ -269,6 +259,13 @@ function DeckBuilder() {
   
   const allAvailCards = div.querySelectorAll('.availCard');
   for (var l = 0; l < allAvailCards.length; l++) {
+    allAvailCards[l].onclick = (function(idx) {
+      return function() { 
+        state.decks[playerKey].push(Object.assign({}, state.cards[idx], { deckId: Date.now() + Math.random() })); 
+        render(); 
+      };
+    })(l);
+    
     allAvailCards[l].onmouseenter = (function(card) {
       return function() {
         const idx = parseInt(card.getAttribute('data-card-idx'));
