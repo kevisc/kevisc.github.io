@@ -708,17 +708,15 @@ function GameBoard() {
       </div>
     </div>
     ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
-      <div class="modal" style="align-items: flex-end; padding-bottom: 120px;">
-        <div class="modal-content" style="max-width: 400px;">
-          <div class="text-center mb-4">${me.hand[state.selectedCard].name}</div>
-          <div class="flex" style="flex-wrap: wrap; gap: 8px;">
-            <button class="btn btn-primary text-sm placeCard" data-zone="upper">Upper Field</button>
-            <button class="btn btn-primary text-sm placeCard" data-zone="lower">Lower Field</button>
-            <button id="discardCard" class="btn btn-red text-sm">Discard</button>
-            <button id="toDeck" class="btn btn-green text-sm">To Deck</button>
-            <button id="cancel" class="btn btn-secondary text-sm">Cancel</button>
-          </div>
+      <div style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 16px; z-index: 1000; min-width: 300px;">
+        <div class="text-center mb-4" style="font-weight: bold;">${me.hand[state.selectedCard].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button class="btn btn-primary text-sm placeCard" data-zone="upper">Upper Field</button>
+          <button class="btn btn-primary text-sm placeCard" data-zone="lower">Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm">Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm">To Deck</button>
         </div>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%;">Cancel</button>
       </div>
     ` : ''}
     ${state.winner ? `
@@ -756,22 +754,39 @@ function GameBoard() {
   div.querySelector('#plusLP').onclick = () => { me.health++; sendGameUpdate(); render(); };
   div.querySelector('#endTurn').onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; sendGameUpdate(); render(); };
   
-  if (state.selectedCard !== null && div.querySelector('#discardCard')) {
-    div.querySelector('#discardCard').onclick = () => {
-      me.graveyard.push(me.hand[state.selectedCard]);
-      me.hand.splice(state.selectedCard, 1);
-      state.selectedCard = null;
-      sendGameUpdate();
-      render();
-    };
-    div.querySelector('#toDeck').onclick = () => {
-      me.deck.push(me.hand[state.selectedCard]);
-      me.hand.splice(state.selectedCard, 1);
-      state.selectedCard = null;
-      sendGameUpdate();
-      render();
-    };
-    div.querySelector('#cancel').onclick = () => { state.selectedCard = null; render(); };
+  // Card action menu handlers
+  if (state.selectedCard !== null) {
+    const discardBtn = div.querySelector('#discardCard');
+    const toDeckBtn = div.querySelector('#toDeck');
+    const cancelBtn = div.querySelector('#cancelSelect');
+    
+    if (discardBtn) {
+      discardBtn.onclick = () => {
+        me.graveyard.push(me.hand[state.selectedCard]);
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        sendGameUpdate();
+        render();
+      };
+    }
+    
+    if (toDeckBtn) {
+      toDeckBtn.onclick = () => {
+        me.deck.push(me.hand[state.selectedCard]);
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        sendGameUpdate();
+        render();
+      };
+    }
+    
+    if (cancelBtn) {
+      cancelBtn.onclick = () => { 
+        state.selectedCard = null; 
+        render(); 
+      };
+    }
+    
     div.querySelectorAll('.placeCard').forEach(btn => {
       btn.onclick = () => {
         const zone = btn.dataset.zone + 'Field';
@@ -796,8 +811,14 @@ function GameBoard() {
   }
   
   div.querySelectorAll('.hand-card').forEach((card, i) => {
-    card.onclick = () => { state.selectedCard = state.selectedCard === i ? null : i; render(); };
-    card.onmouseenter = () => { state.hoveredCard = me.hand[i]; render(); };
+    card.onclick = () => { 
+      state.selectedCard = state.selectedCard === i ? null : i; 
+      render(); 
+    };
+    card.onmouseenter = () => { 
+      state.hoveredCard = me.hand[i]; 
+      render(); 
+    };
   });
   
   div.querySelectorAll('.field-card').forEach(card => {
@@ -807,6 +828,25 @@ function GameBoard() {
       const idx = parseInt(card.dataset.idx);
       state.hoveredCard = owner === 'me' ? me[zone][idx] : opp[zone][idx];
       render();
+    };
+    card.onclick = () => {
+      const zone = card.dataset.zone;
+      const owner = card.dataset.owner;
+      const idx = parseInt(card.dataset.idx);
+      
+      if (owner === 'me') {
+        const action = prompt('Move card to:\n1. Hand\n2. Deck\n3. Graveyard\nEnter 1, 2, or 3:');
+        const cardData = me[zone][idx];
+        me[zone].splice(idx, 1);
+        
+        if (action === '1') me.hand.push(cardData);
+        else if (action === '2') me.deck.push(cardData);
+        else if (action === '3') me.graveyard.push(cardData);
+        else { me[zone].splice(idx, 0, cardData); return; }
+        
+        sendGameUpdate();
+        render();
+      }
     };
   });
   
