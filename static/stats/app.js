@@ -1,13 +1,7 @@
-// Cross‑Section vs Panel Estimation — ESM build (no Babel, no UMD)
-// Drop alongside index.html under /static/stats/ and open /stats/
-
+// Cross-Section vs Panel Estimation — ESM build (no Babel, no UMD)
 import React, { useMemo, useState } from "https://esm.sh/react@18";
 import { createRoot } from "https://esm.sh/react-dom@18/client";
-import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
-  LineChart, Line, ReferenceLine, ResponsiveContainer,
-  BarChart, Bar, ComposedChart, ErrorBar, Area
-} from "https://esm.sh/recharts@2.12.7?external=react,react-dom";
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, LineChart, Line, ReferenceLine, ResponsiveContainer, BarChart, Bar, ComposedChart, Area } from "https://esm.sh/recharts@2.12.7?external=react,react-dom";
 
 // ====================== Utilities ====================== //
 const mulberry32 = (a) => () => { let t = (a += 0x6d2b79f5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -16,14 +10,14 @@ const clamp = (x,a,b) => Math.max(a, Math.min(b, x));
 const rnorm = (rng, m=0, s=1) => { let u=0,v=0; while(u===0)u=rng(); while(v===0)v=rng(); const z=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); return m+s*z; };
 const variance = (a) => { const n=a.length; if(n<=1) return 0; const m=a.reduce((x,y)=>x+y,0)/n; return a.reduce((s,v)=>s+(v-m)**2,0)/(n-1); };
 const quantile = (a, q) => { if(!a.length) return NaN; const s=[...a].sort((x,y)=>x-y); const p=(s.length-1)*q; const lo=Math.floor(p), hi=Math.ceil(p); if(lo===hi) return s[lo]; return s[lo]*(hi-p)+s[hi]*(p-lo); };
+const mean = (arr) => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : NaN;
 const toCSV = (rows, header) => {
   const esc = (s) => '\"' + String(s).replace(/\"/g,'\"\"') + '\"';
   const head = header.map(esc).join(",");
-  const body = rows.map(r => header.map(h => esc(r[h])).join(",")).join("\\n");
-  return head + "\\n" + body;
+  const body = rows.map(r => header.map(h => esc(r[h])).join(",")).join("\n");
+  return head + "\n" + body;
 };
 
-// Weighted LS helper
 function wlsSimple(x, y, w) {
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN,fitted:[],resid:[] };
   const sw=w.reduce((a,b)=>a+b,0);
@@ -37,7 +31,6 @@ function wlsSimple(x, y, w) {
   return { beta, se, n, alpha, resid, fitted:x.map(v=>alpha+beta*v) };
 }
 
-// ----- Estimators ----- //
 function olsSimple(x, y) {
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN,fitted:[],resid:[] };
   const mx=x.reduce((a,b)=>a+b,0)/n, my=y.reduce((a,b)=>a+b,0)/n; let sxx=0,sxy=0;
@@ -68,7 +61,6 @@ function feWithin(personIds, x, y) {
   if(xw.length<3) return { beta:NaN,se:NaN,n:xw.length,alpha:NaN,fitted:[],resid:[] }; return olsSimple(xw,yw);
 }
 
-// Robust (Huber) IRLS, single regressor with intercept
 function huberIRLS(x, y, c=1.345, maxIter=30){
   const n=x.length; if(n<3) return { beta:NaN,se:NaN,n,alpha:NaN };
   let fit=olsSimple(x,y);
@@ -83,32 +75,28 @@ function huberIRLS(x, y, c=1.345, maxIter=30){
   return fit;
 }
 
-// Bayesian linear regression (Normal–Inverse-Gamma prior)
 function bayesPosterior(x, y){
   const n=x.length; if(n<3) return { betaMean:NaN, betaSE:NaN, ci:[NaN,NaN], alphaMean:NaN };
-  const v0a=100, v0b=10; const a0=2, b0=1; // weakly informative
+  const v0a=100, v0b=10; const a0=2, b0=1;
   let sumx=0,sumxx=0,sumy=0,sumxy=0,sumyy=0; for(let i=0;i<n;i++){ const xi=x[i], yi=y[i]; sumx+=xi; sumxx+=xi*xi; sumy+=yi; sumxy+=xi*yi; sumyy+=yi*yi; }
   const V0Inv00=1/v0a, V0Inv11=1/v0b; const XtX00=n, XtX01=sumx, XtX11=sumxx;
   const VnInv00=V0Inv00+XtX00, VnInv01=0+XtX01, VnInv11=V0Inv11+XtX11; const det=VnInv00*VnInv11 - VnInv01*VnInv01;
-  const Vn00= VnInv11/det, Vn01= -VnInv01/det, Vn11= VnInv00/det; // inverse of 2x2
-  const m0a=0, m0b=0;
-  const z0 = (0 + sumy), z1 = (0 + sumxy);
-  const mna = Vn00*z0 + Vn01*z1; const mnb = Vn01*z0 + Vn11*z1;
+  const Vn00= VnInv11/det, Vn01= -VnInv01/det, Vn11= VnInv00/det;
+  const mna = Vn00*(0 + sumy) + Vn01*(0 + sumxy);
+  const mnb = Vn01*(0 + sumy) + Vn11*(0 + sumxy);
   const an = a0 + n/2;
   const quad = (mna*(VnInv00*mna+VnInv01*mnb) + mnb*(VnInv01*mna+VnInv11*mnb));
   const bn = b0 + 0.5*(sumyy - quad);
-  const scale = bn/(an-1); // E[sigma2 | y]
+  const scale = bn/(an-1);
   const varBeta = scale * Vn11; const seBeta = Math.sqrt(Math.max(0,varBeta));
   const ci = [mnb - 1.96*seBeta, mnb + 1.96*seBeta];
   return { betaMean:mnb, betaSE:seBeta, ci, alphaMean:mna, an, bn };
 }
 
-// Normal helpers
 function erf(x){const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911; const s=x<0?-1:1; x=Math.abs(x); const t=1/(1+p*x); const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x)); return s*y;} 
 const phi = (z)=> 0.5*(1+erf(z/Math.SQRT2));
 function erfinv(x){ const a=0.147; const ln = Math.log(1-x*x); const s = (2/(Math.PI*a) + ln/2); const res = Math.sign(x)*Math.sqrt( Math.sqrt(s*s - ln/a) - s ); return res; }
 
-// ====================== Small UI helpers ====================== //
 function Slider({label,min,max,step,value,onChange}){
   return (<div><div className="flex items-center justify-between mb-1"><label className="text-sm text-neutral-300">{label}</label><span className="text-xs text-neutral-400">{min}–{max}</span></div><input type="range" min={min} max={max} step={step} value={value} onChange={(e)=>onChange(parseFloat(e.target.value))} className="w-full accent-neutral-200"/></div>);
 }
@@ -116,9 +104,7 @@ function ResultCard({title,value,ci,details,foot,warn,large}){
   return (<div className={`bg-neutral-900/60 border rounded-2xl ${large? 'p-5':'p-4'} ${warn? 'border-red-800':'border-neutral-800'}`}><div className="text-sm text-neutral-400">{title}</div><div className={`${large? 'text-3xl':'text-2xl'} font-semibold mt-1`}>{value}</div>{ci&&<div className="text-xs text-neutral-400 mt-1">95% interval: {ci}</div>}{details&&<div className="text-xs text-neutral-400 mt-1">{details}</div>}{foot&&<div className="text-xs text-neutral-500 mt-2">{foot}</div>}</div>);
 }
 function PresetButton({onClick,label}){ return (<button onClick={onClick} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">{label}</button>); }
-const applyPreset = (name) => console.log("Preset clicked:", name);
 
-// ====================== Main Component ====================== //
 function App(){
   const [tab,setTab]=useState("sim");
   const [vizTab,setVizTab]=useState('trajectories');
@@ -126,13 +112,11 @@ function App(){
 
   const [scenario,setScenario]=useState({ id:"Custom", title:"Custom scenario", d:"Treatment (D)", y:"Outcome (Y)", desc:"Tweak controls to explore biases.", issues:["Selection","Trends/Shocks","Serial correlation","Measurement error"]});
 
-  // Core params
   const [seed,setSeed]=useState(42); const [N,setN]=useState(600); const [T,setT]=useState(8);
   const [betaTrue,setBetaTrue]=useState(0.6); const [betaHet,setBetaHet]=useState(0.0);
   const [sigmaU,setSigmaU]=useState(1.2); const [sigmaE,setSigmaE]=useState(1.0); const [sigmaME,setSigmaME]=useState(0.3);
   const [pBase,setPBase]=useState(0.5); const [rhoSel,setRhoSel]=useState(1.0); const [switchRate,setSwitchRate]=useState(0.25);
 
-  // Assumptions
   const [timeTrendOn,setTimeTrendOn]=useState(true); const [timeTrendSlope,setTimeTrendSlope]=useState(0.05);
   const [shockAllOn,setShockAllOn]=useState(false); const [shockAllWave,setShockAllWave]=useState(5); const [shockAllSize,setShockAllSize]=useState(0.8);
   const [shockTreatOn,setShockTreatOn]=useState(false); const [shockTreatWave,setShockTreatWave]=useState(6); const [shockTreatSize,setShockTreatSize]=useState(0.8);
@@ -145,7 +129,6 @@ function App(){
 
   const rng = useMemo(()=>mulberry32(seed),[seed]);
 
-  // ---------- Simulate data ---------- //
   const sim = useMemo(()=>{
     const persons = Array.from({length:N},(_,i)=>i); const u = persons.map(()=>rnorm(rng,0,sigmaU));
     const alpha = Math.log(pBase/(1-pBase)); const uSD = sigmaU<=0?1:sigmaU; const rows=[];
@@ -163,16 +146,15 @@ function App(){
         const yStar = beta_i*D_true + u[i] + e_it + trend + shockC + shockT;
         const base = expOutcomeOn ? Math.exp(expScale*yStar) : yStar;
         const y = base + rnorm(rng,0,sigmaME);
-        const D = (misclassOn && rng()<misclassP) ? 1-D_true : D_true;
+        const D = (misclassOn && Math.random()<misclassP) ? 1-D_true : D_true;
         rows.push({ pid:i, wave:t+1, D_true, D, u:u[i], e:e_it, yStar, y, trend, shockCommon:shockC, shockTreat:shockT });
-        if(attritionOn && t<T-1){ const dropP = clamp(attrBase + attrSlope*logistic(-yStar), 0, 0.95); if(rng()<dropP) break; }
+        if(attritionOn && t<T-1){ const dropP = clamp(attrBase + attrSlope*logistic(-yStar), 0, 0.95); if(Math.random()<dropP) break; }
         yLag=yStar;
       }
     }
     return rows;
   },[N,T,betaTrue,betaHet,sigmaU,sigmaE,sigmaME,pBase,rhoSel,switchRate,timeTrendOn,timeTrendSlope,shockAllOn,shockAllWave,shockAllSize,shockTreatOn,shockTreatWave,shockTreatSize,ar1On,rhoE,dynSelOn,gammaDY,misclassOn,misclassP,attritionOn,attrBase,attrSlope,rng,expOutcomeOn,expScale,heteroOn,heteroDWeight,heteroUWeight]);
 
-  // ---------- Derived & estimators ---------- //
   const cross = useMemo(()=>sim.filter(r=>r.wave===1),[sim]); const pooled = sim;
   const xCross = cross.map(r=>r.D), xPooled = pooled.map(r=>r.D), idsPooled = pooled.map(r=>r.pid);
   const yCross = cross.map(r=>r.y), yPooled = pooled.map(r=>r.y);
@@ -199,6 +181,17 @@ function App(){
     return chosen.map(id=>({ id, series: pooled.filter(r=>r.pid===id).map(r=>({t:r.wave,y:r.y})) }));
   },[pooled,seed]);
 
+  const summary = useMemo(()=>{
+    const series = [];
+    for(let t=1; t<=T; t++){
+      const arr = pooled.filter(r=>r.wave===t).map(r=>r.y);
+      if(arr.length){
+        series.push({ t, mean: mean(arr), median: quantile(arr,0.5), p25: quantile(arr,0.25), p75: quantile(arr,0.75) });
+      }
+    }
+    return series;
+  },[pooled,T]);
+
   const residPoints = useMemo(()=> pooled.map(r=>({ fit: pooledOLS.alpha + pooledOLS.beta*r.D, resid: r.y-(pooledOLS.alpha+pooledOLS.beta*r.D), pid:r.pid, wave:r.wave })),[pooled,pooledOLS]);
   const hist = useMemo(()=>{ const a=residPoints.map(d=>d.resid); if(!a.length) return []; const mn=Math.min(...a), mx=Math.max(...a), bins=20; const w=(mx-mn)/bins||1; const cnt=new Array(bins).fill(0); a.forEach(v=>{ const i=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/w))); cnt[i]++; }); return cnt.map((c,i)=>({bin:(mn+i*w).toFixed(2),count:c})); },[residPoints]);
   const qqData = useMemo(()=>{ const r = residPoints.map(d=>d.resid).sort((a,b)=>a-b); const n=r.length; if(n<5) return []; return r.map((v,i)=>{ const p=(i+0.5)/n; const z = Math.SQRT2 * erfinv(2*p-1); return { theor:z, sample:v }; }); },[residPoints]);
@@ -211,8 +204,8 @@ function App(){
 
   const hausman = useMemo(()=>{ if(!(isFinite(pooledOLS.beta)&&isFinite(pooledOLS.se)&&isFinite(fe.beta)&&isFinite(fe.se))) return { z:NaN,p:NaN,diff:NaN }; const diff=pooledOLS.beta-fe.beta; const seDiff=Math.sqrt(pooledOLS.se**2 + fe.se**2); const z=diff/(seDiff||NaN); const p=isFinite(z)? 2*(1-phi(Math.abs(z))) : NaN; return { z, p, diff }; },[pooledOLS,fe]);
   const bp = useMemo(()=>{ const r2=residPoints.map(d=>d.resid**2); if(r2.length<3) return { LM:NaN,p:NaN }; const f=olsSimple(xPooled,r2); const m=r2.reduce((a,b)=>a+b,0)/r2.length; const sst=r2.reduce((s,v)=>s+(v-m)**2,0); const ssr=r2.reduce((s,v,i)=>s+(v-(f.alpha+f.beta*xPooled[i]))**2,0); const R2=sst===0?0:1-ssr/sst; const LM=r2.length*R2; const p=2*(1-phi(Math.sqrt(LM))); return { LM, p }; },[residPoints,xPooled]);
-  const pretrend = useMemo(()=>{ const t=[]; const gaps=[]; for(let w=1; w<=T; w++){ const rows=pooled.filter(r=>r.wave===w); if(!rows.length) continue; const y1=rows.filter(r=>r.D===1).map(r=>r.y); const y0=rows.filter(r=>r.D===0).map(r=>r.y); if(y1.length<5||y0.length<5) continue; const m1=y1.reduce((a,b)=>a+b,0)/y1.length; const m0=y0.reduce((a,b)=>a+b,0)/y0.length; t.push(w); gaps.push(m1-m0); } if(t.length<3) return { slope:NaN,p:NaN }; const f=olsSimple(t,gaps); const z=f.se? f.beta/f.se : NaN; const p=isFinite(z)? 2*(1-phi(Math.abs(z))) : NaN; return { slope:f.beta, p }; },[pooled,T]);
-  const meanAR1 = useMemo(()=>{ const by=new Map(); residPoints.forEach(d=>{ if(!by.has(d.pid)) by.set(d.pid,[]); by.get(d.pid).push(d); }); let sum=0,cnt=0; by.forEach(arr=>{ const s=arr.sort((a,b)=>a.wave-b.wave); const y1=[], y2=[]; for(let i=1;i<s.length;i++){ y1.push(s[i-1].resid); y2.push(s[i].resid); } if(y1.length>1){ const m1=y1.reduce((a,b)=>a+b,0)/y1.length, m2=y2.reduce((a,b)=>a+b,0)/y2.length; let num=0,den=0; for(let i=0;i<y1.length;i++){ num+=(y1[i]-m1)*(y2[i]-m2); den+=(y1[i]-m1)**2; } if(den>0){ sum+=num/den; cnt++; } } }); return cnt? sum/cnt : NaN; },[residPoints]);
+  const pretrend = useMemo(()=>{ const t=[]; const gaps=[]; for(let w=1; w<=T; w++){ const rows=pooled.filter(r=>r.wave===w); if(!rows.length) continue; const y1=rows.filter(r=>r.D===1).map(r=>r.y); const y0=rows.filter(r=>r.D===0).map(r=>r.y); if(y1.length<5||y0.length<5) continue; const m1=mean(y1); const m0=mean(y0); t.push(w); gaps.push(m1-m0); } if(t.length<3) return { slope:NaN,p:NaN }; const f=olsSimple(t,gaps); const z=f.se? f.beta/f.se : NaN; const p=isFinite(z)? 2*(1-phi(Math.abs(z))) : NaN; return { slope:f.beta, p }; },[pooled,T]);
+  const meanAR1 = useMemo(()=>{ const by=new Map(); residPoints.forEach(d=>{ if(!by.has(d.pid)) by.set(d.pid,[]); by.get(d.pid).push(d); }); let sum=0,cnt=0; by.forEach(arr=>{ const s=arr.sort((a,b)=>a.wave-b.wave); const y1=[], y2=[]; for(let i=1;i<s.length;i++){ y1.push(s[i-1].resid); y2.push(s[i].resid); } if(y1.length>1){ const m1=mean(y1), m2=mean(y2); let num=0,den=0; for(let i=0;i<y1.length;i++){ num+=(y1[i]-m1)*(y2[i]-m2); den+=(y1[i]-m1)**2; } if(den>0){ sum+=num/den; cnt++; } } }); return cnt? sum/cnt : NaN; },[residPoints]);
 
   const huberPooled = useMemo(()=> huberIRLS(xPooled,yPooled), [xPooled,yPooled]);
   const bayesPooled = useMemo(()=> bayesPosterior(xPooled,yPooled), [xPooled,yPooled]);
@@ -235,7 +228,7 @@ function App(){
 
   const selfTests = useMemo(()=>{
     const R = [];
-    try{ const rows=[{a:1,b:2},{a:'a\"b',b:4}], header=['a','b']; const csv=toCSV(rows,header); const lines=csv.split('\\n'); R.push({name:'CSV header/rows',pass:lines.length===3,detail:String(lines.length)}); R.push({name:'CSV quote escape',pass:csv.includes('\"a\"\"b\"'),detail:lines[1]}); }catch(e){ R.push({name:'CSV',pass:false,detail:String(e)}); }
+    try{ const rows=[{a:1,b:2},{a:'a\"b',b:4}], header=['a','b']; const csv=toCSV(rows,header); const lines=csv.split('\n'); R.push({name:'CSV header/rows',pass:lines.length===3,detail:String(lines.length)}); R.push({name:'CSV quote escape',pass:csv.includes('\"a\"\"b\"'),detail:lines[1]}); }catch(e){ R.push({name:'CSV',pass:false,detail:String(e)}); }
     try{ const d=olsSimple([0,0,0,0],[1,2,3,4]); R.push({name:'OLS constant regressor',pass:Number.isNaN(d.beta),detail:`beta=${d.beta}`}); }catch(e){ R.push({name:'OLS const',pass:false,detail:String(e)}); }
     try{ const x=[0,1,2,3], y=x.map(v=>3+2*v); const f=olsSimple(x,y); R.push({name:'OLS exact recovery',pass:Math.abs(f.beta-2)<1e-12 && Math.abs(f.alpha-3)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'OLS recover',pass:false,detail:String(e)}); }
     try{ const ids=[1,1,2,2], x=[0,1,0,1], y=[0,1,2,3]; const f=feWithin(ids,x,y); R.push({name:'FE exact recovery',pass:Math.abs(f.beta-1)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE',pass:false,detail:String(e)}); }
@@ -247,23 +240,13 @@ function App(){
 
   const downloadCSV = () => { const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"]; const csv=toCSV(pooled,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url); };
 
-  const TabButton = ({id,children}) => (
-    <button onClick={()=>setTab(id)} className={`px-3 py-2 rounded-lg border ${tab===id? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>{children}</button>
-  );
-  const AnalysisPill = ({id,label}) => (
-    <button onClick={()=>setAnalysisTab(id)} className={`px-2.5 py-1 rounded-md text-xs border ${analysisTab===id? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>{label}</button>
-  );
-  const VizPill = ({id,label}) => (
-    <button onClick={()=>setVizTab(id)} className={`px-2.5 py-1 rounded-md text-xs border ${vizTab===id? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>{label}</button>
-  );
-
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-neutral-100">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <header className="mb-4 md:mb-6">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cross-Section vs Panel Estimation — Demonstrator</h1>
           <p className="text-neutral-300 mt-2 max-w-4xl">Explore how cross-sectional, pooled, fixed-effects, robust, and Bayesian estimators behave under realistic panel data-generating processes. Toggle selection, trends, shocks, serial correlation, dynamics, misclassification, heterogeneity, and attrition.</p>
-          <div className="mt-4 flex gap-2"><TabButton id="sim">Simulator</TabButton><TabButton id="info">Info</TabButton></div>
+          <div className="mt-4 flex gap-2"><button onClick={()=>setTab('sim')} className={`px-3 py-2 rounded-lg border ${tab==='sim'? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>Simulator</button><button onClick={()=>setTab('info')} className={`px-3 py-2 rounded-lg border ${tab==='info'? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>Info</button></div>
         </header>
 
         {tab==='sim'? (
@@ -292,25 +275,25 @@ function App(){
                 <Slider label={`Measurement error SD (σₘₑ): ${sigmaME.toFixed(2)}`} min={0} max={3} step={0.05} value={sigmaME} onChange={setSigmaME} />
                 <Slider label={`Base prevalence P(D=1): ${pBase.toFixed(2)}`} min={0.05} max={0.95} step={0.01} value={pBase} onChange={setPBase} />
                 <Slider label={`Selection strength (ρ): ${rhoSel.toFixed(2)}`} min={0} max={2} step={0.05} value={rhoSel} onChange={setRhoSel} />
-                <Slider label={`Switch rate: ${switchRate.toFixed(2)}`} min={0} max={1} step={0.05} value={switchRate} />
+                <Slider label={`Switch rate: ${switchRate.toFixed(2)}`} min={0} max={1} step={0.05} value={switchRate} onChange={setSwitchRate} />
 
                 <div className="pt-2 grid grid-cols-1 gap-2">
                   <div className="flex flex-wrap gap-2">
-                    <PresetButton onClick={()=>applyPreset('SelectionBias')} label="Preset: Tutoring bias" />
-                    <PresetButton onClick={()=>applyPreset('RandomizedClean')} label="Preset: RCT" />
-                    <PresetButton onClick={()=>applyPreset('MeasurementError')} label="Preset: Noisy survey" />
-                    <PresetButton onClick={()=>applyPreset('PolicyDIDViolation')} label="Preset: Policy (DiD viol.)" />
-                    <PresetButton onClick={()=>applyPreset('HeterogeneousTE')} label="Preset: Heterog. TE" />
+                    <button onClick={()=>setRhoSel(1.2)} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Tutoring bias</button>
+                    <button onClick={()=>{setRhoSel(0); setTimeTrendOn(false); setShockAllOn(false); setShockTreatOn(false);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: RCT</button>
+                    <button onClick={()=>{setMisclassOn(true); setMisclassP(0.25); setSigmaME(0.9);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Noisy survey</button>
+                    <button onClick={()=>{setShockAllOn(true); setShockAllWave(6); setShockTreatOn(true); setShockTreatWave(7);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Policy (DiD viol.)</button>
+                    <button onClick={()=>{setHeteroOn(true); setBetaHet(0.6);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Heterog. TE</button>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <PresetButton onClick={()=>applyPreset('OLS_Nonlinear')} label="Preset: OLS nonlinearity" />
-                    <PresetButton onClick={()=>applyPreset('OLS_Heteroskedastic')} label="Preset: OLS heterosked." />
-                    <PresetButton onClick={()=>applyPreset('TrendOnly')} label="Preset: Pure trend" />
-                    <PresetButton onClick={()=>applyPreset('ReverseCausality')} label="Preset: Reverse causality" />
+                    <button onClick={()=>{setExpOutcomeOn(true); setExpScale(0.4);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: OLS nonlinearity</button>
+                    <button onClick={()=>{setHeteroOn(true); setHeteroDWeight(0.9); setHeteroUWeight(0.5);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: OLS heterosked.</button>
+                    <button onClick={()=>{setTimeTrendOn(true); setTimeTrendSlope(0.08); setRhoSel(0);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Pure trend</button>
+                    <button onClick={()=>{setDynSelOn(true); setGammaDY(0.8);}} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm">Preset: Reverse causality</button>
                   </div>
                 </div>
 
-                <div className="pt-3"><button onClick={downloadCSV} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full">Download simulated CSV</button></div>
+                <div className="pt-3"><button onClick={()=>{ const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"]; const csv=toCSV(pooled,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url); }} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 w-full">Download simulated CSV</button></div>
                 <p className="text-xs text-neutral-400">FE uses within-person changes (non-switchers do not identify β). Robust = Huber IRLS.
                 Bayesian uses a weakly-informative Normal–Inverse-Gamma prior for pooled OLS.</p>
               </div>
@@ -325,7 +308,7 @@ function App(){
                   <h3 className="font-semibold mb-2">Model notation</h3>
                   <pre className="whitespace-pre-wrap text-neutral-200 leading-5">{`
 βᵢ = β + β_h·(uᵢ/σᵤ)    (β=${fmt(betaTrue,2)}, β_h=${fmt(betaHet,2)}, σᵤ=${fmt(sigmaU,2)})
-Outcome base:  y*ᵢₜ = βᵢ·Dᵢₜ + uᵢ + eᵢₜ + γ·t + ξ·1{t=${5}} + τ·Dᵢₜ·1{t=${6}}
+Outcome base:  y*ᵢₜ = βᵢ·Dᵢₜ + uᵢ + eᵢₜ + γ·t + ξ·1{t=${shockAllWave}} + τ·Dᵢₜ·1{t=${shockTreatWave}}
 Observed Y:   yᵢₜ = ${expOutcomeOn? 'exp(κ·y*ᵢₜ)' : 'y*ᵢₜ'} + νᵢₜ   (κ=${expOutcomeOn?fmt(expScale,2):'0'},  σₘₑ=${fmt(sigmaME,2)})
 Errors:       eᵢₜ = ${ar1On?`ρₑ·eᵢ,ₜ₋₁ + ηᵢₜ (ρₑ=${fmt(rhoE,2)})`:'ηᵢₜ (i.i.d.)'}  with σₑ=${fmt(sigmaE,2)}
 Treatment:    Pr(Dᵢₜ=1 | uᵢ, y*ᵢ,ₜ₋₁) = logit⁻¹(α + ρ·(uᵢ/σᵤ) + γ_dy·tanh(y*ᵢ,ₜ₋₁)), α=logit(${fmt(pBase,2)})
@@ -357,7 +340,7 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                         </ResponsiveContainer></div>
                       </div>
                       <div className="bg-neutral-950/40 border border-neutral-800 rounded-2xl p-3">
-                        <h3 className="font-semibold mb-2">Panel trajectories (sample)</h3>
+                        <h3 className="font-semibold mb-2">Panel trajectories (20 units) + summary</h3>
                         <div className="w-full h-[26rem]"><ResponsiveContainer width="100%" height="100%">
                           <LineChart margin={{top:10,right:10,bottom:10,left:10}}>
                             <CartesianGrid strokeDasharray="3 3"/>
@@ -366,9 +349,14 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                             {spaghetti.map(s=>(
                               <Line key={s.id} data={s.series} dataKey="y" dot={false} type="monotone" />
                             ))}
+                            <Line data={summary} dataKey="mean" dot={false} type="monotone" />
+                            <Line data={summary} dataKey="median" dot={false} type="monotone" />
+                            <Line data={summary} dataKey="p25" dot={false} type="monotone" />
+                            <Line data={summary} dataKey="p75" dot={false} type="monotone" />
                             <ReferenceLine y={0} strokeDasharray="4 4" />
                           </LineChart>
                         </ResponsiveContainer></div>
+                        <p className="text-xs text-neutral-400 mt-2">Faint lines: 20 random units. Bold lines: mean, median, 25th, and 75th percentiles by wave.</p>
                       </div>
                     </div>
                   )}
@@ -376,38 +364,36 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                   {vizTab==='estimates' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div className="bg-neutral-950/40 border border-neutral-800 rounded-2xl p-3">
-                        <h3 className="font-semibold mb-2">Estimator β with 95% interval</h3>
+                        <h3 className="font-semibold mb-2">Estimator β (95% intervals noted)</h3>
                         {(() => {
-                          const data = [];
-                          const push = (name, b, se) => data.push({ name, b, err: 1.96*se });
+                          const rows = [];
+                          const push = (name, b, se) => rows.push({ name, b, se });
                           if (analysisTab==='frequentist'){
                             if (isFinite(cs.beta) && isFinite(cs.se)) push("Cross-section", cs.beta, cs.se);
                             if (isFinite(pooledOLS.beta) && isFinite(pooledOLS.se)) push("Pooled", pooledOLS.beta, pooledOLS.se);
                             if (isFinite(fe.beta) && isFinite(fe.se)) push("Fixed Effects", fe.beta, fe.se);
                           } else if(analysisTab==='robust'){
                             if (isFinite(pooledOLS.beta) && isFinite(pooledOLS.se)) push("Pooled OLS", pooledOLS.beta, pooledOLS.se);
-                            const hub = huberIRLS(xPooled,yPooled);
+                            const hub = huberPooled;
                             if (isFinite(hub.beta) && isFinite(hub.se)) push("Huber robust", hub.beta, hub.se);
                           } else if(analysisTab==='bayesian'){
-                            const bp = bayesPosterior(xPooled,yPooled);
-                            data.push({name:'Bayesian pooled', b: bp.betaMean, err: 1.96*(bp.betaSE||NaN)});
-                            data.push({name:'Frequentist pooled', b: pooledOLS.beta, err: 1.96*(pooledOLS.se||NaN)});
+                            const bp = bayesPooled;
+                            rows.push({name:'Bayesian pooled', b: bp.betaMean, se: bp.betaSE});
+                            rows.push({name:'Frequentist pooled', b: pooledOLS.beta, se: pooledOLS.se});
                           }
                           return (
                             <div className="w-full h-[26rem]"><ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={data} margin={{top:10,right:10,bottom:10,left:10}}>
+                              <BarChart data={rows} margin={{top:10,right:10,bottom:10,left:10}}>
                                 <CartesianGrid strokeDasharray="3 3"/>
                                 <XAxis dataKey="name" />
                                 <YAxis />
-                                <Bar dataKey="b">
-                                  <ErrorBar dataKey="err" direction="y" />
-                                </Bar>
+                                <Bar dataKey="b" />
                                 <ReferenceLine y={betaTrue} strokeDasharray="4 4" />
                               </BarChart>
                             </ResponsiveContainer></div>
                           );
                         })()}
-                        <p className="text-xs text-neutral-400 mt-2">Bars show point estimates; error bars show ±1.96×SE (Bayesian uses posterior variance). Dashed line marks true β.</p>
+                        <p className="text-xs text-neutral-400 mt-2">Dashed line marks the true β. 95% intervals shown in the cards and can be recomputed from SEs.</p>
                       </div>
 
                       <div className="bg-neutral-950/40 border border-neutral-800 rounded-2xl p-3">
@@ -467,11 +453,32 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                   )}
                 </div>
 
+                {analysisTab!=='descriptives' && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <ResultCard title="True β" value={fmt(betaTrue)} details={`Outcome: ${scenario.y} | Treatment: ${scenario.d}`} large />
+                    {analysisTab==='frequentist' && (<>
+                      <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={`${fmt(csCI[0])} … ${fmt(csCI[1])}`} foot={`n=${cs.n}`} warn={Number.isNaN(cs.beta)} large />
+                      <ResultCard title={'Pooled OLS'} value={fmt(pooledOLS.beta)} ci={`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`} foot={`n=${pooledOLS.n}, cl.SE=${fmt(pooledCluster.seCluster)}`} warn={Number.isNaN(pooledOLS.beta)} large />
+                      <ResultCard title="Fixed Effects (within)" value={fmt(fe.beta)} ci={`${fmt(feCI[0])} … ${fmt(feCI[1])}`} foot={`obs=${fe.n}, switchers=${isFinite(shareSwitchers)?(shareSwitchers*100).toFixed(0):'—'}%`} warn={Number.isNaN(fe.beta)} large />
+                    </>)}
+                    {analysisTab==='robust' && (<>
+                      <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={`${fmt(csCI[0])} … ${fmt(csCI[1])}`} foot={`n=${cs.n}`} large />
+                      <ResultCard title={'Pooled (Huber robust)'} value={fmt(huberPooled.beta)} ci={`±1.96·SE ≈ ${fmt(1.96*(huberPooled.se||NaN))}`} foot={`n=${huberPooled.n}`} warn={Number.isNaN(huberPooled.beta)} large />
+                      <ResultCard title="Fixed Effects (within)" value={fmt(fe.beta)} ci={`${fmt(feCI[0])} … ${fmt(feCI[1])}`} foot={`obs=${fe.n}`} large />
+                    </>)}
+                    {analysisTab==='bayesian' && (<>
+                      <ResultCard title={'Bayesian pooled β (mean)'} value={fmt(bayesPooled.betaMean)} ci={`${fmt(bayesPooled.ci[0])} … ${fmt(bayesPooled.ci[1])}`} foot={`SE≈${fmt(bayesPooled.betaSE)}`} large />
+                      <ResultCard title={'Frequentist pooled β'} value={fmt(pooledOLS.beta)} ci={`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`} foot={`cl.SE=${fmt(pooledCluster.seCluster)}`} large />
+                      <ResultCard title={'Cross-section OLS'} value={fmt(cs.beta)} ci={`${fmt(csCI[0])} … ${fmt(csCI[1])}`} foot={`n=${cs.n}`} large />
+                    </>)}
+                  </div>
+                )}
+
                 <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4">
                   <h3 className="font-semibold mb-2">Diagnostic report</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="md:col-span-2"><ul className="space-y-1"><li>• Inspect serial correlation and heteroskedasticity; prefer FE when selection on levels is strong.</li></ul></div>
-                    <div className="md:col-span-1"><div className="font-medium mb-1">Suggested remedies</div><ul className="list-disc pl-5 space-y-1 text-neutral-300"><li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID where plausible</li></ul></div>
+                    <div className="md:col-span-2"><ul className="space-y-1">{diag.warns.map((w,i)=>(<li key={i}>{w.lvl} {w.msg}</li>))}</ul></div>
+                    <div className="md:col-span-1"><div className="font-medium mb-1">Suggested remedies</div><ul className="list-disc pl-5 space-y-1 text-neutral-300">{diag.suggestions.length? diag.suggestions.map((s,i)=>(<li key={i}>{s}</li>)) : (<><li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID where plausible</li></>)}</ul></div>
                   </div>
                 </div>
 
@@ -486,9 +493,9 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
           <section className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-5">
             <h2 className="text-xl font-semibold mb-3">Quick explanation</h2>
             <div className="text-sm space-y-3 text-neutral-200">
-              <p>This demo contrasts <span className="font-medium">cross-sectional</span>, <span className="font-medium">pooled</span>, and <span className="font-medium">fixed-effects</span> estimators, and adds <span className="font-medium">robust</span> and <span className="font-medium">Bayesian</span> alternatives, on synthetic panel data.</p>
+              <p>This demo contrasts <span className="font-medium">cross-sectional</span>, <span className="font-medium">pooled</span>, and <span className="font-medium">fixed-effects</span> estimators, with robust and Bayesian alternatives, on synthetic panel data.</p>
               <p className="text-neutral-300">Current scenario: <span className="font-medium">{scenario.title}</span>. D = {scenario.d}; Y = {scenario.y}.</p>
-              <pre className="whitespace-pre-wrap text-xs text-neutral-300">{`DGP (compact): βᵢ=β+β_h(uᵢ/σᵤ);  y*ᵢₜ=βᵢDᵢₜ+uᵢ+eᵢₜ+γt+ξ1{t=5}+τDᵢₜ1{t=6};  y= ${expOutcomeOn?'exp(κy*)':'y*'} +ν.`}</pre>
+              <pre className="whitespace-pre-wrap text-xs text-neutral-300">{`DGP (compact): βᵢ=β+β_h(uᵢ/σᵤ);  y*ᵢₜ=βᵢDᵢₜ+uᵢ+eᵢₜ+γt+ξ1{t=${shockAllWave}}+τDᵢₜ1{t=${shockTreatWave}};  y= ${expOutcomeOn?'exp(κy*)':'y*'} +ν.`}</pre>
             </div>
           </section>
         )}
@@ -499,4 +506,4 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(React.createElement(App));
