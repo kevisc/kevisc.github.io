@@ -214,7 +214,7 @@ function DeckBuilder() {
   }).join('');
   
   const availCardsHtml = state.cards.map(function(c, idx) {
-    return '<div class="inline-block relative group m-1 availCard" data-card-idx="' + idx + '" data-location="avail"><img src="' + createCardImg(c) + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-green-400 cursor-pointer addCard" data-id="' + idx + '"></div>';
+    return '<div class="inline-block relative group m-1 availCard cursor-pointer" data-card-idx="' + idx + '" data-location="avail"><img src="' + createCardImg(c) + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-green-400 pointer-events-none"></div>';
   }).join('');
 
   const sidebarCard = state.hoveredCard ? '<div class="bg-gray-700 rounded-lg p-3"><div class="text-center font-bold mb-1 text-sm">' + state.hoveredCard.name + '</div><div class="text-center text-xs text-gray-400 mb-2">' + state.hoveredCard.type + '</div>' + (state.hoveredCard.image ? '<img src="' + state.hoveredCard.image + '" class="w-full rounded mb-2">' : '<div class="w-full h-32 bg-gray-600 rounded mb-2 flex items-center justify-center text-3xl">🃏</div>') + (state.hoveredCard.type === 'Monster' ? '<div class="flex justify-between mb-2 text-xs"><span>ATK: ' + state.hoveredCard.attack + '</span><span>DEF: ' + state.hoveredCard.defense + '</span></div>' : '') + '<div class="text-xs text-gray-300">' + state.hoveredCard.effect + '</div></div>' : '<div class="text-gray-500 text-center p-4 text-sm">Hover card for details</div>';
