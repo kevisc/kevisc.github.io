@@ -274,22 +274,35 @@ function feWithin(ids,x,y){
   if(X.length<3) return {beta:NaN,se:NaN,n:X.length,alpha:NaN};
   return olsSimple(X,Y);
 }
+
 function huberIRLS(x,y,c,maxIter){
   if(c===void 0)c=1.345; if(maxIter===void 0)maxIter=30;
   var fit=olsSimple(x,y);
   function medAbsDev(arr){
+    if(!arr || !arr.length) return 1e-6;
     var m=quantile(arr,0.5);
     var dev=arr.map(function(v){return Math.abs(v-m)});
-    return quantile(dev,0.5)||1e-6;
+    var mad=quantile(dev,0.5);
+    return (mad && isFinite(mad)) ? mad : 1e-6;
   }
   for(var it=0; it<maxIter; it++){
     var s = 1.4826 * medAbsDev(fit.resid);
-    var w = fit.resid.map(function(r){ var t=Math.abs(r/(s||1e-6)); return t>c? c/t : 1; });
+    var w = [];
+    for(var i=0;i<x.length;i++){
+      var r = fit.resid && fit.resid[i]!==undefined ? fit.resid[i] : (y[i] - (fit.alpha + fit.beta*x[i]));
+      var t = Math.abs(r/(s||1e-6));
+      w.push(t>c? c/t : 1);
+    }
     fit = wlsSimple(x,y,w);
+    // attach residuals for next iteration
+    var res = new Array(x.length);
+    for(i=0;i<x.length;i++){ res[i] = y[i] - (fit.alpha + fit.beta*x[i]); }
+    fit.resid = res;
     if(!isFinite(fit.beta)) break;
   }
   return fit;
 }
+
 function bayesPosterior(x,y){
   var n=x.length; if(n<3) return {betaMean:NaN,betaSE:NaN,ci:[NaN,NaN],alphaMean:NaN};
   var v0a=100, v0b=10, a0=2, b0=1;
