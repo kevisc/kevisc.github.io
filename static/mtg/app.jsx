@@ -23,11 +23,12 @@ const state = {
   editingCard: null,
   activePlayer: 1,
   gameState: {
-    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 },
-    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 }
+    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 8000 },
+    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 8000 }
   },
   gameStarted: false,
-  winner: null
+  winner: null,
+  selectedCard: null
 };
 
 function compressImage(file, callback) {
@@ -150,13 +151,15 @@ function CardCreator() {
 function DeckBuilder() {
   const playerKey = 'player' + state.currentPlayer;
   const div = document.createElement('div');
-  div.className = 'min-h-screen bg-gray-900 p-8';
+  div.className = 'min-h-screen bg-black p-4';
 
-  const availCards = state.cards.map((c, idx) => '<div class="relative"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">' + c.name + '</h3><p class="text-xs text-gray-300 text-center">' + c.type + '</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">' + (c.image ? '<img src="' + c.image + '" class="w-full h-full object-cover rounded-lg">' : '<div class="text-gray-500 text-4xl">🃏</div>') + '</div>' + (c.type === 'Monster' ? '<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ' + c.attack + '</span><span class="text-gray-100 font-semibold text-sm">DEF: ' + c.defense + '</span></div>' : '') + '<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">' + c.effect + '</p></div></div><button class="addCard absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full hover:bg-gray-600 transition border border-gray-600" data-id="' + idx + '">' + Icon.Plus() + '</button></div>').join('');
+  const mainDeckHtml = state.decks[playerKey].map((c, idx) => '<div class="inline-block relative group m-1"><img src="' + (c.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="12">' + c.name + '</text></svg>') + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-blue-400 cursor-pointer"><button class="remCard absolute top-0 right-0 bg-red-600 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100" data-id="' + idx + '">X</button></div>').join('');
   
-  const deckCards = state.decks[playerKey].length === 0 ? '<p class="text-gray-500 text-center py-8">No cards in deck</p>' : state.decks[playerKey].map((c, idx) => '<div class="relative"><div class="bg-gray-700 rounded-lg p-3 shadow-lg border border-gray-600"><div class="bg-gray-600 rounded-t-lg p-2 mb-2"><h3 class="font-bold text-gray-100 text-center text-sm truncate">' + c.name + '</h3><p class="text-xs text-gray-300 text-center">' + c.type + '</p></div><div class="bg-gray-600 rounded-lg aspect-square mb-2 flex items-center justify-center overflow-hidden">' + (c.image ? '<img src="' + c.image + '" class="w-full h-full object-cover rounded-lg">' : '<div class="text-gray-500 text-4xl">🃏</div>') + '</div>' + (c.type === 'Monster' ? '<div class="bg-gray-600 rounded-lg p-2 mb-2 flex justify-between"><span class="text-gray-100 font-semibold text-sm">ATK: ' + c.attack + '</span><span class="text-gray-100 font-semibold text-sm">DEF: ' + c.defense + '</span></div>' : '') + '<div class="bg-gray-600 rounded-lg p-2"><p class="text-xs text-gray-200 line-clamp-3">' + c.effect + '</p></div></div><button class="remCard absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full hover:bg-gray-600 transition border border-gray-600" data-id="' + idx + '">' + Icon.Trash2() + '</button></div>').join('');
+  const extraDeckHtml = '';
+  
+  const availCardsHtml = state.cards.map((c, idx) => '<div class="inline-block relative group m-1"><img src="' + (c.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="12">' + c.name + '</text></svg>') + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-green-400 cursor-pointer addCard" data-id="' + idx + '"></div>').join('');
 
-  div.innerHTML = '<div class="flex justify-between items-center mb-6"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.ArrowLeft() + ' Back</button><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition">' + Icon.LogOut() + ' Logout</button></div><div class="max-w-7xl mx-auto"><h1 class="text-3xl font-bold text-gray-100 mb-8">Player ' + state.currentPlayer + ' Deck Builder (' + state.decks[playerKey].length + ' cards)</h1><div class="grid md:grid-cols-2 gap-8"><div><h2 class="text-xl font-bold text-gray-100 mb-4">Available Cards</h2><div class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700"><div class="grid grid-cols-2 gap-4">' + availCards + '</div></div></div><div><h2 class="text-xl font-bold text-gray-100 mb-4">Your Deck</h2><div class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700"><div class="grid grid-cols-2 gap-4">' + deckCards + '</div></div></div></div></div>';
+  div.innerHTML = '<div class="flex justify-between items-center mb-4"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">' + Icon.ArrowLeft() + ' Back</button><div class="text-gray-100 text-xl">Deck: Player ' + state.currentPlayer + '</div><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">' + Icon.LogOut() + ' Logout</button></div><div class="grid grid-cols-2 gap-4 h-screen"><div class="bg-gray-900 rounded-lg p-4 border border-gray-700 overflow-y-auto"><h2 class="text-gray-100 font-bold mb-4">Main [' + state.decks[playerKey].length + ']</h2><div class="bg-gray-800 rounded p-2 min-h-[200px]">' + (mainDeckHtml || '<div class="text-gray-500 text-center py-8">No cards in main deck</div>') + '</div><h2 class="text-gray-100 font-bold mt-6 mb-4">Extra [0]</h2><div class="bg-gray-800 rounded p-2 min-h-[120px]"><div class="text-gray-500 text-center py-4">No extra deck cards</div></div></div><div class="bg-gray-900 rounded-lg p-4 border border-gray-700 overflow-y-auto"><h2 class="text-gray-100 font-bold mb-4">All Cards</h2><div class="bg-gray-800 rounded p-2">' + availCardsHtml + '</div></div></div>';
 
   div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
@@ -201,8 +204,8 @@ function GameBoard() {
       const p2Deck = shuffleDeck(state.decks.player2.map(function(c, i) { return Object.assign({}, c, { gameId: 'p2-' + i }); }));
       
       state.gameState = { 
-        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p1Deck, health: 20 }, 
-        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p2Deck, health: 20 } 
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p1Deck, health: 8000 }, 
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p2Deck, health: 8000 } 
       };
       state.activePlayer = 1; 
       state.gameStarted = true; 
@@ -212,56 +215,120 @@ function GameBoard() {
   }
 
   const playerKey = 'player' + state.currentPlayer;
-  const myHealth = state.gameState[playerKey].health;
-  const myHand = state.gameState[playerKey].hand.length;
-  const myDeck = state.gameState[playerKey].deck.length;
+  const opponentKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+  const myState = state.gameState[playerKey];
+  const oppState = state.gameState[opponentKey];
   
-  div.className = 'min-h-screen bg-gray-900 p-8 text-center';
-  
-  const winnerHtml = state.winner ? '<div class="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700 max-w-md mx-auto"><h2 class="text-2xl font-bold text-gray-100 mb-4">' + (state.winner === state.currentPlayer ? 'You Win!' : 'You Lose!') + '</h2><p class="text-gray-400 mb-4">Player ' + state.winner + ' is victorious!</p><button id="returnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Return to Menu</button></div>' : '';
-  
-  div.innerHTML = '<h1 class="text-3xl font-bold text-gray-100 mb-8">Game In Progress</h1><p class="text-gray-400 mb-4">Player ' + state.currentPlayer + ' View</p><p class="text-gray-400 mb-4">Health: ' + myHealth + '</p><p class="text-gray-400 mb-4">Hand: ' + myHand + ' cards</p><p class="text-gray-400 mb-4">Deck: ' + myDeck + ' cards</p><button id="drawBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition mr-4">Draw Card</button><button id="minusHealth" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition mr-4">-1 Health</button><button id="endTurnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition mr-4">End Turn</button><button id="exitBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Exit Game</button>' + winnerHtml;
-  
-  div.querySelector('#drawBtn').onclick = () => {
-    if (state.gameState[playerKey].deck.length > 0) {
-      const randomIndex = Math.floor(Math.random() * state.gameState[playerKey].deck.length);
-      const drawnCard = state.gameState[playerKey].deck[randomIndex];
-      state.gameState[playerKey].deck = state.gameState[playerKey].deck.filter((c, i) => i !== randomIndex);
-      state.gameState[playerKey].hand.push(drawnCard);
-      render();
+  const renderCardSlot = (card, zone, owner, position) => {
+    if (!card) {
+      return '<div class="w-16 h-24 bg-gray-800 rounded border border-gray-700 hover:border-blue-500 cursor-pointer cardSlot" data-zone="' + zone + '" data-owner="' + owner + '" data-pos="' + position + '"></div>';
     }
+    return '<div class="relative group cardSlot" data-zone="' + zone + '" data-owner="' + owner + '" data-pos="' + position + '"><img src="' + (card.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">' + card.name + '</text></svg>') + '" class="w-16 h-24 object-cover rounded border-2 border-blue-400 cursor-pointer"></div>';
   };
   
-  div.querySelector('#minusHealth').onclick = () => {
-    state.gameState[playerKey].health = Math.max(0, state.gameState[playerKey].health - 1);
-    checkWinner();
-    render();
-  };
+  const oppUpperRow = '<div class="flex gap-1 justify-center mb-1">' + [0,1,2,3,4,5,6,7].map(i => renderCardSlot(oppState.upperField[i], 'upperField', 'opponent', i)).join('') + '</div>';
+  const oppLowerRow = '<div class="flex gap-1 justify-center mb-2">' + [0,1,2,3,4,5,6,7].map(i => renderCardSlot(oppState.lowerField[i], 'lowerField', 'opponent', i)).join('') + '</div>';
   
-  div.querySelector('#endTurnBtn').onclick = () => {
-    state.activePlayer = state.activePlayer === 1 ? 2 : 1;
-    render();
-  };
+  const myLowerRow = '<div class="flex gap-1 justify-center mb-1">' + [0,1,2,3,4,5,6,7].map(i => renderCardSlot(myState.lowerField[i], 'lowerField', 'me', i)).join('') + '</div>';
+  const myUpperRow = '<div class="flex gap-1 justify-center mb-2">' + [0,1,2,3,4,5,6,7].map(i => renderCardSlot(myState.upperField[i], 'upperField', 'me', i)).join('') + '</div>';
+  
+  const myHandHtml = myState.hand.map((c, idx) => '<div class="inline-block relative handCard cursor-pointer m-1 hover:transform hover:-translate-y-2 transition" data-idx="' + idx + '"><img src="' + (c.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">' + c.name + '</text></svg>') + '" class="w-20 h-28 object-cover rounded border-2 ' + (state.selectedCard === idx ? 'border-yellow-400' : 'border-gray-600') + '"></div>').join('');
+  
+  div.className = 'min-h-screen bg-black text-gray-100';
+  
+  const winnerHtml = state.winner ? '<div class="fixed inset-0 bg-black/90 flex items-center justify-center z-50"><div class="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center"><h2 class="text-3xl font-bold text-gray-100 mb-4">' + (state.winner === state.currentPlayer ? 'You Win!' : 'You Lose!') + '</h2><p class="text-gray-400 mb-6">Player ' + state.winner + ' wins!</p><button id="returnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Return to Menu</button></div></div>' : '';
+  
+  div.innerHTML = '<div class="flex justify-between items-center p-2 bg-gray-900"><button id="exitBtn" class="text-gray-400 hover:text-gray-200 text-sm">' + Icon.ArrowLeft() + ' Exit</button><div class="text-sm">Turn: Player ' + state.activePlayer + (state.activePlayer === state.currentPlayer ? ' (YOU)' : '') + '</div><button id="endTurnBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-1 rounded text-sm">End Turn</button></div><div class="p-4"><div class="mb-4 text-center"><div class="text-red-400 font-bold mb-2">Opponent (Player ' + (state.currentPlayer === 1 ? 2 : 1) + ') - LP: ' + oppState.health + '</div><div class="text-xs text-gray-500 mb-2">Deck: ' + oppState.deck.length + ' | Hand: ' + oppState.hand.length + ' | GY: ' + oppState.graveyard.length + '</div></div>' + oppUpperRow + oppLowerRow + '<div class="my-8 border-t-2 border-purple-600"></div>' + myLowerRow + myUpperRow + '<div class="mt-4 text-center"><div class="text-green-400 font-bold mb-2">You (Player ' + state.currentPlayer + ') - LP: ' + myState.health + '</div><div class="flex justify-center gap-4 mb-2 text-sm"><button id="drawBtn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">Draw (' + myState.deck.length + ')</button><button id="toGrave" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">To GY (' + myState.graveyard.length + ')</button><button id="minusLP" class="bg-red-700 hover:bg-red-600 px-3 py-1 rounded">-100 LP</button><button id="plusLP" class="bg-green-700 hover:bg-green-600 px-3 py-1 rounded">+100 LP</button></div><div class="text-xs text-gray-500 mb-2">' + (state.selectedCard !== null ? 'Selected: ' + myState.hand[state.selectedCard].name + ' - Click a field slot to place' : 'Click a card in your hand to select it') + '</div></div><div class="bg-gray-900 rounded p-2 flex justify-center flex-wrap min-h-[140px]">' + (myHandHtml || '<div class="text-gray-500 py-8">No cards in hand</div>') + '</div></div>' + winnerHtml;
   
   div.querySelector('#exitBtn').onclick = () => {
     state.screen = 'menu';
     state.gameStarted = false;
     state.winner = null;
+    state.selectedCard = null;
     state.gameState = {
-      player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 },
-      player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 }
+      player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 8000 },
+      player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 8000 }
     };
     render();
   };
+  
+  div.querySelector('#drawBtn').onclick = () => {
+    if (myState.deck.length > 0) {
+      const randomIndex = Math.floor(Math.random() * myState.deck.length);
+      const drawnCard = myState.deck[randomIndex];
+      myState.deck = myState.deck.filter(function(c, i) { return i !== randomIndex; });
+      myState.hand.push(drawnCard);
+      render();
+    }
+  };
+  
+  div.querySelector('#toGrave').onclick = () => {
+    if (state.selectedCard !== null) {
+      const card = myState.hand[state.selectedCard];
+      myState.graveyard.push(card);
+      myState.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      render();
+    }
+  };
+  
+  div.querySelector('#minusLP').onclick = () => {
+    myState.health = Math.max(0, myState.health - 100);
+    checkWinner();
+    render();
+  };
+  
+  div.querySelector('#plusLP').onclick = () => {
+    myState.health += 100;
+    render();
+  };
+  
+  div.querySelector('#endTurnBtn').onclick = () => {
+    state.activePlayer = state.activePlayer === 1 ? 2 : 1;
+    state.selectedCard = null;
+    render();
+  };
+  
+  const handCards = div.querySelectorAll('.handCard');
+  for (var i = 0; i < handCards.length; i++) {
+    handCards[i].onclick = (function(idx) {
+      return function() {
+        state.selectedCard = state.selectedCard === idx ? null : idx;
+        render();
+      };
+    })(i);
+  }
+  
+  const cardSlots = div.querySelectorAll('.cardSlot');
+  for (var j = 0; j < cardSlots.length; j++) {
+    cardSlots[j].onclick = (function(slot) {
+      return function() {
+        const zone = slot.getAttribute('data-zone');
+        const owner = slot.getAttribute('data-owner');
+        const pos = parseInt(slot.getAttribute('data-pos'));
+        
+        if (owner === 'me' && state.selectedCard !== null) {
+          const card = myState.hand[state.selectedCard];
+          if (!myState[zone][pos]) {
+            myState[zone][pos] = card;
+            myState.hand.splice(state.selectedCard, 1);
+            state.selectedCard = null;
+            render();
+          }
+        }
+      };
+    })(cardSlots[j]);
+  }
   
   if (state.winner && div.querySelector('#returnBtn')) {
     div.querySelector('#returnBtn').onclick = () => {
       state.screen = 'menu';
       state.gameStarted = false;
       state.winner = null;
+      state.selectedCard = null;
       state.gameState = {
-        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 },
-        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 }
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 8000 },
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 8000 }
       };
       render();
     };
