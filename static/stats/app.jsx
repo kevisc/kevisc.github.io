@@ -1,4 +1,4 @@
-/* Cross-Section vs Panel Estimation — JSX + UMD build (fmt/ci defined once at top-level) */
+/* Cross-Section vs Panel Estimation — JSX + UMD build (Recharts global) */
 
 const {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -20,7 +20,7 @@ const toCSV = (rows, header) => {
   const body = rows.map(r => header.map(h => esc(r[h])).join(",")).join("\n");
   return head + "\n" + body;
 };
-// ---- single definitions of helpers used across the app ----
+// ---- single shared helpers ----
 const fmt = (x, d=3) => (Number.isNaN(x)||x===undefined||!isFinite(x)) ? "—" : Number(x).toFixed(d);
 const ci  = (b, se) => [b - 1.96 * (se || NaN), b + 1.96 * (se || NaN)];
 
@@ -213,8 +213,6 @@ function App(){
   const huberPooled = React.useMemo(()=> huberIRLS(xPooled,yPooled), [xPooled,yPooled]);
   const bayesPooled = React.useMemo(()=> bayesPosterior(xPooled,yPooled), [xPooled,yPooled]);
 
-  const downloadCSV = () => { const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"]; const csv=toCSV(pooled,header); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='sim_cross_section_vs_panel.csv'; a.click(); URL.revokeObjectURL(url); };
-
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-neutral-100">
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -224,6 +222,7 @@ function App(){
           <div className="mt-4 flex gap-2">
             <button onClick={()=>setTab('sim')} className={`px-3 py-2 rounded-lg border ${tab==='sim'? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>Simulator</button>
             <button onClick={()=>setTab('info')} className={`px-3 py-2 rounded-lg border ${tab==='info'? 'bg-neutral-800 border-neutral-700':'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-900'}`}>Info</button>
+            <button onClick={()=>{ location.search='?v='+(Date.now()); }} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700" title="Hard refresh">Hard refresh</button>
           </div>
         </header>
 
@@ -232,10 +231,6 @@ function App(){
             <div className="col-span-1 space-y-4 bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">Simulation Settings</h2>
-                <div className="flex gap-2">
-                  <button onClick={()=>setSeed(s=>s+1)} className="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700" title="Reseed">Reseed</button>
-                  <button onClick={()=>{ location.search='?v='+(Date.now()); }} className="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700" title="Hard refresh">Hard refresh</button>
-                </div>
               </div>
 
               <div className="flex gap-2 flex-wrap items-center text-xs">
@@ -505,6 +500,23 @@ Estimators:   Cross-sec (wave1), pooled (stacked), FE within-person; plus Robust
                     </div>
                   );
                 })()}
+              </div>
+
+              <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-4 text-sm mt-4">
+                <h3 className="font-semibold mb-2">Developer smoke tests</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  {(() => {
+                    const R = [];
+                    try{ const rows=[{a:1,b:2},{a:'a\"b',b:4}], header=['a','b']; const csv=toCSV(rows,header); const lines=csv.split('\n'); R.push({name:'CSV header/rows',pass:lines.length===3,detail:String(lines.length)}); R.push({name:'CSV quote escape',pass:csv.includes('\"a\"\"b\"'),detail:lines[1]}); }catch(e){ R.push({name:'CSV',pass:false,detail:String(e)}); }
+                    try{ const d=olsSimple([0,0,0,0],[1,2,3,4]); R.push({name:'OLS constant regressor',pass:Number.isNaN(d.beta),detail:`beta=${d.beta}`}); }catch(e){ R.push({name:'OLS const',pass:false,detail:String(e)}); }
+                    try{ const x=[0,1,2,3], y=x.map(v=>3+2*v); const f=olsSimple(x,y); R.push({name:'OLS exact recovery',pass:Math.abs(f.beta-2)<1e-12 && Math.abs(f.alpha-3)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'OLS recover',pass:false,detail:String(e)}); }
+                    try{ const ids=[1,1,2,2], x=[0,1,0,1], y=[0,1,2,3]; const f=feWithin(ids,x,y); R.push({name:'FE exact recovery',pass:Math.abs(f.beta-1)<1e-12,detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE',pass:false,detail:String(e)}); }
+                    try{ const ids=[1,1,2,2], x=[0,0,1,1], y=[0,0,1,1]; const f=feWithin(ids,x,y); R.push({name:'FE needs switchers',pass:Number.isNaN(f.beta),detail:`b=${f.beta}`}); }catch(e){ R.push({name:'FE switchers',pass:false,detail:String(e)}); }
+                    try{ const x=[0,1,2,3,100], y=[0,2,4,6,0]; const ols=olsSimple(x,y); const hub=huberIRLS(x,y); R.push({name:'Huber vs OLS (outlier)',pass:Math.abs(hub.beta-2)<Math.abs(ols.beta-2),detail:`ols=${ols.beta}, huber=${hub.beta}`}); }catch(e){ R.push({name:'Huber',pass:false,detail:String(e)}); }
+                    try{ const x=[0,1,2,3,4,5,6,7,8,9], y=x.map(v=>1+0.5*v + (v%2?1:-1)*0.01); const b=bayesPosterior(x,y); R.push({name:'Bayes finite',pass:isFinite(b.betaMean) && isFinite(b.betaSE),detail:`b=${b.betaMean}`}); }catch(e){ R.push({name:'Bayes',pass:false,detail:String(e)}); }
+                    return R;
+                  })().map((t,i)=>(<li key={i}><span className={t.pass? 'text-green-400':'text-red-400'}>{t.pass? 'PASS':'FAIL'}</span>{": "}{t.name} <span className="text-neutral-400">({t.detail})</span></li>))}
+                </ul>
               </div>
             </div>
           </section>

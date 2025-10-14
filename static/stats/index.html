@@ -1,27 +1,32 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cross-Section vs Panel Estimation — Demonstrator</title>
-  <meta name="robots" content="noindex,nofollow,noarchive" />
-  <!-- Tailwind (CDN for quick unlisted demo; see docs for production build) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    html, body, #root { height: 100%; }
-    body { background: #0a0a0a; color: #e5e7eb; }
-  </style>
-  <!-- React + ReactDOM UMD -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Recharts UMD global `Recharts` -->
-  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
-  <!-- Babel standalone to transform JSX in-browser -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body class="bg-neutral-950 text-neutral-100">
-  <div id="root">Loading…</div>
-  <!-- Your app code in JSX -->
-  <script type="text/babel" data-presets="env,react" src="./app.jsx"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cross-Section vs Panel — Interactive</title>
+
+    <!-- Tailwind (CDN): OK for a quick unlisted page; for production, precompile -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React + ReactDOM UMD -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Recharts UMD (MUST load before app.jsx so window.Recharts exists) -->
+    <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+
+    <!-- Babel standalone to transpile JSX in-browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-neutral-950 text-neutral-100">
+    <div id="root"></div>
+    <noscript>
+      <div class="max-w-xl mx-auto mt-8 p-4 bg-neutral-900/70 text-neutral-200 rounded-xl">
+        This page requires JavaScript (React) enabled.
+      </div>
+    </noscript>
+
+    <!-- Your app (cache-busted) -->
+    <script type="text/babel" data-presets="env,react" src="./app.jsx?v=20251014"></script>
+  </body>
 </html>
