@@ -1,21 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <meta name="robots" content="noindex, nofollow">
-  <title>Card Game Platform</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { margin: 0; padding: 0; overflow-x: hidden; background: #111827; }
-    #root { min-height: 100vh; }
-    .lucide { width: 1em; height: 1em; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card Game Platform</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.lucide { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
 </head>
 <body>
-  <div id="root"></div>
-  
-  <script>
+<div id="root"></div>
+<script>
 (function(){
 'use strict';
 
@@ -82,7 +79,11 @@ function checkWinner() {
 
 function saveDeck() {
   const playerKey = 'player' + state.currentPlayer;
-  const deckData = { player: state.currentPlayer, cards: state.decks[playerKey], timestamp: Date.now() };
+  const deckData = {
+    player: state.currentPlayer,
+    cards: state.decks[playerKey],
+    timestamp: Date.now()
+  };
   const dataStr = JSON.stringify(deckData);
   const blob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -202,21 +203,23 @@ function CardCreator() {
 function DeckBuilder() {
   const playerKey = 'player' + state.currentPlayer;
   const div = document.createElement('div');
-  div.className = 'min-h-screen bg-black p-4';
+  div.className = 'min-h-screen bg-black text-gray-100 flex';
 
   const createCardImg = function(c) {
     return c.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="140"%3E%3Crect width="100" height="140" fill="%23374151"/%3E%3Ctext x="50" y="70" text-anchor="middle" fill="white" font-size="10"%3E' + encodeURIComponent(c.name) + '%3C/text%3E%3C/svg%3E';
   };
 
   const mainDeckHtml = state.decks[playerKey].map(function(c, idx) {
-    return '<div class="inline-block relative group m-1"><img src="' + createCardImg(c) + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-blue-400 cursor-pointer"><button class="remCard absolute top-0 right-0 bg-red-600 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100" data-id="' + idx + '">X</button></div>';
+    return '<div class="inline-block relative group m-1 deckCard" data-card-idx="' + idx + '" data-location="deck"><img src="' + createCardImg(c) + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-blue-400 cursor-pointer"><button class="remCard absolute top-0 right-0 bg-red-600 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100" data-id="' + idx + '">X</button></div>';
   }).join('');
   
   const availCardsHtml = state.cards.map(function(c, idx) {
-    return '<div class="inline-block relative group m-1"><img src="' + createCardImg(c) + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-green-400 cursor-pointer addCard" data-id="' + idx + '"></div>';
+    return '<div class="inline-block relative group m-1 availCard" data-card-idx="' + idx + '" data-location="avail"><img src="' + createCardImg(c) + '" class="w-20 h-28 object-cover rounded border-2 border-gray-600 hover:border-green-400 cursor-pointer addCard" data-id="' + idx + '"></div>';
   }).join('');
 
-  div.innerHTML = '<div class="flex justify-between items-center mb-4"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">' + Icon.ArrowLeft() + ' Back</button><div class="text-gray-100 text-xl">Deck: Player ' + state.currentPlayer + '</div><div class="flex gap-2"><button id="saveDeck" class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm">' + Icon.Download() + ' Save</button><label for="loadDeckInput" class="flex items-center gap-1 bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm cursor-pointer">' + Icon.Upload() + ' Load<input type="file" id="loadDeckInput" accept=".json" class="hidden"></label><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">' + Icon.LogOut() + '</button></div></div><div class="grid grid-cols-2 gap-4 h-screen"><div class="bg-gray-900 rounded-lg p-4 border border-gray-700 overflow-y-auto"><h2 class="text-gray-100 font-bold mb-4">Main [' + state.decks[playerKey].length + ']</h2><div class="bg-gray-800 rounded p-2 min-h-[200px]">' + (mainDeckHtml || '<div class="text-gray-500 text-center py-8">No cards in main deck</div>') + '</div></div><div class="bg-gray-900 rounded-lg p-4 border border-gray-700 overflow-y-auto"><h2 class="text-gray-100 font-bold mb-4">All Cards</h2><div class="bg-gray-800 rounded p-2">' + availCardsHtml + '</div></div></div>';
+  const sidebarCard = state.hoveredCard ? '<div class="bg-gray-700 rounded-lg p-3"><div class="text-center font-bold mb-1 text-sm">' + state.hoveredCard.name + '</div><div class="text-center text-xs text-gray-400 mb-2">' + state.hoveredCard.type + '</div>' + (state.hoveredCard.image ? '<img src="' + state.hoveredCard.image + '" class="w-full rounded mb-2">' : '<div class="w-full h-32 bg-gray-600 rounded mb-2 flex items-center justify-center text-3xl">🃏</div>') + (state.hoveredCard.type === 'Monster' ? '<div class="flex justify-between mb-2 text-xs"><span>ATK: ' + state.hoveredCard.attack + '</span><span>DEF: ' + state.hoveredCard.defense + '</span></div>' : '') + '<div class="text-xs text-gray-300">' + state.hoveredCard.effect + '</div></div>' : '<div class="text-gray-500 text-center p-4 text-sm">Hover card for details</div>';
+
+  div.innerHTML = '<div class="flex-1 flex flex-col"><div class="flex justify-between items-center p-4 bg-gray-900"><button id="backBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">' + Icon.ArrowLeft() + ' Back</button><div class="text-gray-100 text-xl">Deck: Player ' + state.currentPlayer + '</div><div class="flex gap-2"><button id="saveDeck" class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm">' + Icon.Download() + ' Save</button><label for="loadDeckInput" class="flex items-center gap-1 bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm cursor-pointer">' + Icon.Upload() + ' Load<input type="file" id="loadDeckInput" accept=".json" class="hidden"></label><button id="logoutBtn" class="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition text-sm">' + Icon.LogOut() + '</button></div></div><div class="flex-1 grid grid-cols-2 gap-4 p-4 overflow-hidden"><div class="bg-gray-900 rounded-lg p-4 border border-gray-700 overflow-y-auto"><h2 class="text-gray-100 font-bold mb-4">Main Deck [' + state.decks[playerKey].length + ']</h2><div class="bg-gray-800 rounded p-2 min-h-[200px]">' + (mainDeckHtml || '<div class="text-gray-500 text-center py-8">No cards in main deck</div>') + '</div></div><div class="bg-gray-900 rounded-lg p-4 border border-gray-700 overflow-y-auto"><h2 class="text-gray-100 font-bold mb-4">All Cards</h2><div class="bg-gray-800 rounded p-2">' + availCardsHtml + '</div></div></div></div><div class="w-64 bg-gray-900 p-3 border-l border-gray-700 overflow-y-auto flex-shrink-0"><h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>' + sidebarCard + '</div>';
 
   div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
@@ -245,6 +248,24 @@ function DeckBuilder() {
         render(); 
       };
     })(j);
+  }
+
+  // Add hover handlers for all cards in deck builder
+  const allCards = div.querySelectorAll('.deckCard, .availCard');
+  for (var k = 0; k < allCards.length; k++) {
+    allCards[k].onmouseenter = (function(card) {
+      return function() {
+        const idx = parseInt(card.getAttribute('data-card-idx'));
+        const location = card.getAttribute('data-location');
+        state.hoveredCard = location === 'deck' ? state.decks[playerKey][idx] : state.cards[idx];
+        render();
+      };
+    })(allCards[k]);
+    
+    allCards[k].onmouseleave = function() {
+      state.hoveredCard = null;
+      render();
+    };
   }
   
   return div;
@@ -311,7 +332,7 @@ function GameBoard() {
     return '<div class="relative group"><img src="' + createCardImg(c) + '" class="w-16 h-24 object-cover rounded border-2 border-gray-600 cursor-pointer">' + (state.viewingGraveyard === 'me' ? '<div class="absolute inset-0 bg-black/90 opacity-0 group-hover:opacity-100 transition flex flex-col gap-1 p-1 rounded text-xs"><button class="graveAction bg-blue-600 hover:bg-blue-700 px-1 py-1 rounded" data-idx="' + idx + '" data-action="hand">Hand</button><button class="graveAction bg-green-600 hover:bg-green-700 px-1 py-1 rounded" data-idx="' + idx + '" data-action="deck">Deck</button><button class="graveAction bg-purple-600 hover:bg-purple-700 px-1 py-1 rounded" data-idx="' + idx + '" data-action="upper">Upper</button><button class="graveAction bg-purple-600 hover:bg-purple-700 px-1 py-1 rounded" data-idx="' + idx + '" data-action="lower">Lower</button></div>' : '') + '</div>';
   }).join('') + '</div></div></div>' : '';
   
-  const cardActionsModal = state.selectedCard !== null && myState.hand[state.selectedCard] ? '<div class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 p-3 rounded-lg border border-gray-700 z-40"><div class="text-sm text-gray-300 mb-2 text-center">' + myState.hand[state.selectedCard].name + '</div><div class="flex gap-2"><button class="placeCard bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded text-sm" data-zone="upper">Upper Field</button><button class="placeCard bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded text-sm" data-zone="lower">Lower Field</button><button id="discardCard" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm">Discard</button><button id="toDeckCard" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm">To Deck</button></div></div>' : '';
+  const cardActionsModal = state.selectedCard !== null && myState.hand[state.selectedCard] ? '<div class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 p-3 rounded-lg border border-gray-700 z-40 shadow-xl"><div class="text-sm text-gray-300 mb-2 text-center font-bold">' + myState.hand[state.selectedCard].name + '</div><div class="flex gap-2"><button class="placeCard bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded text-sm font-semibold transition" data-zone="upper">Upper Field</button><button class="placeCard bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded text-sm font-semibold transition" data-zone="lower">Lower Field</button><button id="discardCard" class="bg-red-600 hover:bg-red-700 px-3 py-2 rounded text-sm font-semibold transition">Discard</button><button id="toDeckCard" class="bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-sm font-semibold transition">To Deck</button></div></div>' : '';
   
   const winnerHtml = state.winner ? '<div class="fixed inset-0 bg-black/90 flex items-center justify-center z-50"><div class="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center"><h2 class="text-3xl font-bold text-gray-100 mb-4">' + (state.winner === state.currentPlayer ? 'You Win!' : 'You Lose!') + '</h2><p class="text-gray-400 mb-6">Player ' + state.winner + ' wins!</p><button id="returnBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-100 px-6 py-3 rounded-lg font-semibold border border-gray-600 transition">Return to Menu</button></div></div>' : '';
   
@@ -415,6 +436,11 @@ function GameBoard() {
         render();
       };
     })(i);
+    
+    handCards[i].onmouseleave = function() {
+      state.hoveredCard = null;
+      render();
+    };
   }
   
   const fieldCards = div.querySelectorAll('.fieldCard');
@@ -429,6 +455,11 @@ function GameBoard() {
       };
     })(fieldCards[m]);
     
+    fieldCards[m].onmouseleave = function() {
+      state.hoveredCard = null;
+      render();
+    };
+    
     fieldCards[m].onclick = (function(card) {
       return function() {
         const zone = card.getAttribute('data-zone');
@@ -436,6 +467,7 @@ function GameBoard() {
         const idx = parseInt(card.getAttribute('data-idx'));
         
         if (owner === 'me') {
+          const actions = ['To Hand', 'To Deck', 'To Graveyard'];
           const action = prompt('Move card to:\n1. Hand\n2. Deck\n3. Graveyard\nEnter 1, 2, or 3:');
           const cardData = myState[zone][idx];
           myState[zone].splice(idx, 1);
@@ -470,13 +502,19 @@ function GameBoard() {
   return div;
 }
 
-if (document.readyState !== 'loading') {
-  render();
-} else {
-  document.addEventListener('DOMContentLoaded', render);
+function __ready(fn) { 
+  if (document.readyState !== 'loading') { 
+    fn(); 
+  } else { 
+    document.addEventListener('DOMContentLoaded', fn); 
+  } 
 }
 
+__ready(function() {
+  render();
+});
+
 })();
-  </script>
+</script>
 </body>
 </html>
