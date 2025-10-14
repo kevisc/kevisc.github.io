@@ -1,50 +1,327 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cross-Section vs Panel — Interactive</title>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Cross-Section vs Panel — Self‑Contained</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #121212;
+    --muted: #9aa0a6;
+    --text: #e5e7eb;
+    --accent: #d1d5db;
+    --border: #262626;
+    --green: #22c55e;
+    --red: #ef4444;
+  }
+  html, body { height:100%; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .mt-2 { margin-top: 8px; } .mt-3 { margin-top: 12px; } .mt-4{ margin-top:16px; } .mt-6 { margin-top: 24px; }
+  .muted { color: var(--muted); }
+  .row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media(min-width: 1200px){ .row { grid-template-columns: 1fr 2fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .btn { background:#1e1e1e; border:1px solid var(--border); color:var(--text); border-radius:10px; padding:8px 10px; cursor:pointer; }
+  .btn:hover { background:#222; }
+  .chip { display:inline-block; padding:4px 8px; border:1px solid var(--border); border-radius:8px; background:#121212; cursor:pointer; }
+  .chip.active { background:#1f1f1f; border-color:#3a3a3a; }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; }
+  label { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin:6px 0 4px; }
+  input[type=range] { width:100%; }
+  .cards { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
+  @media(max-width: 900px){ .cards{ grid-template-columns: 1fr 1fr; } }
+  .card { background:#101010; border:1px solid var(--border); border-radius:14px; padding:12px; }
+  .card .title { font-size:12px; color:var(--muted); }
+  .card .value { font-size:22px; margin-top:6px; }
+  .card .foot { font-size:12px; color:#8a8a8a; margin-top:6px; }
+  .warn { border-color:#6b1d1d; }
+  svg { width:100%; height:100%; display:block; }
+  .chart { height: 400px; background:#0c0c0c; border:1px solid var(--border); border-radius:12px; padding:8px; }
+  .axis text { fill: #9aa0a6; font-size: 11px; }
+  .axis line, .axis path { stroke: #2a2a2a; }
+  .grid line { stroke:#1e1e1e; }
+  .tick line { stroke:#2a2a2a; }
+  .legend { font-size: 12px; color: var(--muted); }
+  pre { white-space: pre-wrap; background:#0e0e0e; border:1px solid var(--border); padding:8px; border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Cross-Section vs Panel Estimation — Self‑Contained Demonstrator</h1>
+    <p class="muted">No external libraries. SVG charts. Explore how cross-sectional, pooled, fixed-effects, robust, and Bayesian estimators behave with realistic panel DGPs.</p>
+    <div class="mt-3">
+      <button class="btn" id="tab-sim">Simulator</button>
+      <button class="btn" id="tab-info">Info</button>
+      <button class="btn" id="btn-refresh">Hard refresh</button>
+    </div>
+  </header>
 
-    <!-- Tailwind (CDN) — fine for unlisted demos -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <section id="sim" class="mt-4">
+    <div class="row">
+      <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Simulation Settings</h2>
+        </div>
+        <div class="mt-2">
+          <span class="muted" style="font-size:12px;">Analysis:</span>
+          <span id="mode-descriptives" class="chip active">Descriptives</span>
+          <span id="mode-freq" class="chip">Frequentist (OLS/FE)</span>
+          <span id="mode-robust" class="chip">Robust (Huber)</span>
+          <span id="mode-bayes" class="chip">Bayesian (OLS)</span>
+        </div>
 
-    <!-- React + ReactDOM UMD (CDN) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+        <div class="mt-3">
+          <label>Persons (N): <span id="lblN"></span></label>
+          <input type="range" min="50" max="4000" step="50" id="N">
+          <label>Waves (T): <span id="lblT"></span></label>
+          <input type="range" min="2" max="16" step="1" id="T">
+          <label>True effect β: <span id="lblB"></span></label>
+          <input type="range" min="-2" max="2" step="0.05" id="betaTrue">
+          <label>Heterogeneity β×u (β_h): <span id="lblBh"></span></label>
+          <input type="range" min="-2" max="2" step="0.05" id="betaHet">
+          <label>Between-person SD (σ_u): <span id="lblSu"></span></label>
+          <input type="range" min="0" max="3" step="0.05" id="sigmaU">
+          <label>Within-person SD (σ_e): <span id="lblSe"></span></label>
+          <input type="range" min="0" max="3" step="0.05" id="sigmaE">
+          <label>Measurement error SD (σ_me): <span id="lblSme"></span></label>
+          <input type="range" min="0" max="3" step="0.05" id="sigmaME">
+          <label>Base prevalence P(D=1): <span id="lblP"></span></label>
+          <input type="range" min="0.05" max="0.95" step="0.01" id="pBase">
+          <label>Selection strength (ρ): <span id="lblRho"></span></label>
+          <input type="range" min="0" max="2" step="0.05" id="rhoSel">
+          <label>Switch rate: <span id="lblSw"></span></label>
+          <input type="range" min="0" max="1" step="0.05" id="switchRate">
+        </div>
 
-    <!-- Recharts UMD (CDN first) -->
-    <script
-      src="https://unpkg.com/recharts/umd/Recharts.min.js"
-      onerror="(function(){var s=document.createElement('script'); s.src='/stats/vendor/Recharts.min.js'; document.head.appendChild(s);})();"
-    ></script>
+        <div class="mt-3 grid-2">
+          <div>
+            <div class="muted" style="font-size:12px; margin-bottom:6px;">Quick presets</div>
+            <div class="grid-2">
+              <button class="btn" id="preset-bias">Preset: Tutoring bias</button>
+              <button class="btn" id="preset-rct">Preset: RCT</button>
+              <button class="btn" id="preset-noisy">Preset: Noisy survey</button>
+              <button class="btn" id="preset-policy">Preset: Policy (DiD viol.)</button>
+              <button class="btn" id="preset-hetero">Preset: Heterog. TE</button>
+              <button class="btn" id="preset-nonlinear">Preset: OLS nonlinearity</button>
+              <button class="btn" id="preset-heterosked">Preset: OLS heterosked.</button>
+              <button class="btn" id="preset-trend">Preset: Pure trend</button>
+              <button class="btn" id="preset-revcause">Preset: Reverse causality</button>
+            </div>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px; margin-bottom:6px;">Toggles</div>
+            <div class="grid-2">
+              <label><span>Time trend on</span><input type="checkbox" id="timeTrendOn"></label>
+              <label>Trend slope γ: <span id="lblTrend"></span></label>
+              <input type="range" min="0" max="0.2" step="0.01" id="timeTrendSlope">
 
-    <!-- If CSP blocked the CDN (no onerror), add a tiny guard to load local after DOMContentLoaded -->
-    <script>
-      (function(){
-        function ensureRecharts(){
-          if (window.Recharts) return;
-          var s=document.createElement('script');
-          s.src='/stats/vendor/Recharts.min.js';
-          document.head.appendChild(s);
-        }
-        document.addEventListener('DOMContentLoaded', function(){
-          setTimeout(ensureRecharts, 1500);
-        });
-      })();
-    </script>
+              <label><span>Common shock</span><input type="checkbox" id="shockAllOn"></label>
+              <label>Shock wave</label><input type="number" id="shockAllWave" min="1" value="5">
+              <label>Shock size ξ</label><input type="number" id="shockAllSize" step="0.1" value="0.8">
 
-    <!-- Babel standalone to transpile JSX in-browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
-  <body class="bg-neutral-950 text-neutral-100">
-    <div id="root"></div>
-    <noscript>
-      <div class="max-w-xl mx-auto mt-8 p-4 bg-neutral-900/70 text-neutral-200 rounded-xl">
-        This page requires JavaScript (React) enabled.
+              <label><span>Treat shock</span><input type="checkbox" id="shockTreatOn"></label>
+              <label>Treat shock wave</label><input type="number" id="shockTreatWave" min="1" value="6">
+              <label>Treat shock size τ</label><input type="number" id="shockTreatSize" step="0.1" value="0.8">
+
+              <label><span>AR(1) errors</span><input type="checkbox" id="ar1On"></label>
+              <label>ρ_e</label><input type="number" id="rhoE" step="0.05" value="0.5">
+
+              <label><span>Dynamic selection</span><input type="checkbox" id="dynSelOn"></label>
+              <label>γ_dy</label><input type="number" id="gammaDY" step="0.1" value="0.5">
+
+              <label><span>Misclassification</span><input type="checkbox" id="misclassOn"></label>
+              <label>p_m</label><input type="number" id="misclassP" step="0.01" value="0.15">
+
+              <label><span>Attrition</span><input type="checkbox" id="attritionOn"></label>
+              <label>α_attr</label><input type="number" id="attrBase" step="0.01" value="0.02">
+              <label>β_attr</label><input type="number" id="attrSlope" step="0.05" value="0.15">
+
+              <label><span>Exp outcome</span><input type="checkbox" id="expOutcomeOn"></label>
+              <label>κ</label><input type="number" id="expScale" step="0.05" value="0.35">
+
+              <label><span>Heteroskedasticity</span><input type="checkbox" id="heteroOn"></label>
+              <label>weight D</label><input type="number" id="heteroDWeight" step="0.1" value="0.8">
+              <label>weight |u|</label><input type="number" id="heteroUWeight" step="0.1" value="0.4">
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <button class="btn" id="btn-download">Download simulated CSV</button>
+        </div>
+
+        <p class="muted mt-2" style="font-size:12px;">FE uses within-person changes; robust = Huber IRLS; Bayesian uses Normal–Inverse-Gamma conjugate prior.</p>
       </div>
-    </noscript>
 
-    <!-- Your app (cache-busted) -->
-    <script type="text/babel" data-presets="env,react" src="./app.jsx?v=20251014b"></script>
-  </body>
+      <div>
+        <div class="panel">
+          <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+            <span class="muted" style="font-size:12px;">Visuals:</span>
+            <span id="viz-trajectories" class="chip active">Trajectories</span>
+            <span id="viz-estimates" class="chip">Estimates & CIs</span>
+            <span id="viz-diagnostics" class="chip">Diagnostics</span>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <h2>Cross-section — Outcome vs Treatment</h2>
+              <div class="chart" id="chart-scatter"></div>
+            </div>
+            <div>
+              <h2>Panel trajectories (20 units) + summary</h2>
+              <div class="chart" id="chart-lines"></div>
+              <div class="muted" style="font-size:12px; margin-top:6px;">Faint: 20 random units. Bold: mean, median, 25th, 75th percentile by wave.</div>
+            </div>
+          </div>
+
+          <div id="estimatesArea" class="mt-3" style="display:none;">
+            <div class="grid-2">
+              <div>
+                <h2>Estimator β</h2>
+                <div class="chart" id="chart-bars"></div>
+                <div class="muted" style="font-size:12px; margin-top:6px;">Dashed line is true β.</div>
+              </div>
+              <div class="panel" style="background:#0f0f0f;">
+                <h2>Variance & composition</h2>
+                <ul id="varianceList" class="mt-2"></ul>
+              </div>
+            </div>
+          </div>
+
+          <div id="diagArea" class="mt-3" style="display:none;">
+            <div class="grid-3">
+              <div>
+                <h2>Residuals vs Fitted (pooled OLS)</h2>
+                <div class="chart" id="chart-rvf"></div>
+              </div>
+              <div>
+                <h2>Residual histogram</h2>
+                <div class="chart" id="chart-hist"></div>
+              </div>
+              <div>
+                <h2>Normal QQ plot</h2>
+                <div class="chart" id="chart-qq"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel mt-3">
+          <h2>Model notation</h2>
+          <pre id="notation"></pre>
+        </div>
+
+        <div class="cards mt-3" id="cards"></div>
+
+        <div class="panel mt-3">
+          <h2>Diagnostic report</h2>
+          <div id="report"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="info" class="panel mt-4" style="display:none;">
+    <h2>Quick explanation</h2>
+    <p>This demo contrasts cross-sectional, pooled, and fixed-effects estimators, with robust (Huber) and Bayesian alternatives, on synthetic panel data.</p>
+  </section>
+
+  <footer class="mt-6 muted" style="font-size:12px;">
+    <p>Single-file prototype. All data are synthetic.</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const mulberry32=(a)=>()=>{let t=a+=0x6d2b79f5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
+const logistic=(z)=>1/(1+Math.exp(-z));
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const mean=(a)=>a.length?a.reduce((x,y)=>x+y,0)/a.length:NaN;
+const variance=(a)=>{const n=a.length;if(n<=1)return 0;const m=mean(a);return a.reduce((s,v)=>s+(v-m)*(v-m),0)/(n-1)};
+const quantile=(a,q)=>{if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y);const p=(s.length-1)*q;const lo=Math.floor(p),hi=Math.ceil(p);if(lo===hi)return s[lo];return s[lo]*(hi-p)+s[hi]*(p-lo)};
+const rnorm=(rng,m=0,s=1)=>{let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();const z=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);return m+s*z};
+const fmt=(x,d=3)=>Number.isNaN(x)||x===undefined||!isFinite(x)?"—":Number(x).toFixed(d);
+const phi=(z)=>.5*(1+erf(z/Math.SQRT2));
+function erf(x){const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911;const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+p*x);const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));return s*y}
+function erfinv(x){const a=.147;const ln=Math.log(1-x*x);const s=2/(Math.PI*a)+ln/2;const r=Math.sign(x)*Math.sqrt(Math.sqrt(s*s-ln/a)-s);return r}
+const ci=(b,se)=>[b-1.96*(se||NaN),b+1.96*(se||NaN)];
+
+function olsSimple(x,y){const n=x.length;if(n<3)return{beta:NaN,se:NaN,n,alpha:NaN,resid:[],fitted:[]};const mx=mean(x),my=mean(y);let sxx=0,sxy=0;for(let i=0;i<n;i++){const dx=x[i]-mx;sxx+=dx*dx;sxy+=dx*(y[i]-my)}if(sxx===0)return{beta:NaN,se:NaN,n,alpha:NaN,resid:[],fitted:[]};const beta=sxy/sxx,alpha=my-beta*mx;const fitted=new Array(n),resid=new Array(n);let rss=0;for(let i=0;i<n;i++){const f=alpha+beta*x[i];fitted[i]=f;const r=y[i]-f;resid[i]=r;rss+=r*r}const sigma2=rss/(n-2);const se=Math.sqrt(sigma2/sxx);return{beta,se,n,alpha,resid,fitted}}
+function wlsSimple(x,y,w){const n=x.length;if(n<3)return{beta:NaN,se:NaN,n,alpha:NaN};const sw=w.reduce((a,b)=>a+b,0);const mx=x.reduce((s,v,i)=>s+w[i]*v,0)/sw,my=y.reduce((s,v,i)=>s+w[i]*v,0)/sw;let sxx=0,sxy=0;for(let i=0;i<n;i++){const dx=x[i]-mx;sxx+=w[i]*dx*dx;sxy+=w[i]*dx*(y[i]-my)}if(sxx===0)return{beta:NaN,se:NaN,n,alpha:NaN};const beta=sxy/sxx,alpha=my-beta*mx;let rss=0;for(let i=0;i<n;i++){const r=y[i]-(alpha+beta*x[i]);rss+=w[i]*r*r}const sigma2=rss/Math.max(1,n-2);const se=Math.sqrt(sigma2/sxx);return{beta,se,n,alpha}}
+function feWithin(ids,x,y){const uniq=Array.from(new Set(ids));const X=[],Y=[];for(const id of uniq){const idx=[];for(let i=0;i<ids.length;i++)if(ids[i]===id)idx.push(i);const mx=idx.reduce((s,j)=>s+x[j],0)/idx.length,my=idx.reduce((s,j)=>s+y[j],0)/idx.length;let varx=0;for(const j of idx)varx+=(x[j]-mx)**2;if(varx===0)continue;for(const j of idx){X.push(x[j]-mx);Y.push(y[j]-my)}}if(X.length<3)return{beta:NaN,se:NaN,n:X.length,alpha:NaN};return olsSimple(X,Y)}
+function huberIRLS(x,y,c=1.345,maxIter=30){let fit=olsSimple(x,y);const mad=(arr)=>{const med=quantile(arr,0.5);const m=quantile(arr.map(v=>Math.abs(v-med)),0.5);return m||1e-6};for(let it=0;it<maxIter;it++){const s=1.4826*mad(fit.resid);const w=fit.resid.map(r=>{const t=Math.abs(r/(s||1e-6));return t>c?c/t:1});fit=wlsSimple(x,y,w);if(!Number.isFinite(fit.beta))break}return fit}
+function bayesPosterior(x,y){const n=x.length;if(n<3)return{betaMean:NaN,betaSE:NaN,ci:[NaN,NaN],alphaMean:NaN};const v0a=100,v0b=10;const a0=2,b0=1;let sumx=0,sumxx=0,sumy=0,sumxy=0,sumyy=0;for(let i=0;i<n;i++){const xi=x[i],yi=y[i];sumx+=xi;sumxx+=xi*xi;sumy+=yi;sumxy+=xi*yi;sumyy+=yi*yi}const V0Inv00=1/v0a,V0Inv11=1/v0b;const XtX00=n,XtX01=sumx,XtX11=sumxx;const VnInv00=V0Inv00+XtX00,VnInv01=0+XtX01,VnInv11=V0Inv11+XtX11;const det=VnInv00*VnInv11-VnInv01*VnInv01;const Vn00=VnInv11/det,Vn01=-VnInv01/det,Vn11=VnInv00/det;const mna=Vn00*(0+sumy)+Vn01*(0+sumxy);const mnb=Vn01*(0+sumy)+Vn11*(0+sumxy);const an=a0+n/2;const quad=mna*(VnInv00*mna+VnInv01*mnb)+mnb*(VnInv01*mna+VnInv11*mnb);const bn=b0+.5*(sumyy-quad);const scale=bn/(an-1);const varBeta=scale*Vn11;const seBeta=Math.sqrt(Math.max(0,varBeta));const cInt=[mnb-1.96*seBeta,mnb+1.96*seBeta];return{betaMean:mnb,betaSE:seBeta,ci:cInt,alphaMean:mna,an,bn}}
+
+function createSVG(w,h){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${w} ${h}`);svg.setAttribute("width","100%");svg.setAttribute("height","100%");return svg}
+function line(x1,y1,x2,y2,cls,stroke="#6b7280",sw=1){const el=document.createElementNS("http://www.w3.org/2000/svg","line");el.setAttribute("x1",x1);el.setAttribute("y1",y1);el.setAttribute("x2",x2);el.setAttribute("y2",y2);el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",sw);if(cls)el.setAttribute("class",cls);return el}
+function rect(x,y,w,h,fill="#60a5fa"){const el=document.createElementNS("http://www.w3.org/2000/svg","rect");el.setAttribute("x",x);el.setAttribute("y",y);el.setAttribute("width",w);el.setAttribute("height",h);el.setAttribute("fill",fill);return el}
+function circle(x,y,r,fill="#cbd5e1",op=.8){const el=document.createElementNS("http://www.w3.org/2000/svg","circle");el.setAttribute("cx",x);el.setAttribute("cy",y);el.setAttribute("r",r);el.setAttribute("fill",fill);el.setAttribute("fill-opacity",op);return el}
+function polyline(points,stroke="#93c5fd",sw=1,op=1){const el=document.createElementNS("http://www.w3.org/2000/svg","polyline");el.setAttribute("points",points.map(p=>p[0]+","+p[1]).join(" "));el.setAttribute("fill","none");el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",sw);el.setAttribute("stroke-opacity",op);return el}
+function textSVG(x,y,txt,fill="#9aa0a6",fs=10,anchor="middle"){const el=document.createElementNS("http://www.w3.org/2000/svg","text");el.setAttribute("x",x);el.setAttribute("y",y);el.setAttribute("fill",fill);el.setAttribute("font-size",fs);el.setAttribute("text-anchor",anchor);el.textContent=txt;return el}
+function axis(svg,x,y,len,horizontal,ticks){if(horizontal){svg.appendChild(line(x,y,x+len,y,"axis","#374151",1));ticks.forEach(t=>{const tx=x+t.pos*len;svg.appendChild(line(tx,y,tx,y+4,"tick","#4b5563",1));svg.appendChild(textSVG(tx,y+14,t.label,"#9aa0a6",10,"middle"))})}else{svg.appendChild(line(x,y-len,x,y,"axis","#374151",1));ticks.forEach(t=>{const ty=y-t.pos*len;svg.appendChild(line(x-4,ty,x,ty,"tick","#4b5563",1));svg.appendChild(textSVG(x-6,ty+3,t.label,"#9aa0a6",10,"end"))})}}
+function scaleLinear(d0,d1,r0,r1){const d=d1-d0||1e-9;const m=(r1-r0)/d;return (v)=>r0+(v-d0)*m}
+
+const S={seed:42,N:600,T:8,betaTrue:.6,betaHet:0,sigmaU:1.2,sigmaE:1.0,sigmaME:.3,pBase:.5,rhoSel:1.0,switchRate:.25,timeTrendOn:true,timeTrendSlope:.05,shockAllOn:false,shockAllWave:5,shockAllSize:.8,shockTreatOn:false,shockTreatWave:6,shockTreatSize:.8,ar1On:false,rhoE:.5,dynSelOn:false,gammaDY:.5,misclassOn:false,misclassP:.15,attritionOn:false,attrBase:.02,attrSlope:.15,expOutcomeOn:false,expScale:.35,heteroOn:false,heteroDWeight:.8,heteroUWeight:.4,mode:"descriptives",viz:"trajectories"};
+
+function updateLabels(){document.getElementById("lblN").textContent=S.N;document.getElementById("lblT").textContent=S.T;document.getElementById("lblB").textContent=S.betaTrue.toFixed(2);document.getElementById("lblBh").textContent=S.betaHet.toFixed(2);document.getElementById("lblSu").textContent=S.sigmaU.toFixed(2);document.getElementById("lblSe").textContent=S.sigmaE.toFixed(2);document.getElementById("lblSme").textContent=S.sigmaME.toFixed(2);document.getElementById("lblP").textContent=S.pBase.toFixed(2);document.getElementById("lblRho").textContent=S.rhoSel.toFixed(2);document.getElementById("lblSw").textContent=S.switchRate.toFixed(2);document.getElementById("lblTrend").textContent=S.timeTrendSlope.toFixed(2)}
+
+function simulate(){const rng=mulberry32(S.seed);const persons=new Array(S.N).fill(0).map((_,i)=>i);const u=persons.map(()=>rnorm(rng,0,S.sigmaU));const alpha=Math.log(S.pBase/(1-S.pBase));const uSD=S.sigmaU<=0?1:S.sigmaU;const rows=[];for(let i=0;i<S.N;i++){const p_i=clamp(logistic(alpha+S.rhoSel*(u[i]/uSD)),.01,.99);let D_prev=rng()<p_i?1:0;let e_prev=rnorm(rng,0,S.sigmaE);let yLag=0;for(let t=0;t<S.T;t++){let p_now=p_i;if(S.dynSelOn&&t>0)p_now=clamp(logistic(alpha+S.rhoSel*(u[i]/uSD)+S.gammaDY*Math.tanh(yLag)),.01,.99);if(t>0&&rng()<S.switchRate)D_prev=rng()<p_now?1:0;const D_true=D_prev;const heteroScale=S.heteroOn?(1+S.heteroDWeight*D_true+S.heteroUWeight*Math.abs(u[i])):1;const e_it=S.ar1On?(S.rhoE*e_prev+rnorm(rng,0,S.sigmaE*Math.sqrt(1-S.rhoE*S.rhoE)*heteroScale)):rnorm(rng,0,S.sigmaE*heteroScale);e_prev=e_it;const trend=S.timeTrendOn?S.timeTrendSlope*(t+1):0;const shockC=S.shockAllOn&&(t+1)===S.shockAllWave?S.shockAllSize:0;const shockT=S.shockTreatOn&&(t+1)===S.shockTreatWave&&D_true===1?S.shockTreatSize:0;const beta_i=S.betaTrue+S.betaHet*(u[i]/uSD);const yStar=beta_i*D_true+u[i]+e_it+trend+shockC+shockT;const base=S.expOutcomeOn?Math.exp(S.expScale*yStar):yStar;const y=base+rnorm(rng,0,S.sigmaME);const D=(S.misclassOn&&Math.random()<S.misclassP)?1-D_true:D_true;rows.push({pid:i,wave:t+1,D_true,D,u:u[i],e:e_it,yStar,y,trend,shockCommon:shockC,shockTreat:shockT});if(S.attritionOn&&t<S.T-1){const dropP=clamp(S.attrBase+S.attrSlope*logistic(-yStar),0,.95);if(Math.random()<dropP)break}yLag=yStar}}return rows}
+
+function renderNotation(sim){const txt=[`β_i = β + β_h·(u_i/σ_u)    (β=${S.betaTrue.toFixed(2)}, β_h=${S.betaHet.toFixed(2)}, σ_u=${S.sigmaU.toFixed(2)})`,`Outcome base:  y*_it = β_i·D_it + u_i + e_it + γ·t + ξ·1{t=${S.shockAllWave}} + τ·D_it·1{t=${S.shockTreatWave}}`,`Observed Y:   y_it = ${S.expOutcomeOn?'exp(κ·y*_it)':'y*_it'} + ν_it   (κ=${S.expOutcomeOn?S.expScale.toFixed(2):'0'},  σ_me=${S.sigmaME.toFixed(2)})`,`Errors:       e_it = ${S.ar1On?`ρ_e·e_i,t-1 + η_it (ρ_e=${S.rhoE.toFixed(2)})`:'η_it (i.i.d.)'}  with σ_e=${S.sigmaE.toFixed(2)}`,`Treatment:    Pr(D_it=1 | u_i, y*_i,t-1) = logit^-1(α + ρ·(u_i/σ_u) + γ_dy·tanh(y*_i,t-1)), α=logit(${S.pBase.toFixed(2)})`,`Misclass:     D~_it = D_it w.p. (1−p_m), else 1−D_it  (p_m=${S.misclassOn?S.misclassP.toFixed(2):'0'})`,`Estimators:   Cross-sec (wave1), pooled, FE within; Robust (Huber) & Bayesian pooled.`].join("
+");document.getElementById("notation").textContent=txt}
+
+function drawScatter(container,data,fit){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const svg=createSVG(w,h);const yMin=Math.min(...data.map(d=>d.y));const yMax=Math.max(...data.map(d=>d.y));const xs=scaleLinear(0,1,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"grid","#111"))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"grid","#111"))}axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:"0"},{pos:1,label:"1"}]);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(const d of data){svg.appendChild(circle(xs(d.x),ys(d.y),2,"#a3a3a3",.9))}if(fit){const p1=[xs(0),ys(fit.alpha)],p2=[xs(1),ys(fit.alpha+fit.beta)];svg.appendChild(polyline([p1,p2],"#93c5fd",2))}container.appendChild(svg)}
+function drawLines(container,spaghetti,summary,T){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const allY=spaghetti.flatMap(s=>s.series.map(p=>p.y)).concat(summary.flatMap(s=>[s.mean,s.median,s.p25,s.p75]));const yMin=Math.min(...allY),yMax=Math.max(...allY);const xs=scaleLinear(1,T,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);const svg=createSVG(w,h);for(let i=0;i<=T-1;i++){const x=xs(1+i*(T-1)/(T-1));svg.appendChild(line(x,m.t,x,h-m.b,"grid","#111"))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"grid","#111"))}const xTicks=[];for(let t=1;t<=T;t++)xTicks.push({pos:(t-1)/(T-1),label:String(t)});axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);spaghetti.forEach(s=>{const pts=s.series.map(p=>[xs(p.t),ys(p.y)]);svg.appendChild(polyline(pts,"#6b7280",1,.6))});function pathFor(key,color){const pts=summary.map(s=>[xs(s.t),ys(s[key])]);svg.appendChild(polyline(pts,color,2.5,1))}pathFor("mean","#93c5fd");pathFor("median","#e5e7eb");pathFor("p25","#a78bfa");pathFor("p75","#a78bfa");container.appendChild(svg)}
+function drawBars(container,rows,betaTrue){container.innerHTML="";const w=520,h=380,m={l:50,r:10,t:10,b:60};const yVals=rows.map(r=>r.b).concat([betaTrue]);const yMin=Math.min(...yVals),yMax=Math.max(...yVals);const xs=scaleLinear(0,rows.length,m.l,w-m.r);const ys=scaleLinear(yMin,yMax,h-m.b,m.t);const svg=createSVG(w,h);const xTicks=rows.map((r,i)=>({pos:(i+.5)/rows.length,label:r.name}));axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(yMin+p*(yMax-yMin))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);const bw=(w-m.l-m.r)/rows.length-12;rows.forEach((r,i)=>{const x=m.l+i*((w-m.l-m.r)/rows.length)+6;const y=ys(Math.max(0,r.b));const y0=ys(0);const height=Math.abs(y-y0);const top=Math.min(y,y0);svg.appendChild(rect(x,top,bw,height,"#60a5fa"))});const ytrue=ys(betaTrue);svg.appendChild(line(m.l,ytrue,w-m.r,ytrue,null,"#f87171",2));container.appendChild(svg)}
+function drawResiduals(container,points){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const xs=scaleLinear(Math.min(...points.map(d=>d.fit)),Math.max(...points.map(d=>d.fit)),m.l,w-m.r);const ys=scaleLinear(Math.min(...points.map(d=>d.resid)),Math.max(...points.map(d=>d.resid)),h-m.b,m.t);const svg=createSVG(w,h);for(let i=0;i<=10;i++){const x=m.l+i*(w-m.l-m.r)/10;svg.appendChild(line(x,m.t,x,h-m.b,"grid","#111"))}for(let i=0;i<=10;i++){const y=m.t+i*(h-m.t-m.b)/10;svg.appendChild(line(m.l,y,w-m.r,y,"grid","#111"))}const xTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(Math.min(...points.map(d=>d.fit))+p*(Math.max(...points.map(d=>d.fit))-Math.min(...points.map(d=>d.fit)))}));axis(svg,m.l,h-m.b,w-m.l-m.r,true,xTicks);const yTicks=[0,.25,.5,.75,1].map(p=>({pos:p,label:fmt(Math.min(...points.map(d=>d.resid))+p*(Math.max(...points.map(d=>d.resid))-Math.min(...points.map(d=>d.resid)))}));axis(svg,m.l,h-m.b,h-m.t-m.b,false,yTicks);for(const d of points){svg.appendChild(circle(xs(d.fit),ys(d.resid),2,"#a3a3a3",.9))}const y0=ys(0);svg.appendChild(line(m.l,y0,w-m.r,y0,null,"#94a3b8",1.5));container.appendChild(svg)}
+function drawHist(container,resid){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};if(resid.length===0){container.textContent="No data";return}const mn=Math.min(...resid),mx=Math.max(...resid),bins=20;const width=(mx-mn)/bins||1;const cnt=new Array(bins).fill(0);resid.forEach(v=>{const i=Math.max(0,Math.min(bins-1,Math.floor((v-mn)/width)));cnt[i]++});const xs=scaleLinear(0,bins,m.l,w-m.r);const ys=scaleLinear(0,Math.max(...cnt),h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(mn)},{pos:1,label:fmt(mx)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:"0"},{pos:1,label:String(Math.max(...cnt))}]);const bw=(w-m.l-m.r)/bins-2;for(let i=0;i<bins;i++){const x=xs(i)+1,y=ys(cnt[i]),y0=ys(0);svg.appendChild(rect(x,y,bw,y0-y,"#93c5fd"))}container.appendChild(svg)}
+function drawQQ(container,resid){container.innerHTML="";const w=520,h=380,m={l:40,r:10,t:10,b:30};const r=[...resid].sort((a,b)=>a-b);if(r.length<5){container.textContent="Not enough data";return}const n=r.length;const pts=[];for(let i=0;i<n;i++){const p=(i+.5)/n;const z=Math.SQRT2*erfinv(2*p-1);pts.push({theor:z,sample:r[i]})}const xs=scaleLinear(pts[0].theor,pts[pts.length-1].theor,m.l,w-m.r);const ys=scaleLinear(r[0],r[r.length-1],h-m.b,m.t);const svg=createSVG(w,h);axis(svg,m.l,h-m.b,w-m.l-m.r,true,[{pos:0,label:fmt(pts[0].theor)},{pos:1,label:fmt(pts[pts.length-1].theor)}]);axis(svg,m.l,h-m.b,h-m.t-m.b,false,[{pos:0,label:fmt(r[0])},{pos:1,label:fmt(r[r.length-1])}]);const d1=[xs(pts[0].theor),ys(r[0])],d2=[xs(pts[pts.length-1].theor),ys(r[r.length-1])];const ref=[d1,d2];const svgRef=polyline(ref,"#94a3b8",1.5);svg.appendChild(svgRef);for(const p of pts){svg.appendChild(circle(xs(p.theor),ys(p.sample),2,"#a3a3a3",.9))}container.appendChild(svg)}
+
+function computeAndRender(){updateLabels();const sim=simulate();const cross=sim.filter(r=>r.wave===1);const pooled=sim;const xCross=cross.map(r=>r.D),yCross=cross.map(r=>r.y);const xPooled=pooled.map(r=>r.D),yPooled=pooled.map(r=>r.y);const idsPooled=pooled.map(r=>r.pid);const cs=olsSimple(xCross,yCross);const pooledOLS=olsSimple(xPooled,yPooled);const fe=feWithin(idsPooled,xPooled,yPooled);const hub=huberIRLS(xPooled,yPooled);const bayes=bayesPosterior(xPooled,yPooled);const scatterData=cross.map(r=>({x:r.D,y:r.y}));drawScatter(document.getElementById("chart-scatter"),scatterData,cs);const ids=Array.from(new Set(pooled.map(r=>r.pid)));const k=Math.min(20,ids.length);const rand=mulberry32(1234+S.seed);const chosen=new Set;while(chosen.size<k&&ids.length>0)chosen.add(Math.floor(rand()*ids.length));const chosenIds=Array.from(chosen).map(i=>ids[i]);const spaghetti=chosenIds.map(id=>({id,series:pooled.filter(r=>r.pid===id).map(r=>({t:r.wave,y:r.y}))}));const summary=[];for(let t=1;t<=S.T;t++){const arr=pooled.filter(r=>r.wave===t).map(r=>r.y);if(arr.length){summary.push({t,mean:mean(arr),median:quantile(arr,0.5),p25:quantile(arr,0.25),p75:quantile(arr,0.75)})}}drawLines(document.getElementById("chart-lines"),spaghetti,summary,S.T);const estRows=[];if(S.mode==="frequentist"){if(Number.isFinite(cs.beta)&&Number.isFinite(cs.se))estRows.push({name:"Cross-section",b:cs.beta});if(Number.isFinite(pooledOLS.beta)&&Number.isFinite(pooledOLS.se))estRows.push({name:"Pooled",b:pooledOLS.beta});if(Number.isFinite(fe.beta)&&Number.isFinite(fe.se))estRows.push({name:"Fixed Effects",b:fe.beta})}else if(S.mode==="robust"){estRows.push({name:"Pooled OLS",b:pooledOLS.beta});estRows.push({name:"Huber robust",b:hub.beta})}else if(S.mode==="bayesian"){estRows.push({name:"Bayesian pooled",b:bayes.betaMean});estRows.push({name:"Frequentist pooled",b:pooledOLS.beta})}if(S.viz==="estimates"||S.mode!=="descriptives"){drawBars(document.getElementById("chart-bars"),estRows,S.betaTrue)}const iccTrue=(S.sigmaU**2)/(S.sigmaU**2+S.sigmaE**2+S.sigmaME**2);const by=new Map;for(const r of pooled){if(!by.has(r.pid))by.set(r.pid,[]);by.get(r.pid).push(r.y)}const means=[],wVars=[];by.forEach(arr=>{const m=mean(arr);means.push(m);const v=arr.reduce((s,v)=>s+(v-m)*(v-m),0)/Math.max(1,arr.length-1);wVars.push(v)});const vb=variance(means);const vw=wVars.length?wVars.reduce((a,b)=>a+b,0)/wVars.length:0;const tot=vb+vw;const iccEmp=tot===0?NaN:vb/tot;const idsUnique=Array.from(new Set(pooled.map(r=>r.pid)));let nSwitch=0;idsUnique.forEach(id=>{const rows=pooled.filter(r=>r.pid===id);const any=rows.some((r,i)=>i>0&&r.D!==rows[i-1].D);if(any)nSwitch++});const shareSwitchers=idsUnique.length?nSwitch/idsUnique.length:NaN;const attritionRate=idsUnique.length?idsUnique.filter(id=>pooled.filter(r=>r.pid===id).length<S.T).length/idsUnique.length:NaN;document.getElementById("varianceList").innerHTML=`
+    <li><b>True ICC:</b> ${fmt(iccTrue)}</li>
+    <li><b>Empirical ICC:</b> ${fmt(iccEmp)}</li>
+    <li><b>Switchers:</b> ${Number.isFinite(shareSwitchers)?(shareSwitchers*100).toFixed(0)+'%':'—'}</li>
+    <li><b>Attrition:</b> ${Number.isFinite(attritionRate)?(attritionRate*100).toFixed(0)+'%':'—'}</li>
+  `;const residPoints=pooled.map(r=>({fit:pooledOLS.alpha+pooledOLS.beta*r.D,resid:r.y-(pooledOLS.alpha+pooledOLS.beta*r.D)}));drawResiduals(document.getElementById("chart-rvf"),residPoints);drawHist(document.getElementById("chart-hist"),residPoints.map(d=>d.resid));drawQQ(document.getElementById("chart-qq"),residPoints.map(d=>d.resid));const cards=[];function addCard(title,value,ciVals,foot,warn){cards.push({title,value,ciVals,foot,warn})}const csCI=ci(cs.beta,cs.se),pooledCI=ci(pooledOLS.beta,pooledOLS.se),feCI=ci(fe.beta,fe.se);if(S.mode!=="descriptives"){addCard("True β",fmt(S.betaTrue),null,"",false);if(S.mode==="frequentist"){addCard("Cross-section OLS",fmt(cs.beta),`${fmt(csCI[0])} … ${fmt(csCI[1])}`,`n=${cs.n}`,Number.isNaN(cs.beta));addCard("Pooled OLS",fmt(pooledOLS.beta),`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`,`n=${pooledOLS.n}`,Number.isNaN(pooledOLS.beta));addCard("Fixed Effects (within)",fmt(fe.beta),`${fmt(feCI[0])} … ${fmt(feCI[1])}`,`obs=${fe.n}`,Number.isNaN(fe.beta))}else if(S.mode==="robust"){addCard("Cross-section OLS",fmt(cs.beta),`${fmt(csCI[0])} … ${fmt(csCI[1])}`,`n=${cs.n}`,false);addCard("Pooled (Huber robust)",fmt(hub.beta),`±1.96·SE ≈ ${fmt(1.96*(hub.se||NaN))}`,`n=${xPooled?.length||''}`,Number.isNaN(hub.beta));addCard("Fixed Effects (within)",fmt(fe.beta),`${fmt(feCI[0])} … ${fmt(feCI[1])}`,`obs=${fe.n}`,false)}else if(S.mode==="bayesian"){addCard("Bayesian pooled β (mean)",fmt(bayes.betaMean),`${fmt(bayes.ci[0])} … ${fmt(bayes.ci[1])}`,`SE≈${fmt(bayes.betaSE)}`,false);addCard("Frequentist pooled β",fmt(pooledOLS.beta),`${fmt(pooledCI[0])} … ${fmt(pooledCI[1])}`,`SE=${fmt(pooledOLS.se)}`,false);addCard("Cross-section OLS",fmt(cs.beta),`${fmt(csCI[0])} … ${fmt(csCI[1])}`,`n=${cs.n}`,false)}}const cardsDiv=document.getElementById("cards");cardsDiv.innerHTML="";for(const c of cards){const el=document.createElement("div");el.className="card"+(c.warn?" warn":"");el.innerHTML=`<div class="title">${c.title}</div><div class="value">${c.value}</div>${c.ciVals?`<div class="muted" style="font-size:12px;margin-top:4px;">95% interval: ${c.ciVals}</div>`:""}${c.foot?`<div class="foot">${c.foot}</div>`:""}`;cardsDiv.appendChild(el)}const rep=[];const sugg=new Set;const push=(lvl,msg,fix)=>{rep.push({lvl,msg,fix});if(fix)sugg.add(fix)};if(S.rhoSel>.5)push("🔴","High selection potential (large ρ): cross-section/pooled likely biased.","Prefer FE; add controls or IV.");if(S.timeTrendOn||S.shockAllOn)push("🟠","Time trends or common shocks present.","Add time FE or detrend; consider DiD.");if(S.shockTreatOn)push("🔴","Treat-specific shock active: parallel trends violated.","Use event-study with group×time FE; test pre-trends.");if(S.ar1On)push("🟠","Serial correlation in errors.","Cluster SEs at unit level; model AR terms.");if(S.sigmaME>.8||S.misclassOn)push("🟠","Strong measurement error/misclassification.","Instrument/correct using validation; reliability adjustments.");if(S.dynSelOn)push("🔴","Dynamic selection (Y→D) enabled.","Lagged controls/GMM (Arellano–Bond), IV, or design-based ID.");if(Number.isFinite(shareSwitchers)&&shareSwitchers<.15)push("🟠","Few switchers → FE weakly identified.","Increase T; pooled + controls/IV.");if(S.attritionOn&&Number.isFinite(attritionRate)&&attritionRate>.15)push("🟠",`Nontrivial attrition (${(attritionRate*100).toFixed(0)}%).`,"Model attrition, IPW, or bounds.");if(!rep.length)push("🟢","No major red flags detected.","Still cluster SEs for panels; inspect residuals & ICC.");document.getElementById("report").innerHTML=`
+    <div class="grid-2">
+      <div>${rep.map(w=>`<div>${w.lvl} ${w.msg}</div>`).join("")}</div>
+      <div><div style="margin-bottom:6px;"><b>Suggested remedies</b></div><ul>${Array.from(sugg).map(s=>`<li>${s}</li>`).join("")||"<li>Cluster SEs by unit</li><li>Add time FE / event study</li><li>Use IV / design-based ID</li>"}</ul></div>
+    </div>
+  `;document.getElementById("estimatesArea").style.display=S.viz==="estimates"?"block":"none";document.getElementById("diagArea").style.display=S.viz==="diagnostics"?"block":"none";renderNotation(sim)}
+
+function bindRange(id,key){const el=document.getElementById(id);el.value=S[key];el.addEventListener("input",e=>{S[key]=parseFloat(e.target.value);computeAndRender()})}
+function bindCheck(id,key){const el=document.getElementById(id);el.checked=S[key];el.addEventListener("change",e=>{S[key]=!!e.target.checked;computeAndRender()})}
+function bindNum(id,key){const el=document.getElementById(id);el.value=S[key];el.addEventListener("change",e=>{S[key]=parseFloat(e.target.value);computeAndRender()})}
+
+function setMode(mode){S.mode=mode;["mode-descriptives","mode-freq","mode-robust","mode-bayes"].forEach(id=>document.getElementById(id).classList.remove("active"));if(mode==="descriptives")document.getElementById("mode-descriptives").classList.add("active");if(mode==="frequentist")document.getElementById("mode-freq").classList.add("active");if(mode==="robust")document.getElementById("mode-robust").classList.add("active");if(mode==="bayesian")document.getElementById("mode-bayes").classList.add("active");computeAndRender()}
+function setViz(v){S.viz=v;["viz-trajectories","viz-estimates","viz-diagnostics"].forEach(id=>document.getElementById(id).classList.remove("active"));if(v==="trajectories")document.getElementById("viz-trajectories").classList.add("active");if(v==="estimates")document.getElementById("viz-estimates").classList.add("active");if(v==="diagnostics")document.getElementById("viz-diagnostics").classList.add("active");computeAndRender()}
+
+function init(){
+  document.getElementById("tab-sim").addEventListener("click",()=>{document.getElementById("sim").style.display="block";document.getElementById("info").style.display="none"});
+  document.getElementById("tab-info").addEventListener("click",()=>{document.getElementById("sim").style.display="none";document.getElementById("info").style.display="block"});
+  document.getElementById("btn-refresh").addEventListener("click",()=>{location.search="?v="+Date.now()});
+  document.getElementById("mode-descriptives").addEventListener("click",()=>setMode("descriptives"));
+  document.getElementById("mode-freq").addEventListener("click",()=>setMode("frequentist"));
+  document.getElementById("mode-robust").addEventListener("click",()=>setMode("robust"));
+  document.getElementById("mode-bayes").addEventListener("click",()=>setMode("bayesian"));
+  document.getElementById("viz-trajectories").addEventListener("click",()=>setViz("trajectories"));
+  document.getElementById("viz-estimates").addEventListener("click",()=>setViz("estimates"));
+  document.getElementById("viz-diagnostics").addEventListener("click",()=>setViz("diagnostics"));
+  bindRange("N","N");bindRange("T","T");bindRange("betaTrue","betaTrue");bindRange("betaHet","betaHet");bindRange("sigmaU","sigmaU");bindRange("sigmaE","sigmaE");bindRange("sigmaME","sigmaME");bindRange("pBase","pBase");bindRange("rhoSel","rhoSel");bindRange("switchRate","switchRate");bindRange("timeTrendSlope","timeTrendSlope");
+  bindCheck("timeTrendOn","timeTrendOn");bindCheck("shockAllOn","shockAllOn");bindNum("shockAllWave","shockAllWave");bindNum("shockAllSize","shockAllSize");bindCheck("shockTreatOn","shockTreatOn");bindNum("shockTreatWave","shockTreatWave");bindNum("shockTreatSize","shockTreatSize");
+  bindCheck("ar1On","ar1On");bindNum("rhoE","rhoE");bindCheck("dynSelOn","dynSelOn");bindNum("gammaDY","gammaDY");bindCheck("misclassOn","misclassOn");bindNum("misclassP","misclassP");bindCheck("attritionOn","attritionOn");bindNum("attrBase","attrBase");bindNum("attrSlope","attrSlope");
+  bindCheck("expOutcomeOn","expOutcomeOn");bindNum("expScale","expScale");bindCheck("heteroOn","heteroOn");bindNum("heteroDWeight","heteroDWeight");bindNum("heteroUWeight","heteroUWeight");
+  document.getElementById("btn-download").addEventListener("click",()=>{const sim=simulate();const header=["pid","wave","D_true","D","u","e","yStar","y","trend","shockCommon","shockTreat"];const esc=s=>'"'+String(s).replace(/"/g,'""')+'"';const csv=[header.join(",")].concat(sim.map(r=>header.map(h=>esc(r[h])).join(","))).join("
+");const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="sim_cross_section_vs_panel.csv";a.click();URL.revokeObjectURL(url)});
+  computeAndRender();
+}
+window.addEventListener("DOMContentLoaded",init);
+</script>
+</body>
 </html>
