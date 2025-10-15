@@ -50,28 +50,13 @@
       padding: 2px;
     }
     .hand-card:hover { transform: translateY(-8px); background: #4b5563; }
-    .hand-card img { 
-      width: 64px; 
-      height: 80px; 
-      border-radius: 4px; 
-      border: 2px solid #4b5563; 
-      object-fit: cover; 
-      pointer-events: none; 
-      display: block; 
-    }
-    .hand-card.selected { 
-      border: 3px solid #fbbf24; 
-      background: #fbbf24; 
-      box-shadow: 0 0 20px #fbbf24; 
-      padding: 2px; 
-    }
-    .hand-card.selected img { border-color: #fbbf24; }
+    .hand-card img { width: 64px; height: 80px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; pointer-events: none; display: block; }
+    .hand-card.selected { border: 3px solid #fbbf24; background: #fbbf24; box-shadow: 0 0 20px #fbbf24; }
     .field-card { display: inline-block; margin: 4px; }
     .field-card img { width: 60px; height: 84px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; }
     .sidebar { width: 260px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal-content { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
-    .icon { width: 20px; height: 20px; display: inline-block; vertical-align: middle; }
     .flex { display: flex; gap: 8px; align-items: center; }
     .justify-between { justify-content: space-between; }
     .text-sm { font-size: 14px; }
@@ -91,7 +76,6 @@
 </head>
 <body>
   <div id="root"></div>
-  
   <script>
 (function(){
 'use strict';
@@ -164,12 +148,10 @@ function sendGameUpdate() {
 
 function setupDataChannel(channel) {
   state.dataChannel = channel;
-  
   state.dataChannel.onopen = () => {
     console.log('Connected!');
     state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
   };
-  
   state.dataChannel.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
@@ -186,7 +168,6 @@ function setupDataChannel(channel) {
       }
     } catch(e) { console.error(e); }
   };
-  
   state.dataChannel.onclose = () => {
     alert('Connection closed');
     disconnectOnline();
@@ -199,20 +180,15 @@ async function createOnlineRoom() {
   state.isHost = true;
   state.onlineMode = true;
   state.roomCode = 'waiting';
-  
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   state.peerConnection = pc;
-  
   setupDataChannel(pc.createDataChannel('game'));
-  
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  
   await new Promise(resolve => {
     if (pc.iceGatheringState === 'complete') resolve();
     else pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
   });
-  
   state.roomCode = btoa(JSON.stringify({ offer: pc.localDescription }));
   state.waitingForAnswer = true;
   render();
@@ -222,23 +198,18 @@ async function joinOnlineRoom(offerStr) {
   state.isHost = false;
   state.onlineMode = true;
   state.roomCode = 'connecting';
-  
   try {
     const data = JSON.parse(atob(offerStr));
     const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     state.peerConnection = pc;
-    
     pc.ondatachannel = (e) => setupDataChannel(e.channel);
     await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-    
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    
     await new Promise(resolve => {
       if (pc.iceGatheringState === 'complete') resolve();
       else pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
     });
-    
     state.answerCode = btoa(JSON.stringify({ answer: pc.localDescription }));
     render();
   } catch(e) {
@@ -505,7 +476,6 @@ function DeckBuilder() {
   const createCardElement = (c, isInDeck) => {
     const cardDiv = document.createElement('div');
     cardDiv.className = 'deck-card';
-    
     const img = document.createElement('img');
     if (c.image) {
       img.src = c.image;
@@ -514,13 +484,10 @@ function DeckBuilder() {
       img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
     }
     img.alt = c.name;
-    
-    // Add hover to show card details in sidebar
     cardDiv.onmouseenter = () => {
       state.hoveredCard = c;
       updateCardInfo();
     };
-    
     cardDiv.appendChild(img);
     return cardDiv;
   };
@@ -528,7 +495,6 @@ function DeckBuilder() {
   const updateCardInfo = () => {
     const infoDiv = div.querySelector('#cardInfoSidebar');
     if (!infoDiv) return;
-    
     if (state.hoveredCard) {
       const c = state.hoveredCard;
       infoDiv.innerHTML = `
@@ -631,7 +597,6 @@ function GameBoard() {
   
   if (!state.gameStarted) {
     div.className = 'container screen';
-    
     let connUI = '';
     if (state.onlineMode && state.waitingForAnswer) {
       connUI = `
@@ -727,7 +692,7 @@ function GameBoard() {
     return div;
   }
 
-  // Game screen
+  // GAME SCREEN - Critical part with working card selection
   const pKey = 'player' + state.currentPlayer;
   const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
   const me = state.gameState[pKey];
@@ -760,11 +725,11 @@ function GameBoard() {
           <button id="endTurn" class="btn btn-blue text-xs">End Turn</button>
         </div>
         <div style="flex: 1; overflow-y: auto; padding: 16px;">
-          <div class="text-center mb-4">
-            <div class="text-red" style="font-weight: bold;">Opponent - LP: ${opp.health}</div>
+          <div class="mb-4 text-center">
+            <div class="text-red" style="font-weight: bold; font-size: 14px;">Opponent - LP: ${opp.health}</div>
             <div class="text-xs text-gray">Deck: ${opp.deck.length} | Hand: ${opp.hand.length} | GY: ${opp.graveyard.length}</div>
           </div>
-                      <div class="game-field mb-4" style="min-height: 110px;">
+          <div class="game-field mb-4" style="min-height: 110px;">
             <div class="text-xs text-gray text-center">Opponent Upper Field</div>
             ${oppUpperHtml}
           </div>
@@ -781,9 +746,9 @@ function GameBoard() {
             <div class="text-xs text-gray text-center">Your Upper Field</div>
             ${myUpperHtml}
           </div>
-          <div class="text-center">
-            <div class="text-green" style="font-weight: bold;">You - LP: ${me.health}</div>
-            <div class="flex justify-between" style="margin-top: 8px;">
+          <div class="mt-4 text-center">
+            <div class="text-green" style="font-weight: bold; font-size: 14px;">You - LP: ${me.health}</div>
+            <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
               <button id="drawBtn" class="btn btn-secondary text-xs">Draw(${me.deck.length})</button>
               <button id="viewGY" class="btn btn-secondary text-xs">GY(${me.graveyard.length})</button>
               <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
@@ -791,33 +756,25 @@ function GameBoard() {
             </div>
           </div>
         </div>
-        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 100px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; position: relative;">
-          <div style="position: absolute; top: 2px; right: 2px; font-size: 9px; color: #6b7280;">Click cards to select</div>
-        </div>
+        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 100px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px;"></div>
       </div>
       <div class="sidebar">
-        <h3 class="mb-4 text-center" style="font-weight: bold; font-size: 14px;">Card Info</h3>
-        ${state.hoveredCard ? `
-          <div class="card-preview">
-            <div class="text-center mb-2" style="font-weight: bold;">${state.hoveredCard.name}</div>
-            <div class="text-xs text-gray text-center mb-2">${state.hoveredCard.type}</div>
-            ${state.hoveredCard.image ? `<img src="${state.hoveredCard.image}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : '<div class="card-img" style="height: 150px;">🃏</div>'}
-            ${state.hoveredCard.type === 'Monster' ? `<div class="text-xs mb-2">ATK: ${state.hoveredCard.attack} | DEF: ${state.hoveredCard.defense}</div>` : ''}
-            <div class="text-xs">${state.hoveredCard.effect}</div>
-          </div>
-        ` : '<p class="text-gray text-xs text-center">Hover over a card</p>'}
+        <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+        <div id="cardInfo">
+          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>
+        </div>
       </div>
     </div>
     ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
-      <div id="actionMenu" style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
-        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">⭐ ${me.hand[state.selectedCard].name}</div>
+      <div style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <button class="btn btn-primary text-sm placeCard" data-zone="upper" style="padding: 14px; font-weight: bold;">⬆️ Upper Field</button>
-          <button class="btn btn-primary text-sm placeCard" data-zone="lower" style="padding: 14px; font-weight: bold;">⬇️ Lower Field</button>
-          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px; font-weight: bold;">🗑️ Discard</button>
-          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px; font-weight: bold;">📚 To Deck</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">Upper Field</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">To Deck</button>
         </div>
-        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px; font-weight: bold;">❌ Cancel</button>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">Cancel</button>
       </div>
     ` : ''}
     ${state.winner ? `
@@ -831,101 +788,50 @@ function GameBoard() {
     ` : ''}
   `;
   
-  
-  // Create hand cards with DOM and attach handlers immediately
-  console.log('🎴 Starting hand card creation');
-  console.log('  state.currentPlayer:', state.currentPlayer);
-  console.log('  pKey:', pKey);
-  console.log('  Full gameState:', state.gameState);
-  console.log('  My state object:', me);
-  console.log('  My hand array:', me.hand);
-  console.log('  Hand length:', me.hand.length);
-  
+  // Create hand cards with handlers attached ONCE
+  console.log('Creating hand cards for Player', state.currentPlayer);
   const handContainer = div.querySelector('#handContainer');
-  console.log('  handContainer found:', !!handContainer);
-  
-  if (!handContainer) {
-    console.error('❌ ERROR: handContainer not found!');
-    return div;
-  }
-  
-  // CRITICAL: Clear any existing content
-  handContainer.innerHTML = '';
-  console.log('  ✅ Cleared handContainer');
   
   if (me.hand.length === 0) {
-    console.log('⚠️ Hand is empty, showing empty message');
     const emptyMsg = document.createElement('span');
     emptyMsg.className = 'text-gray text-xs';
-    emptyMsg.textContent = 'No cards in hand - Click Draw!';
+    emptyMsg.textContent = 'No cards - Click Draw!';
     handContainer.appendChild(emptyMsg);
   } else {
-    console.log('✅ Hand has', me.hand.length, 'cards, creating card elements...');
     me.hand.forEach((card, idx) => {
-      console.log(`  → Creating card ${idx}:`, card.name);
       const cardDiv = document.createElement('div');
       cardDiv.className = 'hand-card' + (state.selectedCard === idx ? ' selected' : '');
-      cardDiv.dataset.idx = idx;
-      cardDiv.style.cssText = 'z-index: 10; user-select: none; position: relative;';
-      
-      // Add card image
       cardDiv.appendChild(createGameCardImg(card));
       
-      // Add a BIG OBVIOUS BUTTON that's definitely clickable
-      const selectBtn = document.createElement('button');
-      selectBtn.textContent = 'SELECT';
-      selectBtn.style.cssText = 'position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); background: lime; color: black; border: 2px solid black; padding: 4px 8px; font-weight: bold; font-size: 10px; cursor: pointer; z-index: 100;';
-      selectBtn.onclick = (e) => {
-        console.log('🟢🟢🟢 SELECT BUTTON CLICKED for card', idx);
-        e.preventDefault();
-        e.stopPropagation();
+      // Attach click handler ONCE here
+      cardDiv.onclick = () => {
+        console.log('Card clicked:', idx);
         state.selectedCard = state.selectedCard === idx ? null : idx;
-        console.log('  Selection changed to:', state.selectedCard);
-        render();
-      };
-      cardDiv.appendChild(selectBtn);
-      
-      // Also attach to the card div itself
-      cardDiv.onclick = (e) => {
-        // Only if not clicking the button
-        if (e.target === selectBtn) return;
-        console.log('✅✅✅ CARD DIV CLICKED', idx, 'Card:', card.name);
-        e.preventDefault();
-        e.stopPropagation();
-        state.selectedCard = state.selectedCard === idx ? null : idx;
-        console.log('  New selection:', state.selectedCard);
         render();
       };
       
-      cardDiv.onmousedown = (e) => {
-        console.log('🖱️ MOUSEDOWN on card', idx);
-      };
-      
-      // Hover for sidebar
+      // Hover updates sidebar without re-rendering
       cardDiv.onmouseenter = () => {
-        state.hoveredCard = card;
-        const sidebar = document.querySelector('.sidebar');
-        if (sidebar && state.hoveredCard) {
-          const c = state.hoveredCard;
+        const sidebar = div.querySelector('#cardInfo');
+        if (sidebar) {
+          const c = card;
           sidebar.innerHTML = `
-            <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
             <div class="card-preview">
-              <div class="text-center mb-2" style="font-weight: bold; font-size: 14px;">${c.name}</div>
+              <div class="text-center mb-2" style="font-weight: bold;">${c.name}</div>
               <div class="text-xs text-gray text-center mb-2">${c.type}</div>
-              ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 150px; font-size: 48px;">🃏</div>'}
-              ${c.type === 'Monster' ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-xs">ATK: ${c.attack}</span><span class="text-xs">DEF: ${c.defense}</span></div>` : ''}
-              <div class="text-xs" style="margin-top: 8px;">${c.effect || 'No effect'}</div>
+              ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : '<div class="card-img" style="height: 120px;">🃏</div>'}
+              ${c.type === 'Monster' ? `<div class="mb-2 text-xs"><strong>ATK:</strong> ${c.attack} <strong>DEF:</strong> ${c.defense}</div>` : ''}
+              <div class="text-xs">${c.effect || 'No effect'}</div>
             </div>
           `;
         }
       };
       
       handContainer.appendChild(cardDiv);
-      console.log(`  → Card ${idx} added with SELECT button`);
     });
   }
   
-  console.log('✅ Finished! handContainer now has', handContainer.children.length, 'children');
+  console.log('Hand cards created:', me.hand.length);
   
   // Add images to field cards
   div.querySelectorAll('.field-card').forEach(fieldCard => {
@@ -935,168 +841,78 @@ function GameBoard() {
     const card = owner === 'me' ? me[zone][idx] : opp[zone][idx];
     if (card) {
       fieldCard.appendChild(createGameCardImg(card));
-      
-      // Attach hover handler to field cards - DON'T CALL RENDER!
-      fieldCard.onmouseenter = () => {
-        state.hoveredCard = card;
-        // Update sidebar directly
-        const sidebar = document.querySelector('.sidebar');
-        if (sidebar && state.hoveredCard) {
-          const c = state.hoveredCard;
-          sidebar.innerHTML = `
-            <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
-            <div class="card-preview">
-              <div class="text-center mb-2" style="font-weight: bold; font-size: 14px;">${c.name}</div>
-              <div class="text-xs text-gray text-center mb-2">${c.type}</div>
-              ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 150px; font-size: 48px;">🃏</div>'}
-              ${c.type === 'Monster' ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-xs">ATK: ${c.attack}</span><span class="text-xs">DEF: ${c.defense}</span></div>` : ''}
-              <div class="text-xs" style="margin-top: 8px;">${c.effect || 'No effect'}</div>
-            </div>
-          `;
-        }
-      };
-      
-      // Attach click handler for your own field cards
-      if (owner === 'me') {
-        fieldCard.onclick = () => {
-          const action = prompt('Move card to:\n1. Hand\n2. Deck\n3. Graveyard\nEnter 1, 2, or 3:');
-          const cardData = me[zone][idx];
-          me[zone].splice(idx, 1);
-          
-          if (action === '1') me.hand.push(cardData);
-          else if (action === '2') me.deck.push(cardData);
-          else if (action === '3') me.graveyard.push(cardData);
-          else { me[zone].splice(idx, 0, cardData); return; }
-          
-          sendGameUpdate();
-          render();
-        };
-      }
     }
   });
   
+  // Button handlers
+  const exitBtn = div.querySelector('#exitBtn');
   const drawBtn = div.querySelector('#drawBtn');
   const gyBtn = div.querySelector('#viewGY');
   const minusBtn = div.querySelector('#minusLP');
   const plusBtn = div.querySelector('#plusLP');
   const endBtn = div.querySelector('#endTurn');
-  const exitBtn = div.querySelector('#exitBtn');
   
-  console.log('Button check - draw:', !!drawBtn, 'gy:', !!gyBtn, 'minus:', !!minusBtn, 'plus:', !!plusBtn, 'end:', !!endBtn, 'exit:', !!exitBtn);
+  if (exitBtn) exitBtn.onclick = () => {
+    if (state.onlineMode) disconnectOnline();
+    state.screen = 'menu';
+    state.gameStarted = false;
+    state.winner = null;
+    state.selectedCard = null;
+    render();
+  };
   
-  if (exitBtn) {
-    exitBtn.onclick = () => {
-      if (state.onlineMode) disconnectOnline();
-      state.screen = 'menu';
-      state.gameStarted = false;
-      state.winner = null;
-      state.selectedCard = null;
+  if (drawBtn) drawBtn.onclick = () => {
+    if (me.deck.length > 0) {
+      const idx = Math.floor(Math.random() * me.deck.length);
+      me.hand.push(me.deck[idx]);
+      me.deck.splice(idx, 1);
+      sendGameUpdate();
       render();
-    };
-  }
-  
-  if (drawBtn) {
-    drawBtn.onclick = () => {
-      console.log('🎲 Draw button clicked!');
-      console.log('  Current player:', state.currentPlayer);
-      console.log('  Player key:', pKey);
-      console.log('  Deck size before draw:', me.deck.length);
-      console.log('  Hand size before draw:', me.hand.length);
-      
-      if (me.deck.length > 0) {
-        const idx = Math.floor(Math.random() * me.deck.length);
-        const drawnCard = me.deck[idx];
-        console.log('  Drawing card:', drawnCard.name);
-        me.hand.push(drawnCard);
-        me.deck.splice(idx, 1);
-        console.log('  Hand size after draw:', me.hand.length);
-        console.log('  New hand:', me.hand.map(c => c.name));
-        sendGameUpdate();
-        render();
-      } else {
-        console.log('  ❌ No cards in deck to draw!');
-      }
-    };
-  }
+    }
+  };
   
   if (gyBtn) gyBtn.onclick = () => { state.viewingGraveyard = 'me'; render(); };
   if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
   if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
   if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; sendGameUpdate(); render(); };
   
-  
-  // Card action menu handlers
-  if (state.selectedCard !== null && me.hand[state.selectedCard]) {
-    console.log('🎯 Card selected! Setting up action menu for card:', state.selectedCard, me.hand[state.selectedCard].name);
-    
-    const actionMenu = div.querySelector('#actionMenu');
-    console.log('Action menu element found:', !!actionMenu);
-    
+  // Card action handlers
+  if (state.selectedCard !== null) {
     const discardBtn = div.querySelector('#discardCard');
     const toDeckBtn = div.querySelector('#toDeck');
     const cancelBtn = div.querySelector('#cancelSelect');
     
-    console.log('✅ Found buttons:', { 
-      discard: !!discardBtn, 
-      toDeck: !!toDeckBtn, 
-      cancel: !!cancelBtn,
-      placeCards: div.querySelectorAll('.placeCard').length
-    });
+    if (discardBtn) discardBtn.onclick = () => {
+      me.graveyard.push(me.hand[state.selectedCard]);
+      me.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      sendGameUpdate();
+      render();
+    };
     
-    if (discardBtn) {
-      discardBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('🗑️ Discard button clicked!');
-        me.graveyard.push(me.hand[state.selectedCard]);
-        me.hand.splice(state.selectedCard, 1);
-        state.selectedCard = null;
-        sendGameUpdate();
-        render();
-      };
-    }
+    if (toDeckBtn) toDeckBtn.onclick = () => {
+      me.deck.push(me.hand[state.selectedCard]);
+      me.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      sendGameUpdate();
+      render();
+    };
     
-    if (toDeckBtn) {
-      toDeckBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('📚 To Deck button clicked!');
-        me.deck.push(me.hand[state.selectedCard]);
-        me.hand.splice(state.selectedCard, 1);
-        state.selectedCard = null;
-        sendGameUpdate();
-        render();
-      };
-    }
-    
-    if (cancelBtn) {
-      cancelBtn.onclick = (e) => { 
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('❌ Cancel button clicked!');
-        state.selectedCard = null; 
-        render(); 
-      };
-    }
+    if (cancelBtn) cancelBtn.onclick = () => {
+      state.selectedCard = null;
+      render();
+    };
     
     div.querySelectorAll('.placeCard').forEach(btn => {
-      console.log('Attaching handler to place button:', btn.dataset.zone);
-      btn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const zone = btn.dataset.zone;
-        console.log('⬆️ Place card button clicked! Zone:', zone);
-        const zoneName = zone + 'Field';
-        me[zoneName].push(me.hand[state.selectedCard]);
+      btn.onclick = () => {
+        const zone = btn.dataset.zone + 'Field';
+        me[zone].push(me.hand[state.selectedCard]);
         me.hand.splice(state.selectedCard, 1);
         state.selectedCard = null;
         sendGameUpdate();
         render();
       };
     });
-    console.log('✅ All action menu handlers attached!');
-  } else {
-    console.log('ℹ️ No card selected, no action menu');
   }
   
   if (state.winner && div.querySelector('#returnBtn')) {
@@ -1109,68 +925,6 @@ function GameBoard() {
       render();
     };
   }
-  
-  
-  
-  console.log('=== GAME BOARD RENDER ===');
-  console.log('Hand has', me.hand.length, 'cards');
-  console.log('Selected card:', state.selectedCard);
-  
-  const handCards = div.querySelectorAll('.hand-card');
-  console.log('Found', handCards.length, 'hand card elements in DOM');
-  
-  handCards.forEach((cardEl) => {
-    const idx = parseInt(cardEl.dataset.idx);
-    console.log('Setting up handler for hand card', idx, 'element:', cardEl);
-    
-    cardEl.onclick = (e) => { 
-      console.log('✅✅✅ CLICK DETECTED on hand card', idx);
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('Current selection:', state.selectedCard);
-      state.selectedCard = state.selectedCard === idx ? null : idx; 
-      console.log('New selection:', state.selectedCard);
-      render(); 
-    };
-    
-    cardEl.onmouseenter = () => { 
-      if (me.hand[idx]) {
-        state.hoveredCard = me.hand[idx]; 
-        render(); 
-      }
-    };
-  });
-  
-  console.log('✅ Finished attaching handlers to', handCards.length, 'hand cards');
-  
-  div.querySelectorAll('.field-card').forEach(card => {
-    card.onmouseenter = () => {
-      const zone = card.dataset.zone;
-      const owner = card.dataset.owner;
-      const idx = parseInt(card.dataset.idx);
-      state.hoveredCard = owner === 'me' ? me[zone][idx] : opp[zone][idx];
-      render();
-    };
-    card.onclick = () => {
-      const zone = card.dataset.zone;
-      const owner = card.dataset.owner;
-      const idx = parseInt(card.dataset.idx);
-      
-      if (owner === 'me') {
-        const action = prompt('Move card to:\n1. Hand\n2. Deck\n3. Graveyard\nEnter 1, 2, or 3:');
-        const cardData = me[zone][idx];
-        me[zone].splice(idx, 1);
-        
-        if (action === '1') me.hand.push(cardData);
-        else if (action === '2') me.deck.push(cardData);
-        else if (action === '3') me.graveyard.push(cardData);
-        else { me[zone].splice(idx, 0, cardData); return; }
-        
-        sendGameUpdate();
-        render();
-      }
-    };
-  });
   
   return div;
 }
