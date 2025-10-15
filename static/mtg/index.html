@@ -61,9 +61,14 @@
     .hand-card:hover { transform: translateY(-8px); background: #4b5563; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
     .hand-card img { width: 80px; height: 112px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; pointer-events: none; display: block; }
     .hand-card.selected { border: 3px solid #fbbf24; background: #fbbf24; box-shadow: 0 0 20px #fbbf24; }
-    .field-card { display: inline-block; margin: 4px; transition: all 0.2s; }
+    .field-card { display: inline-block; margin: 4px; transition: all 0.2s; cursor: pointer; position: relative; }
     .field-card:hover { transform: scale(1.05); }
-    .field-card img { width: 72px; height: 100px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .field-card img { width: 72px; height: 100px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s; }
+    .field-card.tapped img { transform: rotate(90deg); opacity: 0.7; }
+    .field-card.selected { border: 2px solid #fbbf24; border-radius: 6px; background: rgba(251, 191, 36, 0.2); }
+    .zone-card { display: inline-block; margin: 4px; cursor: pointer; transition: all 0.2s; }
+    .zone-card img { width: 60px; height: 84px; border-radius: 4px; border: 2px solid #6b7280; object-fit: cover; }
+    .zone-card:hover img { border-color: #3b82f6; transform: translateY(-4px); }
     .sidebar { width: 280px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
     .modal-content { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
@@ -105,14 +110,15 @@ const state = {
   editingCard: null,
   activePlayer: 1,
   gameState: {
-    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 },
-    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: [], health: 20 }
+    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: [], health: 20 },
+    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: [], health: 20 }
   },
   gameStarted: false,
   winner: null,
   selectedCard: null,
+  selectedFieldCard: null,
   hoveredCard: null,
-  viewingGraveyard: null,
+  viewingZone: null,
   onlineMode: false,
   peerConnection: null,
   dataChannel: null,
@@ -928,12 +934,12 @@ function GameBoard() {
         return a;
       };
       
-      const p1 = shuffle(state.decks.player1.map((c, i) => ({ ...c, gameId: 'p1-' + i })));
-      const p2 = shuffle(state.decks.player2.map((c, i) => ({ ...c, gameId: 'p2-' + i })));
+      const p1 = shuffle(state.decks.player1.map((c, i) => ({ ...c, gameId: 'p1-' + i, tapped: false })));
+      const p2 = shuffle(state.decks.player2.map((c, i) => ({ ...c, gameId: 'p2-' + i, tapped: false })));
       
       state.gameState = { 
-        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p1, health: 20 }, 
-        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], deck: p2, health: 20 } 
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p1, health: 20 }, 
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p2, health: 20 } 
       };
       state.activePlayer = 1; 
       state.gameStarted = true;
@@ -958,14 +964,33 @@ function GameBoard() {
       img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
     }
     img.alt = '';
-    img.style.pointerEvents = 'none';
     return img;
   };
   
-  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
-  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
-  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
-  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
+  const showCardInfo = (card, target) => {
+    const sidebar = target || div.querySelector('#cardInfo');
+    if (sidebar && card) {
+      const c = card;
+      sidebar.innerHTML = `
+        <div class="card-preview">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.name}</div>
+            ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${c.cost}</div>` : ''}
+          </div>
+          <div class="text-xs text-gray text-center mb-2">${c.type}</div>
+          ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : '<div class="card-img" style="height: 120px;">🃏</div>'}
+          ${c.type && c.type.includes('Creature') ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${c.power} <strong>TGH:</strong> ${c.toughness}</div>` : ''}
+          <div class="text-xs">${c.effect || 'No effect'}</div>
+          ${c.tapped ? '<div class="text-xs text-red mt-2">⟳ TAPPED</div>' : ''}
+        </div>
+      `;
+    }
+  };
+  
+  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'lowerField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
+  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'upperField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
   
   div.innerHTML = `
     <div style="display: flex; height: 100vh;">
@@ -981,7 +1006,7 @@ function GameBoard() {
         <div style="flex: 1; overflow-y: auto; padding: 16px;">
           <div class="mb-4 text-center">
             <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ Opponent - LP: ${opp.health}</div>
-            <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length}</div>
+            <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}</div>
           </div>
           <div class="game-field mb-4" style="min-height: 110px;">
             <div class="text-xs text-gray text-center mb-2">Opponent Upper Field</div>
@@ -1005,6 +1030,9 @@ function GameBoard() {
             <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
               <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${me.deck.length})</button>
               <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
+              <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
+              <button id="viewOppGY" class="btn btn-secondary text-xs">👁️ Opp GY</button>
+              <button id="viewOppExile" class="btn btn-secondary text-xs">👁️ Opp Exile</button>
               <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
               <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
             </div>
@@ -1019,6 +1047,33 @@ function GameBoard() {
         </div>
       </div>
     </div>
+    ${state.selectedFieldCard !== null ? `
+      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #8b5cf6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 380px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #a78bfa;">${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button id="tapCard" class="btn ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 12px;">⟳ ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].tapped ? 'Untap' : 'Tap'}</button>
+          <button id="toHand" class="btn btn-secondary text-sm" style="padding: 12px;">🖐️ To Hand</button>
+          <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 12px;">⚰️ To GY</button>
+          <button id="toExile" class="btn btn-red text-sm" style="padding: 12px;">🚫 Exile</button>
+          <button id="toOppField" class="btn btn-secondary text-sm" style="padding: 12px;">👤 To Opp</button>
+          <button id="toBottomDeck" class="btn btn-secondary text-sm" style="padding: 12px;">📚 To Deck</button>
+        </div>
+        <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 12px;">❌ Cancel</button>
+      </div>
+    ` : ''}
+    ${state.viewingZone ? `
+      <div class="modal">
+        <div class="modal-content">
+          <div class="flex justify-between mb-4">
+            <h3 style="font-weight: bold; font-size: 18px;">${state.viewingZone.title}</h3>
+            <button id="closeZone" class="btn btn-secondary text-xs">✕ Close</button>
+          </div>
+          <div id="zoneCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px; max-height: 60vh; overflow-y: auto;">
+            ${state.viewingZone.cards.length === 0 ? '<p class="text-gray text-center p-4">Empty</p>' : ''}
+          </div>
+        </div>
+      </div>
+    ` : ''}
     ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
       <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
         <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
@@ -1058,26 +1113,12 @@ function GameBoard() {
       
       cardDiv.onclick = () => {
         state.selectedCard = state.selectedCard === idx ? null : idx;
+        state.selectedFieldCard = null;
         render();
       };
       
       cardDiv.onmouseenter = () => {
-        const sidebar = div.querySelector('#cardInfo');
-        if (sidebar) {
-          const c = card;
-          sidebar.innerHTML = `
-            <div class="card-preview">
-              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.name}</div>
-                ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${c.cost}</div>` : ''}
-              </div>
-              <div class="text-xs text-gray text-center mb-2">${c.type}</div>
-              ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : '<div class="card-img" style="height: 120px;">🃏</div>'}
-              ${c.type && c.type.includes('Creature') ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${c.power} <strong>TGH:</strong> ${c.toughness}</div>` : ''}
-              <div class="text-xs">${c.effect || 'No effect'}</div>
-            </div>
-          `;
-        }
+        showCardInfo(card);
       };
       
       handContainer.appendChild(cardDiv);
@@ -1091,6 +1132,25 @@ function GameBoard() {
     const card = owner === 'me' ? me[zone][idx] : opp[zone][idx];
     if (card) {
       fieldCard.appendChild(createGameCardImg(card));
+      
+      // Make all field cards show info on hover
+      fieldCard.onmouseenter = () => {
+        showCardInfo(card);
+      };
+      
+      // Make own field cards clickable
+      if (owner === 'me') {
+        fieldCard.onclick = (e) => {
+          e.stopPropagation();
+          state.selectedCard = null;
+          if (state.selectedFieldCard && state.selectedFieldCard.zone === zone && state.selectedFieldCard.idx === idx) {
+            state.selectedFieldCard = null;
+          } else {
+            state.selectedFieldCard = { zone, idx, owner };
+          }
+          render();
+        };
+      }
     }
   });
   
@@ -1108,6 +1168,8 @@ function GameBoard() {
       state.gameStarted = false;
       state.winner = null;
       state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.viewingZone = null;
       render();
     }
   };
@@ -1115,7 +1177,9 @@ function GameBoard() {
   if (drawBtn) drawBtn.onclick = () => {
     if (me.deck.length > 0) {
       const idx = Math.floor(Math.random() * me.deck.length);
-      me.hand.push(me.deck[idx]);
+      const card = me.deck[idx];
+      if (!card.hasOwnProperty('tapped')) card.tapped = false;
+      me.hand.push(card);
       me.deck.splice(idx, 1);
       sendGameUpdate();
       render();
@@ -1123,12 +1187,165 @@ function GameBoard() {
   };
   
   if (gyBtn) gyBtn.onclick = () => { 
-    alert('Graveyard: ' + (me.graveyard.length > 0 ? me.graveyard.map(c => c.name).join(', ') : 'Empty')); 
+    state.viewingZone = { title: '⚰️ Your Graveyard', cards: me.graveyard, zone: 'graveyard', owner: 'me' };
+    render();
+  };
+  
+  const viewExileBtn = div.querySelector('#viewExile');
+  if (viewExileBtn) viewExileBtn.onclick = () => {
+    state.viewingZone = { title: '🚫 Your Exile', cards: me.exile, zone: 'exile', owner: 'me' };
+    render();
+  };
+  
+  const viewOppGYBtn = div.querySelector('#viewOppGY');
+  if (viewOppGYBtn) viewOppGYBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Graveyard", cards: opp.graveyard, zone: 'graveyard', owner: 'opp' };
+    render();
+  };
+  
+  const viewOppExileBtn = div.querySelector('#viewOppExile');
+  if (viewOppExileBtn) viewOppExileBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Exile", cards: opp.exile, zone: 'exile', owner: 'opp' };
+    render();
   };
   if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
   if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
-  if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; sendGameUpdate(); render(); };
+  if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; state.selectedFieldCard = null; sendGameUpdate(); render(); };
   
+  // Zone viewer
+  if (state.viewingZone) {
+    const closeZoneBtn = div.querySelector('#closeZone');
+    if (closeZoneBtn) closeZoneBtn.onclick = () => {
+      state.viewingZone = null;
+      render();
+    };
+    
+    const zoneCardsDiv = div.querySelector('#zoneCards');
+    if (zoneCardsDiv && state.viewingZone.cards.length > 0) {
+      state.viewingZone.cards.forEach((card, idx) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'zone-card';
+        cardDiv.appendChild(createGameCardImg(card));
+        
+        cardDiv.onmouseenter = () => showCardInfo(card);
+        
+        // Only allow interaction with own zones
+        if (state.viewingZone.owner === 'me') {
+          cardDiv.onclick = () => {
+            const actions = ['To Hand', 'To Field', 'To Deck'];
+            if (state.viewingZone.zone === 'graveyard') actions.push('Exile');
+            if (state.viewingZone.zone === 'exile') actions.push('To Graveyard');
+            
+            const action = prompt(`Move ${card.name} to:\n1. Hand\n2. Field (Upper)\n3. Field (Lower)\n4. Deck\n5. ${state.viewingZone.zone === 'graveyard' ? 'Exile' : 'Graveyard'}\n\nEnter number:`);
+            
+            const zoneKey = state.viewingZone.zone;
+            const sourcePlayer = state.gameState[pKey];
+            
+            if (action === '1') {
+              sourcePlayer.hand.push(card);
+              sourcePlayer[zoneKey].splice(idx, 1);
+            } else if (action === '2') {
+              sourcePlayer.upperField.push({ ...card, tapped: false });
+              sourcePlayer[zoneKey].splice(idx, 1);
+            } else if (action === '3') {
+              sourcePlayer.lowerField.push({ ...card, tapped: false });
+              sourcePlayer[zoneKey].splice(idx, 1);
+            } else if (action === '4') {
+              sourcePlayer.deck.push(card);
+              sourcePlayer[zoneKey].splice(idx, 1);
+            } else if (action === '5') {
+              if (state.viewingZone.zone === 'graveyard') {
+                sourcePlayer.exile.push(card);
+                sourcePlayer.graveyard.splice(idx, 1);
+              } else {
+                sourcePlayer.graveyard.push(card);
+                sourcePlayer.exile.splice(idx, 1);
+              }
+            }
+            
+            state.viewingZone = null;
+            sendGameUpdate();
+            render();
+          };
+        }
+        
+        zoneCardsDiv.appendChild(cardDiv);
+      });
+    }
+  }
+  
+  // Field card actions
+  if (state.selectedFieldCard) {
+    const tapBtn = div.querySelector('#tapCard');
+    const toHandBtn = div.querySelector('#toHand');
+    const toGYBtn = div.querySelector('#toGraveyard');
+    const toExileBtn = div.querySelector('#toExile');
+    const toOppFieldBtn = div.querySelector('#toOppField');
+    const toBottomDeckBtn = div.querySelector('#toBottomDeck');
+    const cancelFieldBtn = div.querySelector('#cancelFieldSelect');
+    
+    const card = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
+    
+    if (tapBtn) tapBtn.onclick = () => {
+      card.tapped = !card.tapped;
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toHandBtn) toHandBtn.onclick = () => {
+      me.hand.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toGYBtn) toGYBtn.onclick = () => {
+      me.graveyard.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toExileBtn) toExileBtn.onclick = () => {
+      me.exile.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toOppFieldBtn) toOppFieldBtn.onclick = () => {
+      const choice = prompt('Move to opponent:\n1. Upper Field\n2. Lower Field\n\nEnter number:');
+      if (choice === '1') {
+        opp.upperField.push({ ...card, tapped: false });
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      } else if (choice === '2') {
+        opp.lowerField.push({ ...card, tapped: false });
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      }
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toBottomDeckBtn) toBottomDeckBtn.onclick = () => {
+      me.deck.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (cancelFieldBtn) cancelFieldBtn.onclick = () => {
+      state.selectedFieldCard = null;
+      render();
+    };
+  }
+  
+  // Card action handlers
   if (state.selectedCard !== null) {
     const discardBtn = div.querySelector('#discardCard');
     const toDeckBtn = div.querySelector('#toDeck');
@@ -1138,6 +1355,7 @@ function GameBoard() {
       me.graveyard.push(me.hand[state.selectedCard]);
       me.hand.splice(state.selectedCard, 1);
       state.selectedCard = null;
+      state.selectedFieldCard = null;
       sendGameUpdate();
       render();
     };
@@ -1146,21 +1364,24 @@ function GameBoard() {
       me.deck.push(me.hand[state.selectedCard]);
       me.hand.splice(state.selectedCard, 1);
       state.selectedCard = null;
+      state.selectedFieldCard = null;
       sendGameUpdate();
       render();
     };
     
     if (cancelBtn) cancelBtn.onclick = () => {
       state.selectedCard = null;
+      state.selectedFieldCard = null;
       render();
     };
     
     div.querySelectorAll('.placeCard').forEach(btn => {
       btn.onclick = () => {
         const zone = btn.dataset.zone + 'Field';
-        me[zone].push(me.hand[state.selectedCard]);
+        me[zone].push({ ...me.hand[state.selectedCard], tapped: false });
         me.hand.splice(state.selectedCard, 1);
         state.selectedCard = null;
+        state.selectedFieldCard = null;
         sendGameUpdate();
         render();
       };
@@ -1174,6 +1395,8 @@ function GameBoard() {
       state.gameStarted = false;
       state.winner = null;
       state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.viewingZone = null;
       render();
     };
   }
