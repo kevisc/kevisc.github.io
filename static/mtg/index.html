@@ -3,18 +3,26 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Card Game Platform</title>
+  <title>MTG Card Game Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #111827; color: #f3f4f6; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
+      color: #f3f4f6; 
+      margin: 0; 
+      padding: 0; 
+      overflow-x: hidden;
+    }
     button { cursor: pointer; font-family: inherit; border: none; }
     input, select, textarea { font-family: inherit; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
     .screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 20px; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .btn { padding: 12px 24px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
     .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
     .btn-secondary { background: #1f2937; color: #f3f4f6; border: 1px solid #374151; }
     .btn-secondary:hover { background: #374151; }
     .btn-green { background: #059669; color: white; }
@@ -24,7 +32,7 @@
     .btn-red { background: #dc2626; color: white; }
     .btn-red:hover { background: #b91c1c; }
     .input { width: 100%; padding: 10px 15px; background: #374151; color: #f3f4f6; border: 1px solid #4b5563; border-radius: 6px; }
-    .input:focus { outline: none; border-color: #6b7280; }
+    .input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
     .grid { display: grid; gap: 20px; }
     .grid-2 { grid-template-columns: repeat(2, 1fr); }
@@ -35,9 +43,10 @@
     .mt-4 { margin-top: 16px; }
     .p-4 { padding: 16px; }
     .hidden { display: none; }
-    .card-preview { background: #374151; border-radius: 8px; padding: 12px; border: 1px solid #4b5563; }
+    .card-preview { background: #374151; border-radius: 8px; padding: 12px; border: 1px solid #4b5563; transition: all 0.2s; }
+    .card-preview:hover { border-color: #3b82f6; }
     .card-img { width: 100%; aspect-ratio: 5/7; background: #4b5563; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
-    .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 120px; border: 2px solid #4b5563; }
+    .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 120px; border: 2px solid #4b5563; transition: all 0.2s; }
     .game-field.player { background: rgba(34, 197, 94, 0.1); }
     .hand-card { 
       display: inline-block; 
@@ -49,13 +58,14 @@
       border-radius: 6px;
       padding: 2px;
     }
-    .hand-card:hover { transform: translateY(-8px); background: #4b5563; }
-    .hand-card img { width: 64px; height: 80px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; pointer-events: none; display: block; }
+    .hand-card:hover { transform: translateY(-8px); background: #4b5563; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+    .hand-card img { width: 80px; height: 112px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; pointer-events: none; display: block; }
     .hand-card.selected { border: 3px solid #fbbf24; background: #fbbf24; box-shadow: 0 0 20px #fbbf24; }
-    .field-card { display: inline-block; margin: 4px; }
-    .field-card img { width: 60px; height: 84px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; }
-    .sidebar { width: 260px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .field-card { display: inline-block; margin: 4px; transition: all 0.2s; }
+    .field-card:hover { transform: scale(1.05); }
+    .field-card img { width: 72px; height: 100px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .sidebar { width: 280px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
     .modal-content { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
     .flex { display: flex; gap: 8px; align-items: center; }
     .justify-between { justify-content: space-between; }
@@ -66,16 +76,20 @@
     .text-green { color: #4ade80; }
     .text-blue { color: #60a5fa; }
     .deck-card { display: inline-block; position: relative; margin: 4px; }
-    .deck-card img { width: 80px; height: 112px; border-radius: 4px; border: 2px solid #4b5563; cursor: pointer; object-fit: cover; }
-    .deck-card:hover img { border-color: #3b82f6; }
-    .remove-btn { position: absolute; top: 0; right: 0; background: #dc2626; color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; display: none; }
+    .deck-card img { width: 100px; height: 140px; border-radius: 4px; border: 2px solid #4b5563; cursor: pointer; object-fit: cover; transition: all 0.2s; }
+    .deck-card:hover img { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+    .remove-btn { position: absolute; top: 0; right: 0; background: #dc2626; color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; display: none; cursor: pointer; }
     .deck-card:hover .remove-btn { display: block; }
-    label { display: block; margin-bottom: 8px; color: #d1d5db; font-size: 14px; }
+    label { display: block; margin-bottom: 8px; color: #d1d5db; font-size: 14px; font-weight: 500; }
     textarea { resize: vertical; min-height: 80px; }
+    .mana-symbol { display: inline-block; width: 20px; height: 20px; border-radius: 50%; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; margin: 0 2px; }
+    .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
   </style>
 </head>
 <body>
   <div id="root"></div>
+  
   <script>
 (function(){
 'use strict';
@@ -83,10 +97,10 @@
 const state = {
   screen: 'login',
   currentPlayer: null,
-  cards: [
-    { id: 1, name: 'Fire Dragon', type: 'Monster', attack: 2500, defense: 2000, effect: 'When summoned, deal 500 damage to opponent.', image: '' },
-    { id: 2, name: 'Magic Shield', type: 'Spell', attack: 0, defense: 0, effect: 'Negate one attack this turn.', image: '' }
-  ],
+  cards: [],
+  scryfallCards: [],
+  searchResults: [],
+  isLoadingScryfallCards: false,
   decks: { player1: [], player2: [] },
   editingCard: null,
   activePlayer: 1,
@@ -114,13 +128,13 @@ function compressImage(file, callback) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxW = 200, maxH = 200;
+      const maxW = 400, maxH = 560;
       let w = img.width, h = img.height;
       if (w > h) { if (w > maxW) { h *= maxW / w; w = maxW; } }
       else { if (h > maxH) { w *= maxH / h; h = maxH; } }
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      callback(canvas.toDataURL('image/jpeg', 0.7));
+      callback(canvas.toDataURL('image/jpeg', 0.85));
     };
     img.src = e.target.result;
   };
@@ -286,9 +300,9 @@ function LoginScreen() {
   div.className = 'screen';
   div.innerHTML = `
     <div class="text-center">
-      <h1 style="font-size: 48px; font-weight: bold; margin-bottom: 12px;">Card Game Platform</h1>
-      <p class="text-gray mb-8">Select your player</p>
-      <div class="flex" style="gap: 24px;">
+      <h1 style="font-size: 56px; font-weight: bold; margin-bottom: 12px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MTG Card Game</h1>
+      <p class="text-gray mb-8">Select your player to begin</p>
+      <div class="flex" style="gap: 24px; justify-content: center;">
         <button id="p1btn" class="btn btn-secondary" style="padding: 32px 48px; font-size: 20px;">Player 1</button>
         <button id="p2btn" class="btn btn-secondary" style="padding: 32px 48px; font-size: 20px;">Player 2</button>
       </div>
@@ -303,20 +317,22 @@ function MainMenu() {
   const div = document.createElement('div');
   div.className = 'screen';
   div.innerHTML = `
-    <div style="max-width: 600px;">
+    <div style="max-width: 600px; width: 100%;">
       <div class="header">
         <div></div>
         <h1 style="font-size: 32px; font-weight: bold;">Player ${state.currentPlayer}</h1>
         <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
       </div>
-      <div class="grid" style="gap: 16px;">
-        <button id="createBtn" class="btn btn-secondary" style="padding: 24px;">Create Cards</button>
-        <button id="buildBtn" class="btn btn-secondary" style="padding: 24px;">Build Deck</button>
-        <button id="playBtn" class="btn btn-secondary" style="padding: 24px;">Play Local Game</button>
-        <div style="border-top: 1px solid #374151; margin: 16px 0; padding-top: 16px;">
-          <p class="text-gray text-sm mb-4">🌐 Online Multiplayer</p>
-          <button id="hostBtn" class="btn btn-blue mb-4" style="width: 100%; padding: 16px;">Host Online Game</button>
-          <button id="joinBtn" class="btn btn-green" style="width: 100%; padding: 16px;">Join Online Game</button>
+      <div class="card">
+        <div class="grid" style="gap: 16px;">
+          <button id="createBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">🎨 Create Cards</button>
+          <button id="buildBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">🃏 Build Deck</button>
+          <button id="playBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">⚔️ Play Local Game</button>
+          <div style="border-top: 1px solid #374151; margin: 16px 0; padding-top: 16px;">
+            <p class="text-gray text-sm mb-4">🌐 Online Multiplayer</p>
+            <button id="hostBtn" class="btn btn-blue mb-4" style="width: 100%; padding: 16px;">Host Online Game</button>
+            <button id="joinBtn" class="btn btn-green" style="width: 100%; padding: 16px;">Join Online Game</button>
+          </div>
         </div>
       </div>
     </div>
@@ -342,18 +358,21 @@ function MainMenu() {
 }
 
 function CardCreator() {
-  const form = state.editingCard || { name: '', type: 'Monster', attack: 0, defense: 0, effect: '', image: '' };
+  const form = state.editingCard || { name: '', type: 'Creature', cost: '', colors: [], power: 0, toughness: 0, effect: '', image: '', imageUrl: '' };
   const div = document.createElement('div');
   div.className = 'container';
   
   const cardsHtml = state.cards.map((c, i) => `
     <div class="card-preview" style="position: relative;">
       <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
-        <h3 style="font-weight: bold; text-align: center; font-size: 14px;">${c.name || 'Unnamed'}</h3>
-        <p class="text-xs text-gray text-center">${c.type}</p>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+          <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+        </div>
+        <p class="text-xs text-gray">${c.type}</p>
       </div>
-      <div class="card-img">${c.image ? `<img src="${c.image}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
-      ${c.type === 'Monster' ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">ATK: ${c.attack}</span><span class="text-sm">DEF: ${c.defense}</span></div>` : ''}
+      <div class="card-img">${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+      ${c.type && c.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
       <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
       <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
         <button class="btn btn-secondary text-xs editCard" data-id="${i}" style="padding: 4px 8px;">Edit</button>
@@ -365,10 +384,25 @@ function CardCreator() {
   div.innerHTML = `
     <div class="header">
       <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+      <h1 style="font-size: 24px; font-weight: bold;">Card Creator</h1>
       <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
     </div>
-    <h1 class="mb-8" style="font-size: 28px; font-weight: bold;">${state.editingCard ? 'Edit Card' : 'Create New Card'}</h1>
-    <div class="grid grid-2">
+    
+    <div class="card mb-4">
+      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">🔍 Search Scryfall Cards</h2>
+      <div style="background: #374151; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+        <p class="text-xs text-gray">💡 <strong>Tip:</strong> Search works best when hosted on HTTPS. If you get errors, try searching for specific card names like "Lightning Bolt" or "Black Lotus".</p>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input id="scryfallSearch" class="input" placeholder="Search for MTG cards (e.g., Lightning Bolt)..." style="flex: 1;">
+        <button id="searchBtn" class="btn btn-primary">Search</button>
+        <button id="loadAllBtn" class="btn btn-blue">Load All Cards</button>
+      </div>
+      <div id="searchResults" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+    
+    <h2 class="mb-4" style="font-size: 20px; font-weight: bold;">${state.editingCard ? 'Edit Card' : 'Create Custom Card'}</h2>
+    <div class="grid grid-2 mb-8">
       <div class="card">
         <div class="mb-4">
           <label>Card Name</label>
@@ -377,39 +411,62 @@ function CardCreator() {
         <div class="mb-4">
           <label>Type</label>
           <select id="cardType" class="input">
-            <option value="Monster">Monster</option>
-            <option value="Spell">Spell</option>
-            <option value="Trap">Trap</option>
+            <option value="Creature">Creature</option>
+            <option value="Instant">Instant</option>
+            <option value="Sorcery">Sorcery</option>
+            <option value="Enchantment">Enchantment</option>
+            <option value="Artifact">Artifact</option>
+            <option value="Planeswalker">Planeswalker</option>
+            <option value="Land">Land</option>
           </select>
         </div>
-        <div id="monsterStats" class="mb-4" style="${form.type !== 'Monster' ? 'display:none' : ''}">
-          <div class="mb-4">
-            <label>Attack</label>
-            <input id="cardAtk" class="input" type="number" value="${form.attack}">
+        <div class="mb-4">
+          <label>Mana Cost</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button class="mana-btn" data-color="W" style="background: #f9fafb; color: #111827; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #d1d5db;">W</button>
+            <button class="mana-btn" data-color="U" style="background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">U</button>
+            <button class="mana-btn" data-color="B" style="background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #4b5563;">B</button>
+            <button class="mana-btn" data-color="R" style="background: #dc2626; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">R</button>
+            <button class="mana-btn" data-color="G" style="background: #059669; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">G</button>
+            <button class="mana-btn" data-color="C" style="background: #9ca3af; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">C</button>
+            <input id="genericMana" type="number" min="0" max="20" value="0" style="width: 60px;" class="input text-center" placeholder="0">
+            <button id="clearMana" class="btn btn-red text-xs" style="padding: 8px 12px;">Clear</button>
           </div>
-          <div>
-            <label>Defense</label>
-            <input id="cardDef" class="input" type="number" value="${form.defense}">
+          <input id="cardCost" class="input" value="${form.cost}" placeholder="{2}{U}{U}" readonly>
+        </div>
+        <div id="creatureStats" class="mb-4" style="${!form.type || !form.type.includes('Creature') ? 'display:none' : ''}">
+          <div class="grid grid-2">
+            <div>
+              <label>Power</label>
+              <input id="cardPower" class="input" type="text" value="${form.power}">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="cardToughness" class="input" type="text" value="${form.toughness}">
+            </div>
           </div>
         </div>
         <div class="mb-4">
-          <label>Effect</label>
-          <textarea id="cardEffect" class="input">${form.effect}</textarea>
+          <label>Effect / Oracle Text</label>
+          <textarea id="cardEffect" class="input" rows="4">${form.effect}</textarea>
         </div>
         <div class="mb-4">
-          <label>Image</label>
+          <label>Upload Image</label>
           <input id="cardImage" class="input" type="file" accept="image/*">
+          <label class="mt-4">Or Image URL</label>
+          <input id="cardImageUrl" class="input" placeholder="https://..." value="${form.imageUrl || ''}">
         </div>
-        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px;">${state.editingCard ? 'Update' : 'Create'}</button>
+        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? '✓ Update Card' : '+ Create Card'}</button>
       </div>
       <div>
-        <h2 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h2>
+        <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
         <div id="preview"></div>
       </div>
     </div>
-    <div class="mt-4">
-      <h2 class="mb-4" style="font-size: 18px; font-weight: bold;">Your Cards</h2>
-      <div class="grid grid-4">${cardsHtml}</div>
+    
+    <div class="card">
+      <h2 class="mb-4" style="font-size: 18px; font-weight: bold;">Your Collection (${state.cards.length} cards)</h2>
+      <div class="grid grid-4">${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall or create custom cards!</p>'}</div>
     </div>
   `;
   
@@ -420,39 +477,219 @@ function CardCreator() {
   const updatePreview = () => {
     form.name = div.querySelector('#cardName').value;
     form.type = div.querySelector('#cardType').value;
-    form.attack = parseInt(div.querySelector('#cardAtk').value) || 0;
-    form.defense = parseInt(div.querySelector('#cardDef').value) || 0;
+    form.power = div.querySelector('#cardPower').value;
+    form.toughness = div.querySelector('#cardToughness').value;
     form.effect = div.querySelector('#cardEffect').value;
-    div.querySelector('#monsterStats').style.display = form.type === 'Monster' ? 'block' : 'none';
+    form.imageUrl = div.querySelector('#cardImageUrl').value;
+    div.querySelector('#creatureStats').style.display = form.type.includes('Creature') ? 'block' : 'none';
     div.querySelector('#preview').innerHTML = `
       <div class="card-preview">
         <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
-          <h3 style="font-weight: bold; text-align: center;">${form.name || 'Unnamed'}</h3>
-          <p class="text-xs text-gray text-center">${form.type}</p>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-weight: bold;">${form.name || 'Unnamed Card'}</h3>
+            <span style="font-size: 12px; color: #fbbf24;">${form.cost || ''}</span>
+          </div>
+          <p class="text-xs text-gray">${form.type}</p>
         </div>
-        <div class="card-img">${form.image ? `<img src="${form.image}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
-        ${form.type === 'Monster' ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>ATK: ${form.attack}</span><span>DEF: ${form.defense}</span></div>` : ''}
-        <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect'}</p></div>
+        <div class="card-img">${form.image || form.imageUrl ? `<img src="${form.image || form.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+        ${form.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>PWR: ${form.power}</span><span>TGH: ${form.toughness}</span></div>` : ''}
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect text'}</p></div>
       </div>
     `;
   };
   
+  // Mana cost builder
+  div.querySelectorAll('.mana-btn').forEach(btn => {
+    btn.onclick = () => {
+      const color = btn.dataset.color;
+      if (!form.colors) form.colors = [];
+      form.colors.push(color);
+      const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+      form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+      div.querySelector('#cardCost').value = form.cost;
+      updatePreview();
+    };
+  });
+  
+  div.querySelector('#genericMana').oninput = () => {
+    const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+    if (!form.colors) form.colors = [];
+    form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+    div.querySelector('#cardCost').value = form.cost;
+    updatePreview();
+  };
+  
+  div.querySelector('#clearMana').onclick = () => {
+    form.colors = [];
+    form.cost = '';
+    div.querySelector('#cardCost').value = '';
+    div.querySelector('#genericMana').value = '0';
+    updatePreview();
+  };
+  
+  // Scryfall search
+  div.querySelector('#searchBtn').onclick = async () => {
+    const query = div.querySelector('#scryfallSearch').value.trim();
+    if (!query) {
+      alert('Please enter a search term!');
+      return;
+    }
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading">Searching Scryfall...</p>';
+    try {
+      // Use the correct Scryfall API endpoint with proper encoding
+      const searchUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
+      console.log('Searching:', searchUrl);
+      
+      const response = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Scryfall response:', data);
+      
+      if (data.object === 'error') {
+        resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Scryfall Error: ${data.details || 'Invalid search'}</p>`;
+        return;
+      }
+      
+      if (data.data && data.data.length > 0) {
+        state.searchResults = data.data;
+        resultsDiv.innerHTML = data.data.slice(0, 40).map((card, idx) => {
+          const imgUrl = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '';
+          return `
+            <div class="scryfall-result" data-idx="${idx}" style="cursor: pointer; border: 2px solid #374151; border-radius: 6px; overflow: hidden; transition: all 0.2s; position: relative;">
+              ${imgUrl ? `<img src="${imgUrl}" style="width: 100%; display: block;">` : `<div style="padding: 20px; text-align: center; background: #374151; font-size: 12px;">${card.name}</div>`}
+              <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 4px; font-size: 10px; text-align: center;">${card.name}</div>
+            </div>
+          `;
+        }).join('');
+        
+        resultsDiv.querySelectorAll('.scryfall-result').forEach((el, idx) => {
+          el.onmouseenter = () => el.style.borderColor = '#3b82f6';
+          el.onmouseleave = () => el.style.borderColor = '#374151';
+          el.onclick = () => {
+            const card = data.data[idx];
+            const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+            const newCard = {
+              id: Date.now() + Math.random(),
+              name: card.name,
+              type: card.type_line,
+              cost: card.mana_cost || '',
+              colors: card.colors || [],
+              power: card.power || 0,
+              toughness: card.toughness || 0,
+              effect: card.oracle_text || '',
+              image: '',
+              imageUrl: imgUrl,
+              scryfallId: card.id
+            };
+            state.cards.push(newCard);
+            alert(`✓ Added ${card.name} to your collection!`);
+            render();
+          };
+        });
+      } else {
+        resultsDiv.innerHTML = '<p class="text-gray text-xs text-center p-4">No results found. Try a different search term.</p>';
+      }
+    } catch (err) {
+      console.error('Scryfall search error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error: ${err.message}<br><br>This might be a network issue or CORS restriction. Try:<br>1. Check your internet connection<br>2. Make sure you're using HTTPS<br>3. Try a different browser<br>4. Check browser console for details</p>`;
+    }
+  };
+  
+  // Load all Oracle cards
+  div.querySelector('#loadAllBtn').onclick = async () => {
+    if (state.isLoadingScryfallCards) return;
+    if (state.scryfallCards.length > 0) {
+      alert(`✓ ${state.scryfallCards.length} cards already loaded! Use search to find them.`);
+      return;
+    }
+    if (!confirm('This will download ~160MB of card data from Scryfall. This may take 1-2 minutes. Continue?\n\nNote: You can also just use the Search feature without loading all cards!')) return;
+    
+    state.isLoadingScryfallCards = true;
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading all MTG cards from Scryfall... Please wait...</p>';
+    
+    try {
+      console.log('Fetching bulk data list...');
+      const bulkResponse = await fetch('https://api.scryfall.com/bulk-data', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!bulkResponse.ok) {
+        throw new Error(`HTTP ${bulkResponse.status}: ${bulkResponse.statusText}`);
+      }
+      
+      const bulkData = await bulkResponse.json();
+      console.log('Bulk data received:', bulkData);
+      
+      const oracleData = bulkData.data.find(d => d.type === 'oracle_cards');
+      
+      if (oracleData) {
+        console.log('Downloading oracle cards from:', oracleData.download_uri);
+        resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading card database... This may take 1-2 minutes...</p>';
+        
+        const cardsResponse = await fetch(oracleData.download_uri);
+        
+        if (!cardsResponse.ok) {
+          throw new Error(`HTTP ${cardsResponse.status}: ${cardsResponse.statusText}`);
+        }
+        
+        const cards = await cardsResponse.json();
+        state.scryfallCards = cards;
+        console.log('Loaded cards:', cards.length);
+        alert(`✓ Success! Loaded ${cards.length.toLocaleString()} MTG cards! You can now search through all cards.`);
+        resultsDiv.innerHTML = '<p class="text-green text-xs text-center p-4">✓ All cards loaded! Use the search box above to find any MTG card.</p>';
+      } else {
+        throw new Error('Could not find oracle cards in bulk data');
+      }
+    } catch (err) {
+      console.error('Bulk load error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error loading cards: ${err.message}<br><br>Don't worry! You can still use the Search feature to find specific cards without loading the entire database.</p>`;
+    }
+    state.isLoadingScryfallCards = false;
+  };
+  
   div.querySelector('#cardName').oninput = updatePreview;
   div.querySelector('#cardType').onchange = updatePreview;
-  div.querySelector('#cardAtk').oninput = updatePreview;
-  div.querySelector('#cardDef').oninput = updatePreview;
+  div.querySelector('#cardPower').oninput = updatePreview;
+  div.querySelector('#cardToughness').oninput = updatePreview;
   div.querySelector('#cardEffect').oninput = updatePreview;
+  div.querySelector('#cardImageUrl').oninput = updatePreview;
+  
+  // Allow Enter key to search
+  div.querySelector('#scryfallSearch').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      div.querySelector('#searchBtn').click();
+    }
+  };
+  
   div.querySelector('#cardImage').onchange = (e) => {
     const file = e.target.files[0];
     if (file) compressImage(file, (img) => { form.image = img; updatePreview(); });
   };
   div.querySelector('#submitCard').onclick = () => {
+    if (!form.name.trim()) {
+      alert('Please enter a card name!');
+      return;
+    }
     if (state.editingCard) {
       const idx = state.cards.findIndex(c => c.id === state.editingCard.id);
       state.cards[idx] = Object.assign({}, form, { id: state.editingCard.id });
       state.editingCard = null;
     } else {
-      state.cards.push(Object.assign({}, form, { id: Date.now() }));
+      state.cards.push(Object.assign({}, form, { id: Date.now() + Math.random() }));
     }
     render();
   };
@@ -461,7 +698,12 @@ function CardCreator() {
     btn.onclick = () => { state.editingCard = state.cards[i]; render(); window.scrollTo(0, 0); };
   });
   div.querySelectorAll('.delCard').forEach((btn, i) => {
-    btn.onclick = () => { state.cards.splice(i, 1); render(); };
+    btn.onclick = () => { 
+      if (confirm('Delete this card?')) {
+        state.cards.splice(i, 1); 
+        render(); 
+      }
+    };
   });
   
   updatePreview();
@@ -477,8 +719,8 @@ function DeckBuilder() {
     const cardDiv = document.createElement('div');
     cardDiv.className = 'deck-card';
     const img = document.createElement('img');
-    if (c.image) {
-      img.src = c.image;
+    if (c.image || c.imageUrl) {
+      img.src = c.image || c.imageUrl;
     } else {
       const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
       img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
@@ -499,10 +741,13 @@ function DeckBuilder() {
       const c = state.hoveredCard;
       infoDiv.innerHTML = `
         <div class="card-preview">
-          <div class="text-center mb-2" style="font-weight: bold; font-size: 16px;">${c.name}</div>
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div class="text-center mb-2" style="font-weight: bold; font-size: 16px; flex: 1;">${c.name}</div>
+            ${c.cost ? `<div style="font-size: 14px; color: #fbbf24; white-space: nowrap;">${c.cost}</div>` : ''}
+          </div>
           <div class="text-xs text-gray text-center mb-2">${c.type}</div>
-          ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 180px; font-size: 64px;">🃏</div>'}
-          ${c.type === 'Monster' ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-sm"><strong>ATK:</strong> ${c.attack}</span><span class="text-sm"><strong>DEF:</strong> ${c.defense}</span></div>` : ''}
+          ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 180px; font-size: 64px;">🃏</div>'}
+          ${c.type && c.type.includes('Creature') ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-sm"><strong>PWR:</strong> ${c.power}</span><span class="text-sm"><strong>TGH:</strong> ${c.toughness}</span></div>` : ''}
           <div class="text-sm" style="margin-top: 12px;"><strong>Effect:</strong></div>
           <div class="text-xs" style="margin-top: 8px; line-height: 1.4;">${c.effect || 'No effect'}</div>
         </div>
@@ -519,7 +764,7 @@ function DeckBuilder() {
     const emptyMsg = document.createElement('p');
     emptyMsg.className = 'text-gray text-center';
     emptyMsg.style.padding = '32px 0';
-    emptyMsg.textContent = 'No cards in deck';
+    emptyMsg.textContent = 'No cards in deck. Click cards below to add them!';
     deckContainer.appendChild(emptyMsg);
   } else {
     state.decks[key].forEach((c, idx) => {
@@ -538,26 +783,30 @@ function DeckBuilder() {
   }
   
   const availContainer = document.createElement('div');
-  availContainer.style.cssText = 'background: #1f2937; padding: 16px; border-radius: 8px;';
+  availContainer.style.cssText = 'background: #1f2937; padding: 16px; border-radius: 8px; min-height: 200px;';
   
-  state.cards.forEach((c, idx) => {
-    const cardEl = createCardElement(c, false);
-    cardEl.style.cursor = 'pointer';
-    cardEl.onclick = () => {
-      state.decks[key].push(Object.assign({}, c, { deckId: Date.now() + Math.random() }));
-      render();
-    };
-    availContainer.appendChild(cardEl);
-  });
+  if (state.cards.length === 0) {
+    availContainer.innerHTML = '<p class="text-gray text-center" style="padding: 32px;">No cards available. Go to Create Cards to add some!</p>';
+  } else {
+    state.cards.forEach((c, idx) => {
+      const cardEl = createCardElement(c, false);
+      cardEl.style.cursor = 'pointer';
+      cardEl.onclick = () => {
+        state.decks[key].push(Object.assign({}, c, { deckId: Date.now() + Math.random() }));
+        render();
+      };
+      availContainer.appendChild(cardEl);
+    });
+  }
   
   div.innerHTML = `
     <div class="header">
       <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-      <h2 style="font-size: 20px;">Deck: Player ${state.currentPlayer}</h2>
+      <h2 style="font-size: 20px; font-weight: bold;">Deck Builder - Player ${state.currentPlayer}</h2>
       <div class="flex">
         <button id="saveDeck" class="btn btn-blue text-sm">💾 Save</button>
         <label class="btn btn-green text-sm" style="margin: 0;">
-          📁 Load
+          📂 Load
           <input type="file" id="loadDeck" accept=".json" style="display: none;">
         </label>
         <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
@@ -566,10 +815,12 @@ function DeckBuilder() {
     <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 20px;">
       <div class="card">
         <h3 class="mb-4" style="font-weight: bold;">Main Deck [${state.decks[key].length}]</h3>
+        <p class="text-xs text-gray mb-4">Click the ✕ to remove cards</p>
         <div id="deckContainer"></div>
       </div>
       <div class="card">
-        <h3 class="mb-4" style="font-weight: bold;">All Cards</h3>
+        <h3 class="mb-4" style="font-weight: bold;">All Available Cards [${state.cards.length}]</h3>
+        <p class="text-xs text-gray mb-4">Click cards to add to deck</p>
         <div id="availContainer"></div>
       </div>
       <div class="card" style="position: sticky; top: 20px; height: fit-content;">
@@ -620,7 +871,7 @@ function GameBoard() {
         </div>
       `;
     } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
-      connUI = '<div class="card text-green mb-4">✅ Connected!</div>';
+      connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to play.</div>';
     }
     
     div.innerHTML = `
@@ -630,11 +881,11 @@ function GameBoard() {
           <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
         </div>
         ${connUI}
-        <div class="text-center">
-          <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">Ready to Play?</h1>
-          <p class="text-gray mb-8">${state.onlineMode ? 'Waiting for both players...' : 'Make sure both have decks!'}</p>
-          <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px;" ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'disabled' : ''}>Start Game</button>
-          ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? '<p class="text-red mt-4">Both players need decks!</p>' : ''}
+        <div class="card text-center">
+          <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">⚔️ Ready to Play?</h1>
+          <p class="text-gray mb-8">${state.onlineMode ? 'Waiting for both players to be ready...' : 'Local game - Both players ready!'}</p>
+          <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'disabled' : ''}>Start Game</button>
+          ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? '<p class="text-red mt-4">⚠️ Both players need decks to start!</p>' : ''}
         </div>
       </div>
     `;
@@ -643,21 +894,21 @@ function GameBoard() {
       div.querySelector('#copyOffer').onclick = () => {
         div.querySelector('#offerCode').select();
         document.execCommand('copy');
-        alert('Code copied!');
+        alert('✓ Code copied to clipboard!');
       };
     }
     if (div.querySelector('#submitAnswer')) {
       div.querySelector('#submitAnswer').onclick = () => {
         const val = div.querySelector('#answerInput').value.trim();
         if (val) completeConnection(val);
-        else alert('Paste the answer code first!');
+        else alert('Please paste the answer code first!');
       };
     }
     if (div.querySelector('#copyAnswer')) {
       div.querySelector('#copyAnswer').onclick = () => {
         div.querySelector('#answerCode').select();
         document.execCommand('copy');
-        alert('Answer copied!');
+        alert('✓ Answer code copied to clipboard!');
       };
     }
     
@@ -692,7 +943,7 @@ function GameBoard() {
     return div;
   }
 
-  // GAME SCREEN - Critical part with working card selection
+  // GAME SCREEN
   const pKey = 'player' + state.currentPlayer;
   const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
   const me = state.gameState[pKey];
@@ -700,8 +951,8 @@ function GameBoard() {
   
   const createGameCardImg = (c) => {
     const img = document.createElement('img');
-    if (c.image) {
-      img.src = c.image;
+    if (c.image || c.imageUrl) {
+      img.src = c.image || c.imageUrl;
     } else {
       const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
       img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
@@ -719,44 +970,47 @@ function GameBoard() {
   div.innerHTML = `
     <div style="display: flex; height: 100vh;">
       <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-        <div style="background: #1f2937; padding: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="background: #1f2937; padding: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #374151;">
           <button id="exitBtn" class="btn btn-secondary text-xs">← Exit</button>
-          <span class="text-xs">Player ${state.activePlayer}${state.activePlayer === state.currentPlayer ? ' (YOU)' : ''}</span>
-          <button id="endTurn" class="btn btn-blue text-xs">End Turn</button>
+          <div class="text-center">
+            <span class="text-xs" style="font-weight: bold;">Player ${state.activePlayer}${state.activePlayer === state.currentPlayer ? ' (YOU)' : ''}</span>
+            <div class="text-xs text-gray">Current Turn</div>
+          </div>
+          <button id="endTurn" class="btn btn-blue text-xs">End Turn →</button>
         </div>
         <div style="flex: 1; overflow-y: auto; padding: 16px;">
           <div class="mb-4 text-center">
-            <div class="text-red" style="font-weight: bold; font-size: 14px;">Opponent - LP: ${opp.health}</div>
-            <div class="text-xs text-gray">Deck: ${opp.deck.length} | Hand: ${opp.hand.length} | GY: ${opp.graveyard.length}</div>
+            <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ Opponent - LP: ${opp.health}</div>
+            <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length}</div>
           </div>
           <div class="game-field mb-4" style="min-height: 110px;">
-            <div class="text-xs text-gray text-center">Opponent Upper Field</div>
-            ${oppUpperHtml}
+            <div class="text-xs text-gray text-center mb-2">Opponent Upper Field</div>
+            ${oppUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
           <div class="game-field mb-4" style="min-height: 110px;">
-            <div class="text-xs text-gray text-center">Opponent Lower Field</div>
-            ${oppLowerHtml}
+            <div class="text-xs text-gray text-center mb-2">Opponent Lower Field</div>
+            ${oppLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
-          <div style="border-top: 2px solid #7c3aed; margin: 16px 0;"></div>
+          <div style="border-top: 3px dashed #7c3aed; margin: 16px 0;"></div>
           <div class="game-field player mb-4" style="min-height: 110px;">
-            <div class="text-xs text-gray text-center">Your Lower Field</div>
-            ${myLowerHtml}
+            <div class="text-xs text-gray text-center mb-2">Your Lower Field</div>
+            ${myLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
           <div class="game-field player mb-4" style="min-height: 110px;">
-            <div class="text-xs text-gray text-center">Your Upper Field</div>
-            ${myUpperHtml}
+            <div class="text-xs text-gray text-center mb-2">Your Upper Field</div>
+            ${myUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
           <div class="mt-4 text-center">
-            <div class="text-green" style="font-weight: bold; font-size: 14px;">You - LP: ${me.health}</div>
+            <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ You - LP: ${me.health}</div>
             <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
-              <button id="drawBtn" class="btn btn-secondary text-xs">Draw(${me.deck.length})</button>
-              <button id="viewGY" class="btn btn-secondary text-xs">GY(${me.graveyard.length})</button>
+              <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${me.deck.length})</button>
+              <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
               <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
               <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
             </div>
           </div>
         </div>
-        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 100px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px;"></div>
+        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 120px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; border-top: 2px solid #374151;"></div>
       </div>
       <div class="sidebar">
         <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
@@ -766,36 +1020,35 @@ function GameBoard() {
       </div>
     </div>
     ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
-      <div style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
+      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
         <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">Upper Field</button>
-          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">Lower Field</button>
-          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">Discard</button>
-          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">To Deck</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬆️ Upper Field</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬇️ Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">🗑️ Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
         </div>
-        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">Cancel</button>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
       </div>
     ` : ''}
     ${state.winner ? `
       <div class="modal">
         <div class="modal-content text-center">
-          <h2 class="mb-4" style="font-size: 32px; font-weight: bold;">${state.winner === state.currentPlayer ? 'You Win!' : 'You Lose!'}</h2>
-          <p class="text-gray mb-8">Player ${state.winner} wins!</p>
-          <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px;">Return to Menu</button>
+          <h2 class="mb-4" style="font-size: 48px;">🏆</h2>
+          <h2 class="mb-4" style="font-size: 32px; font-weight: bold;">${state.winner === state.currentPlayer ? '🎉 You Win!' : '😔 You Lose'}</h2>
+          <p class="text-gray mb-8">Player ${state.winner} is victorious!</p>
+          <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
         </div>
       </div>
     ` : ''}
   `;
   
-  // Create hand cards with handlers attached ONCE
-  console.log('Creating hand cards for Player', state.currentPlayer);
   const handContainer = div.querySelector('#handContainer');
   
   if (me.hand.length === 0) {
     const emptyMsg = document.createElement('span');
     emptyMsg.className = 'text-gray text-xs';
-    emptyMsg.textContent = 'No cards - Click Draw!';
+    emptyMsg.textContent = '🃏 No cards in hand - Click Draw!';
     handContainer.appendChild(emptyMsg);
   } else {
     me.hand.forEach((card, idx) => {
@@ -803,24 +1056,24 @@ function GameBoard() {
       cardDiv.className = 'hand-card' + (state.selectedCard === idx ? ' selected' : '');
       cardDiv.appendChild(createGameCardImg(card));
       
-      // Attach click handler ONCE here
       cardDiv.onclick = () => {
-        console.log('Card clicked:', idx);
         state.selectedCard = state.selectedCard === idx ? null : idx;
         render();
       };
       
-      // Hover updates sidebar without re-rendering
       cardDiv.onmouseenter = () => {
         const sidebar = div.querySelector('#cardInfo');
         if (sidebar) {
           const c = card;
           sidebar.innerHTML = `
             <div class="card-preview">
-              <div class="text-center mb-2" style="font-weight: bold;">${c.name}</div>
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.name}</div>
+                ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${c.cost}</div>` : ''}
+              </div>
               <div class="text-xs text-gray text-center mb-2">${c.type}</div>
-              ${c.image ? `<img src="${c.image}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : '<div class="card-img" style="height: 120px;">🃏</div>'}
-              ${c.type === 'Monster' ? `<div class="mb-2 text-xs"><strong>ATK:</strong> ${c.attack} <strong>DEF:</strong> ${c.defense}</div>` : ''}
+              ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : '<div class="card-img" style="height: 120px;">🃏</div>'}
+              ${c.type && c.type.includes('Creature') ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${c.power} <strong>TGH:</strong> ${c.toughness}</div>` : ''}
               <div class="text-xs">${c.effect || 'No effect'}</div>
             </div>
           `;
@@ -831,9 +1084,6 @@ function GameBoard() {
     });
   }
   
-  console.log('Hand cards created:', me.hand.length);
-  
-  // Add images to field cards
   div.querySelectorAll('.field-card').forEach(fieldCard => {
     const zone = fieldCard.dataset.zone;
     const owner = fieldCard.dataset.owner;
@@ -844,7 +1094,6 @@ function GameBoard() {
     }
   });
   
-  // Button handlers
   const exitBtn = div.querySelector('#exitBtn');
   const drawBtn = div.querySelector('#drawBtn');
   const gyBtn = div.querySelector('#viewGY');
@@ -853,12 +1102,14 @@ function GameBoard() {
   const endBtn = div.querySelector('#endTurn');
   
   if (exitBtn) exitBtn.onclick = () => {
-    if (state.onlineMode) disconnectOnline();
-    state.screen = 'menu';
-    state.gameStarted = false;
-    state.winner = null;
-    state.selectedCard = null;
-    render();
+    if (confirm('Exit game? Progress will be lost.')) {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      render();
+    }
   };
   
   if (drawBtn) drawBtn.onclick = () => {
@@ -871,12 +1122,13 @@ function GameBoard() {
     }
   };
   
-  if (gyBtn) gyBtn.onclick = () => { state.viewingGraveyard = 'me'; render(); };
+  if (gyBtn) gyBtn.onclick = () => { 
+    alert('Graveyard: ' + (me.graveyard.length > 0 ? me.graveyard.map(c => c.name).join(', ') : 'Empty')); 
+  };
   if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
   if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
   if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; sendGameUpdate(); render(); };
   
-  // Card action handlers
   if (state.selectedCard !== null) {
     const discardBtn = div.querySelector('#discardCard');
     const toDeckBtn = div.querySelector('#toDeck');
