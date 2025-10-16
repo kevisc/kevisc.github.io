@@ -1,0 +1,1467 @@
+(function(){
+'use strict';
+
+const state = {
+  screen: 'login',
+  currentPlayer: null,
+  cards: [],
+  scryfallCards: [],
+  searchResults: [],
+  isLoadingScryfallCards: false,
+  decks: { player1: [], player2: [] },
+  editingCard: null,
+  activePlayer: 1,
+  gameState: {
+    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: [], health: 20 },
+    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: [], health: 20 }
+  },
+  gameStarted: false,
+  winner: null,
+  selectedCard: null,
+  selectedFieldCard: null,
+  selectedZoneCard: null,
+  hoveredCard: null,
+  viewingZone: null,
+  creatingToken: false,
+  onlineMode: false,
+  peerConnection: null,
+  dataChannel: null,
+  roomCode: null,
+  isHost: false,
+  waitingForAnswer: false,
+  answerCode: null
+};
+
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 400, maxH = 560;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > maxW) { h *= maxW / w; w = maxW; } }
+      else { if (h > maxH) { w *= maxH / h; h = maxH; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function checkWinner() {
+  if (state.gameStarted) {
+    if (state.gameState.player1.health <= 0) { state.winner = 2; state.gameStarted = false; }
+    else if (state.gameState.player2.health <= 0) { state.winner = 1; state.gameStarted = false; }
+  }
+}
+
+function sendGameUpdate() {
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({
+      type: 'gameUpdate',
+      gameState: state.gameState,
+      gameStarted: state.gameStarted,
+      activePlayer: state.activePlayer,
+      winner: state.winner
+    }));
+  }
+}
+
+function setupDataChannel(channel) {
+  state.dataChannel = channel;
+  state.dataChannel.onopen = () => {
+    console.log('Connected!');
+    state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
+  };
+  state.dataChannel.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'deckSync') {
+        const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+        if (data.decks[oppKey]) state.decks[oppKey] = data.decks[oppKey];
+        render();
+      } else if (data.type === 'gameUpdate') {
+        state.gameState = data.gameState;
+        state.gameStarted = data.gameStarted;
+        state.activePlayer = data.activePlayer;
+        state.winner = data.winner;
+        render();
+      }
+    } catch(e) { console.error(e); }
+  };
+  state.dataChannel.onclose = () => {
+    alert('Connection closed');
+    disconnectOnline();
+    state.screen = 'menu';
+    render();
+  };
+}
+
+async function createOnlineRoom() {
+  state.isHost = true;
+  state.onlineMode = true;
+  state.roomCode = 'waiting';
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  state.peerConnection = pc;
+  setupDataChannel(pc.createDataChannel('game'));
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') resolve();
+    else pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+  });
+  state.roomCode = btoa(JSON.stringify({ offer: pc.localDescription }));
+  state.waitingForAnswer = true;
+  render();
+}
+
+async function joinOnlineRoom(offerStr) {
+  state.isHost = false;
+  state.onlineMode = true;
+  state.roomCode = 'connecting';
+  try {
+    const data = JSON.parse(atob(offerStr));
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    state.peerConnection = pc;
+    pc.ondatachannel = (e) => setupDataChannel(e.channel);
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') resolve();
+      else pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+    });
+    state.answerCode = btoa(JSON.stringify({ answer: pc.localDescription }));
+    render();
+  } catch(e) {
+    alert('Invalid code: ' + e.message);
+    disconnectOnline();
+    state.screen = 'menu';
+    render();
+  }
+}
+
+async function completeConnection(answerStr) {
+  try {
+    const data = JSON.parse(atob(answerStr));
+    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    state.waitingForAnswer = false;
+    render();
+  } catch(e) {
+    alert('Invalid answer: ' + e.message);
+  }
+}
+
+function disconnectOnline() {
+  if (state.dataChannel) state.dataChannel.close();
+  if (state.peerConnection) state.peerConnection.close();
+  state.dataChannel = null;
+  state.peerConnection = null;
+  state.onlineMode = false;
+  state.roomCode = null;
+  state.isHost = false;
+  state.waitingForAnswer = false;
+  state.answerCode = null;
+}
+
+function saveDeck() {
+  const key = 'player' + state.currentPlayer;
+  const data = JSON.stringify({ player: state.currentPlayer, cards: state.decks[key], timestamp: Date.now() });
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'deck_player' + state.currentPlayer + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadDeck(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      state.decks['player' + state.currentPlayer] = data.cards || [];
+      render();
+    } catch(err) {
+      alert('Error loading deck');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function render() {
+  const root = document.getElementById('root');
+  if (!root) return;
+  root.innerHTML = '';
+  
+  if (state.screen === 'login') root.appendChild(LoginScreen());
+  else if (state.screen === 'menu') root.appendChild(MainMenu());
+  else if (state.screen === 'creator') root.appendChild(CardCreator());
+  else if (state.screen === 'builder') root.appendChild(DeckBuilder());
+  else if (state.screen === 'game') root.appendChild(GameBoard());
+}
+
+function LoginScreen() {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  div.innerHTML = `
+    <div class="text-center">
+      <h1 style="font-size: 56px; font-weight: bold; margin-bottom: 12px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MTG Card Game</h1>
+      <p class="text-gray mb-8">Select your player to begin</p>
+      <div class="flex" style="gap: 24px; justify-content: center;">
+        <button id="p1btn" class="btn btn-secondary" style="padding: 32px 48px; font-size: 20px;">Player 1</button>
+        <button id="p2btn" class="btn btn-secondary" style="padding: 32px 48px; font-size: 20px;">Player 2</button>
+      </div>
+    </div>
+  `;
+  div.querySelector('#p1btn').onclick = () => { state.currentPlayer = 1; state.screen = 'menu'; render(); };
+  div.querySelector('#p2btn').onclick = () => { state.currentPlayer = 2; state.screen = 'menu'; render(); };
+  return div;
+}
+
+function MainMenu() {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  div.innerHTML = `
+    <div style="max-width: 600px; width: 100%;">
+      <div class="header">
+        <div></div>
+        <h1 style="font-size: 32px; font-weight: bold;">Player ${state.currentPlayer}</h1>
+        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+      </div>
+      <div class="card">
+        <div class="grid" style="gap: 16px;">
+          <button id="createBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">🎨 Create Cards</button>
+          <button id="buildBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">🃏 Build Deck</button>
+          <button id="playBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">⚔️ Play Local Game</button>
+          <div style="border-top: 1px solid #374151; margin: 16px 0; padding-top: 16px;">
+            <p class="text-gray text-sm mb-4">🌐 Online Multiplayer</p>
+            <button id="hostBtn" class="btn btn-blue mb-4" style="width: 100%; padding: 16px;">Host Online Game</button>
+            <button id="joinBtn" class="btn btn-green" style="width: 100%; padding: 16px;">Join Online Game</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#createBtn').onclick = () => { state.screen = 'creator'; render(); };
+  div.querySelector('#buildBtn').onclick = () => { state.screen = 'builder'; render(); };
+  div.querySelector('#playBtn').onclick = () => { state.onlineMode = false; state.screen = 'game'; render(); };
+  div.querySelector('#hostBtn').onclick = () => {
+    if (state.decks['player' + state.currentPlayer].length === 0) { alert('Build a deck first!'); return; }
+    createOnlineRoom();
+    state.screen = 'game';
+    render();
+  };
+  div.querySelector('#joinBtn').onclick = () => {
+    if (state.decks['player' + state.currentPlayer].length === 0) { alert('Build a deck first!'); return; }
+    const code = prompt('Paste connection code:');
+    if (code && code.trim()) { joinOnlineRoom(code.trim()); state.screen = 'game'; render(); }
+  };
+  
+  return div;
+}
+
+function CardCreator() {
+  const form = state.editingCard || { name: '', type: 'Creature', cost: '', colors: [], power: 0, toughness: 0, effect: '', image: '', imageUrl: '' };
+  const div = document.createElement('div');
+  div.className = 'container';
+  
+  const cardsHtml = state.cards.map((c, i) => `
+    <div class="card-preview" style="position: relative;">
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+          <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+        </div>
+        <p class="text-xs text-gray">${c.type}</p>
+      </div>
+      <div class="card-img">${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+      ${c.type && c.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+      <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
+        <button class="btn btn-secondary text-xs editCard" data-id="${i}" style="padding: 4px 8px;">Edit</button>
+        <button class="btn btn-red text-xs delCard" data-id="${i}" style="padding: 4px 8px;">Del</button>
+      </div>
+    </div>
+  `).join('');
+  
+  div.innerHTML = `
+    <div class="header">
+      <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+      <h1 style="font-size: 24px; font-weight: bold;">Card Creator</h1>
+      <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+    </div>
+    
+    <div class="card mb-4">
+      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">🔍 Search Scryfall Cards</h2>
+      <div style="background: #374151; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+        <p class="text-xs text-gray">💡 <strong>Tip:</strong> Search works best when hosted on HTTPS. If you get errors, try searching for specific card names like "Lightning Bolt" or "Black Lotus".</p>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input id="scryfallSearch" class="input" placeholder="Search for MTG cards (e.g., Lightning Bolt)..." style="flex: 1;">
+        <button id="searchBtn" class="btn btn-primary">Search</button>
+        <button id="loadAllBtn" class="btn btn-blue">Load All Cards</button>
+      </div>
+      <div id="searchResults" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+    
+    <h2 class="mb-4" style="font-size: 20px; font-weight: bold;">${state.editingCard ? 'Edit Card' : 'Create Custom Card'}</h2>
+    <div class="grid grid-2 mb-8">
+      <div class="card">
+        <div class="mb-4">
+          <label>Card Name</label>
+          <input id="cardName" class="input" value="${form.name}">
+        </div>
+        <div class="mb-4">
+          <label>Type</label>
+          <select id="cardType" class="input">
+            <option value="Creature">Creature</option>
+            <option value="Instant">Instant</option>
+            <option value="Sorcery">Sorcery</option>
+            <option value="Enchantment">Enchantment</option>
+            <option value="Artifact">Artifact</option>
+            <option value="Planeswalker">Planeswalker</option>
+            <option value="Land">Land</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label>Mana Cost</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button class="mana-btn" data-color="W" style="background: #f9fafb; color: #111827; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #d1d5db;">W</button>
+            <button class="mana-btn" data-color="U" style="background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">U</button>
+            <button class="mana-btn" data-color="B" style="background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #4b5563;">B</button>
+            <button class="mana-btn" data-color="R" style="background: #dc2626; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">R</button>
+            <button class="mana-btn" data-color="G" style="background: #059669; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">G</button>
+            <button class="mana-btn" data-color="C" style="background: #9ca3af; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">C</button>
+            <input id="genericMana" type="number" min="0" max="20" value="0" style="width: 60px;" class="input text-center" placeholder="0">
+            <button id="clearMana" class="btn btn-red text-xs" style="padding: 8px 12px;">Clear</button>
+          </div>
+          <input id="cardCost" class="input" value="${form.cost}" placeholder="{2}{U}{U}" readonly>
+        </div>
+        <div id="creatureStats" class="mb-4" style="${!form.type || !form.type.includes('Creature') ? 'display:none' : ''}">
+          <div class="grid grid-2">
+            <div>
+              <label>Power</label>
+              <input id="cardPower" class="input" type="text" value="${form.power}">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="cardToughness" class="input" type="text" value="${form.toughness}">
+            </div>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label>Effect / Oracle Text</label>
+          <textarea id="cardEffect" class="input" rows="4">${form.effect}</textarea>
+        </div>
+        <div class="mb-4">
+          <label>Upload Image</label>
+          <input id="cardImage" class="input" type="file" accept="image/*">
+          <label class="mt-4">Or Image URL</label>
+          <input id="cardImageUrl" class="input" placeholder="https://..." value="${form.imageUrl || ''}">
+        </div>
+        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? '✓ Update Card' : '+ Create Card'}</button>
+      </div>
+      <div>
+        <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
+        <div id="preview"></div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 class="mb-4" style="font-size: 18px; font-weight: bold;">Your Collection (${state.cards.length} cards)</h2>
+      <div class="grid grid-4">${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall or create custom cards!</p>'}</div>
+    </div>
+  `;
+  
+  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
+  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#cardType').value = form.type;
+  
+  const updatePreview = () => {
+    form.name = div.querySelector('#cardName').value;
+    form.type = div.querySelector('#cardType').value;
+    form.power = div.querySelector('#cardPower').value;
+    form.toughness = div.querySelector('#cardToughness').value;
+    form.effect = div.querySelector('#cardEffect').value;
+    form.imageUrl = div.querySelector('#cardImageUrl').value;
+    div.querySelector('#creatureStats').style.display = form.type.includes('Creature') ? 'block' : 'none';
+    div.querySelector('#preview').innerHTML = `
+      <div class="card-preview">
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-weight: bold;">${form.name || 'Unnamed Card'}</h3>
+            <span style="font-size: 12px; color: #fbbf24;">${form.cost || ''}</span>
+          </div>
+          <p class="text-xs text-gray">${form.type}</p>
+        </div>
+        <div class="card-img">${form.image || form.imageUrl ? `<img src="${form.image || form.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+        ${form.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>PWR: ${form.power}</span><span>TGH: ${form.toughness}</span></div>` : ''}
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect text'}</p></div>
+      </div>
+    `;
+  };
+  
+  // Mana cost builder
+  div.querySelectorAll('.mana-btn').forEach(btn => {
+    btn.onclick = () => {
+      const color = btn.dataset.color;
+      if (!form.colors) form.colors = [];
+      form.colors.push(color);
+      const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+      form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+      div.querySelector('#cardCost').value = form.cost;
+      updatePreview();
+    };
+  });
+  
+  div.querySelector('#genericMana').oninput = () => {
+    const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+    if (!form.colors) form.colors = [];
+    form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+    div.querySelector('#cardCost').value = form.cost;
+    updatePreview();
+  };
+  
+  div.querySelector('#clearMana').onclick = () => {
+    form.colors = [];
+    form.cost = '';
+    div.querySelector('#cardCost').value = '';
+    div.querySelector('#genericMana').value = '0';
+    updatePreview();
+  };
+  
+  // Scryfall search
+  div.querySelector('#searchBtn').onclick = async () => {
+    const query = div.querySelector('#scryfallSearch').value.trim();
+    if (!query) {
+      alert('Please enter a search term!');
+      return;
+    }
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading">Searching Scryfall...</p>';
+    try {
+      const searchUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
+      console.log('Searching:', searchUrl);
+      
+      const response = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Scryfall response:', data);
+      
+      if (data.object === 'error') {
+        resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Scryfall Error: ${data.details || 'Invalid search'}</p>`;
+        return;
+      }
+      
+      if (data.data && data.data.length > 0) {
+        state.searchResults = data.data;
+        resultsDiv.innerHTML = data.data.slice(0, 40).map((card, idx) => {
+          const imgUrl = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '';
+          return `
+            <div class="scryfall-result" data-idx="${idx}" style="cursor: pointer; border: 2px solid #374151; border-radius: 6px; overflow: hidden; transition: all 0.2s; position: relative;">
+              ${imgUrl ? `<img src="${imgUrl}" style="width: 100%; display: block;">` : `<div style="padding: 20px; text-align: center; background: #374151; font-size: 12px;">${card.name}</div>`}
+              <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 4px; font-size: 10px; text-align: center;">${card.name}</div>
+            </div>
+          `;
+        }).join('');
+        
+        resultsDiv.querySelectorAll('.scryfall-result').forEach((el, idx) => {
+          el.onmouseenter = () => el.style.borderColor = '#3b82f6';
+          el.onmouseleave = () => el.style.borderColor = '#374151';
+          el.onclick = () => {
+            const card = data.data[idx];
+            const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+            const newCard = {
+              id: Date.now() + Math.random(),
+              name: card.name,
+              type: card.type_line,
+              cost: card.mana_cost || '',
+              colors: card.colors || [],
+              power: card.power || 0,
+              toughness: card.toughness || 0,
+              effect: card.oracle_text || '',
+              image: '',
+              imageUrl: imgUrl,
+              scryfallId: card.id
+            };
+            state.cards.push(newCard);
+            alert(`✓ Added ${card.name} to your collection!`);
+            render();
+          };
+        });
+      } else {
+        resultsDiv.innerHTML = '<p class="text-gray text-xs text-center p-4">No results found. Try a different search term.</p>';
+      }
+    } catch (err) {
+      console.error('Scryfall search error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error: ${err.message}<br><br>This might be a network issue or CORS restriction. Try:<br>1. Check your internet connection<br>2. Make sure you're using HTTPS<br>3. Try a different browser<br>4. Check browser console for details</p>`;
+    }
+  };
+  
+  // Load all Oracle cards
+  div.querySelector('#loadAllBtn').onclick = async () => {
+    if (state.isLoadingScryfallCards) return;
+    if (state.scryfallCards.length > 0) {
+      alert(`✓ ${state.scryfallCards.length} cards already loaded! Use search to find them.`);
+      return;
+    }
+    if (!confirm('This will download ~160MB of card data from Scryfall. This may take 1-2 minutes. Continue?\n\nNote: You can also just use the Search feature without loading all cards!')) return;
+    
+    state.isLoadingScryfallCards = true;
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading all MTG cards from Scryfall... Please wait...</p>';
+    
+    try {
+      console.log('Fetching bulk data list...');
+      const bulkResponse = await fetch('https://api.scryfall.com/bulk-data', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!bulkResponse.ok) {
+        throw new Error(`HTTP ${bulkResponse.status}: ${bulkResponse.statusText}`);
+      }
+      
+      const bulkData = await bulkResponse.json();
+      console.log('Bulk data received:', bulkData);
+      
+      const oracleData = bulkData.data.find(d => d.type === 'oracle_cards');
+      
+      if (oracleData) {
+        console.log('Downloading oracle cards from:', oracleData.download_uri);
+        resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading card database... This may take 1-2 minutes...</p>';
+        
+        const cardsResponse = await fetch(oracleData.download_uri);
+        
+        if (!cardsResponse.ok) {
+          throw new Error(`HTTP ${cardsResponse.status}: ${cardsResponse.statusText}`);
+        }
+        
+        const cards = await cardsResponse.json();
+        state.scryfallCards = cards;
+        console.log('Loaded cards:', cards.length);
+        alert(`✓ Success! Loaded ${cards.length.toLocaleString()} MTG cards! You can now search through all cards.`);
+        resultsDiv.innerHTML = '<p class="text-green text-xs text-center p-4">✓ All cards loaded! Use the search box above to find any MTG card.</p>';
+      } else {
+        throw new Error('Could not find oracle cards in bulk data');
+      }
+    } catch (err) {
+      console.error('Bulk load error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error loading cards: ${err.message}<br><br>Don't worry! You can still use the Search feature to find specific cards without loading the entire database.</p>`;
+    }
+    state.isLoadingScryfallCards = false;
+  };
+  
+  div.querySelector('#cardName').oninput = updatePreview;
+  div.querySelector('#cardType').onchange = updatePreview;
+  div.querySelector('#cardPower').oninput = updatePreview;
+  div.querySelector('#cardToughness').oninput = updatePreview;
+  div.querySelector('#cardEffect').oninput = updatePreview;
+  div.querySelector('#cardImageUrl').oninput = updatePreview;
+  
+  // Allow Enter key to search
+  div.querySelector('#scryfallSearch').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      div.querySelector('#searchBtn').click();
+    }
+  };
+  
+  div.querySelector('#cardImage').onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) compressImage(file, (img) => { form.image = img; updatePreview(); });
+  };
+  div.querySelector('#submitCard').onclick = () => {
+    if (!form.name.trim()) {
+      alert('Please enter a card name!');
+      return;
+    }
+    if (state.editingCard) {
+      const idx = state.cards.findIndex(c => c.id === state.editingCard.id);
+      state.cards[idx] = Object.assign({}, form, { id: state.editingCard.id });
+      state.editingCard = null;
+    } else {
+      state.cards.push(Object.assign({}, form, { id: Date.now() + Math.random() }));
+    }
+    render();
+  };
+  
+  div.querySelectorAll('.editCard').forEach((btn, i) => {
+    btn.onclick = () => { state.editingCard = state.cards[i]; render(); window.scrollTo(0, 0); };
+  });
+  div.querySelectorAll('.delCard').forEach((btn, i) => {
+    btn.onclick = () => { 
+      if (confirm('Delete this card?')) {
+        state.cards.splice(i, 1); 
+        render(); 
+      }
+    };
+  });
+  
+  updatePreview();
+  return div;
+}
+
+function DeckBuilder() {
+  const key = 'player' + state.currentPlayer;
+  const div = document.createElement('div');
+  div.className = 'container';
+  
+  const createCardElement = (c, isInDeck) => {
+    const cardDiv = document.createElement('div');
+    cardDiv.className = 'deck-card';
+    const img = document.createElement('img');
+    if (c.image || c.imageUrl) {
+      img.src = c.image || c.imageUrl;
+    } else {
+      const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
+      img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
+    }
+    img.alt = c.name;
+    cardDiv.onmouseenter = () => {
+      state.hoveredCard = c;
+      updateCardInfo();
+    };
+    cardDiv.appendChild(img);
+    return cardDiv;
+  };
+  
+  const updateCardInfo = () => {
+    const infoDiv = div.querySelector('#cardInfoSidebar');
+    if (!infoDiv) return;
+    if (state.hoveredCard) {
+      const c = state.hoveredCard;
+      infoDiv.innerHTML = `
+        <div class="card-preview">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div class="text-center mb-2" style="font-weight: bold; font-size: 16px; flex: 1;">${c.name}</div>
+            ${c.cost ? `<div style="font-size: 14px; color: #fbbf24; white-space: nowrap;">${c.cost}</div>` : ''}
+          </div>
+          <div class="text-xs text-gray text-center mb-2">${c.type}</div>
+          ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 12px;">` : '<div class="card-img" style="height: 180px; font-size: 64px;">🃏</div>'}
+          ${c.type && c.type.includes('Creature') ? `<div class="mb-2" style="display: flex; justify-content: space-between;"><span class="text-sm"><strong>PWR:</strong> ${c.power}</span><span class="text-sm"><strong>TGH:</strong> ${c.toughness}</span></div>` : ''}
+          <div class="text-sm" style="margin-top: 12px;"><strong>Effect:</strong></div>
+          <div class="text-xs" style="margin-top: 8px; line-height: 1.4;">${c.effect || 'No effect'}</div>
+        </div>
+      `;
+    } else {
+      infoDiv.innerHTML = '<p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card to see details</p>';
+    }
+  };
+  
+  const deckContainer = document.createElement('div');
+  deckContainer.style.cssText = 'background: #1f2937; padding: 16px; border-radius: 8px; min-height: 200px;';
+  
+  if (state.decks[key].length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'text-gray text-center';
+    emptyMsg.style.padding = '32px 0';
+    emptyMsg.textContent = 'No cards in deck. Click cards below to add them!';
+    deckContainer.appendChild(emptyMsg);
+  } else {
+    state.decks[key].forEach((c, idx) => {
+      const cardEl = createCardElement(c, true);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        state.decks[key].splice(idx, 1);
+        render();
+      };
+      cardEl.appendChild(removeBtn);
+      deckContainer.appendChild(cardEl);
+    });
+  }
+  
+  const availContainer = document.createElement('div');
+  availContainer.style.cssText = 'background: #1f2937; padding: 16px; border-radius: 8px; min-height: 200px;';
+  
+  if (state.cards.length === 0) {
+    availContainer.innerHTML = '<p class="text-gray text-center" style="padding: 32px;">No cards available. Go to Create Cards to add some!</p>';
+  } else {
+    state.cards.forEach((c, idx) => {
+      const cardEl = createCardElement(c, false);
+      cardEl.style.cursor = 'pointer';
+      cardEl.onclick = () => {
+        state.decks[key].push(Object.assign({}, c, { deckId: Date.now() + Math.random() }));
+        render();
+      };
+      availContainer.appendChild(cardEl);
+    });
+  }
+  
+  div.innerHTML = `
+    <div class="header">
+      <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+      <h2 style="font-size: 20px; font-weight: bold;">Deck Builder - Player ${state.currentPlayer}</h2>
+      <div class="flex">
+        <button id="saveDeck" class="btn btn-blue text-sm">💾 Save</button>
+        <label class="btn btn-green text-sm" style="margin: 0;">
+          📂 Load
+          <input type="file" id="loadDeck" accept=".json" style="display: none;">
+        </label>
+        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 20px;">
+      <div class="card">
+        <h3 class="mb-4" style="font-weight: bold;">Main Deck [${state.decks[key].length}]</h3>
+        <p class="text-xs text-gray mb-4">Click the ✕ to remove cards</p>
+        <div id="deckContainer"></div>
+      </div>
+      <div class="card">
+        <h3 class="mb-4" style="font-weight: bold;">All Available Cards [${state.cards.length}]</h3>
+        <p class="text-xs text-gray mb-4">Click cards to add to deck</p>
+        <div id="availContainer"></div>
+      </div>
+      <div class="card" style="position: sticky; top: 20px; height: fit-content;">
+        <h3 class="mb-4" style="font-weight: bold; text-align: center;">Card Info</h3>
+        <div id="cardInfoSidebar">
+          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card to see details</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  div.querySelector('#deckContainer').appendChild(deckContainer);
+  div.querySelector('#availContainer').appendChild(availContainer);
+  
+  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
+  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#saveDeck').onclick = saveDeck;
+  div.querySelector('#loadDeck').onchange = (e) => { if (e.target.files[0]) loadDeck(e.target.files[0]); };
+  
+  return div;
+}
+
+function GameBoard() {
+  const div = document.createElement('div');
+  
+  if (!state.gameStarted) {
+    div.className = 'container screen';
+    let connUI = '';
+    if (state.onlineMode && state.waitingForAnswer) {
+      connUI = `
+        <div class="card" style="background: rgba(30, 64, 175, 0.2); border-color: #3b82f6; margin-bottom: 24px;">
+          <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+          <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
+          <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
+          <hr style="border-color: #4b5563; margin: 16px 0;">
+          <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
+          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+          <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+        </div>
+      `;
+    } else if (state.onlineMode && state.answerCode) {
+      connUI = `
+        <div class="card" style="background: rgba(5, 150, 105, 0.2); border-color: #059669; margin-bottom: 24px;">
+          <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+          <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
+          <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+          <p class="text-green text-sm mt-4">Waiting for host...</p>
+        </div>
+      `;
+    } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+      connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to play.</div>';
+    }
+    
+    div.innerHTML = `
+      <div style="max-width: 800px; width: 100%;">
+        <div class="header">
+          <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+          <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+        </div>
+        ${connUI}
+        <div class="card text-center">
+          <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">⚔️ Ready to Play?</h1>
+          <p class="text-gray mb-8">${state.onlineMode ? 'Waiting for both players to be ready...' : 'Local game - Both players ready!'}</p>
+          <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'disabled' : ''}>Start Game</button>
+          ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? '<p class="text-red mt-4">⚠️ Both players need decks to start!</p>' : ''}
+        </div>
+      </div>
+    `;
+    
+    if (div.querySelector('#copyOffer')) {
+      div.querySelector('#copyOffer').onclick = () => {
+        div.querySelector('#offerCode').select();
+        document.execCommand('copy');
+        alert('✓ Code copied to clipboard!');
+      };
+    }
+    if (div.querySelector('#submitAnswer')) {
+      div.querySelector('#submitAnswer').onclick = () => {
+        const val = div.querySelector('#answerInput').value.trim();
+        if (val) completeConnection(val);
+        else alert('Please paste the answer code first!');
+      };
+    }
+    if (div.querySelector('#copyAnswer')) {
+      div.querySelector('#copyAnswer').onclick = () => {
+        div.querySelector('#answerCode').select();
+        document.execCommand('copy');
+        alert('✓ Answer code copied to clipboard!');
+      };
+    }
+    
+    div.querySelector('#backBtn').onclick = () => { 
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu'; 
+      render(); 
+    };
+    div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+    div.querySelector('#startBtn').onclick = () => {
+      const shuffle = (arr) => {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+      
+      const p1 = shuffle(state.decks.player1.map((c, i) => ({ ...c, gameId: 'p1-' + i, tapped: false })));
+      const p2 = shuffle(state.decks.player2.map((c, i) => ({ ...c, gameId: 'p2-' + i, tapped: false })));
+      
+      state.gameState = { 
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p1, health: 20 }, 
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p2, health: 20 } 
+      };
+      state.activePlayer = 1; 
+      state.gameStarted = true;
+      sendGameUpdate();
+      render();
+    };
+    return div;
+  }
+
+  // GAME SCREEN
+  const pKey = 'player' + state.currentPlayer;
+  const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+  const me = state.gameState[pKey];
+  const opp = state.gameState[oKey];
+  
+  const createGameCardImg = (c) => {
+    const img = document.createElement('img');
+    if (c.image || c.imageUrl) {
+      img.src = c.image || c.imageUrl;
+    } else {
+      const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
+      const bgColor = c.isToken ? '%23059669' : '%23374151';
+      const emoji = c.isToken ? '🎭' : '';
+      img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="${bgColor}"/><text x="50" y="50" text-anchor="middle" fill="white" font-size="24">${emoji}</text><text x="50" y="80" text-anchor="middle" fill="white" font-size="10">${safeName}</text><text x="50" y="100" text-anchor="middle" fill="white" font-size="12">${c.power || '?'}/${c.toughness || '?'}</text></svg>`;
+    }
+    img.alt = '';
+    return img;
+  };
+  
+  const showCardInfo = (card, target) => {
+    const sidebar = target || div.querySelector('#cardInfo');
+    if (sidebar && card) {
+      const c = card;
+      sidebar.innerHTML = `
+        <div class="card-preview">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.isToken ? '🎭 ' : ''}${c.name}</div>
+            ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${c.cost}</div>` : ''}
+          </div>
+          <div class="text-xs text-gray text-center mb-2">${c.type}${c.isToken ? ' (Token)' : ''}</div>
+          ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : `<div class="card-img" style="height: 120px; font-size: 48px; background: ${c.isToken ? '#059669' : '#4b5563'};">${c.isToken ? '🎭' : '🃏'}</div>`}
+          ${c.type && (c.type.includes('Creature') || c.isToken) ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${c.power} <strong>TGH:</strong> ${c.toughness}</div>` : ''}
+          <div class="text-xs">${c.effect || 'No effect'}</div>
+          ${c.tapped ? '<div class="text-xs text-red mt-2">⟳ TAPPED</div>' : ''}
+        </div>
+      `;
+    }
+  };
+  
+  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'lowerField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
+  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'upperField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
+  
+  div.innerHTML = `
+    <div style="display: flex; height: 100vh;">
+      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="background: #1f2937; padding: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #374151;">
+          <button id="exitBtn" class="btn btn-secondary text-xs">← Exit</button>
+          <div class="text-center">
+            <span class="text-xs" style="font-weight: bold;">Player ${state.activePlayer}${state.activePlayer === state.currentPlayer ? ' (YOU)' : ''}</span>
+            <div class="text-xs text-gray">Current Turn</div>
+          </div>
+          <button id="endTurn" class="btn btn-blue text-xs">End Turn →</button>
+        </div>
+        <div style="flex: 1; overflow-y: auto; padding: 16px;">
+          <div class="mb-4 text-center">
+            <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ Opponent - LP: ${opp.health}</div>
+            <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}</div>
+          </div>
+          <div class="game-field mb-4" style="min-height: 110px;">
+            <div class="text-xs text-gray text-center mb-2">Opponent Upper Field</div>
+            ${oppUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+          </div>
+          <div class="game-field mb-4" style="min-height: 110px;">
+            <div class="text-xs text-gray text-center mb-2">Opponent Lower Field</div>
+            ${oppLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+          </div>
+          <div style="border-top: 3px dashed #7c3aed; margin: 16px 0;"></div>
+          <div class="game-field player mb-4" style="min-height: 110px;">
+            <div class="text-xs text-gray text-center mb-2">Your Lower Field</div>
+            ${myLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+          </div>
+          <div class="game-field player mb-4" style="min-height: 110px;">
+            <div class="text-xs text-gray text-center mb-2">Your Upper Field</div>
+            ${myUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+          </div>
+          <div class="mt-4 text-center">
+            <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ You - LP: ${me.health}</div>
+            <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <button id="drawBtn" class="btn btn-secondary text-xs">🔥 Draw (${me.deck.length})</button>
+              <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
+              <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
+              <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
+              <button id="viewOppGY" class="btn btn-secondary text-xs">👁️ Opp GY</button>
+              <button id="viewOppExile" class="btn btn-secondary text-xs">👁️ Opp Exile</button>
+              <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
+              <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
+            </div>
+          </div>
+        </div>
+        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 120px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; border-top: 2px solid #374151;"></div>
+      </div>
+      <div class="sidebar">
+        <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+        <div id="cardInfo">
+          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>
+        </div>
+      </div>
+    </div>
+    ${state.creatingToken ? `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+          <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">🎭 Create Token</h3>
+          <div class="mb-4">
+            <label>Token Name</label>
+            <input id="tokenName" class="input" placeholder="Soldier Token" value="Token">
+          </div>
+          <div class="mb-4">
+            <label>Token Type</label>
+            <input id="tokenType" class="input" placeholder="Creature — Soldier" value="Creature Token">
+          </div>
+          <div class="grid grid-2 mb-4">
+            <div>
+              <label>Power</label>
+              <input id="tokenPower" class="input" type="number" value="1">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="tokenToughness" class="input" type="number" value="1">
+            </div>
+          </div>
+          <div class="mb-4">
+            <label>Effect (Optional)</label>
+            <textarea id="tokenEffect" class="input" rows="2" placeholder="Flying, Haste"></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button id="createTokenUpper" class="btn btn-primary">⬆️ Create Upper</button>
+            <button id="createTokenLower" class="btn btn-primary">⬇️ Create Lower</button>
+          </div>
+          <button id="cancelToken" class="btn btn-secondary mt-3" style="width: 100%;">Cancel</button>
+        </div>
+      </div>
+    ` : ''}
+    ${state.selectedFieldCard !== null ? `
+      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #8b5cf6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 360px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #a78bfa;">${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button id="tapCard" class="btn ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px;">⟳ ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].tapped ? 'Untap' : 'Tap'}</button>
+          <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px;">🖐️ To Hand</button>
+          <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px;">⚰️ To GY</button>
+          <button id="toExile" class="btn btn-red text-sm" style="padding: 14px;">🚫 Exile</button>
+          <button id="toBottomDeck" class="btn btn-secondary text-sm" style="padding: 14px; grid-column: span 2;">📚 To Deck</button>
+        </div>
+        <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">❌ Cancel</button>
+      </div>
+    ` : ''}
+    ${state.viewingZone ? `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+          <div class="flex justify-between mb-4">
+            <h3 style="font-weight: bold; font-size: 18px;">${state.viewingZone.title}</h3>
+            <button id="closeZone" class="btn btn-secondary text-xs">✕ Close</button>
+          </div>
+          ${state.viewingZone.owner === 'me' && state.selectedZoneCard !== null && state.viewingZone.cards[state.selectedZoneCard] ? `
+            <div style="background: #374151; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+              <div class="text-center mb-3" style="font-weight: bold; color: #fbbf24;">${state.viewingZone.cards[state.selectedZoneCard].name}</div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button id="zoneToHand" class="btn btn-primary text-xs">🖐️ To Hand</button>
+                <button id="zoneToUpper" class="btn btn-primary text-xs">⬆️ To Upper</button>
+                <button id="zoneToLower" class="btn btn-primary text-xs">⬇️ To Lower</button>
+                <button id="zoneToDeck" class="btn btn-secondary text-xs">📚 To Deck</button>
+                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">🚫 Exile</button>' : ''}
+                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">⚰️ To GY</button>' : ''}
+                <button id="cancelZoneSelect" class="btn btn-secondary text-xs">❌ Cancel</button>
+              </div>
+            </div>
+          ` : ''}
+          <div id="zoneCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px; max-height: 60vh; overflow-y: auto;">
+            ${state.viewingZone.cards.length === 0 ? '<p class="text-gray text-center p-4">Empty</p>' : ''}
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
+      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬆️ Upper Field</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬇️ Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">🗑️ Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
+        </div>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
+      </div>
+    ` : ''}
+    ${state.winner ? `
+      <div class="modal">
+        <div class="modal-content text-center">
+          <h2 class="mb-4" style="font-size: 48px;">🏆</h2>
+          <h2 class="mb-4" style="font-size: 32px; font-weight: bold;">${state.winner === state.currentPlayer ? '🎉 You Win!' : '😔 You Lose'}</h2>
+          <p class="text-gray mb-8">Player ${state.winner} is victorious!</p>
+          <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+  
+  const handContainer = div.querySelector('#handContainer');
+  
+  if (me.hand.length === 0) {
+    const emptyMsg = document.createElement('span');
+    emptyMsg.className = 'text-gray text-xs';
+    emptyMsg.textContent = '🃏 No cards in hand - Click Draw!';
+    handContainer.appendChild(emptyMsg);
+  } else {
+    me.hand.forEach((card, idx) => {
+      const cardDiv = document.createElement('div');
+      cardDiv.className = 'hand-card' + (state.selectedCard === idx ? ' selected' : '');
+      cardDiv.appendChild(createGameCardImg(card));
+      
+      cardDiv.onclick = () => {
+        state.selectedCard = state.selectedCard === idx ? null : idx;
+        state.selectedFieldCard = null;
+        render();
+      };
+      
+      cardDiv.onmouseenter = () => {
+        showCardInfo(card);
+      };
+      
+      handContainer.appendChild(cardDiv);
+    });
+  }
+  
+  div.querySelectorAll('.field-card').forEach(fieldCard => {
+    const zone = fieldCard.dataset.zone;
+    const owner = fieldCard.dataset.owner;
+    const idx = parseInt(fieldCard.dataset.idx);
+    const card = owner === 'me' ? me[zone][idx] : opp[zone][idx];
+    
+    if (card) {
+      const img = createGameCardImg(card);
+      img.style.pointerEvents = 'none';
+      fieldCard.appendChild(img);
+      
+      fieldCard.addEventListener('mouseenter', (e) => {
+        showCardInfo(card);
+      });
+      
+      if (owner === 'me') {
+        fieldCard.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          state.selectedCard = null;
+          if (state.selectedFieldCard && state.selectedFieldCard.zone === zone && state.selectedFieldCard.idx === idx) {
+            state.selectedFieldCard = null;
+          } else {
+            state.selectedFieldCard = { zone, idx, owner };
+          }
+          render();
+        });
+      }
+    }
+  });
+  
+  const exitBtn = div.querySelector('#exitBtn');
+  const drawBtn = div.querySelector('#drawBtn');
+  const createTokenBtn = div.querySelector('#createToken');
+  const gyBtn = div.querySelector('#viewGY');
+  const minusBtn = div.querySelector('#minusLP');
+  const plusBtn = div.querySelector('#plusLP');
+  const endBtn = div.querySelector('#endTurn');
+  
+  if (exitBtn) exitBtn.onclick = () => {
+    if (confirm('Exit game? Progress will be lost.')) {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      state.viewingZone = null;
+      render();
+    }
+  };
+  
+  if (drawBtn) drawBtn.onclick = () => {
+    if (me.deck.length > 0) {
+      const idx = Math.floor(Math.random() * me.deck.length);
+      const card = me.deck[idx];
+      if (!card.hasOwnProperty('tapped')) card.tapped = false;
+      me.hand.push(card);
+      me.deck.splice(idx, 1);
+      sendGameUpdate();
+      render();
+    }
+  };
+  
+  if (createTokenBtn) createTokenBtn.onclick = () => {
+    state.creatingToken = true;
+    render();
+  };
+  
+  if (gyBtn) gyBtn.onclick = () => { 
+    state.viewingZone = { title: '⚰️ Your Graveyard', cards: me.graveyard, zone: 'graveyard', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewExileBtn = div.querySelector('#viewExile');
+  if (viewExileBtn) viewExileBtn.onclick = () => {
+    state.viewingZone = { title: '🚫 Your Exile', cards: me.exile, zone: 'exile', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewOppGYBtn = div.querySelector('#viewOppGY');
+  if (viewOppGYBtn) viewOppGYBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Graveyard", cards: opp.graveyard, zone: 'graveyard', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewOppExileBtn = div.querySelector('#viewOppExile');
+  if (viewOppExileBtn) viewOppExileBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Exile", cards: opp.exile, zone: 'exile', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
+  if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
+  if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; state.selectedFieldCard = null; state.selectedZoneCard = null; sendGameUpdate(); render(); };
+  
+  // Token creation modal
+  if (state.creatingToken) {
+    const cancelTokenBtn = div.querySelector('#cancelToken');
+    const createUpperBtn = div.querySelector('#createTokenUpper');
+    const createLowerBtn = div.querySelector('#createTokenLower');
+    
+    if (cancelTokenBtn) cancelTokenBtn.onclick = () => {
+      state.creatingToken = false;
+      render();
+    };
+    
+    const createToken = (field) => {
+      const name = div.querySelector('#tokenName').value || 'Token';
+      const type = div.querySelector('#tokenType').value || 'Creature Token';
+      const power = div.querySelector('#tokenPower').value || '1';
+      const toughness = div.querySelector('#tokenToughness').value || '1';
+      const effect = div.querySelector('#tokenEffect').value || '';
+      
+      const token = {
+        id: Date.now() + Math.random(),
+        gameId: 'token-' + Date.now(),
+        name: name,
+        type: type,
+        power: power,
+        toughness: toughness,
+        effect: effect,
+        cost: '',
+        colors: [],
+        image: '',
+        imageUrl: '',
+        tapped: false,
+        isToken: true
+      };
+      
+      me[field].push(token);
+      state.creatingToken = false;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (createUpperBtn) createUpperBtn.onclick = () => createToken('upperField');
+    if (createLowerBtn) createLowerBtn.onclick = () => createToken('lowerField');
+  }
+  
+  // Zone viewer
+  if (state.viewingZone) {
+    const closeZoneBtn = div.querySelector('#closeZone');
+    if (closeZoneBtn) closeZoneBtn.onclick = () => {
+      state.viewingZone = null;
+      state.selectedZoneCard = null;
+      render();
+    };
+    
+    const zoneCardsDiv = div.querySelector('#zoneCards');
+    if (zoneCardsDiv && state.viewingZone.cards.length > 0) {
+      state.viewingZone.cards.forEach((card, idx) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'zone-card' + (state.selectedZoneCard === idx ? ' selected' : '');
+        const img = createGameCardImg(card);
+        img.style.pointerEvents = 'none';
+        cardDiv.appendChild(img);
+        
+        cardDiv.addEventListener('mouseenter', () => showCardInfo(card));
+        
+        if (state.viewingZone.owner === 'me') {
+          cardDiv.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (state.selectedZoneCard === idx) {
+              state.selectedZoneCard = null;
+            } else {
+              state.selectedZoneCard = idx;
+            }
+            render();
+          });
+        }
+        
+        zoneCardsDiv.appendChild(cardDiv);
+      });
+    }
+    
+    // Zone card action handlers
+    if (state.selectedZoneCard !== null && state.viewingZone.owner === 'me') {
+      const card = state.viewingZone.cards[state.selectedZoneCard];
+      const zoneKey = state.viewingZone.zone;
+      const sourcePlayer = me;
+      
+      const toHandBtn = div.querySelector('#zoneToHand');
+      const toUpperBtn = div.querySelector('#zoneToUpper');
+      const toLowerBtn = div.querySelector('#zoneToLower');
+      const toDeckBtn = div.querySelector('#zoneToDeck');
+      const toExileBtn = div.querySelector('#zoneToExile');
+      const toGYBtn = div.querySelector('#zoneToGY');
+      const cancelZoneBtn = div.querySelector('#cancelZoneSelect');
+      
+      if (toHandBtn) toHandBtn.onclick = () => {
+        sourcePlayer.hand.push(card);
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toUpperBtn) toUpperBtn.onclick = () => {
+        sourcePlayer.upperField.push({ ...card, tapped: false });
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toLowerBtn) toLowerBtn.onclick = () => {
+        sourcePlayer.lowerField.push({ ...card, tapped: false });
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toDeckBtn) toDeckBtn.onclick = () => {
+        sourcePlayer.deck.push(card);
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toExileBtn) toExileBtn.onclick = () => {
+        sourcePlayer.exile.push(card);
+        sourcePlayer.graveyard.splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer.graveyard.length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toGYBtn) toGYBtn.onclick = () => {
+        sourcePlayer.graveyard.push(card);
+        sourcePlayer.exile.splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer.exile.length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (cancelZoneBtn) cancelZoneBtn.onclick = () => {
+        state.selectedZoneCard = null;
+        render();
+      };
+    }
+  }
+  
+  // Field card actions
+  if (state.selectedFieldCard) {
+    const tapBtn = div.querySelector('#tapCard');
+    const toHandBtn = div.querySelector('#toHand');
+    const toGYBtn = div.querySelector('#toGraveyard');
+    const toExileBtn = div.querySelector('#toExile');
+    const toBottomDeckBtn = div.querySelector('#toBottomDeck');
+    const cancelFieldBtn = div.querySelector('#cancelFieldSelect');
+    
+    const card = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
+    
+    if (tapBtn) tapBtn.onclick = () => {
+      card.tapped = !card.tapped;
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toHandBtn) toHandBtn.onclick = () => {
+      me.hand.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toGYBtn) toGYBtn.onclick = () => {
+      me.graveyard.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toExileBtn) toExileBtn.onclick = () => {
+      me.exile.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toBottomDeckBtn) toBottomDeckBtn.onclick = () => {
+      me.deck.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (cancelFieldBtn) cancelFieldBtn.onclick = () => {
+      state.selectedFieldCard = null;
+      render();
+    };
+  }
+  
+  // Card action handlers
+  if (state.selectedCard !== null) {
+    const discardBtn = div.querySelector('#discardCard');
+    const toDeckBtn = div.querySelector('#toDeck');
+    const cancelBtn = div.querySelector('#cancelSelect');
+    
+    if (discardBtn) discardBtn.onclick = () => {
+      me.graveyard.push(me.hand[state.selectedCard]);
+      me.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toDeckBtn) toDeckBtn.onclick = () => {
+      me.deck.push(me.hand[state.selectedCard]);
+      me.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (cancelBtn) cancelBtn.onclick = () => {
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      render();
+    };
+    
+    div.querySelectorAll('.placeCard').forEach(btn => {
+      btn.onclick = () => {
+        const zone = btn.dataset.zone + 'Field';
+        me[zone].push({ ...me.hand[state.selectedCard], tapped: false });
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        state.selectedFieldCard = null;
+        sendGameUpdate();
+        render();
+      };
+    });
+  }
+  
+  if (state.winner && div.querySelector('#returnBtn')) {
+    div.querySelector('#returnBtn').onclick = () => {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      state.viewingZone = null;
+      render();
+    };
+  }
+  
+  return div;
+}
+
+setTimeout(render, 100);
+
+})();

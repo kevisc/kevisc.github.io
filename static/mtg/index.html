@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>MTG Card Game Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
+      color: #f3f4f6; 
+      margin: 0; 
+      padding: 0; 
+      overflow-x: hidden;
+    }
+    button { cursor: pointer; font-family: inherit; border: none; }
+    input, select, textarea { font-family: inherit; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .btn { padding: 12px 24px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
+    .btn-secondary { background: #1f2937; color: #f3f4f6; border: 1px solid #374151; }
+    .btn-secondary:hover { background: #374151; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-blue { background: #1e40af; color: white; }
+    .btn-blue:hover { background: #1e3a8a; }
+    .btn-red { background: #dc2626; color: white; }
+    .btn-red:hover { background: #b91c1c; }
+    .input { width: 100%; padding: 10px 15px; background: #374151; color: #f3f4f6; border: 1px solid #4b5563; border-radius: 6px; }
+    .input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .grid { display: grid; gap: 20px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-4 { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .text-center { text-align: center; }
+    .mb-4 { margin-bottom: 16px; }
+    .mb-8 { margin-bottom: 32px; }
+    .mt-4 { margin-top: 16px; }
+    .p-4 { padding: 16px; }
+    .hidden { display: none; }
+    .card-preview { background: #374151; border-radius: 8px; padding: 12px; border: 1px solid #4b5563; transition: all 0.2s; }
+    .card-preview:hover { border-color: #3b82f6; }
+    .card-img { width: 100%; aspect-ratio: 5/7; background: #4b5563; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
+    .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 120px; border: 2px solid #4b5563; transition: all 0.2s; }
+    .game-field.player { background: rgba(34, 197, 94, 0.1); }
+    .hand-card { 
+      display: inline-block; 
+      margin: 4px; 
+      transition: transform 0.2s; 
+      cursor: pointer; 
+      position: relative;
+      background: #374151;
+      border-radius: 6px;
+      padding: 2px;
+    }
+    .hand-card:hover { transform: translateY(-8px); background: #4b5563; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+    .hand-card img { width: 80px; height: 112px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; pointer-events: none; display: block; }
+    .hand-card.selected { border: 3px solid #fbbf24; background: #fbbf24; box-shadow: 0 0 20px #fbbf24; }
+    .field-card { display: inline-block; margin: 4px; transition: all 0.2s; cursor: pointer; position: relative; border-radius: 8px; padding: 2px; }
+    .field-card:hover { transform: scale(1.1); z-index: 10; background: rgba(59, 130, 246, 0.2); }
+    .field-card img { width: 72px; height: 100px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s; pointer-events: none; display: block; }
+    .field-card.tapped img { transform: rotate(90deg); opacity: 0.7; }
+    .field-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    .zone-card { display: inline-block; margin: 4px; cursor: pointer; transition: all 0.2s; border-radius: 6px; padding: 2px; }
+    .zone-card img { width: 60px; height: 84px; border-radius: 4px; border: 2px solid #6b7280; object-fit: cover; pointer-events: none; }
+    .zone-card:hover { transform: translateY(-4px); background: rgba(59, 130, 246, 0.2); }
+    .zone-card:hover img { border-color: #3b82f6; }
+    .zone-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    .sidebar { width: 280px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+    .modal-content { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .flex { display: flex; gap: 8px; align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .text-sm { font-size: 14px; }
+    .text-xs { font-size: 12px; }
+    .text-gray { color: #9ca3af; }
+    .text-red { color: #f87171; }
+    .text-green { color: #4ade80; }
+    .text-blue { color: #60a5fa; }
+    .deck-card { display: inline-block; position: relative; margin: 4px; }
+    .deck-card img { width: 100px; height: 140px; border-radius: 4px; border: 2px solid #4b5563; cursor: pointer; object-fit: cover; transition: all 0.2s; }
+    .deck-card:hover img { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+    .remove-btn { position: absolute; top: 0; right: 0; background: #dc2626; color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; display: none; cursor: pointer; }
+    .deck-card:hover .remove-btn { display: block; }
+    label { display: block; margin-bottom: 8px; color: #d1d5db; font-size: 14px; font-weight: 500; }
+    textarea { resize: vertical; min-height: 80px; }
+    .mana-symbol { display: inline-block; width: 20px; height: 20px; border-radius: 50%; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; margin: 0 2px; }
+    .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script src="mtg-game-app.js"></script>
+</body>
+</html>
