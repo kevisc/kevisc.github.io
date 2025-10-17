@@ -46,8 +46,33 @@
     .card-preview { background: #374151; border-radius: 8px; padding: 12px; border: 1px solid #4b5563; transition: all 0.2s; }
     .card-preview:hover { border-color: #3b82f6; }
     .card-img { width: 100%; aspect-ratio: 5/7; background: #4b5563; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
-    .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 120px; border: 2px solid #4b5563; transition: all 0.2s; }
+    .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 90px; border: 2px solid #4b5563; transition: all 0.2s; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; }
     .game-field.player { background: rgba(34, 197, 94, 0.1); }
+    
+    /* Turn notification */
+    .turn-notification {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      color: white;
+      padding: 30px 60px;
+      border-radius: 16px;
+      font-size: 36px;
+      font-weight: bold;
+      box-shadow: 0 10px 40px rgba(59, 130, 246, 0.5);
+      z-index: 10000;
+      animation: fadeInOut 2s ease-in-out;
+      pointer-events: none;
+    }
+    
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+    }
     .hand-card { 
       display: inline-block; 
       margin: 4px; 
@@ -71,6 +96,59 @@
     .zone-card:hover { transform: translateY(-4px); background: rgba(59, 130, 246, 0.2); }
     .zone-card:hover img { border-color: #3b82f6; }
     .zone-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    
+    /* Responsive field card sizing */
+    .field-card { 
+      display: inline-block; 
+      margin: 4px; 
+      transition: all 0.2s; 
+      cursor: pointer; 
+      position: relative; 
+      border-radius: 8px; 
+      padding: 2px;
+    }
+    .field-card:hover { transform: scale(1.05); z-index: 10; background: rgba(59, 130, 246, 0.2); }
+    
+    /* Dynamic sizing based on number of cards */
+    .field-card img { 
+      width: 90px; 
+      height: 126px; 
+      border-radius: 4px; 
+      border: 2px solid #3b82f6; 
+      object-fit: cover; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); 
+      transition: all 0.3s; 
+      pointer-events: none; 
+      display: block; 
+    }
+    
+    /* Adjust size when many cards on field */
+    .game-field.many-cards .field-card img { width: 72px; height: 100px; }
+    .game-field.lots-cards .field-card img { width: 60px; height: 84px; }
+    
+    .field-card.tapped img { transform: rotate(90deg); opacity: 0.7; }
+    .field-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    
+    /* Counter display */
+    .counter-badge {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      background: #10b981;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 12px;
+      border: 2px solid white;
+      z-index: 5;
+    }
+    .btn-purple { background: #7c3aed; color: white; }
+    .btn-purple:hover { background: #6d28d9; }
     .sidebar { width: 280px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
     .modal-content { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
@@ -129,7 +207,8 @@ const state = {
   roomCode: null,
   isHost: false,
   waitingForAnswer: false,
-  answerCode: null
+  answerCode: null,
+  showTurnNotification: false
 };
 
 function compressImage(file, callback) {
@@ -165,7 +244,8 @@ function sendGameUpdate() {
       gameState: state.gameState,
       gameStarted: state.gameStarted,
       activePlayer: state.activePlayer,
-      winner: state.winner
+      winner: state.winner,
+      showTurnNotification: state.showTurnNotification
     }));
   }
 }
@@ -186,8 +266,19 @@ function setupDataChannel(channel) {
       } else if (data.type === 'gameUpdate') {
         state.gameState = data.gameState;
         state.gameStarted = data.gameStarted;
+        const previousPlayer = state.activePlayer;
         state.activePlayer = data.activePlayer;
         state.winner = data.winner;
+        
+        // Show turn notification if it just became this player's turn
+        if (previousPlayer !== state.activePlayer && state.activePlayer === state.currentPlayer) {
+          state.showTurnNotification = true;
+          setTimeout(() => {
+            state.showTurnNotification = false;
+            render();
+          }, 2000);
+        }
+        
         render();
       }
     } catch(e) { console.error(e); }
@@ -938,8 +1029,8 @@ function GameBoard() {
         return a;
       };
       
-      const p1 = shuffle(state.decks.player1.map((c, i) => ({ ...c, gameId: 'p1-' + i, tapped: false })));
-      const p2 = shuffle(state.decks.player2.map((c, i) => ({ ...c, gameId: 'p2-' + i, tapped: false })));
+      const p1 = shuffle(state.decks.player1.map((c, i) => ({ ...c, gameId: 'p1-' + i, tapped: false, counters: 0 })));
+      const p2 = shuffle(state.decks.player2.map((c, i) => ({ ...c, gameId: 'p2-' + i, tapped: false, counters: 0 })));
       
       state.gameState = { 
         player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p1, health: 20 }, 
@@ -947,6 +1038,16 @@ function GameBoard() {
       };
       state.activePlayer = 1; 
       state.gameStarted = true;
+      
+      // Show "Your Turn" notification for player 1 at game start
+      if (state.currentPlayer === 1) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+      
       sendGameUpdate();
       render();
     };
@@ -977,6 +1078,7 @@ function GameBoard() {
     const sidebar = target || div.querySelector('#cardInfo');
     if (sidebar && card) {
       const c = card;
+      const countersDisplay = c.counters && c.counters > 0 ? `<div class="text-green text-sm mt-2">✨ +${c.counters}/+${c.counters} Counters</div>` : '';
       sidebar.innerHTML = `
         <div class="card-preview">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
@@ -985,9 +1087,10 @@ function GameBoard() {
           </div>
           <div class="text-xs text-gray text-center mb-2">${c.type}${c.isToken ? ' (Token)' : ''}</div>
           ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : `<div class="card-img" style="height: 120px; font-size: 48px; background: ${c.isToken ? '#059669' : '#4b5563'};">${c.isToken ? '🎭' : '🃏'}</div>`}
-          ${c.type && (c.type.includes('Creature') || c.isToken) ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${c.power} <strong>TGH:</strong> ${c.toughness}</div>` : ''}
+          ${c.type && (c.type.includes('Creature') || c.isToken) ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${parseInt(c.power || 0) + (c.counters || 0)} <strong>TGH:</strong> ${parseInt(c.toughness || 0) + (c.counters || 0)}</div>` : ''}
           <div class="text-xs">${c.effect || 'No effect'}</div>
           ${c.tapped ? '<div class="text-xs text-red mt-2">⟳ TAPPED</div>' : ''}
+          ${countersDisplay}
         </div>
       `;
     }
@@ -997,6 +1100,14 @@ function GameBoard() {
   const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
   const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'lowerField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
   const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'upperField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
+  
+  // Dynamic sizing classes based on card count
+  const getFieldClass = (cards) => {
+    const count = cards.length;
+    if (count > 10) return ' lots-cards';
+    if (count > 6) return ' many-cards';
+    return '';
+  };
   
   div.innerHTML = `
     <div style="display: flex; height: 100vh;">
@@ -1014,20 +1125,20 @@ function GameBoard() {
             <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ Opponent - LP: ${opp.health}</div>
             <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}</div>
           </div>
-          <div class="game-field mb-4" style="min-height: 110px;">
+          <div class="game-field mb-4${getFieldClass(opp.upperField)}" style="min-height: 90px;">
             <div class="text-xs text-gray text-center mb-2">Opponent Upper Field</div>
             ${oppUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
-          <div class="game-field mb-4" style="min-height: 110px;">
+          <div class="game-field mb-4${getFieldClass(opp.lowerField)}" style="min-height: 90px;">
             <div class="text-xs text-gray text-center mb-2">Opponent Lower Field</div>
             ${oppLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
           <div style="border-top: 3px dashed #7c3aed; margin: 16px 0;"></div>
-          <div class="game-field player mb-4" style="min-height: 110px;">
+          <div class="game-field player mb-4${getFieldClass(me.lowerField)}" style="min-height: 90px;">
             <div class="text-xs text-gray text-center mb-2">Your Lower Field</div>
             ${myLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
-          <div class="game-field player mb-4" style="min-height: 110px;">
+          <div class="game-field player mb-4${getFieldClass(me.upperField)}" style="min-height: 90px;">
             <div class="text-xs text-gray text-center mb-2">Your Upper Field</div>
             ${myUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
           </div>
@@ -1035,6 +1146,7 @@ function GameBoard() {
             <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ You - LP: ${me.health}</div>
             <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
               <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${me.deck.length})</button>
+              <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
               <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
               <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
               <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
@@ -1054,6 +1166,7 @@ function GameBoard() {
         </div>
       </div>
     </div>
+    ${state.showTurnNotification ? `<div class="turn-notification">🎮 Your Turn!</div>` : ''}
     ${state.creatingToken ? `
       <div class="modal">
         <div class="modal-content" style="max-width: 400px;">
@@ -1091,13 +1204,16 @@ function GameBoard() {
     ${state.selectedFieldCard !== null ? `
       <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #8b5cf6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 360px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);">
         <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #a78bfa;">${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].name}</div>
+        ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].counters > 0 ? `<div class="text-center mb-2" style="color: #10b981; font-weight: bold;">Current: +${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].counters}/+${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].counters}</div>` : ''}
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <button id="tapCard" class="btn ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px;">⟳ ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].tapped ? 'Untap' : 'Tap'}</button>
           <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px;">🖐️ To Hand</button>
+          <button id="addCounter" class="btn btn-green text-sm" style="padding: 14px;">➕ Add +1/+1</button>
+          <button id="removeCounter" class="btn btn-red text-sm" style="padding: 14px;" ${me[state.selectedFieldCard.zone][state.selectedFieldCard.idx].counters > 0 ? '' : 'disabled'}>➖ Remove -1/-1</button>
           <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px;">⚰️ To GY</button>
           <button id="toExile" class="btn btn-red text-sm" style="padding: 14px;">🚫 Exile</button>
-          <button id="toBottomDeck" class="btn btn-secondary text-sm" style="padding: 14px; grid-column: span 2;">📚 To Deck</button>
         </div>
+        <button id="toBottomDeck" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">📚 To Deck</button>
         <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">❌ Cancel</button>
       </div>
     ` : ''}
@@ -1190,6 +1306,14 @@ function GameBoard() {
       img.style.pointerEvents = 'none'; // Critical: let parent handle events
       fieldCard.appendChild(img);
       
+      // Add counter badge if card has counters
+      if (card.counters && card.counters > 0) {
+        const counterBadge = document.createElement('div');
+        counterBadge.className = 'counter-badge';
+        counterBadge.textContent = `+${card.counters}`;
+        fieldCard.appendChild(counterBadge);
+      }
+      
       // Hover handler - works for ALL cards (yours and opponent's)
       fieldCard.addEventListener('mouseenter', (e) => {
         showCardInfo(card);
@@ -1212,12 +1336,23 @@ function GameBoard() {
           }
           render();
         });
+        
+        // Double-click handler to tap/untap (only for your cards)
+        fieldCard.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          card.tapped = !card.tapped;
+          state.selectedFieldCard = null;
+          sendGameUpdate();
+          render();
+        });
       }
     }
   });
   
   const exitBtn = div.querySelector('#exitBtn');
   const drawBtn = div.querySelector('#drawBtn');
+  const upkeepBtn = div.querySelector('#upkeepBtn');
   const createTokenBtn = div.querySelector('#createToken');
   const gyBtn = div.querySelector('#viewGY');
   const minusBtn = div.querySelector('#minusLP');
@@ -1243,11 +1378,21 @@ function GameBoard() {
       const idx = Math.floor(Math.random() * me.deck.length);
       const card = me.deck[idx];
       if (!card.hasOwnProperty('tapped')) card.tapped = false;
+      if (!card.hasOwnProperty('counters')) card.counters = 0;
       me.hand.push(card);
       me.deck.splice(idx, 1);
       sendGameUpdate();
       render();
     }
+  };
+  
+  // Upkeep button - untap all your cards
+  if (upkeepBtn) upkeepBtn.onclick = () => {
+    // Untap all cards in your fields
+    me.upperField.forEach(card => card.tapped = false);
+    me.lowerField.forEach(card => card.tapped = false);
+    sendGameUpdate();
+    render();
   };
   
   if (createTokenBtn) createTokenBtn.onclick = () => {
@@ -1283,7 +1428,26 @@ function GameBoard() {
   };
   if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
   if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
-  if (endBtn) endBtn.onclick = () => { state.activePlayer = state.activePlayer === 1 ? 2 : 1; state.selectedCard = null; state.selectedFieldCard = null; state.selectedZoneCard = null; sendGameUpdate(); render(); };
+  if (endBtn) endBtn.onclick = () => { 
+    const previousPlayer = state.activePlayer;
+    state.activePlayer = state.activePlayer === 1 ? 2 : 1; 
+    state.selectedCard = null; 
+    state.selectedFieldCard = null; 
+    state.selectedZoneCard = null; 
+    
+    // Show "Your Turn" notification if it's now the current player's turn
+    if (state.activePlayer === state.currentPlayer) {
+      state.showTurnNotification = true;
+      // Hide notification after animation completes
+      setTimeout(() => {
+        state.showTurnNotification = false;
+        render();
+      }, 2000);
+    }
+    
+    sendGameUpdate(); 
+    render(); 
+  };
   
   // Token creation modal
   if (state.creatingToken) {
@@ -1316,7 +1480,8 @@ function GameBoard() {
         image: '',
         imageUrl: '',
         tapped: false,
-        isToken: true
+        isToken: true,
+        counters: 0
       };
       
       me[field].push(token);
@@ -1393,7 +1558,9 @@ function GameBoard() {
       };
       
       if (toUpperBtn) toUpperBtn.onclick = () => {
-        sourcePlayer.upperField.push({ ...card, tapped: false });
+        const cardToPlace = { ...card, tapped: false };
+        if (!cardToPlace.hasOwnProperty('counters')) cardToPlace.counters = 0;
+        sourcePlayer.upperField.push(cardToPlace);
         sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
         state.selectedZoneCard = null;
         if (sourcePlayer[zoneKey].length === 0) {
@@ -1404,7 +1571,9 @@ function GameBoard() {
       };
       
       if (toLowerBtn) toLowerBtn.onclick = () => {
-        sourcePlayer.lowerField.push({ ...card, tapped: false });
+        const cardToPlace = { ...card, tapped: false };
+        if (!cardToPlace.hasOwnProperty('counters')) cardToPlace.counters = 0;
+        sourcePlayer.lowerField.push(cardToPlace);
         sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
         state.selectedZoneCard = null;
         if (sourcePlayer[zoneKey].length === 0) {
@@ -1457,6 +1626,8 @@ function GameBoard() {
   // Field card actions
   if (state.selectedFieldCard) {
     const tapBtn = div.querySelector('#tapCard');
+    const addCounterBtn = div.querySelector('#addCounter');
+    const removeCounterBtn = div.querySelector('#removeCounter');
     const toHandBtn = div.querySelector('#toHand');
     const toGYBtn = div.querySelector('#toGraveyard');
     const toExileBtn = div.querySelector('#toExile');
@@ -1470,6 +1641,23 @@ function GameBoard() {
       state.selectedFieldCard = null;
       sendGameUpdate();
       render();
+    };
+    
+    // Add +1/+1 counter handler
+    if (addCounterBtn) addCounterBtn.onclick = () => {
+      if (!card.counters) card.counters = 0;
+      card.counters++;
+      sendGameUpdate();
+      render();
+    };
+    
+    // Remove -1/-1 counter handler
+    if (removeCounterBtn) removeCounterBtn.onclick = () => {
+      if (card.counters > 0) {
+        card.counters--;
+        sendGameUpdate();
+        render();
+      }
     };
     
     if (toHandBtn) toHandBtn.onclick = () => {
@@ -1543,7 +1731,9 @@ function GameBoard() {
     div.querySelectorAll('.placeCard').forEach(btn => {
       btn.onclick = () => {
         const zone = btn.dataset.zone + 'Field';
-        me[zone].push({ ...me.hand[state.selectedCard], tapped: false });
+        const cardToPlace = { ...me.hand[state.selectedCard], tapped: false };
+        if (!cardToPlace.hasOwnProperty('counters')) cardToPlace.counters = 0;
+        me[zone].push(cardToPlace);
         me.hand.splice(state.selectedCard, 1);
         state.selectedCard = null;
         state.selectedFieldCard = null;
