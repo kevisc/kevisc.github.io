@@ -1455,8 +1455,8 @@ function GameBoard() {
               <div class="text-center mb-3" style="font-weight: bold; color: #fbbf24;">${state.viewingZone.cards[state.selectedZoneCard].name}</div>
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
                 <button id="zoneToHand" class="btn btn-primary text-xs">🖐️ To Hand</button>
-                <button id="zoneToUpper" class="btn btn-primary text-xs">⬆️ To Upper</button>
-                <button id="zoneToLower" class="btn btn-primary text-xs">⬇️ To Lower</button>
+                <button id="zoneToUpper" class="btn btn-primary text-xs">⬇️ To Upper</button>
+                <button id="zoneToLower" class="btn btn-primary text-xs">⬆️ To Lower</button>
                 <button id="zoneToDeck" class="btn btn-secondary text-xs">📚 To Deck</button>
                 ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">🚫 Exile</button>' : ''}
                 ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">⚰️ To GY</button>' : ''}
@@ -1474,9 +1474,9 @@ function GameBoard() {
       <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
         <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬆️ Upper Field</button>
-          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬇️ Lower Field</button>
-          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">🗑️ Discard</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬇️ Upper Field</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬆️ Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">⚰️️ Discard</button>
           <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
         </div>
         <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
