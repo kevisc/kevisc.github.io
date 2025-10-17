@@ -1352,21 +1352,21 @@ function GameBoard() {
             <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}</div>
           </div>
           <div class="game-field mb-4${getFieldClass(opp.upperField)}" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2">Opponent Upper Field</div>
-            ${oppUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+            <div class="text-xs text-gray text-center mb-2"> </div>
+            ${oppUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
           </div>
           <div class="game-field mb-4${getFieldClass(opp.lowerField)}" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2">Opponent Lower Field</div>
-            ${oppLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+            <div class="text-xs text-gray text-center mb-2"> </div>
+            ${oppLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
           </div>
-          <div style="border-top: 3px dashed #7c3aed; margin: 16px 0;"></div>
+          <div style="border-top: 3px dashed #7c3aed; margin: 16px 0;"> </div>
           <div class="game-field player mb-4${getFieldClass(me.lowerField)}" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2">Your Lower Field</div>
-            ${myLowerHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+            <div class="text-xs text-gray text-center mb-2">Lower </div>
+            ${myLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
           </div>
           <div class="game-field player mb-4${getFieldClass(me.upperField)}" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2">Your Upper Field</div>
-            ${myUpperHtml || '<p class="text-xs text-gray text-center">Empty</p>'}
+            <div class="text-xs text-gray text-center mb-2">Upper </div>
+            ${myUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
           </div>
           <div class="mt-4 text-center">
             <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ You - LP: ${me.health}</div>
