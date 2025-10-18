@@ -4,7 +4,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mjolnir</title>
-  <script src="./MTG Card Game Platformcurrent_files/saved_resource"></script>
+  <script src="./Mjolnir_files/saved_resource"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
@@ -170,6 +170,19 @@
     .mana-symbol { display: inline-block; width: 20px; height: 20px; border-radius: 50%; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; margin: 0 2px; }
     .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    
+    /* --- Draft mode layout --- */
+.draft-wrap{display:grid;grid-template-columns:1fr 320px;gap:16px;min-height:70vh}
+.draft-stage{background:#111827;border:1px solid #374151;border-radius:10px;padding:14px}
+.draft-row{display:grid;grid-template-columns:repeat(3, minmax(160px,1fr));gap:12px}
+.draft-choice{position:relative;border:2px solid #374151;border-radius:8px;overflow:hidden;cursor:pointer;transition:.15s}
+.draft-choice:hover{transform:translateY(-4px);border-color:#3b82f6;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.draft-hover{position:fixed;pointer-events:none;z-index:9999;display:none;background:#1f2937;border:1px solid #374151;border-radius:8px;width:360px;max-width:90vw;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.draft-side{background:#1f2937;border:1px solid #374151;border-radius:10px;padding:12px;overflow:auto}
+.draft-small{display:flex;gap:8px;align-items:center;margin:6px 0}
+.draft-small img{width:40px;height:56px;border-radius:4px;border:1px solid #4b5563;object-fit:cover}
+.badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid #374151;background:#0b1220}
+
   </style>
 <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.container{width:100%}@media (min-width: 640px){.container{max-width:640px}}@media (min-width: 768px){.container{max-width:768px}}@media (min-width: 1024px){.container{max-width:1024px}}@media (min-width: 1280px){.container{max-width:1280px}}@media (min-width: 1536px){.container{max-width:1536px}}.mb-8{margin-bottom:2rem}.mb-4{margin-bottom:1rem}.mt-4{margin-top:1rem}.mb-2{margin-bottom:0.5rem}.flex{display:flex}.grid{display:grid}.p-4{padding:1rem}.text-center{text-align:center}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}</style><style>:is([id*='google_ads_iframe'],[id*='taboola-'],.taboolaHeight,.taboola-placeholder,#top-ad,#credential_picker_container,#credentials-picker-container,#credential_picker_iframe,[id*='google-one-tap-iframe'],#google-one-tap-popup-container,.google-one-tap__module,.google-one-tap-modal-div,#amp_floatingAdDiv,#ez-content-blocker-container) {display:none!important;min-height:0!important;height:0!important;}
 /* --- menu tiles --- */
@@ -189,25 +202,28 @@
 }
 .hero img { width:100%; height:auto; display:block; }
 </style>
-</head>
+<style>:is([id*='google_ads_iframe'],[id*='taboola-'],.taboolaHeight,.taboola-placeholder,#top-ad,#credential_picker_container,#credentials-picker-container,#credential_picker_iframe,[id*='google-one-tap-iframe'],#google-one-tap-popup-container,.google-one-tap__module,.google-one-tap-modal-div,#amp_floatingAdDiv,#ez-content-blocker-container) {display:none!important;min-height:0!important;height:0!important;}</style></head>
 <body>
   <div id="root"><div class="screen">
-    <div style="max-width: 600px; width: 100%;">
-      <div class="header">
-        <div></div>
-        <h1 style="font-size: 32px; font-weight: bold;">Player 2</h1>
-        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
-      </div>
-      <div class="card">
-        <div class="grid" style="gap: 16px;">
-          <button id="createBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">🎨 Create Cards</button>
-          <button id="buildBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">🃏 Build Deck</button>
-          <button id="playBtn" class="btn btn-primary" style="padding: 24px; font-size: 18px;">⚔️ Play Local Game</button>
-          <div style="border-top: 1px solid #374151; margin: 16px 0; padding-top: 16px;">
-            <p class="text-gray text-sm mb-4">🌐 Online Multiplayer</p>
-            <button id="hostBtn" class="btn btn-blue mb-4" style="width: 100%; padding: 16px;">Host Online Game</button>
-            <button id="joinBtn" class="btn btn-green" style="width: 100%; padding: 16px;">Join Online Game</button>
-          </div>
+    <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
+      <div class="hero"><img src="./Mjolnir_files/title_wizards.png" alt="Wizards Duel"></div>
+      <h1 style="
+        font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+        Mjolnir
+      </h1>
+      <p class="text-gray mb-1" style="font-size: 14px;">Make your own custom cards, play with friends.</p>
+<p class="text-xs text-gray" style="margin-bottom: 20px;">
+  Open-source. KS. 2025.
+</p>
+
+      <div class="card" style="padding: 16px; margin: 0 auto; max-width: 420px;">
+        <label>Password</label>
+        <input id="appPw" class="input mb-4" type="password" autocomplete="current-password" placeholder="Enter password">
+        <div class="flex" style="gap: 24px; justify-content: center;">
+          <button id="p1btn" class="btn btn-secondary" style="padding: 24px 36px; font-size: 18px;">Player 1</button>
+          <button id="p2btn" class="btn btn-secondary" style="padding: 24px 36px; font-size: 18px;">Player 2</button>
         </div>
       </div>
     </div>
@@ -246,7 +262,22 @@ const state = {
   isHost: false,
   waitingForAnswer: false,
   answerCode: null,
-  showTurnNotification: false
+  showTurnNotification: false, 
+  draft: {
+  active: false,
+  screen: 'setup',              // 'setup' | 'colors' | 'lands' | 'picks' | 'done'
+  format: 'standard',           // 'standard' | 'modern' | 'commander'
+  target: 60,
+  allowDuplicates: true,
+  offeredColorSets: [],         // arrays like ['U'], ['U','R'], ['W','U','B']
+  chosenColors: [],
+  basicLands: { W:0, U:0, B:0, R:0, G:0 }, // pre-filled counts
+  picks: 0,
+  pool: [],                     // 3 current choices
+  deck: [],                     // cards selected this draft
+  hoverDivId: 'draftHoverBox'   // singleton hover box id
+}
+
 };
 
 function compressImage(file, callback) {
@@ -454,6 +485,7 @@ function render() {
   else if (state.screen === 'builder') root.appendChild(DeckBuilder());
   else if (state.screen === 'game') root.appendChild(GameBoard());
   else if (state.screen === 'battlemenu') root.appendChild(BattleMenu());
+  else if (state.screen === 'draft') root.appendChild(DraftScreen());
 }
 
 function LoginScreen() {
@@ -570,6 +602,404 @@ function BattleMenu() {
 
   return div;
 }
+
+// ------------------------------ D R A F T  ------------------------------
+function DraftScreen(){
+  const div = document.createElement('div');
+  div.className = 'container';
+
+  const D = state.draft;
+
+  // singleton hover box
+  let hover = document.getElementById(D.hoverDivId);
+  if (!hover){
+    hover = document.createElement('div');
+    hover.id = D.hoverDivId;
+    hover.className = 'draft-hover';
+    document.body.appendChild(hover);
+  }
+
+  function setScreen(s){ D.screen = s; render(); }
+
+  // helpers ---------------------------------------------------------------
+  const colorNames = {W:'Plains',U:'Island',B:'Swamp',R:'Mountain',G:'Forest'};
+  const manaSym = {W:'⚪',U:'🔵',B:'⚫',R:'🔴',G:'🟢'};
+
+  function formatToScryfallLegal(format){
+    if (format === 'standard') return 'legal:standard';
+    if (format === 'modern')   return 'legal:modern';
+    return 'legal:commander';
+  }
+
+  function chosenIdentityToken(){
+    // Scryfall "id<=" means color identity is subset of these letters
+    // e.g., 'ur' allows U/R, UR multi, and mono U or mono R if not excluded elsewhere.
+    return D.chosenColors.join('').toLowerCase();
+  }
+
+  async function fetchThreeChoices(){
+    // rarity weighting + artifact chance
+    const rareRound = (D.picks>0 && D.picks % 10 === 0);
+    const wantArtifact = Math.random() < 0.12; // 12% chance
+
+    const legal = formatToScryfallLegal(D.format);
+    const idTok = chosenIdentityToken();
+    const baseQ = wantArtifact
+      ? `t:artifact ${legal} -t:land`
+      : `id<=${idTok} ${legal} -t:land`;
+
+    const rarityQ = rareRound ? ' (rarity>=rare)' : '';
+    const order = 'order=random&unique=cards';
+    const url = `https://api.scryfall.com/cards/search?${order}&q=${encodeURIComponent(baseQ + rarityQ)}`;
+
+    const resp = await fetch(url, {headers:{Accept:'application/json'}});
+    if (!resp.ok) throw new Error(`Scryfall ${resp.status}`);
+    const data = await resp.json();
+    const arr = (data.data || []).slice(0,3);
+    D.pool = arr.map(c => ({
+      id: c.id,
+      name: c.name,
+      type: c.type_line || '',
+      cost: c.mana_cost || '',
+      colors: c.colors || [],
+      effect: c.oracle_text || '',
+      power: c.power || 0,
+      toughness: c.toughness || 0,
+      imageUrl: c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '',
+      rarity: c.rarity || ''
+    }));
+  }
+
+  async function ensurePool(){
+    if (D.pool.length === 0) {
+      try {
+        await fetchThreeChoices();
+      } catch(e){
+        alert('Draft fetch failed: ' + e.message);
+        D.pool = [];
+      }
+    }
+  }
+
+  function pushBasicLands(){
+    const keys = Object.keys(D.basicLands);
+    keys.forEach(k=>{
+      const n = D.basicLands[k]|0;
+      for (let i=0;i<n;i++){
+        D.deck.push({
+          id: 'land_'+k+'_'+i+'_'+Date.now(),
+          name: colorNames[k],
+          type: 'Basic Land — ' + colorNames[k],
+          cost: '',
+          colors: [k],
+          effect: '',
+          power: 0, toughness: 0,
+          imageUrl: '', // left blank; player can skin later if desired
+          rarity: 'common'
+        });
+      }
+    });
+  }
+
+  function canAdd(card){
+    if (D.allowDuplicates) return true;
+    return !D.deck.some(x => x.name === card.name);
+  }
+
+  async function pickCard(idx){
+    const card = D.pool[idx];
+    if (!card) return;
+    if (!canAdd(card)){
+      toast('Commander singleton: duplicate not allowed'); 
+      return;
+    }
+    D.deck.push(card);
+    D.picks += 1;
+    D.pool = []; // next round
+    const left = D.target - D.deck.length;
+    if (left <= 0){
+      D.screen = 'done';
+      render();
+      return;
+    }
+    await ensurePool();
+    render();
+  }
+
+  function deckCount(){ return D.deck.length; }
+  function leftCount(){ return Math.max(0, D.target - deckCount()); }
+
+  // setup steps -----------------------------------------------------------
+  function Setup(){
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h1 style="font-size:24px;font-weight:700">Draft</h1>
+        <div class="text-sm badge">beta</div>
+      </div>
+
+      <div class="card p-4">
+        <div class="mb-4">
+          <label>Format</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
+            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
+            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray">After choosing a format, you’ll be offered random color schemes (mono / dual / triple) and then draft 3-card picks until the deck is full. Occasional picks upgrade to Rare/Mythic and artifacts may appear.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => { state.screen='builder'; render(); };
+    wrap.querySelectorAll('[data-f]').forEach(b=>{
+      b.onclick = ()=>{
+        const f = b.dataset.f;
+        D.format = f;
+        D.target = (f==='commander') ? 100 : 60;
+        D.allowDuplicates = (f!=='commander');
+        // create color offers: one mono, two duals, two triples at random
+        D.offeredColorSets = randomColorOffers();
+        setScreen('colors');
+      };
+    });
+    return wrap;
+  }
+
+  function Colors(){
+    const offers = D.offeredColorSets;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size:20px;font-weight:700">Choose a color scheme</h2>
+        <div></div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex" style="gap:10px;flex-wrap:wrap">
+          ${offers.map((set,i)=>`
+            <button class="btn btn-secondary" data-i="${i}">
+              ${set.map(c=>`${manaSym[c]} ${c}`).join(' ')}
+            </button>
+          `).join('')}
+        </div>
+        <p class="text-xs text-gray mt-4">Choices include mono / double / triple colors at random. Draft pool will be filtered to these colors when possible.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => setScreen('setup');
+    wrap.querySelectorAll('[data-i]').forEach(b=>{
+      b.onclick = ()=>{
+        D.chosenColors = offers[+b.dataset.i];
+        setScreen('lands');
+      };
+    });
+    return wrap;
+  }
+
+  function Lands(){
+    const wrap = document.createElement('div');
+    const cols = D.chosenColors;
+    const inputs = cols.map(c=>`
+      <div>
+        <label>${c} ${colorNames[c]}</label>
+        <input class="input" type="number" min="0" max="${(D.format==='commander')?40:30}" value="0" data-c="${c}">
+      </div>`).join('');
+
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size:20px;font-weight:700">Optional: pre-fill basic lands</h2>
+        <div></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card p-4">
+          <div class="grid grid-2" style="gap:12px">${inputs}</div>
+          <div class="mt-4 flex" style="gap:8px">
+            <button id="skip" class="btn btn-secondary">Skip</button>
+            <button id="apply" class="btn btn-primary">Continue</button>
+          </div>
+          <p class="text-xs text-gray mt-4">Example: set Islands=14 and continue; the draft will fill the remaining slots to ${D.target}.</p>
+        </div>
+        <div class="card p-4">
+          <div><strong>Format:</strong> ${D.format}, target ${D.target} cards</div>
+          <div class="text-xs text-gray mt-2">Commander: singletons enforced.</div>
+        </div>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => setScreen('colors');
+    wrap.querySelector('#skip').onclick = () => { D.basicLands={W:0,U:0,B:0,R:0,G:0}; beginPicks(); };
+    wrap.querySelector('#apply').onclick = ()=>{
+      const obj = {W:0,U:0,B:0,R:0,G:0};
+      wrap.querySelectorAll('input[data-c]').forEach(inp=>{
+        obj[inp.dataset.c] = Math.max(0, parseInt(inp.value||'0',10));
+      });
+      D.basicLands = obj;
+      beginPicks();
+    };
+    return wrap;
+  }
+
+  async function beginPicks(){
+    // prefill lands into deck if any
+    pushBasicLands();
+    D.screen='picks';
+    await ensurePool();
+    render();
+  }
+
+  function Picks(){
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Exit</button>
+        <h2 style="font-size:20px;font-weight:700">Pick one card • ${deckCount()}/${D.target}</h2>
+        <div class="badge">Colors: ${D.chosenColors.join(', ') || '-'}</div>
+      </div>
+
+      <div class="draft-wrap">
+        <div class="draft-stage">
+          <div id="draftRow" class="draft-row">
+            ${D.pool.map((c,i)=>`
+              <div class="draft-choice" data-i="${i}">
+                ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block">`
+                              : `<div style="height:220px;background:#374151;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+                <div style="position:absolute;left:6px;top:6px" class="badge">${(c.rarity||'').toUpperCase()}</div>
+                <div style="position:absolute;right:6px;bottom:6px" class="badge">${c.name}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="text-xs text-gray mt-4">Hover a card to preview. Click one to draft; the other two disappear.</div>
+        </div>
+
+        <div class="draft-side">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Draft List</strong></div>
+            <div class="text-xs badge">Left: ${leftCount()}</div>
+          </div>
+          <div id="draftList" style="margin-top:8px">
+            ${D.deck.map(c=>`
+              <div class="draft-small">
+                ${c.imageUrl ? `<img src="${c.imageUrl}">` : `<div class="badge">${c.name}</div>`}
+                <div class="text-xs" style="line-height:1.1">
+                  <div><strong>${c.name}</strong></div>
+                  <div class="text-gray">${c.type || ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="mt-4 flex" style="gap:8px">
+            <button id="finishNow" class="btn btn-secondary">Finish</button>
+          </div>
+          <p class="text-xs text-gray mt-2">“Finish” saves current picks into your deck even if not full.</p>
+        </div>
+      </div>
+    `;
+
+    // events
+    wrap.querySelector('#back').onclick = () => {
+      if (!confirm('Leave draft? Picks will be kept only if you finish.')) return;
+      state.screen='builder'; render();
+    };
+    wrap.querySelectorAll('.draft-choice').forEach(el=>{
+      el.onclick = ()=> pickCard(+el.dataset.i);
+      el.onmousemove = (e)=>{
+        const i = +el.dataset.i;
+        const card = D.pool[i];
+        const box = document.getElementById(D.hoverDivId);
+        if (!card || !box) return;
+        box.innerHTML = `
+          <div style="font-weight:700;margin-bottom:4px">${card.name}</div>
+          <div class="text-xs text-gray" style="margin-bottom:6px">${card.type||''}</div>
+          ${card.imageUrl?`<img src="${card.imageUrl}" style="width:100%;border-radius:6px;margin-bottom:8px">`:''}
+          <div style="font-size:12px;white-space:pre-wrap;line-height:1.3">${(card.effect||'').replaceAll('\\n','<br>')}</div>
+        `;
+        box.style.display='block';
+        box.style.left = (e.clientX+16)+'px';
+        box.style.top  = (e.clientY+16)+'px';
+      };
+      el.onmouseleave = ()=>{
+        const box = document.getElementById(D.hoverDivId);
+        if (box) box.style.display='none';
+      };
+    });
+    wrap.querySelector('#finishNow').onclick = ()=> setScreen('done');
+    return wrap;
+  }
+
+  function Done(){
+    const key = 'player' + state.currentPlayer;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Builder</button>
+        <h2 style="font-size:20px;font-weight:700">Draft complete</h2>
+        <div></div>
+      </div>
+      <div class="card p-4">
+        <div class="mb-2">Total cards: <strong>${D.deck.length}</strong> (target ${D.target})</div>
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <button id="useDeck" class="btn btn-primary">Use this as my deck</button>
+          <button id="again" class="btn btn-secondary">Start new draft</button>
+        </div>
+        <p class="text-xs text-gray mt-2">“Use this as my deck” replaces your current deck in the builder.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
+    wrap.querySelector('#again').onclick = ()=>{ state.screen='draft'; state.draft.screen='setup'; render(); };
+    wrap.querySelector('#useDeck').onclick = ()=>{
+      state.decks[key] = D.deck.slice();
+      state.screen='builder';
+      render();
+      toast('Draft deck loaded into builder ✓');
+    };
+    return wrap;
+  }
+
+  // color offers ----------------------------------------------------------
+  function randomColorOffers(){
+    const all = ['W','U','B','R','G'];
+    function pick(n){
+      const pool = all.slice();
+      const res = [];
+      while (res.length<n){
+        const i = Math.floor(Math.random()*pool.length);
+        res.push(pool.splice(i,1)[0]);
+      }
+      return res.sort();
+    }
+    return [
+      pick(1), pick(2), pick(2), pick(3), pick(3)
+    ];
+  }
+
+  // choose which subview to render
+  let content;
+  if (D.screen==='setup') content = Setup();
+  else if (D.screen==='colors') content = Colors();
+  else if (D.screen==='lands') content = Lands();
+  else if (D.screen==='picks') content = Picks();
+  else content = Done();
+
+  // wrapper scaffold
+  div.innerHTML = `
+    <div class="header">
+      <button id="home" class="btn btn-secondary text-sm">← Menu</button>
+      <h1 style="font-size:24px;font-weight:800">Draft</h1>
+      <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}</div>
+    </div>
+  `;
+  const mount = document.createElement('div');
+  mount.appendChild(content);
+  div.appendChild(mount);
+
+  // nav
+  div.querySelector('#home').onclick = ()=>{ state.screen='menu'; render(); };
+
+  return div;
+}
+// ---------------------------- end D R A F T ------------------------------
 
 
 function CardCreator() {
@@ -1128,17 +1558,20 @@ function DeckBuilder() {
   
   div.innerHTML = `
     <div class="header">
-      <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-      <h2 style="font-size: 20px; font-weight: bold;">Deck Builder - Player ${state.currentPlayer}</h2>
-      <div class="flex">
-        <button id="saveDeck" class="btn btn-blue text-sm">💾 Save</button>
-        <label class="btn btn-green text-sm" style="margin: 0;">
-          📂 Load
-          <input type="file" id="loadDeck" accept=".json" style="display: none;">
-        </label>
-        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
-      </div>
+  <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+  <h1 style="font-size: 24px; font-weight: bold;">Deck Builder</h1>
+  <div class="flex" style="gap:8px">
+    <button id="saveDeckBtn" class="btn btn-secondary text-sm">Save</button>
+    <label class="btn btn-secondary text-sm" style="cursor:pointer">
+      Load<input id="loadDeckInput" type="file" accept=".json" style="display:none">
+    </label>
+    <!-- NEW: draft entry as image tile -->
+    <div id="openDraft" class="menu-tile" title="Draft (beta)" style="width:120px;height:44px;overflow:hidden;border-radius:8px">
+      <img src="tile_draft.png" alt="Draft">
     </div>
+  </div>
+</div>
+    
     <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 20px;">
       <div class="card">
         <h3 class="mb-4" style="font-weight: bold;">Main Deck [${state.decks[key].length}]</h3>
@@ -1166,7 +1599,16 @@ function DeckBuilder() {
   div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
   div.querySelector('#saveDeck').onclick = saveDeck;
   div.querySelector('#loadDeck').onchange = (e) => { if (e.target.files[0]) loadDeck(e.target.files[0]); };
-  
+  div.querySelector('#openDraft').onclick = () => {
+  // initialize draft defaults each time
+  state.draft = Object.assign({}, state.draft, {
+    active: true, screen: 'setup', format: 'standard', target: 60,
+    allowDuplicates: true, offeredColorSets: [], chosenColors: [],
+    basicLands: {W:0,U:0,B:0,R:0,G:0}, picks: 0, pool: [], deck: []
+  });
+  state.screen = 'draft';
+  render();
+};
   return div;
 }
 
