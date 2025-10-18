@@ -4,7 +4,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mjolnir</title>
-  <script src="./Mjolnir_files/saved_resource"></script>
+  <script src="./mtg/"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
@@ -182,7 +182,20 @@
 .draft-small{display:flex;gap:8px;align-items:center;margin:6px 0}
 .draft-small img{width:40px;height:56px;border-radius:4px;border:1px solid #4b5563;object-fit:cover}
 .badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid #374151;background:#0b1220}
-
+/* Hover card preview shown *inside* the zone modal so it isn't blurred */
+.zone-hover {
+  position: fixed;             /* relative to viewport */
+  pointer-events: none;
+  z-index: 10050;              /* above your modal content/overlay */
+  display: none;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  width: 360px;
+  max-width: 90vw;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
   </style>
 <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.container{width:100%}@media (min-width: 640px){.container{max-width:640px}}@media (min-width: 768px){.container{max-width:768px}}@media (min-width: 1024px){.container{max-width:1024px}}@media (min-width: 1280px){.container{max-width:1280px}}@media (min-width: 1536px){.container{max-width:1536px}}.mb-8{margin-bottom:2rem}.mb-4{margin-bottom:1rem}.mt-4{margin-top:1rem}.mb-2{margin-bottom:0.5rem}.flex{display:flex}.grid{display:grid}.p-4{padding:1rem}.text-center{text-align:center}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}</style><style>:is([id*='google_ads_iframe'],[id*='taboola-'],.taboolaHeight,.taboola-placeholder,#top-ad,#credential_picker_container,#credentials-picker-container,#credential_picker_iframe,[id*='google-one-tap-iframe'],#google-one-tap-popup-container,.google-one-tap__module,.google-one-tap-modal-div,#amp_floatingAdDiv,#ez-content-blocker-container) {display:none!important;min-height:0!important;height:0!important;}
 /* --- menu tiles --- */
@@ -275,7 +288,9 @@ const state = {
   picks: 0,
   pool: [],                     // 3 current choices
   deck: [],                     // cards selected this draft
-  hoverDivId: 'draftHoverBox'   // singleton hover box id
+  hoverDivId: 'draftHoverBox',   // singleton hover box id
+  seenIds: {},
+  seenNames: {}
 }
 
 };
@@ -637,38 +652,112 @@ function DraftScreen(){
     return D.chosenColors.join('').toLowerCase();
   }
 
-  async function fetchThreeChoices(){
-    // rarity weighting + artifact chance
-    const rareRound = (D.picks>0 && D.picks % 10 === 0);
-    const wantArtifact = Math.random() < 0.12; // 12% chance
+async function fetchThreeChoices(){
+  const legal = formatToScryfallLegal(D.format);
+  const idTok = chosenIdentityToken();
 
-    const legal = formatToScryfallLegal(D.format);
-    const idTok = chosenIdentityToken();
-    const baseQ = wantArtifact
-      ? `t:artifact ${legal} -t:land`
-      : `id<=${idTok} ${legal} -t:land`;
+  // rarity & artifact logic (unchanged policy)
+  const rareRound   = (D.picks > 0 && D.picks % 10 === 0);
+  const wantArtifact = Math.random() < 0.12; // 12%
 
-    const rarityQ = rareRound ? ' (rarity>=rare)' : '';
-    const order = 'order=random&unique=cards';
-    const url = `https://api.scryfall.com/cards/search?${order}&q=${encodeURIComponent(baseQ + rarityQ)}`;
+  // helper: shuffle in-place
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
-    const resp = await fetch(url, {headers:{Accept:'application/json'}});
-    if (!resp.ok) throw new Error(`Scryfall ${resp.status}`);
-    const data = await resp.json();
-    const arr = (data.data || []).slice(0,3);
-    D.pool = arr.map(c => ({
-      id: c.id,
-      name: c.name,
-      type: c.type_line || '',
-      cost: c.mana_cost || '',
-      colors: c.colors || [],
-      effect: c.oracle_text || '',
-      power: c.power || 0,
-      toughness: c.toughness || 0,
-      imageUrl: c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '',
-      rarity: c.rarity || ''
-    }));
+  // helper: draw a unique random card from Scryfall /cards/random with a query
+  async function drawRandomCard(q, attempts = 14){
+    const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
+    const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+
+    for (let k=0; k<attempts; k++){
+      const url = `https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`;
+      const r = await fetch(url, { headers:{Accept:'application/json'} });
+      if (!r.ok) continue;
+      const c = await r.json();
+
+      // skip if no image or it violates “never lands”
+      const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+      if (!img) continue;
+      if ((c.type_line || '').toLowerCase().includes('land')) continue;
+
+      // skip if we've seen/suggested/picked this already in this draft
+      if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
+
+      // commander singleton: allow suggesting duplicates but they’ll be blocked on pick; we still try to avoid repeats here
+      return {
+        id: c.id,
+        name: c.name,
+        type: c.type_line || '',
+        cost: c.mana_cost || '',
+        colors: c.colors || [],
+        effect: c.oracle_text || '',
+        power: c.power || 0,
+        toughness: c.toughness || 0,
+        imageUrl: img,
+        rarity: c.rarity || ''
+      };
+    }
+    return null; // fallback handled by caller
   }
+
+  // Build three CMC bands per round (diversity)
+  const bands = shuffle([[0,2],[3,4],[5,20]]); // low, mid, high
+
+  // Base query: format + colors; never lands
+  const base = `${legal} id<=${idTok} -t:land`;
+
+  // Optional rarity upgrade
+  const rarityQ = rareRound ? ' (rarity>=rare)' : '';
+
+  // Optional artifact path (still respect format; artifacts are allowed outside color identity)
+  const maybeArtifactQ = wantArtifact ? `t:artifact ${legal} -t:land${rarityQ}` : null;
+
+  const picks = [];
+  for (let b = 0; b < bands.length; b++){
+    const [lo, hi] = bands[b];
+
+    // prefer color-filtered banded query; if artifact round, do one artifact slot
+    let q;
+    if (maybeArtifactQ && b === 0) {
+      // one slot is artifact in artifact rounds
+      q = `${maybeArtifactQ} cmc>=${lo} cmc<=${hi}`;
+    } else {
+      q = `${base}${rarityQ} cmc>=${lo} cmc<=${hi}`;
+    }
+
+    // Try to draw a unique card for this slot; broaden if necessary
+    let card = await drawRandomCard(q);
+    if (!card) {
+      // broaden by dropping cmc constraint
+      const broadQ = maybeArtifactQ && b === 0 ? maybeArtifactQ : `${base}${rarityQ}`;
+      card = await drawRandomCard(broadQ);
+    }
+    if (!card) {
+      // ultimate fallback: truly random within format, excluding lands
+      const lastResort = `${legal} -t:land`;
+      card = await drawRandomCard(lastResort);
+    }
+    if (card) {
+      // reserve these to avoid re-offering this round or later
+      if (!D.seenIds)   D.seenIds = {};
+      if (!D.seenNames) D.seenNames = {};
+      D.seenIds[card.id]   = 1;
+      D.seenNames[card.name] = 1;
+      picks.push(card);
+    }
+  }
+
+  // If for any reason we got fewer than 3, try to top up with very broad pulls
+  while (picks.length < 3){
+    const card = await drawRandomCard(`${legal} -t:land`);
+    if (!card) break;
+    D.seenIds[card.id] = 1;
+    D.seenNames[card.name] = 1;
+    picks.push(card);
+  }
+
+  D.pool = picks.slice(0,3);
+}
+
 
   async function ensurePool(){
     if (D.pool.length === 0) {
@@ -681,25 +770,56 @@ function DraftScreen(){
     }
   }
 
-  function pushBasicLands(){
-    const keys = Object.keys(D.basicLands);
-    keys.forEach(k=>{
-      const n = D.basicLands[k]|0;
-      for (let i=0;i<n;i++){
+async function pushBasicLands(){
+  // Map draft shorthand → Scryfall type keyword
+  const typeName = { W:'Plains', U:'Island', B:'Swamp', R:'Mountain', G:'Forest' };
+
+  for (const k of Object.keys(D.basicLands)){
+    const n = (D.basicLands[k] | 0);
+    for (let i = 0; i < n; i++){
+      // random basic land printing with image
+      const q = `t:basic t:land type:${typeName[k]}`;
+      try{
+        const r = await fetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers:{Accept:'application/json'} });
+        if (!r.ok) throw new Error();
+        const c = await r.json();
+        const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+
         D.deck.push({
-          id: 'land_'+k+'_'+i+'_'+Date.now(),
-          name: colorNames[k],
-          type: 'Basic Land — ' + colorNames[k],
+          id: c.id,
+          name: c.name || typeName[k],
+          type: c.type_line || `Basic Land — ${typeName[k]}`,
           cost: '',
           colors: [k],
           effect: '',
           power: 0, toughness: 0,
-          imageUrl: '', // left blank; player can skin later if desired
+          imageUrl: img,
+          rarity: c.rarity || 'common'
+        });
+
+        // also mark as seen so we never suggest this exact printing again
+        if (!D.seenIds)   D.seenIds = {};
+        if (!D.seenNames) D.seenNames = {};
+        D.seenIds[c.id] = 1;
+        D.seenNames[c.name] = 1;
+
+      }catch(e){
+        // fallback: push a text-only placeholder if Scryfall fails
+        D.deck.push({
+          id: 'land_'+k+'_'+i+'_'+Date.now(),
+          name: typeName[k],
+          type: 'Basic Land — ' + typeName[k],
+          cost: '',
+          colors: [k],
+          effect: '',
+          power: 0, toughness: 0,
+          imageUrl: '',
           rarity: 'common'
         });
       }
-    });
+    }
   }
+}
 
   function canAdd(card){
     if (D.allowDuplicates) return true;
@@ -713,6 +833,10 @@ function DraftScreen(){
       toast('Commander singleton: duplicate not allowed'); 
       return;
     }
+    if (!D.seenIds)   D.seenIds = {};
+if (!D.seenNames) D.seenNames = {};
+D.seenIds[card.id] = 1;
+D.seenNames[card.name] = 1;
     D.deck.push(card);
     D.picks += 1;
     D.pool = []; // next round
@@ -841,13 +965,13 @@ function DraftScreen(){
     return wrap;
   }
 
-  async function beginPicks(){
-    // prefill lands into deck if any
-    pushBasicLands();
-    D.screen='picks';
-    await ensurePool();
-    render();
-  }
+ async function beginPicks(){
+   // prefill lands into deck if any (with images)
+   await pushBasicLands();
+   D.screen = 'picks';
+   await ensurePool();
+   render();
+ }
 
   function Picks(){
     const wrap = document.createElement('div');
@@ -1557,21 +1681,23 @@ function DeckBuilder() {
   }
   
   div.innerHTML = `
-    <div class="header">
-  <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-  <h1 style="font-size: 24px; font-weight: bold;">Deck Builder</h1>
-  <div class="flex" style="gap:8px">
-    <button id="saveDeckBtn" class="btn btn-secondary text-sm">Save</button>
-    <label class="btn btn-secondary text-sm" style="cursor:pointer">
-      Load<input id="loadDeckInput" type="file" accept=".json" style="display:none">
-    </label>
-    <!-- NEW: draft entry as image tile -->
-    <div id="openDraft" class="menu-tile" title="Draft (beta)" style="width:120px;height:44px;overflow:hidden;border-radius:8px">
-      <img src="tile_draft.png" alt="Draft">
-    </div>
+<div class="header flex items-center justify-between gap-3">
+  <button id="backBtn" class="btn btn-secondary h-9 px-3 text-sm">← Back</button>
+
+  <h1 class="text-xl font-bold">Deck Builder</h1>
+
+  <div class="flex items-center gap-2">
+    <button id="saveDeckBtn" class="btn btn-secondary h-9 px-3 text-sm">Save</button>
+    <button id="loadDeckBtn" class="btn btn-secondary h-9 px-3 text-sm">Load</button>
+    <!-- Hidden file input, triggered by the Load button -->
+    <input id="loadDeckInput" type="file" accept=".json" class="hidden" />
   </div>
 </div>
-    
+<!-- Big Draft CTA -->
+<div id="draftCTA" class="menu-tile" style="height: 160px; margin-bottom: 16px;">
+  <img src="tile_draft.png" alt="Draft a Deck">
+  <div class="menu-caption">Draft a Deck</div>
+</div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 20px;">
       <div class="card">
         <h3 class="mb-4" style="font-weight: bold;">Main Deck [${state.decks[key].length}]</h3>
@@ -1592,25 +1718,53 @@ function DeckBuilder() {
     </div>
   `;
   
+  // Mount the dynamic containers into the placeholders in the template
   div.querySelector('#deckContainer').appendChild(deckContainer);
   div.querySelector('#availContainer').appendChild(availContainer);
+
+  // === DeckBuilder header event wiring ===
+const backBtn   = div.querySelector('#backBtn');
+const saveBtn   = div.querySelector('#saveDeckBtn');
+const loadBtn   = div.querySelector('#loadDeckBtn');
+const loadInput = div.querySelector('#loadDeckInput');
+const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
+
+if (backBtn) backBtn.onclick = () => { state.screen = 'menu'; render(); };
+if (saveBtn) saveBtn.onclick = saveDeck;
+
+// Load button triggers hidden input
+if (loadBtn && loadInput) loadBtn.onclick = () => loadInput.click();
+if (loadInput) {
+  loadInput.onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) loadDeck(f);
+  };
+}
   
-  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
-  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
-  div.querySelector('#saveDeck').onclick = saveDeck;
-  div.querySelector('#loadDeck').onchange = (e) => { if (e.target.files[0]) loadDeck(e.target.files[0]); };
-  div.querySelector('#openDraft').onclick = () => {
-  // initialize draft defaults each time
-  state.draft = Object.assign({}, state.draft, {
-    active: true, screen: 'setup', format: 'standard', target: 60,
-    allowDuplicates: true, offeredColorSets: [], chosenColors: [],
-    basicLands: {W:0,U:0,B:0,R:0,G:0}, picks: 0, pool: [], deck: []
-  });
-  state.screen = 'draft';
-  render();
-};
+  if (openDraft) {
+    openDraft.onclick = () => {
+      state.draft = {
+        ...state.draft,
+        active: true,
+        screen: 'setup',
+        format: 'standard',
+        target: 60,
+        allowDuplicates: true,
+        offeredColorSets: [],
+        chosenColors: [],
+        basicLands: { W:0, U:0, B:0, R:0, G:0 },
+        picks: 0,
+        pool: [],
+        deck: []
+      };
+      state.screen = 'draft';
+      render();
+    };
+  }
+
   return div;
 }
+
 
 function GameBoard() {
   const div = document.createElement('div');
@@ -1818,10 +1972,12 @@ function GameBoard() {
               <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
               <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
               <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
+              <button id="viewDeck" class="btn btn-secondary text-xs">📚 Deck (${me.deck.length})</button>
               <button id="viewOppGY" class="btn btn-secondary text-xs">👁️ Opp GY</button>
               <button id="viewOppExile" class="btn btn-secondary text-xs">👁️ Opp Exile</button>
               <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
               <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
+              <button id="mulliganBtn" class="btn btn-blue text-xs">🔄 Mulligan</button>
             </div>
           </div>
         </div>
@@ -1899,7 +2055,7 @@ function GameBoard() {
                 <button id="zoneToHand" class="btn btn-primary text-xs">🖐️ To Hand</button>
                 <button id="zoneToUpper" class="btn btn-primary text-xs">⬇️ To Upper</button>
                 <button id="zoneToLower" class="btn btn-primary text-xs">⬆️ To Lower</button>
-                <button id="zoneToDeck" class="btn btn-secondary text-xs">📚 To Deck</button>
+                ${state.viewingZone.zone !== 'deck' ? '<button id="zoneToDeck" class="btn btn-secondary text-sm">📚 To Deck</button>' : ''}
                 ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">🚫 Exile</button>' : ''}
                 ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">⚰️ To GY</button>' : ''}
                 <button id="cancelZoneSelect" class="btn btn-secondary text-xs">❌ Cancel</button>
@@ -1937,6 +2093,7 @@ function GameBoard() {
   `;
   
   const handContainer = div.querySelector('#handContainer');
+  
   
   if (me.hand.length === 0) {
     const emptyMsg = document.createElement('span');
@@ -2026,6 +2183,9 @@ function GameBoard() {
   const minusBtn = div.querySelector('#minusLP');
   const plusBtn = div.querySelector('#plusLP');
   const endBtn = div.querySelector('#endTurn');
+  const viewDeckBtn = div.querySelector('#viewDeck');
+  const mulliganBtn = div.querySelector('#mulliganBtn');
+  
   
   if (exitBtn) exitBtn.onclick = () => {
     if (confirm('Exit game? Progress will be lost.')) {
@@ -2094,6 +2254,40 @@ function GameBoard() {
     state.selectedZoneCard = null;
     render();
   };
+  
+  if (mulliganBtn) mulliganBtn.onclick = () => {
+  const n = me.hand.length;
+  if (n === 0) { toast('No cards in hand to mulligan.'); return; }
+
+  // 1) Return hand to deck
+  me.deck.push(...me.hand);
+  me.hand.length = 0;
+
+  // 2) Shuffle (Fisher–Yates)
+  for (let i = me.deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [me.deck[i], me.deck[j]] = [me.deck[j], me.deck[i]];
+  }
+
+  // 3) Draw the same amount
+  for (let i = 0; i < n && me.deck.length > 0; i++) {
+    const c = me.deck.pop();                 // treat end as top after shuffle
+    if (!c.hasOwnProperty('tapped')) c.tapped = false;
+    if (!c.hasOwnProperty('counters')) c.counters = 0;
+    me.hand.push(c);
+  }
+
+  sendGameUpdate();
+  render();
+};
+
+  
+  if (viewDeckBtn) viewDeckBtn.onclick = () => {
+  state.viewingZone = { title: '📚 Your Deck (top→bottom)', cards: me.deck, zone: 'deck', owner: 'me' };
+  state.selectedZoneCard = null;
+  render();
+};
+  
   if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
   if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
   if (endBtn) endBtn.onclick = () => { 
@@ -2171,7 +2365,19 @@ function GameBoard() {
       render();
     };
     
+    // Ensure a modal-scoped hover box exists so it won't be blurred
+let zoneHover = div.querySelector('#zoneHoverBox');
+if (!zoneHover) {
+  zoneHover = document.createElement('div');
+  zoneHover.id = 'zoneHoverBox';
+  zoneHover.className = 'zone-hover';
+  const modal = div.querySelector('.modal');
+  if (modal) modal.appendChild(zoneHover);
+}
+    
     const zoneCardsDiv = div.querySelector('#zoneCards');
+    
+    
     if (zoneCardsDiv && state.viewingZone.cards.length > 0) {
       state.viewingZone.cards.forEach((card, idx) => {
         const cardDiv = document.createElement('div');
@@ -2180,7 +2386,23 @@ function GameBoard() {
         img.style.pointerEvents = 'none';
         cardDiv.appendChild(img);
         
-        cardDiv.addEventListener('mouseenter', () => showCardInfo(card));
+       cardDiv.onmousemove = (e) => {
+  if (!zoneHover) return;
+  zoneHover.innerHTML = `
+    <div style="font-weight:700;margin-bottom:4px">${card.name || ''}</div>
+    <div class="text-xs text-gray" style="margin-bottom:6px">${card.type || ''}</div>
+    ${card.imageUrl ? `<img src="${card.imageUrl}" style="width:100%;border-radius:6px;margin-bottom:8px">` : ''}
+    <div style="font-size:12px;white-space:pre-wrap;line-height:1.3">
+      ${(card.effect || '').replaceAll('\\n','<br>')}
+    </div>
+  `;
+  const pad = 16;
+  zoneHover.style.left = (e.clientX + pad) + 'px';
+  zoneHover.style.top  = (e.clientY + pad) + 'px';
+  zoneHover.style.display = 'block';
+};
+cardDiv.onmouseleave = () => { if (zoneHover) zoneHover.style.display = 'none'; };
+ 
         
         // Only allow interaction with own zones
         if (state.viewingZone.owner === 'me') {
