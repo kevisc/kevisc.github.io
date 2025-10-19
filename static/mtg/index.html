@@ -598,43 +598,87 @@ function MainMenu() {
   return div;
 }
 
-function BattleMenu() {
+function BattleMenu()  {
   const div = document.createElement('div');
   div.className = 'screen';
+
   div.innerHTML = `
     <div style="max-width: 800px; width:100%; padding: 0 16px;">
       <div class="header">
         <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-        <h2 style="font-size: 24px; font-weight: bold;">Battle</h2>
+        <h2 style="font-size: 24px; font-weight: bold;"></h2>
         <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
       </div>
 
-      <div class="card" style="padding: 20px;">
-        <div class="grid" style="gap: 16px;">
-          <button id="playLocal" class="btn btn-primary" style="padding: 16px; font-size: 18px;">⚔️ Play Local Game</button>
-          <button id="hostOnline" class="btn btn-blue" style="padding: 16px; font-size: 18px;">🌐 Host Online Game</button>
-          <button id="joinOnline" class="btn btn-green" style="padding: 16px; font-size: 18px;">🌐 Join Online Game</button>
+      <!-- Image tile submenu -->
+      <div class="menu-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:16px;">
+        <div id="playLocal" class="menu-tile" tabindex="0" role="button" aria-label="Play Local">
+          <img src="tile_battle_local.png" alt="Play Local">
+          <div class="menu-caption">Play Local</div>
         </div>
-        <p class="text-xs text-gray mt-4">Tip: build a deck before hosting or joining.</p>
+
+        <div id="hostGame" class="menu-tile" tabindex="0" role="button" aria-label="Host Game">
+          <img src="tile_battle_host.png" alt="Host Game">
+          <div class="menu-caption">Host Game</div>
+        </div>
+
+        <div id="joinGame" class="menu-tile" tabindex="0" role="button" aria-label="Join Game">
+          <img src="tile_battle_join.png" alt="Join Game">
+          <div class="menu-caption">Join Game</div>
+        </div>
       </div>
+
+      <p class="text-xs text-gray mt-4">Tip: build a deck before hosting or joining.</p>
     </div>
   `;
 
-  div.querySelector('#backBtn').onclick    = () => { state.screen = 'menu'; render(); };
-  div.querySelector('#logoutBtn').onclick  = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
-  div.querySelector('#playLocal').onclick  = () => { state.onlineMode = false; state.screen = 'game'; render(); };
-  div.querySelector('#hostOnline').onclick = () => {
-    if (state.decks['player' + state.currentPlayer].length === 0) { alert('Build a deck first!'); return; }
-    createOnlineRoom(); state.screen = 'game'; render();
+  // helper for keyboard activation on tiles
+  const bind = (sel, fn) => {
+    const el = div.querySelector(sel);
+    if (!el) return;
+    el.onclick = fn;
+    el.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+    };
   };
-  div.querySelector('#joinOnline').onclick = () => {
-    if (state.decks['player' + state.currentPlayer].length === 0) { alert('Build a deck first!'); return; }
+
+  // nav
+  bind('#backBtn',   () => { state.screen = 'menu';  render(); });
+  bind('#logoutBtn', () => { state.currentPlayer = null; state.screen = 'login'; render(); });
+
+  // local play
+  bind('#playLocal', () => {
+    state.onlineMode = false;
+    state.screen = 'game';
+    render();
+  });
+
+  // host online (ID FIX)
+  bind('#hostGame', () => {
+    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    if (!deck.length) { alert('Build a deck first!'); return; }
+    state.onlineMode = true;
+    if (typeof createOnlineRoom === 'function') createOnlineRoom();
+    state.screen = 'game';
+    render();
+  });
+
+  // join online (ID FIX)
+  bind('#joinGame', () => {
+    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    if (!deck.length) { alert('Build a deck first!'); return; }
     const code = prompt('Paste connection code:');
-    if (code && code.trim()) { joinOnlineRoom(code.trim()); state.screen = 'game'; render(); }
-  };
+    if (code && code.trim()) {
+      state.onlineMode = true;
+      if (typeof joinOnlineRoom === 'function') joinOnlineRoom(code.trim());
+      state.screen = 'game';
+      render();
+    }
+  });
 
   return div;
 }
+
 
 // ------------------------------ D R A F T  ------------------------------
 function DraftScreen(){
