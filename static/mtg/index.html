@@ -279,19 +279,36 @@ const state = {
   showTurnNotification: false, 
   draft: {
   active: false,
-  screen: 'setup',              // 'setup' | 'colors' | 'lands' | 'picks' | 'done'
+  // NEW: first screen is a mode selector
+  screen: 'mode',               // 'mode' | 'setup' | 'custom-setup' | 'colors' | 'lands' | 'picks' | 'done'
+  // NEW: which draft engine to use
+  mode: 'traditional',          // 'traditional' | 'custom'
+
+  // shared
   format: 'standard',           // 'standard' | 'modern' | 'commander'
   target: 60,
   allowDuplicates: true,
+
+  // color flow
   offeredColorSets: [],         // arrays like ['U'], ['U','R'], ['W','U','B']
   chosenColors: [],
-  basicLands: { W:0, U:0, B:0, R:0, G:0 }, // pre-filled counts
+  basicLands: { W:0, U:0, B:0, R:0, G:0 },
+
+  // live draft state
   picks: 0,
-  pool: [],                     // 3 current choices
-  deck: [],                     // cards selected this draft
-  hoverDivId: 'draftHoverBox',   // singleton hover box id
+  pool: [],                     // current 3 shown
+  deck: [],                     // chosen cards
+
+  // NEW: dedupe memory across the whole draft
   seenIds: {},
-  seenNames: {}
+  seenNames: {},
+
+  // NEW: custom draft inputs
+  customPool: [],               // array of card objects (your export format)
+  customParams: {
+    filterByColors: true        // only offer cards within chosen colors
+    // (you can extend later: artifactChance, rareEvery, etc.)
+  },
 }
 
 };
@@ -626,14 +643,6 @@ function DraftScreen(){
 
   const D = state.draft;
 
-  // singleton hover box
-  let hover = document.getElementById(D.hoverDivId);
-  if (!hover){
-    hover = document.createElement('div');
-    hover.id = D.hoverDivId;
-    hover.className = 'draft-hover';
-    document.body.appendChild(hover);
-  }
 
   function setScreen(s){ D.screen = s; render(); }
 
@@ -759,17 +768,78 @@ async function fetchThreeChoices(){
   D.pool = picks.slice(0,3);
 }
 
+async function fetchThreeChoicesCustom(){
+  const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+  const chosen = new Set((D.chosenColors || []).map(String));
+  const filterByColors = !!(D.customParams && D.customParams.filterByColors);
 
-  async function ensurePool(){
-    if (D.pool.length === 0) {
-      try {
-        await fetchThreeChoices();
-      } catch(e){
-        alert('Draft fetch failed: ' + e.message);
-        D.pool = [];
-      }
+  function eligible(c, relaxColors=false){
+    if (!c || !c.name) return false;
+
+    // hard exclude lands
+    const type = (c.type || '').toLowerCase();
+    if (type.includes('land')) return false;
+
+    // singleton suggestion level (avoid offering a name already in deck when duplicates disallowed)
+    if (!D.allowDuplicates && D.deck.some(x => x.name === c.name)) return false;
+
+    // never re-offer same name within this draft
+    if (seenNameSet.has(c.name)) return false;
+
+    // color gating (optional)
+    if (filterByColors && !relaxColors && chosen.size){
+      const cols = new Set((c.colors || []).map(String));
+      for (const col of cols) if (!chosen.has(col)) return false;
+    }
+    return true;
+  }
+
+  const fullPool = Array.isArray(D.customPool) ? D.customPool : [];
+
+  // First pass: strict colors (if enabled), no lands
+  let pool = fullPool.filter(c => eligible(c, false));
+
+  // If too few options, relax color filter but still exclude lands
+  if (pool.length < 3) pool = fullPool.filter(c => eligible(c, true));
+
+  if (pool.length === 0){
+    // Nothing eligible — keep UI responsive and instruct the user
+    D.pool = [];
+    toast('No eligible cards left in custom pool. Consider allowing duplicates or disabling color filtering.');
+    return;
+  }
+
+  // Shuffle and take up to 3 distinct names
+  for (let i = pool.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picks = [];
+  const used = new Set();
+  for (const c of pool){
+    if (!used.has(c.name)){
+      picks.push(c);
+      used.add(c.name);
+      if (picks.length >= 3) break;
     }
   }
+
+  if (!D.seenNames) D.seenNames = {};
+  picks.forEach(c => { D.seenNames[c.name] = 1; });
+  D.pool = picks;
+}
+
+async function ensurePool(){
+  if (D.pool.length === 0) {
+    try {
+      if (D.mode === 'custom') await fetchThreeChoicesCustom();
+      else await fetchThreeChoices();
+    } catch(e){
+      alert('Draft fetch failed: ' + e.message);
+      D.pool = [];
+    }
+  }
+}
 
 async function pushBasicLands(){
   // Map draft shorthand → Scryfall type keyword
@@ -854,13 +924,47 @@ D.seenNames[card.name] = 1;
   function deckCount(){ return D.deck.length; }
   function leftCount(){ return Math.max(0, D.target - deckCount()); }
 
+function Mode(){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Builder</button>
+      <h1 style="font-size:24px;font-weight:800">Choose Draft Mode</h1>
+      <div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div class="card p-4" id="goTraditional" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Traditional Draft</h3>
+        <p class="text-xs text-gray">Random three-card offers from Scryfall, color-filtered by your choice; 60-card or 100-card Commander singleton.</p>
+      </div>
+      <div class="card p-4" id="goCustom" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Custom Draft</h3>
+        <p class="text-xs text-gray">Upload a JSON decklist (export format) to act as the draft pool. Optional color filtering. Same pick flow.</p>
+      </div>
+    </div>
+  `;
+  wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
+  wrap.querySelector('#goTraditional').onclick = ()=>{
+    D.mode='traditional';
+    D.screen='setup';
+    render();
+  };
+  wrap.querySelector('#goCustom').onclick = ()=>{
+    D.mode='custom';
+    D.screen='custom-setup';
+    render();
+  };
+  return wrap;
+}
+
   // setup steps -----------------------------------------------------------
   function Setup(){
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <div class="header">
         <button id="back" class="btn btn-secondary text-sm">← Back</button>
-        <h1 style="font-size:24px;font-weight:700">Draft</h1>
+        <h1 style="font-size:24px;font-weight:700">Traditional Draft</h1>
         <div class="text-sm badge">beta</div>
       </div>
 
@@ -890,6 +994,132 @@ D.seenNames[card.name] = 1;
     });
     return wrap;
   }
+  
+  function CustomSetup(){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Back</button>
+      <h2 style="font-size:20px;font-weight:700">Custom Draft — Pool & Settings</h2>
+      <div></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card p-4">
+        <label>Upload custom pool (.json)</label>
+        <input id="customPoolFile" type="file" accept=".json" class="input" />
+        <div id="customPoolStatus" class="text-xs text-gray" style="margin-top:8px">No file loaded.</div>
+
+        <div class="mb-4" style="margin-top:12px">
+          <label>Format</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
+            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
+            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+          </div>
+        </div>
+
+        <div class="flex" style="gap:10px;align-items:center;margin:8px 0 12px">
+          <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+            <input id="customFilterColors" type="checkbox" checked>
+            Only offer cards within chosen colors
+          </label>
+          <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+            <input id="customAllowDupes" type="checkbox" checked>
+            Allow duplicates
+          </label>
+        </div>
+
+        <div class="flex" style="gap:8px">
+          <button id="continueCustom" class="btn btn-primary" disabled>Continue</button>
+        </div>
+
+        <p class="text-xs text-gray mt-4">
+          JSON must be your app’s export format (i.e., <code>{"cards":[...]}</code>).
+          Cards in the pool with “Land” in type are ignored as draft offers.
+        </p>
+      </div>
+
+      <div class="card p-4">
+        <strong>Pool preview</strong>
+        <div id="customPoolPreview" class="text-xs text-gray" style="margin-top:6px">—</div>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
+
+  // format choose
+  wrap.querySelectorAll('[data-f]').forEach(b=>{
+    b.onclick = ()=>{
+      const f = b.dataset.f;
+      D.format = f;
+      D.target = (f==='commander') ? 100 : 60;
+      // default singleton only in commander – can be overridden by the checkbox
+      D.allowDuplicates = (f!=='commander');
+      wrap.querySelector('#customAllowDupes').checked = D.allowDuplicates;
+    };
+  });
+
+  // file upload
+  const fileInput = wrap.querySelector('#customPoolFile');
+  const statusEl  = wrap.querySelector('#customPoolStatus');
+  const previewEl = wrap.querySelector('#customPoolPreview');
+  const contBtn   = wrap.querySelector('#continueCustom');
+
+  fileInput.onchange = async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try{
+      const text = await f.text();
+      const j = JSON.parse(text);
+      if (!Array.isArray(j.cards)) throw new Error('Missing "cards" array.');
+      // normalize / hydrate images just in case
+      const pool = j.cards.map(c=>{
+        const img = c.image || c.imageUrl ||
+          `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(c.name||'')}`;
+        return {
+          id: c.id || (c.name + '_' + Math.random()),
+          name: c.name,
+          type: c.type || '',
+          cost: c.cost || '',
+          colors: Array.isArray(c.colors) ? c.colors : [],
+          effect: c.effect || '',
+          power: c.power || 0,
+          toughness: c.toughness || 0,
+          imageUrl: img,
+          rarity: c.rarity || 'common'
+        };
+      });
+      D.customPool = pool;
+      statusEl.textContent = `Loaded ${pool.length} cards.`;
+      previewEl.innerHTML = `${pool.slice(0,12).map(x=>x.name).join(', ')}${pool.length>12?' …':''}`;
+      contBtn.disabled = pool.length === 0;
+    }catch(err){
+      statusEl.textContent = 'Invalid JSON: ' + err.message;
+      contBtn.disabled = true;
+    }
+  };
+
+  // params
+  wrap.querySelector('#customAllowDupes').onchange = (e)=>{
+    D.allowDuplicates = !!e.target.checked;
+  };
+  wrap.querySelector('#customFilterColors').onchange = (e)=>{
+    D.customParams.filterByColors = !!e.target.checked;
+  };
+
+  // continue to color selection (we keep the same flow)
+  contBtn.onclick = ()=>{
+    D.offeredColorSets = randomColorOffers();
+    D.chosenColors = []; // chosen next step
+    D.seenIds = {}; D.seenNames = {};
+    D.screen = 'colors';
+    render();
+  };
+
+  return wrap;
+}
 
   function Colors(){
     const offers = D.offeredColorSets;
@@ -995,7 +1225,7 @@ D.seenNames[card.name] = 1;
               </div>
             `).join('')}
           </div>
-          <div class="text-xs text-gray mt-4">Hover a card to preview. Click one to draft; the other two disappear.</div>
+          <div class="text-xs text-gray mt-4">Click one card to draft; the other two disappear.</div>
         </div>
 
         <div class="draft-side">
@@ -1027,28 +1257,10 @@ D.seenNames[card.name] = 1;
       if (!confirm('Leave draft? Picks will be kept only if you finish.')) return;
       state.screen='builder'; render();
     };
-    wrap.querySelectorAll('.draft-choice').forEach(el=>{
-      el.onclick = ()=> pickCard(+el.dataset.i);
-      el.onmousemove = (e)=>{
-        const i = +el.dataset.i;
-        const card = D.pool[i];
-        const box = document.getElementById(D.hoverDivId);
-        if (!card || !box) return;
-        box.innerHTML = `
-          <div style="font-weight:700;margin-bottom:4px">${card.name}</div>
-          <div class="text-xs text-gray" style="margin-bottom:6px">${card.type||''}</div>
-          ${card.imageUrl?`<img src="${card.imageUrl}" style="width:100%;border-radius:6px;margin-bottom:8px">`:''}
-          <div style="font-size:12px;white-space:pre-wrap;line-height:1.3">${(card.effect||'').replaceAll('\\n','<br>')}</div>
-        `;
-        box.style.display='block';
-        box.style.left = (e.clientX+16)+'px';
-        box.style.top  = (e.clientY+16)+'px';
-      };
-      el.onmouseleave = ()=>{
-        const box = document.getElementById(D.hoverDivId);
-        if (box) box.style.display='none';
-      };
-    });
+      
+      wrap.querySelectorAll('.draft-choice').forEach(el=>{
+  el.onclick = ()=> pickCard(+el.dataset.i);
+});
     wrap.querySelector('#finishNow').onclick = ()=> setScreen('done');
     return wrap;
   }
@@ -1098,22 +1310,25 @@ D.seenNames[card.name] = 1;
       pick(1), pick(2), pick(2), pick(3), pick(3)
     ];
   }
-
+  
   // choose which subview to render
-  let content;
-  if (D.screen==='setup') content = Setup();
-  else if (D.screen==='colors') content = Colors();
-  else if (D.screen==='lands') content = Lands();
-  else if (D.screen==='picks') content = Picks();
-  else content = Done();
+let content;
+if (D.screen==='mode')         content = Mode();
+else if (D.screen==='setup')   content = Setup();        // traditional
+else if (D.screen==='custom-setup') content = CustomSetup();
+else if (D.screen==='colors')  content = Colors();
+else if (D.screen==='lands')   content = Lands();
+else if (D.screen==='picks')   content = Picks();
+else                           content = Done();
 
+  
   // wrapper scaffold
   div.innerHTML = `
     <div class="header">
-      <button id="home" class="btn btn-secondary text-sm">← Menu</button>
-      <h1 style="font-size:24px;font-weight:800">Draft</h1>
-      <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}</div>
-    </div>
+  <button id="home" class="btn btn-secondary text-sm">← Menu</button>
+  <h1 style="font-size:24px;font-weight:800">${D.mode==='custom' ? 'Custom Draft' : 'Traditional Draft'}</h1>
+  <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}</div>
+</div>
   `;
   const mount = document.createElement('div');
   mount.appendChild(content);
@@ -1932,28 +2147,33 @@ Island x14
     };
   }
 
-  // Draft entry (image tile)
-  const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
-  if (openDraft) {
-    openDraft.onclick = () => {
-      state.draft = {
-        ...state.draft,
-        active: true,
-        screen: 'setup',
-        format: 'standard',
-        target: 60,
-        allowDuplicates: true,
-        offeredColorSets: [],
-        chosenColors: [],
-        basicLands: { W:0, U:0, B:0, R:0, G:0 },
-        picks: 0,
-        pool: [],
-        deck: []
-      };
-      state.screen = 'draft';
-      render();
+ // Draft entry (image tile)
+const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
+if (openDraft) {
+  openDraft.onclick = () => {
+    state.draft = {
+      ...state.draft,
+      active: true,
+      screen: 'mode',          // ← start at the new mode chooser
+      mode: 'traditional',
+      format: 'standard',
+      target: 60,
+      allowDuplicates: true,
+      offeredColorSets: [],
+      chosenColors: [],
+      basicLands: { W:0, U:0, B:0, R:0, G:0 },
+      picks: 0,
+      pool: [],
+      deck: [],
+      seenIds: {},
+      seenNames: {},
+      customPool: [],
+      customParams: { filterByColors: true }
     };
-  }
+    state.screen = 'draft';
+    render();
+  };
+}
 
   
   // ---------- Import panel wiring ----------
