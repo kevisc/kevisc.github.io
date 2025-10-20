@@ -3,7 +3,7 @@
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mjolnir</title>
+  <title>Galdurspjöld</title>
   <script src="./mtg/"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -220,14 +220,15 @@
 <body>
   <div id="root"><div class="screen">
     <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
-      <div class="hero"><img src="./Mjolnir_files/title_wizards.png" alt="Wizards Duel"></div>
-      <h1 style="
-        font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
-        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-        Mjolnir
-      </h1>
-      <p class="text-gray mb-1" style="font-size: 14px;">Make your own custom cards, play with friends.</p>
+      <div class="hero"><img src="title_wizards.png" alt="Wizards Duel"></div>
+     
+           <h1 style="
+  font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+   ᚵᛆᛚᛑᚢᚱᛍᛔᛁᚮᛚᛑ
+</h1>
+      <p class="text-gray mb-1" style="font-size: 14px;">Galdurspjöld. Make your own custom cards, play with friends.</p>
 <p class="text-xs text-gray" style="margin-bottom: 20px;">
   Open-source. KS. 2025.
 </p>
@@ -277,6 +278,7 @@ const state = {
   waitingForAnswer: false,
   answerCode: null,
   showTurnNotification: false, 
+  actionMessage: null,   // NEW: transient action overlay (e.g., draws)
   draft: {
   active: false,
   // NEW: first screen is a mode selector
@@ -358,6 +360,21 @@ function toast(message, ms = 2200) {
   }, ms);
 }
 
+// --- NEW: in-game center overlay for actions, with optional broadcast ---
+function showAction(message, ms = 2000) {
+  state.actionMessage = message;
+  render();
+  setTimeout(() => { state.actionMessage = null; render(); }, ms);
+}
+
+function broadcastAction(message) {
+  // Always show locally
+  showAction(message);
+  // And notify peer if online
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({ type: 'notify', message }));
+  }
+}
 
 
 function sendGameUpdate() {
@@ -379,40 +396,57 @@ function setupDataChannel(channel) {
     console.log('Connected!');
     state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
   };
-  state.dataChannel.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'deckSync') {
-        const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
-        if (data.decks[oppKey]) state.decks[oppKey] = data.decks[oppKey];
-        render();
-      } else if (data.type === 'gameUpdate') {
-        state.gameState = data.gameState;
-        state.gameStarted = data.gameStarted;
-        const previousPlayer = state.activePlayer;
-        state.activePlayer = data.activePlayer;
-        state.winner = data.winner;
-        
-        // Show turn notification if it just became this player's turn
-        if (previousPlayer !== state.activePlayer && state.activePlayer === state.currentPlayer) {
-          state.showTurnNotification = true;
-          setTimeout(() => {
-            state.showTurnNotification = false;
-            render();
-          }, 2000);
-        }
-        
-        render();
+    
+    // --- WebRTC datachannel handlers ---
+state.dataChannel.onmessage = (event) => {
+  try {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'deckSync') {
+      const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+      if (data.decks && data.decks[oppKey]) {
+        state.decks[oppKey] = data.decks[oppKey];
       }
-    } catch(e) { console.error(e); }
-  };
-  state.dataChannel.onclose = () => {
-    alert('Connection closed');
-    disconnectOnline();
-    state.screen = 'menu';
-    render();
-  };
-}
+      render();
+
+    } else if (data.type === 'gameUpdate') {
+      state.gameState = data.gameState;
+      state.gameStarted = data.gameStarted;
+
+      const previousPlayer = state.activePlayer;
+      state.activePlayer = data.activePlayer;
+      state.winner = data.winner;
+
+      // If it just became this player's turn, flash the turn notice
+      if (previousPlayer !== state.activePlayer && state.activePlayer === state.currentPlayer) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+
+      render();
+
+    } else if (data.type === 'notify') {
+      // NEW: action overlay (deck → hand, etc.)
+      showAction(data.message);
+    }
+
+  } catch (e) {
+    console.error('dataChannel onmessage error:', e, event?.data);
+  }
+};
+
+state.dataChannel.onclose = () => {
+  alert('Connection closed');
+  disconnectOnline();
+  state.screen = 'menu';
+  render();
+};
+
+    
+  }
 
 async function createOnlineRoom() {
   state.isHost = true;
@@ -528,11 +562,14 @@ function LoginScreen() {
     <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
       <div class="hero"><img src="title_wizards.png" alt="Wizards Duel"></div>
       <h1 style="
-        font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
-        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-        Mjolnir
-      </h1>
+  font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+  ᚵᛆᛚᛑᚢᚱᛍᛔᛁᚮᛚᛑ
+</h1>
+<div class="text-xs text-gray" style="letter-spacing: 1px; margin-top: -2px; margin-bottom: 8px;">
+  Galdurspjöld
+</div>
       <p class="text-gray mb-1" style="font-size: 14px;">Make your own custom cards, play with friends.</p>
 <p class="text-xs text-gray" style="margin-bottom: 20px;">
   Open-source. KS. 2025.
@@ -611,7 +648,8 @@ function BattleMenu()  {
       </div>
 
       <!-- Image tile submenu -->
-      <div class="menu-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:16px;">
+      <div class="menu-grid" style="display:grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap:12px; margin-bottom:16px;">
+
         <div id="playLocal" class="menu-tile" tabindex="0" role="button" aria-label="Play Local">
           <img src="tile_battle_local.png" alt="Play Local">
           <div class="menu-caption">Play Local</div>
@@ -2595,6 +2633,7 @@ function GameBoard() {
       </div>
     </div>
     ${state.showTurnNotification ? `<div class="turn-notification">🎮 Your Turn!</div>` : ''}
+    ${state.actionMessage ? `<div class="turn-notification">${state.actionMessage}</div>` : ''} 
     ${state.creatingToken ? `
       <div class="modal">
         <div class="modal-content" style="max-width: 400px;">
@@ -2805,19 +2844,23 @@ function GameBoard() {
     }
   };
   
-  if (drawBtn) drawBtn.onclick = () => {
-    if (me.deck.length > 0) {
-      const idx = Math.floor(Math.random() * me.deck.length);
-      const card = me.deck[idx];
-      if (!card.hasOwnProperty('tapped')) card.tapped = false;
-      if (!card.hasOwnProperty('counters')) card.counters = 0;
-      me.hand.push(card);
-      me.deck.splice(idx, 1);
-      sendGameUpdate();
-      render();
-    }
-  };
   
+  if (drawBtn) drawBtn.onclick = () => {
+  if (me.deck.length > 0) {
+    const idx = Math.floor(Math.random() * me.deck.length);
+    const card = me.deck[idx];
+    if (!card.hasOwnProperty('tapped')) card.tapped = false;
+    if (!card.hasOwnProperty('counters')) card.counters = 0;
+    me.hand.push(card);
+    me.deck.splice(idx, 1);
+
+    sendGameUpdate();
+    render();
+    // No popup for draw button
+  }
+};
+
+
   // Upkeep button - untap all your cards
   if (upkeepBtn) upkeepBtn.onclick = () => {
     // Untap all cards in your fields
@@ -2859,28 +2902,15 @@ function GameBoard() {
     render();
   };
   
-  if (mulliganBtn) mulliganBtn.onclick = () => {
+    if (mulliganBtn) mulliganBtn.onclick = () => {
   const n = me.hand.length;
   if (n === 0) { toast('No cards in hand to mulligan.'); return; }
 
-  // 1) Return hand to deck
-  me.deck.push(...me.hand);
+  // Discard entire hand to graveyard; no shuffle, no redraw
+  me.graveyard.push(...me.hand);
   me.hand.length = 0;
 
-  // 2) Shuffle (Fisher–Yates)
-  for (let i = me.deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [me.deck[i], me.deck[j]] = [me.deck[j], me.deck[i]];
-  }
-
-  // 3) Draw the same amount
-  for (let i = 0; i < n && me.deck.length > 0; i++) {
-    const c = me.deck.pop();                 // treat end as top after shuffle
-    if (!c.hasOwnProperty('tapped')) c.tapped = false;
-    if (!c.hasOwnProperty('counters')) c.counters = 0;
-    me.hand.push(c);
-  }
-
+  toast(`Mulligan: discarded ${n} card${n > 1 ? 's' : ''} to graveyard.`);
   sendGameUpdate();
   render();
 };
@@ -3040,16 +3070,20 @@ cardDiv.onmouseleave = () => { if (zoneHover) zoneHover.style.display = 'none'; 
       const toGYBtn = div.querySelector('#zoneToGY');
       const cancelZoneBtn = div.querySelector('#cancelZoneSelect');
       
-      if (toHandBtn) toHandBtn.onclick = () => {
-        sourcePlayer.hand.push(card);
-        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
-        state.selectedZoneCard = null;
-        if (sourcePlayer[zoneKey].length === 0) {
-          state.viewingZone = null;
-        }
-        sendGameUpdate();
-        render();
-      };
+if (toHandBtn) toHandBtn.onclick = () => {
+  const fromDeck = (zoneKey === 'deck');  // NEW
+  sourcePlayer.hand.push(card);
+  sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+  state.selectedZoneCard = null;
+  if (sourcePlayer[zoneKey].length === 0) {
+    state.viewingZone = null;
+  }
+  sendGameUpdate();
+  render();
+  // NEW: only announce deck→hand, not GY/exile→hand
+  if (fromDeck) broadcastAction(`🃏 Player ${state.currentPlayer} added a card from deck to hand`);
+};
+
       
       if (toUpperBtn) toUpperBtn.onclick = () => {
         const cardToPlace = { ...card, tapped: false };
