@@ -227,6 +227,60 @@
   box-shadow: 0 10px 30px rgba(0,0,0,.5);
 }
 .flash { box-shadow: 0 0 0 3px #f59e0b inset; transition: box-shadow .9s ease; }
+
+/* --- Mana curve (decklist) --- */
+.mana-curve-wrap {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(139,92,246,0.35);
+  border-radius: 12px;
+  padding: 12px;
+}
+.mana-curve-title {
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  opacity: .75;
+  margin-bottom: 8px;
+}
+.mana-curve {
+  display: grid;
+  grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
+  align-items: end;
+  gap: 10px;
+  height: 140px;                /* chart height */
+  padding: 8px 6px 0 6px;
+}
+.mc-col { position: relative; }
+.mc-bar {
+  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+  border: 2px solid #ecfdf5;
+  border-radius: 8px 8px 4px 4px;
+  width: 100%;
+  min-height: 4px;
+  transition: transform .12s ease, opacity .12s ease;
+}
+.mc-bar:hover { transform: translateY(-2px); }
+.mc-count {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #d1fae5;
+  text-shadow: 0 1px 0 rgba(0,0,0,.45);
+  white-space: nowrap;
+}
+.mc-x {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
+  gap: 10px;
+  font-size: 11px;
+  opacity: .8;
+  text-align: center;
+}
+
   </style>
 <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.container{width:100%}@media (min-width: 640px){.container{max-width:640px}}@media (min-width: 768px){.container{max-width:768px}}@media (min-width: 1024px){.container{max-width:1024px}}@media (min-width: 1280px){.container{max-width:1280px}}@media (min-width: 1536px){.container{max-width:1536px}}.mb-8{margin-bottom:2rem}.mb-4{margin-bottom:1rem}.mt-4{margin-top:1rem}.mb-2{margin-bottom:0.5rem}.flex{display:flex}.grid{display:grid}.p-4{padding:1rem}.text-center{text-align:center}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}</style><style>:is([id*='google_ads_iframe'],[id*='taboola-'],.taboolaHeight,.taboola-placeholder,#top-ad,#credential_picker_container,#credentials-picker-container,#credential_picker_iframe,[id*='google-one-tap-iframe'],#google-one-tap-popup-container,.google-one-tap__module,.google-one-tap-modal-div,#amp_floatingAdDiv,#ez-content-blocker-container) {display:none!important;min-height:0!important;height:0!important;}
 /* --- menu tiles --- */
@@ -392,6 +446,106 @@ function toast(message, ms = 2200) {
     setTimeout(() => t.remove(), 180);
   }, ms);
 }
+
+// --- Mana Curve helpers ---
+function getCMC(card) {
+  // Prefer explicit numeric cmc if present
+  if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) return Math.max(0, Math.floor(card.cmc));
+
+  // Common fields: manaCost like "{2}{G}{G}" or "2GG", or "3U/R" etc.
+  const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+  if (!s) return null;
+
+  // Braced form: sum digits; letters count as 1 each, 'X' counts as 0
+  // Examples: "{2}{G}{G}" => 4 ; "{X}{U}{U}" => 2
+  let sum = 0;
+  if (s.includes('{')) {
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens) {
+      const inner = t.slice(1, -1);
+      const n = parseInt(inner, 10);
+      if (Number.isFinite(n)) sum += n;
+      else {
+        // split hybrids like "G/U" -> ["G","U"]
+        const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+        for (const ch of letters) {
+          if ('WUBRGCS'.includes(ch)) sum += 1;   // treat W U B R G C S as 1
+          // 'X' -> 0
+        }
+      }
+    }
+    return sum;
+  }
+
+  // Unbraced fallback: digits + count of letters WUBRG (X=0)
+  const digits = (s.match(/\d+/g) || []).map(x => parseInt(x,10)).reduce((a,b)=>a+b,0);
+  const letters = (s.toUpperCase().match(/[WUBRGC]/g) || []).length;
+  return digits + letters;
+}
+
+function manaCurveData(cards) {
+  const counts = new Map();
+  for (const c of (cards || [])) {
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    counts.set(cmc, (counts.get(cmc) || 0) + 1);
+  }
+  if (counts.size === 0) return { bins: [], max: 0 };
+
+  const min = Math.min(...counts.keys());
+  const max = Math.max(...counts.keys());
+  const bins = [];
+  let peak = 0;
+  for (let k = min; k <= max; k++) {
+    const v = counts.get(k) || 0;
+    bins.push({ cmc: k, count: v });
+    if (v > peak) peak = v;
+  }
+  return { bins, max: peak };
+}
+
+function renderManaCurve(containerId, cards) {
+  const root = document.getElementById(containerId);
+  if (!root) return;
+  const { bins, max } = manaCurveData(cards);
+  if (bins.length === 0) {
+    root.innerHTML = `<div class="mana-curve-wrap">
+      <div class="mana-curve-title">Mana Curve</div>
+      <div style="opacity:.7; font-size:12px;">No mana-cost data in this deck.</div>
+    </div>`;
+    return;
+  }
+  const cols = bins.map(b => {
+    const h = max > 0 ? Math.round((b.count / max) * 100) : 0;
+    return `
+      <div class="mc-col">
+        <div class="mc-bar" style="height: ${h}%"></div>
+        <div class="mc-count">${b.count}</div>
+      </div>`;
+  }).join('');
+
+  const labels = bins.map(b => `<div>${b.cmc}</div>`).join('');
+
+  root.innerHTML = `
+    <div class="mana-curve-wrap">
+      <div class="mana-curve-title">Mana Curve</div>
+      <div class="mana-curve" style="--bins:${bins.length}">${cols}</div>
+      <div class="mc-x" style="--bins:${bins.length}">${labels}</div>
+    </div>`;
+}
+
+
+function getDeckForChart() {
+  const meKey = 'player' + state.currentPlayer;
+  // Try common working-deck shapes first
+  if (Array.isArray(state.currentDeck)) return state.currentDeck;
+  if (state.deckBuilder?.cards && Array.isArray(state.deckBuilder.cards)) return state.deckBuilder.cards;
+  if (Array.isArray(state.deck)) return state.deck;
+  // Fallback: the deck synced per player
+  return state.decks?.[meKey] || [];
+}
+
+
 
 function nInt(x) {
   const v = parseInt(x, 10);
@@ -618,7 +772,7 @@ function LoginScreen() {
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
   Galdurspjölt
 </h1>
-      <p class="text-gray mb-1" style="font-size: 14px;">Create custom cards, play friends.</p>
+      <p class="text-gray mb-1" style="font-size: 14px;">Create custom cards, play with friends.</p>
 
 <p class="text-xs text-gray" style="margin-bottom: 20px;">
  Made by KS. 2025. 
@@ -2055,11 +2209,143 @@ if (!window.convertDecklist) window.convertDecklist = async function(text, playe
 // =====================================
 // Deck Builder
 // =====================================
+
 function DeckBuilder() {
   const key = 'player' + state.currentPlayer;
 
   const div = document.createElement('div');
   div.className = 'container';
+
+  // ---------- NEW: mana-curve CSS injector (safe if added already) ----------
+  (function ensureManaCurveCSS(){
+    if (document.getElementById('manaCurveCSS')) return;
+    const style = document.createElement('style');
+    style.id = 'manaCurveCSS';
+    style.textContent = `
+      /* --- Mana curve (decklist) --- */
+      .mana-curve-wrap {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(139,92,246,0.35);
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 16px;
+      }
+      .mana-curve-title {
+        font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+        opacity: .75; margin-bottom: 8px;
+      }
+      .mana-curve {
+        display: grid; grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
+        align-items: end; gap: 10px; height: 140px; padding: 8px 6px 0 6px;
+      }
+.mc-col {
+  position: relative;
+  height: 100%;          /* key: give bars a height reference */
+  display: flex;         /* let the bar sit on the bottom */
+  align-items: flex-end; /* bars grow up from the baseline */
+}
+      .mc-bar {
+        background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+        border: 2px solid #ecfdf5; border-radius: 8px 8px 4px 4px;
+        width: 100%; min-height: 4px; transition: transform .12s ease, opacity .12s ease;
+      }
+      .mc-bar:hover { transform: translateY(-2px); }
+      .mc-count {
+        position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+        font-size: 11px; font-weight: 700; color: #d1fae5; text-shadow: 0 1px 0 rgba(0,0,0,.45);
+        white-space: nowrap;
+      }
+      .mc-x {
+        margin-top: 6px; display: grid;
+        grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
+        gap: 10px; font-size: 11px; opacity: .8; text-align: center;
+      }
+    `;
+    document.head.appendChild(style);
+  })();
+
+  // ---------- NEW: mana-curve helpers (local to this screen) ----------
+  function getCMC(card) {
+    if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) {
+      return Math.max(0, Math.floor(card.cmc));
+    }
+    const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+    if (!s) return null;
+
+    if (s.includes('{')) {
+      const tokens = s.match(/\{([^}]+)\}/g) || [];
+      let sum = 0;
+      for (const t of tokens) {
+        const inner = t.slice(1, -1);
+        const n = parseInt(inner, 10);
+        if (Number.isFinite(n)) { sum += n; continue; }
+        const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+        for (const ch of letters) {
+          if ('WUBRGCS'.includes(ch)) sum += 1; // W U B R G C (colorless) S (snow) → 1
+          // X → 0
+        }
+      }
+      return sum;
+    }
+    const digits = (s.match(/\d+/g) || []).map(x => parseInt(x,10)).reduce((a,b)=>a+b,0);
+    const letters = (s.toUpperCase().match(/[WUBRGC]/g) || []).length;
+    return digits + letters;
+  }
+
+  function manaCurveData(cards) {
+    const counts = new Map();
+    for (const c of (cards || [])) {
+      const cmc = getCMC(c);
+      if (cmc === null || !Number.isFinite(cmc)) continue;
+      counts.set(cmc, (counts.get(cmc) || 0) + 1);
+    }
+    if (counts.size === 0) return { bins: [], max: 0 };
+
+    const min = Math.min(...counts.keys());
+    const max = Math.max(...counts.keys());
+    const bins = [];
+    let peak = 0;
+    for (let k = min; k <= max; k++) {
+      const v = counts.get(k) || 0;
+      bins.push({ cmc: k, count: v });
+      if (v > peak) peak = v;
+    }
+    return { bins, max: peak };
+  }
+
+  function renderManaCurveDeck() {
+    const mount = div.querySelector('#manaCurveDeckChart');
+    if (!mount) return;
+
+    const deck = state.decks[key] || [];
+    const { bins, max } = manaCurveData(deck);
+
+    if (bins.length === 0) {
+      mount.innerHTML = `
+        <div class="mana-curve-wrap">
+          <div class="mana-curve-title">Mana Curve</div>
+          <div style="opacity:.7; font-size:12px;">No mana-cost data in this deck.</div>
+        </div>`;
+      return;
+    }
+
+    const cols = bins.map(b => {
+      const h = max > 0 ? Math.round((b.count / max) * 100) : 0;
+      return `
+        <div class="mc-col">
+          <div class="mc-bar" style="height:${h}%"></div>
+          <div class="mc-count">${b.count}</div>
+        </div>`;
+    }).join('');
+    const labels = bins.map(b => `<div>${b.cmc}</div>`).join('');
+
+    mount.innerHTML = `
+      <div class="mana-curve-wrap">
+        <div class="mana-curve-title">Mana Curve</div>
+        <div class="mana-curve" style="--bins:${bins.length}">${cols}</div>
+        <div class="mc-x" style="--bins:${bins.length}">${labels}</div>
+      </div>`;
+  }
 
   // ---------- helpers (local to builder) ----------
   const updateCardInfo = () => {
@@ -2115,7 +2401,7 @@ function DeckBuilder() {
         e.stopPropagation();
         const i = state.decks[key].indexOf(c);
         if (i > -1) state.decks[key].splice(i, 1);
-        render();
+        render(); // will rebuild and re-render the chart
       };
       cardDiv.appendChild(removeBtn);
     }
@@ -2148,7 +2434,7 @@ function DeckBuilder() {
         const copy = { ...c, deckId: Date.now() + Math.random() };
         state.decks[key] = state.decks[key] || [];
         state.decks[key].push(copy);
-        render();
+        render(); // will rebuild and re-render the chart
       };
       availContainer.appendChild(el);
     });
@@ -2181,12 +2467,11 @@ function DeckBuilder() {
     <div class="card p-4 hidden" id="importCard" style="margin-bottom:16px">
       <div class="flex justify-between" style="align-items:center;margin-bottom:8px">
         <h3 style="font-weight:800;letter-spacing:.2px">Import decklist</h3>
-
         <div class="text-xs text-gray">
-  <strong>.json</strong> upload = replace current deck immediately.<br>
-  <strong>.txt</strong> or pasted text = Parse → Import parsed.
+          <strong>.json</strong> upload = replace current deck immediately.<br>
+          <strong>.txt</strong> or pasted text = Parse → Import parsed.
         </div>
-    </div>
+      </div>
 
       <div class="grid" style="grid-template-columns:1fr 320px;gap:12px">
         <div>
@@ -2217,9 +2502,8 @@ Island x14
               Replace current deck (instead of add)
             </label>
 
-              <button id="btnImportParse"  class="btn btn-primary text-sm">Parse</button>
-              <button id="btnImportApply"  class="btn btn-secondary text-sm" disabled>Import parsed</button>
-            
+            <button id="btnImportParse"  class="btn btn-primary text-sm">Parse</button>
+            <button id="btnImportApply"  class="btn btn-secondary text-sm" disabled>Import parsed</button>
           </div>
         </div>
 
@@ -2229,6 +2513,9 @@ Island x14
         </div>
       </div>
     </div>
+
+    <!-- NEW: Mana curve chart mount -->
+    <div id="manaCurveDeckChart"></div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:20px;">
       <div class="card">
@@ -2278,185 +2565,155 @@ Island x14
     };
   }
 
- // Draft entry (image tile)
-const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
-if (openDraft) {
-  openDraft.onclick = () => {
-    state.draft = {
-      ...state.draft,
-      active: true,
-      screen: 'mode',          // ← start at the new mode chooser
-      mode: 'traditional',
-      format: 'standard',
-      target: 60,
-      allowDuplicates: true,
-      offeredColorSets: [],
-      chosenColors: [],
-      basicLands: { W:0, U:0, B:0, R:0, G:0 },
-      picks: 0,
-      pool: [],
-      deck: [],
-      seenIds: {},
-      seenNames: {},
-      customPool: [],
-      customParams: { filterByColors: true }
+  // Draft entry (image tile)
+  const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
+  if (openDraft) {
+    openDraft.onclick = () => {
+      state.draft = {
+        ...state.draft,
+        active: true, screen: 'mode', mode: 'traditional', format: 'standard',
+        target: 60, allowDuplicates: true, offeredColorSets: [], chosenColors: [],
+        basicLands: { W:0, U:0, B:0, R:0, G:0 }, picks: 0, pool: [], deck: [],
+        seenIds: {}, seenNames: {}, customPool: [], customParams: { filterByColors: true }
+      };
+      state.screen = 'draft';
+      render();
     };
-    state.screen = 'draft';
-    render();
-  };
-}
+  }
 
-  
   // ---------- Import panel wiring ----------
-const importTA    = div.querySelector('#importDeckTA');
-const importFile  = div.querySelector('#importDeckFile');
-const importSet   = div.querySelector('#importSetPref');
-const importImgs  = div.querySelector('#importIncludeImages');
-const importRepl  = div.querySelector('#importReplace');
-const importParse = div.querySelector('#btnImportParse');
-const importApply = div.querySelector('#btnImportApply');
-const importStat  = div.querySelector('#importStatus');
-const importPrev  = div.querySelector('#importPreview');
+  const importTA    = div.querySelector('#importDeckTA');
+  const importFile  = div.querySelector('#importDeckFile');
+  const importSet   = div.querySelector('#importSetPref');
+  const importImgs  = div.querySelector('#importIncludeImages');
+  const importRepl  = div.querySelector('#importReplace');
+  const importParse = div.querySelector('#btnImportParse');
+  const importApply = div.querySelector('#btnImportApply');
+  const importStat  = div.querySelector('#importStatus');
+  const importPrev  = div.querySelector('#importPreview');
 
-// Keep a cache of the last parsed result (for TXT or pasted JSON)
-let lastParsedCards = null;
+  // Keep a cache of the last parsed result (for TXT or pasted JSON)
+  let lastParsedCards = null;
 
-// Render a tiny table preview of parsed counts (for TXT)
-function renderImportPreview(map){
-  if (!map || map.size === 0) { importPrev.innerHTML = ''; return; }
-  const rows = [];
-  let total = 0;
-  for (const [name, qty] of map){ rows.push(`<tr><td style="width:40px">${qty}</td><td>${name}</td></tr>`); total += qty; }
-  importPrev.innerHTML = `
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr><th style="text-align:left;width:40px">Qty</th><th style="text-align:left">Name</th></tr></thead>
-      <tbody>${rows.join('')}</tbody>
-    </table>
-    <div class="text-xs text-gray" style="margin-top:6px">
-      Parsed <strong>${map.size}</strong> unique names / <strong>${total}</strong> total.
-      Supported lines: <code>4 Lightning Bolt</code>, <code>Lightning Bolt x2</code>, <code>3x Counterspell</code>, or just the name.
-      Lines beginning with <code>#</code> or <code>//</code> and headers like <code>Sideboard:</code> are ignored.
-    </div>`;
-}
+  function renderImportPreview(map){
+    if (!map || map.size === 0) { importPrev.innerHTML = ''; return; }
+    const rows = [];
+    let total = 0;
+    for (const [name, qty] of map){ rows.push(`<tr><td style="width:40px">${qty}</td><td>${name}</td></tr>`); total += qty; }
+    importPrev.innerHTML = `
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="text-align:left;width:40px">Qty</th><th style="text-align:left">Name</th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>
+      <div class="text-xs text-gray" style="margin-top:6px">
+        Parsed <strong>${map.size}</strong> unique names / <strong>${total}</strong> total.
+        Supported lines: <code>4 Lightning Bolt</code>, <code>Lightning Bolt x2</code>, <code>3x Counterspell</code>, or just the name.
+        Lines beginning with <code>#</code> or <code>//</code> and headers like <code>Sideboard:</code> are ignored.
+      </div>`;
+  }
 
-// Ensure every card object has an imageUrl (re-hydrate if missing)
-function ensureImages(cards){
-  return cards.map(c => {
-    if (!c.imageUrl || !c.imageUrl.length){
-      const nm = encodeURIComponent(c.name || '');
-      c.imageUrl = `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${nm}`;
-    }
-    return c;
-  });
-}
+  function ensureImages(cards){
+    return cards.map(c => {
+      if (!c.imageUrl || !c.imageUrl.length){
+        const nm = encodeURIComponent(c.name || '');
+        c.imageUrl = `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${nm}`;
+      }
+      return c;
+    });
+  }
 
-function applyToDeck(cards, replace){
-  const key = 'player' + state.currentPlayer;
-  if (replace) state.decks[key] = cards.slice();
-  else state.decks[key] = (state.decks[key] || []).concat(cards);
-  toast(replace ? 'Deck replaced ✓' : `Added ${cards.length} card(s) ✓`);
-  render();
-}
+  function applyToDeck(cards, replace){
+    const key2 = 'player' + state.currentPlayer;
+    if (replace) state.decks[key2] = cards.slice();
+    else state.decks[key2] = (state.decks[key2] || []).concat(cards);
+    toast(replace ? 'Deck replaced ✓' : `Added ${cards.length} card(s) ✓`);
+    render();
+  }
 
-// --- Parse (does NOT modify the deck) ---
-async function doParse(raw){
-  lastParsedCards = null;
-  importApply.disabled = true;
-
-  try{
-    if (!raw || !raw.trim()){
-      if (importStat) importStat.textContent = 'Nothing to parse.';
-      return;
-    }
-
-    // If JSON is pasted into the textarea, accept structure and prepare to import on click
-    if (raw.trim().startsWith('{')){
-      const j = JSON.parse(raw);
-      if (Array.isArray(j.cards)){
-        lastParsedCards = ensureImages(j.cards);
-        importPrev.innerHTML = `<div class="text-xs text-gray">Ready: JSON with <strong>${lastParsedCards.length}</strong> card objects.</div>`;
-        if (importStat) importStat.textContent = 'JSON parsed. Click “Import parsed” to load it.';
-        importApply.disabled = false;
+  async function doParse(raw){
+    lastParsedCards = null;
+    importApply.disabled = true;
+    try{
+      if (!raw || !raw.trim()){
+        if (importStat) importStat.textContent = 'Nothing to parse.';
         return;
       }
-      // else fall through to TXT parsing attempt
-    }
+      if (raw.trim().startsWith('{')){
+        const j = JSON.parse(raw);
+        if (Array.isArray(j.cards)){
+          lastParsedCards = ensureImages(j.cards);
+          importPrev.innerHTML = `<div class="text-xs text-gray">Ready: JSON with <strong>${lastParsedCards.length}</strong> card objects.</div>`;
+          if (importStat) importStat.textContent = 'JSON parsed. Click “Import parsed” to load it.';
+          importApply.disabled = false;
+          return;
+        }
+      }
+      const m = parseDecklist(raw);
+      renderImportPreview(m);
+      if (!m.size){ if (importStat) importStat.textContent = 'No valid card names found.'; return; }
 
-    // Treat as TXT: preview counts, then resolve via Scryfall for exact matches
-    const m = parseDecklist(raw);   // from your global helper
-    renderImportPreview(m);
-    if (!m.size){ if (importStat) importStat.textContent = 'No valid card names found.'; return; }
+      if (importStat) importStat.textContent = 'Fetching Scryfall data…';
+      const setPref = (importSet && importSet.value || '').trim();
+      const includeImages = !!(importImgs && importImgs.checked);
+      const { out, errors } = await convertDecklist(raw, state.currentPlayer, setPref, includeImages, { textContent: (t)=> { if(importStat) importStat.textContent = t; } });
 
-    if (importStat) importStat.textContent = 'Fetching Scryfall data…';
-    const setPref = (importSet && importSet.value || '').trim();
-    const includeImages = !!(importImgs && importImgs.checked);
-    const { out, errors } = await convertDecklist(raw, state.currentPlayer, setPref, includeImages, { textContent: (t)=> { if(importStat) importStat.textContent = t; } }); // same helper you already included
+      lastParsedCards = out.cards;
+      importApply.disabled = false;
 
-    lastParsedCards = out.cards;
-    importApply.disabled = false;
-
-    const warn = errors && errors.length ? ` • ${errors.length} could not be matched.` : '';
-    if (importStat) importStat.textContent = `Parsed ${m.size} unique (${[...m.values()].reduce((a,b)=>a+b,0)} total). Resolved ${out.cards.length} objects${warn}.`;
-  } catch(e){
-    if (importStat) importStat.textContent = 'Error: ' + e.message;
-  }
-}
-
-// --- Import parsed → apply to deck (append or replace) ---
-function doImportParsed(){
-  if (!lastParsedCards || !lastParsedCards.length){
-    toast('Nothing parsed yet. Click Parse first.');
-    return;
-  }
-  const replace = !!(importRepl && importRepl.checked);
-  applyToDeck(lastParsedCards, replace);
-}
-
-if (importParse) importParse.onclick = () => {
-  const raw = (importTA && importTA.value) ? importTA.value : '';
-  doParse(raw);
-};
-
-if (importApply) importApply.onclick = () => doImportParsed();
-
-// --- File upload ---
-//   • .json  → REPLACE current deck immediately (and re-hydrate images if missing)
-//   • .txt   → fill textarea, show “ready to parse”, do NOT auto-import
-if (importFile) importFile.onchange = async (e) => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
-
-  const text = await f.text();
-  const name = (f.name || '').toLowerCase();
-
-  // JSON: replace immediately
-  if (name.endsWith('.json') || text.trim().startsWith('{')){
-    try{
-      const j = JSON.parse(text);
-      if (!Array.isArray(j.cards)) throw new Error('Not a compatible deck JSON (missing "cards" array).');
-      const cards = ensureImages(j.cards);
-      // Always replace for JSON uploads (per your request)
-      applyToDeck(cards, true);
-      if (importStat) importStat.textContent = `Loaded JSON deck: ${cards.length} cards (replaced).`;
-      return;
-    } catch(err){
-      if (importStat) importStat.textContent = 'Invalid JSON: ' + err.message;
-      return;
+      const warn = errors && errors.length ? ` • ${errors.length} could not be matched.` : '';
+      if (importStat) importStat.textContent = `Parsed ${m.size} unique (${[...m.values()].reduce((a,b)=>a+b,0)} total). Resolved ${out.cards.length} objects${warn}.`;
+    } catch(e){
+      if (importStat) importStat.textContent = 'Error: ' + e.message;
     }
   }
 
-  // TXT: load into the textarea for the user to Parse → Import
-  if (importTA) importTA.value = text;
-  try { const m = parseDecklist(text); renderImportPreview(m); } catch {}
-  if (importStat) importStat.textContent = 'TXT loaded. Click “Parse” to resolve via Scryfall, then “Import parsed”.';
-  importApply.disabled = true;
-};
+  function doImportParsed(){
+    if (!lastParsedCards || !lastParsedCards.length){
+      toast('Nothing parsed yet. Click Parse first.');
+      return;
+    }
+    const replace = !!(importRepl && importRepl.checked);
+    applyToDeck(lastParsedCards, replace);
+  }
 
-  
+  if (importParse) importParse.onclick = () => {
+    const raw = (importTA && importTA.value) ? importTA.value : '';
+    doParse(raw);
+  };
+  if (importApply) importApply.onclick = () => doImportParsed();
+
+  if (importFile) importFile.onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    const name = (f.name || '').toLowerCase();
+
+    if (name.endsWith('.json') || text.trim().startsWith('{')){
+      try{
+        const j = JSON.parse(text);
+        if (!Array.isArray(j.cards)) throw new Error('Not a compatible deck JSON (missing "cards" array).');
+        const cards = ensureImages(j.cards);
+        applyToDeck(cards, true);
+        if (importStat) importStat.textContent = `Loaded JSON deck: ${cards.length} cards (replaced).`;
+        return;
+      } catch(err){
+        if (importStat) importStat.textContent = 'Invalid JSON: ' + err.message;
+        return;
+      }
+    }
+    if (importTA) importTA.value = text;
+    try { const m = parseDecklist(text); renderImportPreview(m); } catch {}
+    if (importStat) importStat.textContent = 'TXT loaded. Click “Parse” to resolve via Scryfall, then “Import parsed”.';
+    importApply.disabled = true;
+  };
+
+  // ---------- NEW: render the mana-curve now that DOM is mounted ----------
+  renderManaCurveDeck();
+
   return div;
 }
 
-
+// GAME BOARD ----------------------------
 function GameBoard() {
   const div = document.createElement('div');
   
@@ -2737,7 +2994,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       <!-- COUNTERS: spans full width so grid stays balanced; collapsed by default -->
       <details class="counter-panel" style="grid-column: 1 / -1; margin-top: 0;">
         <summary class="btn btn-secondary text-sm" style="display:block; width: 100%; padding: 14px; text-align:center;">
-          🪙 Counters
+          🔘 Counters
         </summary>
         <div style="padding: 10px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; margin-top: 8px;">
           <div class="text-xs mb-1">P/T: <span id="ptNow"></span></div>
@@ -3032,19 +3289,16 @@ render();
     render();
   };
   
-    if (mulliganBtn) mulliganBtn.onclick = () => {
+      if (mulliganBtn) mulliganBtn.onclick = () => {
   const n = me.hand.length;
   if (n === 0) { toast('No cards in hand to mulligan.'); return; }
-
-  // Discard entire hand to graveyard; no shuffle, no redraw
-  me.graveyard.push(...me.hand);
+  // Return entire hand to DECK (no redraw, no shuffle)
+  me.deck.push(...me.hand);
   me.hand.length = 0;
-
-  toast(`Mulligan: discarded ${n} card${n > 1 ? 's' : ''} to graveyard.`);
+  toast(`Mulligan: returned ${n} card${n !== 1 ? 's' : ''} to deck.`);
   sendGameUpdate();
   render();
 };
-
   
   if (viewDeckBtn) viewDeckBtn.onclick = () => {
   state.viewingZone = { title: '📚 Your Deck (top→bottom)', cards: me.deck, zone: 'deck', owner: 'me' };
