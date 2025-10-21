@@ -1251,7 +1251,7 @@ function Mode(){
     wrap.innerHTML = `
       <div class="header">
         <button id="back" class="btn btn-secondary text-sm">← Back</button>
-        <h1 style="font-size:24px;font-weight:700">Traditional Draft</h1>
+        <h1 style="font-size:24px;font-weight:700"></h1>
 
       <div class="card p-4">
         <div class="mb-4">
@@ -2216,53 +2216,317 @@ function DeckBuilder() {
   const div = document.createElement('div');
   div.className = 'container';
 
-  // ---------- NEW: mana-curve CSS injector (safe if added already) ----------
-  (function ensureManaCurveCSS(){
-    if (document.getElementById('manaCurveCSS')) return;
-    const style = document.createElement('style');
-    style.id = 'manaCurveCSS';
-    style.textContent = `
-      /* --- Mana curve (decklist) --- */
-      .mana-curve-wrap {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(139,92,246,0.35);
-        border-radius: 12px;
-        padding: 12px;
-        margin-bottom: 16px;
-      }
-      .mana-curve-title {
-        font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
-        opacity: .75; margin-bottom: 8px;
-      }
-      .mana-curve {
-        display: grid; grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
-        align-items: end; gap: 10px; height: 140px; padding: 8px 6px 0 6px;
-      }
-.mc-col {
-  position: relative;
-  height: 100%;          /* key: give bars a height reference */
-  display: flex;         /* let the bar sit on the bottom */
-  align-items: flex-end; /* bars grow up from the baseline */
+
+// --- NEW: Deck Statistics CSS (once) ---
+(function ensureDeckStatsCSS(){
+  if (document.getElementById('deckStatsCSS')) return;
+  const s = document.createElement('style');
+  s.id = 'deckStatsCSS';
+  s.textContent = `
+  /* Card-like wrapper */
+  .ds-card{
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(139,92,246,0.35);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .ds-title{
+    font-size: 12px; letter-spacing:.04em; text-transform:uppercase;
+    opacity:.8; margin-bottom:8px;
+  }
+  .ds-row{ display:grid; gap:12px; }
+  @media (min-width: 900px){
+    .ds-row{ grid-template-columns: 2fr 1fr 1fr; }
+  }
+
+  /* Stacked mana curve */
+  .ds-curve{ height: 160px; display:grid; align-items:end; gap:10px;
+             grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); padding: 8px 6px 0 6px;}
+  .ds-col{ position:relative; height:100%; display:flex; flex-direction:column; justify-content:flex-end; }
+  .ds-seg{ width:100%; border:2px solid #ecfdf5; }
+  .ds-seg.crea{ background: linear-gradient(180deg,#34d399 0%,#10b981 100%); border-radius:8px 8px 0 0; }
+  .ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 4px 4px; border-top-width:0; }
+  .ds-count{ position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:700; color:#d1fae5; text-shadow:0 1px 0 rgba(0,0,0,.45); }
+  .ds-x{ margin-top:6px; display:grid; gap:10px;
+         grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); font-size:11px; opacity:.8; text-align:center; }
+
+  .ds-legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; font-size:11px; opacity:.85; }
+  .ds-key{ display:inline-flex; align-items:center; gap:6px; }
+  .ds-swatch{ width:12px; height:12px; border-radius:3px; border:1px solid rgba(255,255,255,.5); }
+
+  /* Pie charts (conic-gradient) */
+  .ds-pies{ display:grid; gap:12px; grid-template-columns: 1fr; }
+  @media (min-width: 900px){ .ds-pies{ grid-template-columns: 1fr 1fr; } }
+  .ds-piecard{ }
+  .ds-piewrap{ display:flex; gap:12px; align-items:center; }
+  .ds-pie{
+    --size: 120px;
+    width: var(--size); height: var(--size); border-radius: 50%;
+    border:2px solid rgba(236,253,245,0.7);
+    box-shadow: inset 0 0 16px rgba(0,0,0,0.35);
+  }
+  .ds-list{ font-size:12px; line-height:1.6; }
+  .ds-list .row{ display:flex; justify-content:space-between; gap:12px; }
+  .ds-small{ font-size:12px; opacity:.8; }
+  
+  
+  /* Stretched toggle bar for Deck Statistics */
+.stats-toggle{
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(31,41,55,0.85);
+  border: 1px solid rgba(139,92,246,0.55);
+  border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  color: #e9d5ff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(139,92,246,0.25);
+  transition: border-color .15s ease, background .15s ease, transform .08s ease;
+  margin-bottom: 10px;
 }
-      .mc-bar {
-        background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
-        border: 2px solid #ecfdf5; border-radius: 8px 8px 4px 4px;
-        width: 100%; min-height: 4px; transition: transform .12s ease, opacity .12s ease;
+.stats-toggle:hover{ border-color:#a78bfa; background: rgba(31,41,55,0.95); }
+.stats-toggle:active{ transform: translateY(1px); }
+.stats-toggle .left{ display:flex; align-items:center; gap:10px; }
+.stats-toggle .chip{
+  width: 10px; height:10px; border-radius:50%;
+  background: linear-gradient(180deg,#34d399 0%,#10b981 100%);
+  border: 1px solid #ecfdf5;
+  box-shadow: 0 0 0 2px rgba(16,185,129,.25);
+}
+.stats-toggle .chev{
+  font-size: 16px; opacity: .9; transition: transform .15s ease;
+}
+.stats-toggle.open .chev{ transform: rotate(90deg); } /* ▸ → ▾ */
+  `;
+  document.head.appendChild(s);
+})();
+
+
+// --- NEW: type/color helpers for stats ---
+function isLand(c){ return ((c.type||'')+'' ).toLowerCase().includes('land'); }
+function isBasicLand(c){ const t=(c.type||'').toLowerCase(); return t.includes('basic') && t.includes('land'); }
+function isCreature(c){ return ((c.type||'')+'' ).toLowerCase().includes('creature'); }
+
+function getCMC(card){
+  if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) return Math.max(0, Math.floor(card.cmc));
+  const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+  if (!s) return null;
+  if (s.includes('{')){
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    let sum = 0;
+    for (const t of tokens){
+      const inner = t.slice(1,-1);
+      const n = parseInt(inner,10);
+      if (Number.isFinite(n)) { sum += n; continue; }
+      const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+      for (const ch of letters){
+        if ('WUBRGCS'.includes(ch)) sum += 1;  // treat W U B R G C S as 1; X as 0
       }
-      .mc-bar:hover { transform: translateY(-2px); }
-      .mc-count {
-        position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-        font-size: 11px; font-weight: 700; color: #d1fae5; text-shadow: 0 1px 0 rgba(0,0,0,.45);
-        white-space: nowrap;
+    }
+    return sum;
+  }
+  const digits  = (s.match(/\d+/g)||[]).map(x=>parseInt(x,10)).reduce((a,b)=>a+b,0);
+  const letters = (s.toUpperCase().match(/[WUBRGC]/g)||[]).length;
+  return digits + letters;
+}
+
+// Count W/U/B/R/G symbols in mana *costs*
+function countManaSymbols(cards){
+  const out = {W:0,U:0,B:0,R:0,G:0};
+  for (const c of cards){
+    const s = (c?.manaCost || c?.manacost || c?.cost || '').toString().toUpperCase();
+    if (!s) continue;
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens){
+      const inner = t.slice(1,-1).toUpperCase();
+      // split hybrids "G/U" => "GU"
+      for (const ch of inner.split(/[^A-Z]/).join('')){
+        if (out.hasOwnProperty(ch)) out[ch] += 1;
       }
-      .mc-x {
-        margin-top: 6px; display: grid;
-        grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
-        gap: 10px; font-size: 11px; opacity: .8; text-align: center;
-      }
-    `;
-    document.head.appendChild(style);
-  })();
+    }
+    if (!tokens.length){
+      // unbraced fallback: count letters
+      (s.match(/[WUBRG]/g)||[]).forEach(ch => out[ch] += 1);
+    }
+  }
+  return out;
+}
+
+// Group types (with "Artifact Creature" kept separate)
+function typesBreakdown(cards){
+  const map = new Map();
+  const push = (k)=> map.set(k, (map.get(k)||0)+1);
+  for (const c of cards){
+    const t = (c.type||'').toLowerCase();
+    if (!t){ push('Other'); continue; }
+    if (t.includes('artifact') && t.includes('creature')) { push('Artifact Creature'); continue; }
+    if (t.includes('creature'))     { push('Creature'); continue; }
+    if (t.includes('instant'))      { push('Instant'); continue; }
+    if (t.includes('sorcery'))      { push('Sorcery'); continue; }
+    if (t.includes('enchantment'))  { push('Enchantment'); continue; }
+    if (t.includes('planeswalker')) { push('Planeswalker'); continue; }
+    if (t.includes('artifact'))     { push('Artifact'); continue; }
+    if (t.includes('basic') && t.includes('land')) { push('Basic Land'); continue; }
+    if (t.includes('land'))         { push('Land'); continue; }
+    push('Other');
+  }
+  return map;
+}
+
+// Stacked curve data (exclude lands)
+function stackedCurve(cards){
+  const bins = new Map();  // cmc -> {crea, non}
+  let peak = 0;
+  for (const c of cards){
+    if (isLand(c)) continue;                 // exclude lands from curve & avg
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    const k = cmc;
+    const o = bins.get(k) || {crea:0, non:0};
+    if (isCreature(c)) o.crea += 1; else o.non += 1;
+    bins.set(k, o);
+    const tot = o.crea + o.non;
+    if (tot > peak) peak = tot;
+  }
+  const keys = [...bins.keys()].sort((a,b)=>a-b);
+  return { keys, bins, peak };
+}
+
+// Average mana cost (spells only; lands excluded)
+function averageCMC(cards){
+  let sum = 0, n = 0;
+  for (const c of cards){
+    if (isLand(c)) continue;
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    sum += cmc; n += 1;
+  }
+  return n ? (sum/n) : 0;
+}
+
+// Build conic-gradient for a pie
+function pieStyleFromCounts(obj, palette){
+  const entries = Object.entries(obj).filter(([k,v]) => v>0);
+  const total = entries.reduce((a, [,v])=>a+v, 0) || 1;
+  let acc = 0;
+  const stops = entries.map(([k,v])=>{
+    const start = acc / total * 360;
+    acc += v;
+    const end = acc / total * 360;
+    const color = palette[k] || '#999';
+    return `${color} ${start}deg ${end}deg`;
+  }).join(', ');
+  return `background: conic-gradient(${stops});`;
+}
+
+
+// --- NEW: render Deck Statistics into existing mount ---
+function renderDeckStatsInto(containerId){
+  const mount = div.querySelector('#' + containerId);
+  if (!mount) return;
+
+  const deck = state.decks[key] || [];
+  const avg  = averageCMC(deck);
+  const { keys, bins, peak } = stackedCurve(deck);
+
+  // Colors pie (W/U/B/R/G)
+  const manaColors = countManaSymbols(deck);
+  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+
+  // Types pie
+  const tb = typesBreakdown(deck);
+  const typeObj = Object.fromEntries(tb);
+  // stable palette for common types
+  const typePalette = {
+    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
+    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
+    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+  };
+
+  // Build stacked curve columns
+  const cols = keys.map(k=>{
+    const o = bins.get(k) || {crea:0, non:0};
+    const tot = o.crea + o.non;
+    const hC = peak ? Math.max(4, Math.round(o.crea/peak*100)) : 0;
+    const hN = peak ? Math.max(0, Math.round(o.non/peak*100)) : 0;
+    return `
+      <div class="ds-col">
+        <div class="ds-count">${tot||''}</div>
+        ${hN?`<div class="ds-seg noncrea" style="height:${hN}%"></div>`:''}
+        ${hC?`<div class="ds-seg crea"    style="height:${hC}%"></div>`:''}
+      </div>`;
+  }).join('');
+
+  const xlabels = keys.map(k=>`<div>${k}</div>`).join('');
+
+  // Legends
+  const curveLegend = `
+    <div class="ds-legend">
+      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
+    </div>`;
+
+  // Color pie legend/list
+  const colorRows = Object.entries(manaColors)
+    .map(([k,v])=>`<div class="row"><span>${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}</span><span>${v}</span></div>`)
+    .join('');
+  const colorPieStyle = pieStyleFromCounts(manaColors, colorPalette);
+
+  // Type pie legend/list
+  const typeEntries = Object.entries(typeObj).filter(([,v])=>v>0);
+  const typeTotal = typeEntries.reduce((a,[,v])=>a+v,0) || 1;
+  const typePieStyle = pieStyleFromCounts(typeObj, typePalette);
+  const typeRows = typeEntries
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>{
+      const pct = (v/typeTotal*100).toFixed(1)+'%';
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
+    }).join('');
+
+  // Assemble
+  mount.innerHTML = `
+    <div class="ds-card">
+      <div class="ds-title"></div>
+
+      <div class="ds-row">
+        <!-- Stacked Mana Curve -->
+        <div>
+          <div class="ds-title" style="margin-bottom:4px;">Mana Curve</div>
+          <div class="ds-curve" style="--bins:${Math.max(keys.length,1)}">
+            ${cols || `<div class="text-xs" style="opacity:.7;">No spell costs found (lands excluded).</div>`}
+          </div>
+          <div class="ds-x" style="--bins:${Math.max(keys.length,1)}">${xlabels}</div>
+          ${curveLegend}
+        </div>
+
+        <!-- Colors in Mana Cost -->
+        <div class="ds-piecard">
+          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${colorPieStyle}"></div>
+            <div class="ds-list">
+              ${colorRows || `<div class="ds-small">No mana symbols found.</div>`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Types -->
+        <div class="ds-piecard">
+          <div class="ds-title">Types</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${typePieStyle}"></div>
+            <div class="ds-list">
+              ${typeRows || `<div class="ds-small">No type info available.</div>`}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 
   // ---------- NEW: mana-curve helpers (local to this screen) ----------
   function getCMC(card) {
@@ -2462,6 +2726,18 @@ function DeckBuilder() {
         <div class="menu-caption">Export Decklist</div>
       </div>
     </div>
+
+<!-- Stretched toggle bar for Deck Statistics -->
+<button id="statsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="deckStatsCard">
+  <span class="left"><span class="chip"></span><span id="statsLabel">Decklist Statistics</span></span>
+  <span class="chev" id="statsChevron">▸</span>
+</button>
+
+<!-- Collapsible stats card (initially hidden) -->
+<div class="card p-4 hidden" id="deckStatsCard" style="margin-bottom:16px">
+  <div id="manaCurveDeckChart"></div>
+</div>
+
 
     <!-- Collapsed Import panel -->
     <div class="card p-4 hidden" id="importCard" style="margin-bottom:16px">
@@ -2707,8 +2983,38 @@ Island x14
     importApply.disabled = true;
   };
 
-  // ---------- NEW: render the mana-curve now that DOM is mounted ----------
-  renderManaCurveDeck();
+// --- Deck Statistics toggle wiring ---
+const statsToggle = div.querySelector('#statsToggle');
+const statsCard   = div.querySelector('#deckStatsCard');
+const statsLabel  = div.querySelector('#statsLabel');
+const statsChev   = div.querySelector('#statsChevron');
+
+function openStats(){
+  statsCard.classList.remove('hidden');
+  statsToggle.classList.add('open');
+  statsToggle.setAttribute('aria-expanded','true');
+  if (statsChev) statsChev.textContent = '▾';
+  // render when opened (fresh each time)
+  renderDeckStatsInto('manaCurveDeckChart');
+}
+
+function closeStats(){
+  statsCard.classList.add('hidden');
+  statsToggle.classList.remove('open');
+  statsToggle.setAttribute('aria-expanded','false');
+  if (statsChev) statsChev.textContent = '▸';
+}
+
+if (statsToggle && statsCard){
+  // default closed
+  closeStats();
+
+  statsToggle.onclick = () => {
+    if (statsCard.classList.contains('hidden')) openStats();
+    else closeStats();
+  };
+}
+
 
   return div;
 }
