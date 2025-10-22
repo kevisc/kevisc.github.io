@@ -2530,8 +2530,8 @@ function DeckBuilder() {
   .ds-pies{ display:grid; gap:12px; grid-template-columns: 1fr; }
   @media (min-width: 900px){ .ds-pies{ grid-template-columns: 1fr 1fr; } }
   .ds-piecard{ }
-  .ds-piewrap{ display:flex; gap:12px; align-items:center; }
-  .ds-pie{
+.ds-piewrap{ display:flex; gap:12px; align-items:center; flex-direction:column; }
+.ds-pie{
     --size: 120px;
     width: var(--size); height: var(--size); border-radius: 50%;
     border:2px solid rgba(236,253,245,0.7);
