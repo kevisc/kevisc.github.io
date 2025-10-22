@@ -417,9 +417,6 @@ const state = {
   
   
 }
-isHost: false,
-onlineMode: false,
-currentPlayer: 1,
 
 };
 
@@ -2075,8 +2072,6 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
 }
 
 function DraftOffRoom(){
-  const startBtn = wrap.querySelector('#startPack');
-if (startBtn) startBtn.onclick = ()=> draftOffStartNewPack(true);
   const me = state.currentPlayer;
   const myTurn = D.off.currentPicker === me;
   const status = myTurn ? 'Your pick' : 'Waiting for opponent…';
@@ -2089,6 +2084,7 @@ if (startBtn) startBtn.onclick = ()=> draftOffStartNewPack(true);
       <div class="badge">Set: ${D.off.currentSet || '-'}</div>
     </div>
     
+
     ${ (state.isHost && D.off.table.length === 0)
     ? `<div class="mb-2"><button id="startPack" class="btn btn-primary">Start First Pack</button></div>`
     : `` }
@@ -2125,6 +2121,9 @@ if (startBtn) startBtn.onclick = ()=> draftOffStartNewPack(true);
       </div>
     </div>
   `;
+  
+  const startBtn = wrap.querySelector('#startPack');
+  if (startBtn) startBtn.onclick = ()=> draftOffStartNewPack(true);
 
   wrap.querySelector('#leave').onclick = ()=>{ D.screen='mode'; render(); };
 
