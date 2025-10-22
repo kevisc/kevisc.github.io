@@ -750,43 +750,84 @@ async function joinOnlineRoom(offerStr) {
   }
 }
 
-
-// Host completes handshake by pasting the joiner's answer code
+// Host completes handshake by pasting the joiner's "answer" code
 async function finishRoomHandshake(answerCode){
-  try{
-    const s = (answerCode || '').trim();
-    if (!s) throw new Error('Empty answer code');
+  const raw = (answerCode || '').trim();
+  if (!raw) { alert('Empty answer code'); return; }
 
-    // Accept either Base64-encoded JSON or raw JSON
-    let descInit;
-    if (s.startsWith('{')) {
-      descInit = JSON.parse(s);
-    } else {
-      descInit = JSON.parse(atob(s));
-    }
-
-    if (!state.peerConnection) throw new Error('No peer connection');
-    await state.peerConnection.setRemoteDescription(descInit);
-
-    // Clean up host-side flags / UI
-    state.waitingForAnswer = false;
-    state.answerCode = null;
-
-    // If this handshake came from Draft-off setup, go to the draft room.
-    if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff'){
-      state.draft.off.screen = 'draftoff';
-      render();
-      if (state.isHost) {
-        // Start first pack with host picking first; subsequent rounds alternate automatically
-        draftOffStartNewPack(true);
+  // Helpers ----------------------------------------------------------
+  const safeJSON = (s)=>{ try { return JSON.parse(s); } catch { return null; } };
+  const b64decode = (s)=>{
+    // handle base64url and missing padding
+    let t = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (t.length % 4) t += '=';
+    return atob(t);
+  };
+  const tryAllParses = (s)=>{
+    // 1) raw JSON
+    let obj = safeJSON(s);
+    if (obj) return obj;
+    // 2) base64 / base64url → JSON
+    let d; try { d = b64decode(s); } catch { d = null; }
+    if (d) {
+      obj = safeJSON(d);
+      if (obj) return obj;
+      // 3) some apps double-encode JSON (JSON string inside base64 JSON)
+      const d2 = safeJSON(d);
+      if (typeof d2 === 'string') {
+        const d3 = safeJSON(d2);
+        if (d3) return d3;
       }
-    } else {
-      // (Optional) whatever your battle flow expects post-connection
-      render();
     }
-  }catch(err){
-    console.error('finishRoomHandshake error:', err);
-    alert('Invalid or incomplete answer code. Please try again.');
+    return null;
+  };
+  // -----------------------------------------------------------------
+
+  // Accept raw JSON, base64, or base64url (with or without nested string)
+  let descInit = tryAllParses(raw);
+  if (!descInit) { alert('Invalid code: cannot parse JSON/base64.'); return; }
+
+  // Some wrappers use {desc:{type:'answer', sdp:'...'}} or { answer: {...} }
+  if (descInit.desc && descInit.desc.sdp) descInit = descInit.desc;
+  if (descInit.answer && descInit.answer.sdp) descInit = descInit.answer;
+  if (typeof descInit === 'string') {
+    const again = safeJSON(descInit);
+    if (again) descInit = again;
+  }
+
+  if (!descInit || typeof descInit.sdp !== 'string' || typeof descInit.type !== 'string') {
+    alert('Parsed code is missing required SDP fields.');
+    return;
+  }
+  if (descInit.type.toLowerCase() !== 'answer') {
+    alert(`Expected an SDP "answer", but got "${descInit.type}". Did you paste the offer instead of the answer?`);
+    return;
+  }
+
+  if (!state.peerConnection) {
+    alert('Peer connection not found. Start hosting again and paste the answer from the joiner.');
+    return;
+  }
+
+  try {
+    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(descInit));
+  } catch (err) {
+    console.error('setRemoteDescription failed:', err, descInit);
+    alert('Code looks well-formed, but applying it failed. See console for details.');
+    return;
+  }
+
+  // Success: clear transient UI
+  state.waitingForAnswer = false;
+  state.answerCode = null;
+
+  // If this handshake is for Draft-off, move to the room and start the first pack
+  if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff') {
+    state.draft.off.screen = 'draftoff';
+    render();
+    if (state.isHost) { draftOffStartNewPack(true); }
+  } else {
+    render();
   }
 }
 
