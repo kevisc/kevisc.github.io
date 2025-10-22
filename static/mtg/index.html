@@ -2085,11 +2085,6 @@ function DraftOffRoom(){
     </div>
     
 
-    ${ (state.isHost && D.off.table.length === 0)
-    ? `<div class="mb-2"><button id="startPack" class="btn btn-primary">Start First Pack</button></div>`
-    : `` }
-
-
     <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
       <div class="card p-4">
         <div id="table" class="grid" style="grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px;">
@@ -2204,9 +2199,6 @@ function DraftOffRoom(){
     ];
   }
   
-  // -------------------- Draft-off helpers --------------------
-function isMe(n){ return state.currentPlayer === n; }
-function myPicks(){ return isMe(1) ? D.off.p1 : D.off.p2; }
 
 function sendDraftOff(msg){
   if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open'){
