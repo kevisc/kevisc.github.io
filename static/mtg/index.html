@@ -401,6 +401,21 @@ const state = {
     filterByColors: true        // only offer cards within chosen colors
     // (you can extend later: artifactChance, rareEvery, etc.)
   },
+  
+    // --- Draft-off (two-player online draft) state ---
+  off: {
+    screen: 'setup',       // 'setup' | 'room'
+    round: 0,
+    startingPlayer: 1,     // alternates each round: 1 ↔ 2
+    currentPicker: 1,      // whose turn to pick now (1 or 2)
+    currentSet: null,      // e.g., 'khm'
+    table: [],             // current 15 cards on the field
+    p1: [],                // picks by player 1
+    p2: []                 // picks by player 2
+  },
+
+  
+  
 }
 
 };
@@ -605,6 +620,12 @@ function setupDataChannel(channel) {
   state.dataChannel.onopen = () => {
     console.log('Connected!');
     state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
+        // If we are in Draft-off setup, proceed to the room; host starts the first pack
+    if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff'){
+      state.draft.off.screen = 'draftoff';
+      render();
+      if (state.isHost) { draftOffStartNewPack(true); }
+    }
   };
     
     // --- WebRTC datachannel handlers ---
@@ -642,6 +663,33 @@ state.dataChannel.onmessage = (event) => {
       // NEW: action overlay (deck → hand, etc.)
       showAction(data.message);
     }
+    
+        else if (data.type === 'draftoff_pack') {
+      // pack + state from host
+      D.mode = 'draftoff';
+      D.off.screen = 'draftoff';
+      D.off.round = data.round;
+      D.off.currentSet = data.set;
+      D.off.table = (data.table || []).slice();
+      D.off.startingPlayer = data.startingPlayer;
+      D.off.currentPicker  = data.startingPlayer;
+      render();
+    }
+    else if (data.type === 'draftoff_pick') {
+      // mirror the pick
+      draftOffApplyPick(data.index, data.picker);
+      render();
+      draftOffMaybeNextRoundOrFinish();
+    }
+    else if (data.type === 'draftoff_done') {
+      // opponent reached 42; enable lands transition if I have 42 too
+      if ( (isMe(1)?D.off.p1.length:D.off.p2.length) >= 42 ){
+        D.deck = (isMe(1) ? D.off.p1 : D.off.p2).slice();
+        D.screen = 'lands';
+        render();
+      }
+    }
+
 
   } catch (e) {
     console.error('dataChannel onmessage error:', e, event?.data);
@@ -1234,6 +1282,15 @@ function Mode(){
         <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Custom Draft</h3>
         <p class="text-xs text-gray">Upload a JSON decklist (export format) to act as the draft pool. Optional color filtering. Same pick flow.</p>
       </div>
+        <div class="card p-4" id="goDraftOff" style="cursor:pointer">
+    <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Draft-off (2-Player Online)</h3>
+    <p class="text-xs text-gray">
+      Both players connect online. Each round, 15 random non-land cards from a single random set appear.
+      Players alternate picks until 5 remain; the starting player alternates each round. Repeat until both reach 42 cards, then add lands to 60.
+    </p>
+  </div>
+
+      
     </div>
   `;
   wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
@@ -1247,6 +1304,12 @@ function Mode(){
     D.screen='custom-setup';
     render();
   };
+wrap.querySelector('#goDraftOff').onclick = ()=>{
+  D.mode = 'draftoff';
+  D.screen = 'draftoff-setup';   // <-- switch the main Draft sub-screen
+  state.screen = 'draft';
+  render();
+};
   return wrap;
 }
 
@@ -1807,6 +1870,190 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
     
     return wrap;
   }
+  
+  function DraftOffSetup(){
+  const wrap = document.createElement('div');
+
+  // Reuse your existing connection UI pattern: waiting offer → paste answer → connected
+  let connUI = '';
+  if (state.onlineMode && state.waitingForAnswer && state.roomCode) {
+    connUI = `
+      <div class="card" style="background: rgba(59,130,246,0.15); border-color:#3b82f6; margin-bottom: 24px;">
+        <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+        <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
+        <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
+        <hr style="border-color: #4b5563; margin: 16px 0;">
+        <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
+        <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+        <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+      </div>`;
+  } else if (state.onlineMode && state.answerCode) {
+    connUI = `
+      <div class="card" style="background: rgba(5,150,105,0.2); border-color:#059669; margin-bottom: 24px;">
+        <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+        <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
+        <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+        <p class="text-green text-sm mt-2">Waiting for host…</p>
+      </div>`;
+  } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to draft.</div>';
+  }
+
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
+      <h2 style="font-size:20px;font-weight:700">Draft-off • Setup</h2>
+      <div></div>
+    </div>
+
+    ${connUI}
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:6px">Host Draft-off</h3>
+        <p class="text-xs text-gray mb-2">Create a room and share the code.</p>
+        <button id="hostOff" class="btn btn-primary">Host</button>
+      </div>
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:6px">Join Draft-off</h3>
+        <p class="text-xs text-gray mb-2">Paste the host’s code to connect.</p>
+        <input id="joinCode" class="input mb-2" placeholder="Paste host code">
+        <button id="joinOff" class="btn btn-primary">Join</button>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
+
+  const hostBtn = wrap.querySelector('#hostOff');
+  if (hostBtn) hostBtn.onclick = async ()=>{
+    state.onlineMode = true;
+    await createOnlineRoom();        // uses your existing WebRTC code
+    // stay on setup until connected; host will paste answer; once connected, we can go to room
+    render();
+  };
+
+  const joinBtn = wrap.querySelector('#joinOff');
+  if (joinBtn) joinBtn.onclick = async ()=>{
+    const code = (wrap.querySelector('#joinCode').value||'').trim();
+    if (!code) { alert('Paste a host code'); return; }
+    state.onlineMode = true;
+    await joinOnlineRoom(code);
+    // when connected, switch to room
+    if (state.dataChannel && state.dataChannel.readyState === 'open'){
+      D.screen = 'draftoff';
+      render();
+    }
+  };
+
+  // wire offer/answer UI if present
+  const copyOffer = wrap.querySelector('#copyOffer');
+  if (copyOffer) copyOffer.onclick = ()=>{
+    navigator.clipboard.writeText(state.roomCode||'');
+    copyOffer.textContent = 'Copied ✓';
+    setTimeout(()=>copyOffer.textContent='Copy Code',1000);
+  };
+  const submitAnswer = wrap.querySelector('#submitAnswer');
+  if (submitAnswer) submitAnswer.onclick = async ()=>{
+    const ans = (wrap.querySelector('#answerInput').value||'').trim();
+    if (!ans) return;
+    await finishRoomHandshake(ans);  // this exists in your online flow
+    // after handshake completes, go to room
+    if (state.dataChannel && state.dataChannel.readyState === 'open'){
+      D.screen = 'draftoff';
+      render();
+      // host starts the first pack
+      if (state.isHost) draftOffStartNewPack(true);
+    }
+  };
+
+  const copyAnswer = wrap.querySelector('#copyAnswer');
+  if (copyAnswer) copyAnswer.onclick = ()=>{
+    navigator.clipboard.writeText(state.answerCode||'');
+    copyAnswer.textContent = 'Copied ✓';
+    setTimeout(()=>copyAnswer.textContent='Copy Answer Code',1000);
+  };
+
+  return wrap;
+}
+
+function DraftOffRoom(){
+  const me = state.currentPlayer;
+  const myTurn = D.off.currentPicker === me;
+  const status = myTurn ? 'Your pick' : 'Waiting for opponent…';
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="leave" class="btn btn-secondary text-sm">← Exit</button>
+      <h2 style="font-size:20px;font-weight:700">Draft-off • Round ${D.off.round} • ${status}</h2>
+      <div class="badge">Set: ${D.off.currentSet || '-'}</div>
+    </div>
+
+    <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
+      <div class="card p-4">
+        <div id="table" class="grid" style="grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px;">
+          ${D.off.table.map((c,i)=>`
+            <div class="card" data-i="${i}" style="padding:0;position:relative;cursor:${myTurn?'pointer':'not-allowed'}">
+              ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block;border-radius:8px">`
+                           : `<div style="height:220px;background:#374151;border-radius:8px;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+              <div class="badge" style="position:absolute;left:6px;top:6px">${(c.rarity||'').toUpperCase()}</div>
+              <div class="badge" style="position:absolute;right:6px;bottom:6px">${c.name}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="text-xs text-gray mt-2">Picks until table reaches 5 cards, then a new set appears. Starting player alternates each round.</div>
+      </div>
+
+      <div>
+        <div class="card p-4">
+          <div class="text-xs text-gray mb-2">Hover to preview</div>
+          <img id="hoverImg" style="width:100%;border-radius:8px;display:none">
+          <div class="mt-2 text-xs text-gray">
+            You: ${isMe(1)? D.off.p1.length : D.off.p2.length} • Opp: ${isMe(1)? D.off.p2.length : D.off.p1.length} (target 42)
+          </div>
+          <div class="mt-2">
+            <button id="toLands" class="btn btn-primary" ${ ( (isMe(1)?D.off.p1.length:D.off.p2.length) >= 42 && (isMe(1)?D.off.p2.length:D.off.p1.length) >=42 ) ? '' : 'disabled' }>
+              Continue to Lands
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('#leave').onclick = ()=>{ D.screen='mode'; render(); };
+
+  // hover preview
+  const hoverImg = wrap.querySelector('#hoverImg');
+  wrap.querySelectorAll('#table .card').forEach(el=>{
+    const i = parseInt(el.getAttribute('data-i'),10);
+    const c = D.off.table[i];
+    el.onmouseenter = ()=>{ if (c?.imageUrl){ hoverImg.src = c.imageUrl; hoverImg.style.display='block'; } };
+    el.onmouseleave = ()=>{ hoverImg.style.display='none'; };
+    el.onclick = ()=>{
+      if (! (D.off.currentPicker === state.currentPlayer)) return;
+      // local apply + broadcast
+      draftOffApplyPick(i, state.currentPlayer);
+      render();
+      sendDraftOff({ type:'draftoff_pick', index:i, picker:state.currentPlayer });
+
+      // round/finish checks
+      draftOffMaybeNextRoundOrFinish();
+    };
+  });
+
+  const toLands = wrap.querySelector('#toLands');
+  if (toLands) toLands.onclick = ()=>{
+    // finalize: load my picks to the common draft deck & jump to lands
+    D.deck = (isMe(1) ? D.off.p1 : D.off.p2).slice();
+    D.screen = 'lands';
+    render();
+  };
+
+  return wrap;
+}
+
 
   function Done(){
     const key = 'player' + state.currentPlayer;
@@ -1854,6 +2101,97 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
     ];
   }
   
+  // -------------------- Draft-off helpers --------------------
+function isMe(n){ return state.currentPlayer === n; }
+function myPicks(){ return isMe(1) ? D.off.p1 : D.off.p2; }
+
+function sendDraftOff(msg){
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open'){
+    state.dataChannel.send(JSON.stringify(msg));
+  }
+}
+
+async function draftOffRandomSetCode(){
+  // get Scryfall sets (cache on state)
+  if (!state._scrySets){
+    const r = await fetch('https://api.scryfall.com/sets', {headers:{Accept:'application/json'}});
+    const j = await r.json();
+    // expansion-like paper sets only
+    state._scrySets = (j.data||[]).filter(s =>
+      !s.digital && (s.set_type==='expansion' || s.set_type==='core' || s.set_type==='draft_innovation')
+    ).map(s => s.code);
+  }
+  const list = state._scrySets;
+  return list[Math.floor(Math.random()*list.length)];
+}
+
+// reuse existing drawRandomCard(q) defined in this file (Draft screen)
+// Build a 15-card non-land pack from ONE random set; unique names; paper; booster-ish
+async function draftOffBuildPackFromRandomSet(){
+  const code = await draftOffRandomSetCode();
+  const q = `s:${code} -t:land is:booster game:paper`;
+  const seen = new Set();
+  const pack = [];
+  for (let k=0; k<60 && pack.length<15; k++){
+    const c = await drawRandomCard(q, 10); // already returns a unified card object with imageUrl
+    if (!c) continue;
+    if (seen.has(c.name)) continue;
+    seen.add(c.name);
+    pack.push(c);
+  }
+  return { code, pack };
+}
+
+function draftOffApplyPick(index, picker){
+  const card = D.off.table.splice(index,1)[0];
+  if (!card) return;
+  if (picker === 1) D.off.p1.push(card); else D.off.p2.push(card);
+  // toggle picker
+  D.off.currentPicker = (picker === 1) ? 2 : 1;
+}
+
+async function draftOffStartNewPack(hostStarts){
+  // host generates and broadcasts
+  const { code, pack } = await draftOffBuildPackFromRandomSet();
+  D.off.round += 1;
+  if (typeof hostStarts === 'boolean'){
+    D.off.startingPlayer = hostStarts ? 1 : 2;
+  } else {
+    // alternate each round
+    D.off.startingPlayer = (D.off.round % 2 === 1) ? 1 : 2;
+  }
+  D.off.currentPicker = D.off.startingPlayer;
+  D.off.currentSet = code;
+  D.off.table = pack.slice();
+
+  sendDraftOff({ type:'draftoff_pack', round:D.off.round, set:code, table:pack, startingPlayer: D.off.startingPlayer });
+}
+
+function draftOffMaybeNextRoundOrFinish(){
+  const me = state.currentPlayer;
+  const mine = isMe(1) ? D.off.p1.length : D.off.p2.length;
+  const opp  = isMe(1) ? D.off.p2.length : D.off.p1.length;
+  const doneMe  = mine >= 42;
+  const doneOpp = opp  >= 42;
+
+  if (doneMe && doneOpp){
+    // load my 42 into the draft deck and go to lands step
+    D.deck = (isMe(1) ? D.off.p1 : D.off.p2).slice();
+    D.screen = 'lands';
+    render();
+    sendDraftOff({ type:'draftoff_done' });
+    return;
+  }
+
+  if (D.off.table.length <= 5){
+    // host starts next pack; the starting player alternates automatically
+    if (state.isHost) draftOffStartNewPack();
+  }
+}
+// -----------------------------------------------------------
+
+  
+  
   // choose which subview to render
 let content;
 if (D.screen==='mode')         content = Mode();
@@ -1862,6 +2200,11 @@ else if (D.screen==='custom-setup') content = CustomSetup();
 else if (D.screen==='colors')  content = Colors();
 else if (D.screen==='lands')   content = Lands();
 else if (D.screen==='picks')   content = Picks();
+
+// NEW: Draft-off
+else if (D.screen==='draftoff-setup') content = DraftOffSetup();
+else if (D.screen==='draftoff')       content = DraftOffRoom();
+
 else                           content = Done();
 
   
@@ -1869,7 +2212,11 @@ else                           content = Done();
   div.innerHTML = `
     <div class="header">
   <button id="home" class="btn btn-secondary text-sm">← Menu</button>
-  <h1 style="font-size:24px;font-weight:800">${D.mode==='custom' ? 'Custom Draft' : 'Traditional Draft'}</h1>
+<h1 style="font-size:24px;font-weight:800">${
+  D.mode==='custom'    ? 'Custom Draft' :
+  D.mode==='draftoff'  ? 'Draft-off' :
+                         'Traditional Draft'
+}</h1>
   <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}</div>
 </div>
   `;
