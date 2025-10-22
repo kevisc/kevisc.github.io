@@ -417,6 +417,9 @@ const state = {
   
   
 }
+isHost: false,
+onlineMode: false,
+currentPlayer: 1,
 
 };
 
@@ -620,12 +623,17 @@ function setupDataChannel(channel) {
   state.dataChannel.onopen = () => {
     console.log('Connected!');
     state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
-        // If we are in Draft-off setup, proceed to the room; host starts the first pack
-    if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff'){
-      state.draft.off.screen = 'draftoff';
-      render();
-      if (state.isHost) { draftOffStartNewPack(true); }
-    }
+
+    // Auto-enter the Draft-off room and start the first pack (host only)
+if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff') {
+  state.draft.screen = 'draftoff';       // ensure main Draft subview
+  state.draft.off.screen = 'draftoff';   // optional mirror
+  render();
+  if (state.isHost) {
+    draftOffStartNewPack(true);          // host picks first in round 1
+  }
+}
+
   };
     
     // --- WebRTC datachannel handlers ---
@@ -712,6 +720,10 @@ async function createOnlineRoom() {
   state.roomCode = 'waiting';
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   state.peerConnection = pc;
+  state.onlineMode = true;
+state.isHost = true;
+state.currentPlayer = 1;  // host = player 1
+
   setupDataChannel(pc.createDataChannel('game'));
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -732,6 +744,9 @@ async function joinOnlineRoom(offerStr) {
     const data = JSON.parse(atob(offerStr));
     const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     state.peerConnection = pc;
+    state.onlineMode = true;
+state.isHost = false;
+state.currentPlayer = 2; // joiner = player 2
     pc.ondatachannel = (e) => setupDataChannel(e.channel);
     await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
     const answer = await pc.createAnswer();
@@ -2060,6 +2075,8 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
 }
 
 function DraftOffRoom(){
+  const startBtn = wrap.querySelector('#startPack');
+if (startBtn) startBtn.onclick = ()=> draftOffStartNewPack(true);
   const me = state.currentPlayer;
   const myTurn = D.off.currentPicker === me;
   const status = myTurn ? 'Your pick' : 'Waiting for opponent…';
@@ -2071,6 +2088,11 @@ function DraftOffRoom(){
       <h2 style="font-size:20px;font-weight:700">Draft-off • Round ${D.off.round} • ${status}</h2>
       <div class="badge">Set: ${D.off.currentSet || '-'}</div>
     </div>
+    
+    ${ (state.isHost && D.off.table.length === 0)
+    ? `<div class="mb-2"><button id="startPack" class="btn btn-primary">Start First Pack</button></div>`
+    : `` }
+
 
     <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
       <div class="card p-4">
