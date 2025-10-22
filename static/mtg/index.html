@@ -2220,6 +2220,36 @@ async function draftOffRandomSetCode(){
   return list[Math.floor(Math.random()*list.length)];
 }
 
+
+async function draftOffDrawRandomCard(q, attempts = 14){
+  const D = state.draft;
+  const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
+  const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+  for (let k = 0; k < attempts; k++){
+    const r = await fetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' }});
+    if (!r.ok) continue;
+    const c = await r.json();
+    const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+    if (!img) continue;
+    if ((c.type_line || '').toLowerCase().includes('land')) continue;
+    if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
+    return {
+      id: c.id,
+      name: c.name,
+      type: c.type_line || '',
+      cost: c.mana_cost || '',
+      colors: c.colors || [],
+      effect: c.oracle_text || '',
+      power: c.power || 0,
+      toughness: c.toughness || 0,
+      imageUrl: img,
+      rarity: c.rarity || ''
+    };
+  }
+  return null;
+}
+
+
 // reuse existing drawRandomCard(q) defined in this file (Draft screen)
 // Build a 15-card non-land pack from ONE random set; unique names; paper; booster-ish
 async function draftOffBuildPackFromRandomSet(){
@@ -2228,7 +2258,7 @@ async function draftOffBuildPackFromRandomSet(){
   const seen = new Set();
   const pack = [];
   for (let k=0; k<60 && pack.length<15; k++){
-    const c = await drawRandomCard(q, 10); // already returns a unified card object with imageUrl
+const c = await draftOffDrawRandomCard(q, 10);
     if (!c) continue;
     if (seen.has(c.name)) continue;
     seen.add(c.name);
