@@ -750,6 +750,47 @@ async function joinOnlineRoom(offerStr) {
   }
 }
 
+
+// Host completes handshake by pasting the joiner's answer code
+async function finishRoomHandshake(answerCode){
+  try{
+    const s = (answerCode || '').trim();
+    if (!s) throw new Error('Empty answer code');
+
+    // Accept either Base64-encoded JSON or raw JSON
+    let descInit;
+    if (s.startsWith('{')) {
+      descInit = JSON.parse(s);
+    } else {
+      descInit = JSON.parse(atob(s));
+    }
+
+    if (!state.peerConnection) throw new Error('No peer connection');
+    await state.peerConnection.setRemoteDescription(descInit);
+
+    // Clean up host-side flags / UI
+    state.waitingForAnswer = false;
+    state.answerCode = null;
+
+    // If this handshake came from Draft-off setup, go to the draft room.
+    if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff'){
+      state.draft.off.screen = 'draftoff';
+      render();
+      if (state.isHost) {
+        // Start first pack with host picking first; subsequent rounds alternate automatically
+        draftOffStartNewPack(true);
+      }
+    } else {
+      // (Optional) whatever your battle flow expects post-connection
+      render();
+    }
+  }catch(err){
+    console.error('finishRoomHandshake error:', err);
+    alert('Invalid or incomplete answer code. Please try again.');
+  }
+}
+
+
 async function completeConnection(answerStr) {
   try {
     const data = JSON.parse(atob(answerStr));
