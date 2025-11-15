@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shawn Holzer - Strudel Music</title>
+    <script src="https://unpkg.com/@strudel/embed@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #16161d;
+            --bg-tertiary: #1e1e28;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --text-primary: #e5e5e7;
+            --text-secondary: #a1a1aa;
+            --border: #2d2d3a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .player-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .track-list {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            height: fit-content;
+        }
+
+        .track-list h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .track-item {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .track-item:hover {
+            background: var(--bg-primary);
+            border-color: var(--accent);
+        }
+
+        .track-item.active {
+            background: var(--bg-primary);
+            border-color: var(--accent);
+        }
+
+        .track-item h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .track-item p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .player-section {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .player-header {
+            margin-bottom: 1rem;
+        }
+
+        .current-track-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .current-track-meta {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .strudel-container {
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        strudel-repl {
+            display: block;
+            width: 100%;
+            height: 500px;
+        }
+
+        .other-music {
+            margin-bottom: 3rem;
+        }
+
+        .platforms {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .platform-link {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .platform-link:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .platform-icon {
+            font-size: 2rem;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+        }
+
+        .platform-text h3 {
+            font-size: 1.125rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .platform-text p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            border-top: 1px solid var(--border);
+            margin-top: 3rem;
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .empty-state {
+            padding: 3rem;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .player-container {
+                grid-template-columns: 1fr;
+            }
+
+            .track-list {
+                order: 2;
+            }
+
+            .player-section {
+                order: 1;
+            }
+
+            strudel-repl {
+                height: 400px;
+            }
+
+            .platforms {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Shawn Holzer</h1>
+            <p class="subtitle">LIVE CODE MUSIC</p>
+        </header>
+
+        <div class="player-container">
+            <div class="track-list">
+                <h2>Strudel Tracks</h2>
+                <div id="trackList"></div>
+            </div>
+
+            <div class="player-section">
+                <div class="player-header">
+                    <div class="current-track-title" id="currentTitle">Select a track to load</div>
+                    <div class="current-track-meta" id="currentMeta"></div>
+                </div>
+                <div class="strudel-container" id="strudelContainer">
+                    <div class="empty-state">
+                        <p>👈 Select a track from the left to load it into the player</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="other-music">
+            <h2 class="section-title">More Music</h2>
+            <div class="platforms">
+                <a href="https://shawnholzer.bandcamp.com/" target="_blank" rel="noopener noreferrer" class="platform-link">
+                    <div class="platform-icon">🎵</div>
+                    <div class="platform-text">
+                        <h3>Bandcamp</h3>
+                        <p>Albums & releases</p>
+                    </div>
+                </a>
+                <a href="https://www.youtube.com/@DrummerSchon" target="_blank" rel="noopener noreferrer" class="platform-link">
+                    <div class="platform-icon">▶️</div>
+                    <div class="platform-text">
+                        <h3>YouTube</h3>
+                        <p>Videos & performances</p>
+                    </div>
+                </a>
+                <a href="https://soundcloud.com/shawnholzer" target="_blank" rel="noopener noreferrer" class="platform-link">
+                    <div class="platform-icon">☁️</div>
+                    <div class="platform-text">
+                        <h3>SoundCloud</h3>
+                        <p>Tracks & mixes</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2024 Shawn Holzer · Made with <a href="https://strudel.cc" target="_blank" rel="noopener noreferrer">Strudel</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // Track library
+        const tracks = [
+            {
+                id: 1,
+                title: "Minor Meditation",
+                bpm: 35,
+                description: "Dark ambient composition in G minor",
+                code: `setcps(35/60)
+$: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(0) 
+.s("triangle").lpf(200)
+  .delay(.4)
+  .fm(0.5).fmwave('white')
+._pianoroll()
+$:s("bossdr55_bd :2!4")
+  .duck("3:4:5:6")
+  .duckdepth(0.8)
+  .duckattack(.16)
+  ._scope()
+$: n("<7 _ _ 6 5 _ <5 3> <6 4>>*2").scale("g:minor").trans(-12) 
+  .detune(rand)
+.s("supersaw").lpf(400)
+._pianoroll()
+._scope()
+$: n("<0 4 0>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(0) 
+.s("gm_shakuhachi").lpf(1600).attack(0.2)
+  .delay(.1)
+._pianoroll()
+$: n("<7 _ _ 6 5 _ <5 3> <6 4>>*0.5").scale("g:minor").trans(0) 
+  .s("sine")
+  .fm(0.4)
+  .fmh(1.001)
+  .detune(rand)
+._scope()`
+            }
+            // Add more tracks here as you create them
+            // {
+            //     id: 2,
+            //     title: "Track Title",
+            //     bpm: 120,
+            //     description: "Description of the track",
+            //     code: `your strudel code here`
+            // }
+        ];
+
+        let currentTrackId = null;
+
+        // Render track list
+        function renderTracks() {
+            const trackListEl = document.getElementById('trackList');
+            trackListEl.innerHTML = tracks.map(track => `
+                <div class="track-item" data-track-id="${track.id}">
+                    <h3>${track.title}</h3>
+                    <p>${track.description} · ${track.bpm} BPM</p>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            document.querySelectorAll('.track-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const trackId = parseInt(item.dataset.trackId);
+                    loadTrack(trackId);
+                });
+            });
+        }
+
+        // Load a track into the Strudel player
+        function loadTrack(trackId) {
+            const track = tracks.find(t => t.id === trackId);
+            if (!track) return;
+
+            currentTrackId = trackId;
+
+            // Update UI
+            document.getElementById('currentTitle').textContent = track.title;
+            document.getElementById('currentMeta').textContent = `${track.description} · ${track.bpm} BPM`;
+
+            // Update active state
+            document.querySelectorAll('.track-item').forEach(item => {
+                item.classList.remove('active');
+                if (parseInt(item.dataset.trackId) === trackId) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Load the track into Strudel
+            const container = document.getElementById('strudelContainer');
+            container.innerHTML = `
+                <strudel-repl>
+                    <!--
+${track.code}
+                    -->
+                </strudel-repl>
+            `;
+        }
+
+        // Initialize
+        renderTracks();
+        
+        // Auto-load first track
+        if (tracks.length > 0) {
+            loadTrack(tracks[0].id);
+        }
+    </script>
+</body>
+</html>
