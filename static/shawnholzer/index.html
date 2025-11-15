@@ -16,8 +16,8 @@
             --bg-primary: #0a0a0f;
             --bg-secondary: #16161d;
             --bg-tertiary: #1e1e28;
-            --accent: #6366f1;
-            --accent-hover: #818cf8;
+            --accent: #8BB2CC;
+            --accent-hover: #63A3D4;
             --text-primary: #e5e5e7;
             --text-secondary: #a1a1aa;
             --border: #2d2d3a;
@@ -32,13 +32,13 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
         }
 
         header {
-            text-align: center;
+            text-align: left;
             margin-bottom: 3rem;
             padding-bottom: 2rem;
             border-bottom: 1px solid var(--border);
@@ -69,7 +69,7 @@
 
         .player-container {
             display: grid;
-            grid-template-columns: 300px 1fr;
+            grid-template-columns: 280px 1fr;
             gap: 1.5rem;
             margin-bottom: 3rem;
         }
@@ -80,6 +80,8 @@
             padding: 1.5rem;
             border: 1px solid var(--border);
             height: fit-content;
+            max-height: 800px;
+            overflow-y: auto;
         }
 
         .track-list h2 {
@@ -141,6 +143,24 @@
             font-size: 0.875rem;
         }
 
+        .strudel-credit {
+            text-align: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .strudel-credit a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .strudel-credit a:hover {
+            text-decoration: underline;
+        }
+
         .strudel-container {
             border-radius: 8px;
             overflow: hidden;
@@ -150,7 +170,13 @@
         strudel-repl {
             display: block;
             width: 100%;
-            height: 500px;
+            height: 700px;
+        }
+
+        strudel-repl iframe {
+            width: 100% !important;
+            height: 100% !important;
+            border: none;
         }
 
         .other-music {
@@ -244,7 +270,7 @@
             }
 
             strudel-repl {
-                height: 400px;
+                height: 600px;
             }
 
             .platforms {
@@ -257,7 +283,7 @@
     <div class="container">
         <header>
             <h1>Shawn Holzer</h1>
-            <p class="subtitle">LIVE CODE MUSIC</p>
+            <p class="subtitle">Some of my projects:</p>
         </header>
 
         <div class="player-container">
@@ -275,6 +301,9 @@
                     <div class="empty-state">
                         <p>👈 Select a track from the left to load it into the player</p>
                     </div>
+                </div>
+                <div class="strudel-credit">
+                    Made with <a href="https://strudel.cc" target="_blank" rel="noopener noreferrer">Strudel</a>
                 </div>
             </div>
         </div>
@@ -307,7 +336,7 @@
         </div>
 
         <footer>
-            <p>© 2024 Shawn Holzer · Made with <a href="https://strudel.cc" target="_blank" rel="noopener noreferrer">Strudel</a></p>
+            <p>Shawn Holzer 2025</p>
         </footer>
     </div>
 
