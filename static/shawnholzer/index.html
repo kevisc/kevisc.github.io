@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shawn Holzer - Strudel Music</title>
+    <title>Shawn Holzer - Music</title>
     <script src="https://unpkg.com/@strudel/embed@latest"></script>
     <style>
         * {
@@ -16,8 +16,8 @@
             --bg-primary: #0a0a0f;
             --bg-secondary: #16161d;
             --bg-tertiary: #1e1e28;
-            --accent: #8BB2CC;
-            --accent-hover: #63A3D4;
+            --accent: #A7BAD1;
+            --accent-hover: #A4B1BF;
             --text-primary: #e5e5e7;
             --text-secondary: #a1a1aa;
             --border: #2d2d3a;
@@ -60,40 +60,131 @@
             letter-spacing: 0.05em;
         }
 
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            color: var(--text-primary);
-        }
-
-        .player-container {
+        .music-grid {
             display: grid;
-            grid-template-columns: 280px 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 1.5rem;
             margin-bottom: 3rem;
         }
 
-        .track-list {
+        .strudel-section {
             background: var(--bg-secondary);
             border-radius: 16px;
-            padding: 1.5rem;
             border: 1px solid var(--border);
-            height: fit-content;
-            max-height: 800px;
+            margin-bottom: 3rem;
+            overflow: hidden;
+        }
+
+        .strudel-section .tile-header {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(129, 140, 248, 0.1));
+        }
+
+        .music-tile {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .music-tile:hover {
+            border-color: var(--accent);
+            transform: translateY(-4px);
+        }
+
+        .tile-header {
+            padding: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tile-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .tile-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .expand-icon {
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+        .tile-content {
+            padding: 0 1.5rem 1.5rem 1.5rem;
+        }
+
+        .embedded-content {
+            padding: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 350px;
+            background: var(--bg-tertiary);
+        }
+
+        .embedded-content iframe {
+            border-radius: 8px;
+        }
+
+        .bandcamp-player {
+            border: 0;
+            width: 350px;
+            height: 470px;
+        }
+
+        .bandcamp-player.square {
+            height: 350px;
+        }
+
+        /* Strudel specific styles */
+        .strudel-expanded {
+            display: none;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .strudel-expanded.active {
+            display: block;
+            max-height: 1000px;
+        }
+
+        .strudel-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .track-list {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 1rem;
+            max-height: 700px;
             overflow-y: auto;
         }
 
-        .track-list h2 {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
-            color: var(--text-primary);
+        .track-list h3 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
         }
 
         .track-item {
-            background: var(--bg-tertiary);
-            padding: 1rem;
-            margin-bottom: 0.75rem;
+            background: var(--bg-secondary);
+            padding: 0.875rem;
+            margin-bottom: 0.5rem;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -110,22 +201,21 @@
             border-color: var(--accent);
         }
 
-        .track-item h3 {
-            font-size: 1rem;
+        .track-item h4 {
+            font-size: 0.875rem;
             font-weight: 600;
             margin-bottom: 0.25rem;
         }
 
         .track-item p {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
         }
 
-        .player-section {
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            padding: 1.5rem;
-            border: 1px solid var(--border);
+        .player-area {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 1rem;
         }
 
         .player-header {
@@ -133,7 +223,7 @@
         }
 
         .current-track-title {
-            font-size: 1.25rem;
+            font-size: 1.125rem;
             font-weight: 600;
             margin-bottom: 0.25rem;
         }
@@ -141,6 +231,24 @@
         .current-track-meta {
             color: var(--text-secondary);
             font-size: 0.875rem;
+        }
+
+        .strudel-container {
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        strudel-repl {
+            display: block;
+            width: 100%;
+            height: 650px;
+        }
+
+        strudel-repl iframe {
+            width: 100% !important;
+            height: 100% !important;
+            border: none;
         }
 
         .strudel-credit {
@@ -161,32 +269,17 @@
             text-decoration: underline;
         }
 
-        .strudel-container {
-            border-radius: 8px;
-            overflow: hidden;
-            background: #000;
-        }
-
-        strudel-repl {
-            display: block;
-            width: 100%;
-            height: 700px;
-        }
-
-        strudel-repl iframe {
-            width: 100% !important;
-            height: 100% !important;
-            border: none;
-        }
-
-        .other-music {
-            margin-bottom: 3rem;
+        .empty-state {
+            padding: 3rem;
+            text-align: center;
+            color: var(--text-secondary);
         }
 
         .platforms {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 1rem;
+            margin-bottom: 3rem;
         }
 
         .platform-link {
@@ -237,19 +330,28 @@
             margin-top: 3rem;
         }
 
-        footer a {
-            color: var(--accent);
-            text-decoration: none;
+        /* Responsive YouTube iframes */
+        .youtube-wrapper {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: 0;
+            overflow: hidden;
+            width: 100%;
+            max-width: 560px;
         }
 
-        footer a:hover {
-            text-decoration: underline;
+        .youtube-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
         }
 
-        .empty-state {
-            padding: 3rem;
-            text-align: center;
-            color: var(--text-secondary);
+        .soundcloud-wrapper {
+            width: 100%;
+            max-width: 500px;
         }
 
         @media (max-width: 768px) {
@@ -257,24 +359,31 @@
                 font-size: 2rem;
             }
 
-            .player-container {
+            .music-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .strudel-layout {
                 grid-template-columns: 1fr;
             }
 
             .track-list {
-                order: 2;
-            }
-
-            .player-section {
-                order: 1;
+                max-height: 300px;
             }
 
             strudel-repl {
-                height: 600px;
+                height: 500px;
             }
+        }
 
-            .platforms {
-                grid-template-columns: 1fr;
+        @media (max-width: 480px) {
+            .embedded-content {
+                padding: 1rem;
+            }
+            
+            .embedded-content iframe {
+                width: 100% !important;
+                max-width: 350px;
             }
         }
     </style>
@@ -286,53 +395,149 @@
             <p class="subtitle">Some of my projects:</p>
         </header>
 
-        <div class="player-container">
-            <div class="track-list">
-                <h2>Strudel Tracks</h2>
-                <div id="trackList"></div>
+        <!-- Strudel Section - Full Width -->
+        <div class="strudel-section">
+            <div class="tile-header" onclick="toggleStrudel()">
+                <div>
+                    <div class="tile-title">Strudel Live Code</div>
+                    <div class="tile-subtitle">Interactive generative music</div>
+                </div>
+                <div class="expand-icon" id="strudelIcon">▼</div>
             </div>
-
-            <div class="player-section">
-                <div class="player-header">
-                    <div class="current-track-title" id="currentTitle">Select a track to load</div>
-                    <div class="current-track-meta" id="currentMeta"></div>
-                </div>
-                <div class="strudel-container" id="strudelContainer">
-                    <div class="empty-state">
-                        <p>👈 Select a track from the left to load it into the player</p>
+            <div class="strudel-expanded" id="strudelContent">
+                <div class="strudel-layout">
+                    <div class="track-list">
+                        <h3>Tracks</h3>
+                        <div id="trackList"></div>
                     </div>
-                </div>
-                <div class="strudel-credit">
-                    Made with <a href="https://strudel.cc" target="_blank" rel="noopener noreferrer">Strudel</a>
+                    <div class="player-area">
+                        <div class="player-header">
+                            <div class="current-track-title" id="currentTitle">Select a track</div>
+                            <div class="current-track-meta" id="currentMeta"></div>
+                        </div>
+                        <div class="strudel-container" id="strudelContainer">
+                            <div class="empty-state">
+                                <p>👈 Select a track to load</p>
+                            </div>
+                        </div>
+                        <div class="strudel-credit">
+                            Made with <a href="https://strudel.cc" target="_blank" rel="noopener noreferrer">Strudel</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="other-music">
-            <h2 class="section-title">More Music</h2>
-            <div class="platforms">
-                <a href="https://shawnholzer.bandcamp.com/" target="_blank" rel="noopener noreferrer" class="platform-link">
-                    <div class="platform-icon">🎵</div>
-                    <div class="platform-text">
-                        <h3>Bandcamp</h3>
-                        <p>Albums & releases</p>
+        <div class="music-grid">
+            <!-- Bandcamp Track 1: IC18 BE-ZH -->
+            <div class="music-tile">
+                <div class="tile-header">
+                    <div>
+                        <div class="tile-title">IC18 BE-ZH</div>
+                        <div class="tile-subtitle">Bandcamp</div>
                     </div>
-                </a>
-                <a href="https://www.youtube.com/@DrummerSchon" target="_blank" rel="noopener noreferrer" class="platform-link">
-                    <div class="platform-icon">▶️</div>
-                    <div class="platform-text">
-                        <h3>YouTube</h3>
-                        <p>Videos & performances</p>
-                    </div>
-                </a>
-                <a href="https://soundcloud.com/shawnholzer" target="_blank" rel="noopener noreferrer" class="platform-link">
-                    <div class="platform-icon">☁️</div>
-                    <div class="platform-text">
-                        <h3>SoundCloud</h3>
-                        <p>Tracks & mixes</p>
-                    </div>
-                </a>
+                </div>
+                <div class="embedded-content">
+                    <iframe class="bandcamp-player square" src="https://bandcamp.com/EmbeddedPlayer/track=1320971702/size=large/bgcol=16161d/linkcol=6366f1/minimal=true/transparent=true/" seamless></iframe>
+                </div>
             </div>
+
+            <!-- Bandcamp Track 2: Endings -->
+            <div class="music-tile">
+                <div class="tile-header">
+                    <div>
+                        <div class="tile-title">Endings</div>
+                        <div class="tile-subtitle">Bandcamp</div>
+                    </div>
+                </div>
+                <div class="embedded-content">
+                    <iframe class="bandcamp-player square" src="https://bandcamp.com/EmbeddedPlayer/track=4047944957/size=large/bgcol=16161d/linkcol=6366f1/minimal=true/transparent=true/" seamless></iframe>
+                </div>
+            </div>
+
+            <!-- YouTube Video 1 -->
+            <div class="music-tile">
+                <div class="tile-header">
+                    <div>
+                        <div class="tile-title">Performance</div>
+                        <div class="tile-subtitle">YouTube</div>
+                    </div>
+                </div>
+                <div class="embedded-content">
+                    <div class="youtube-wrapper">
+                        <iframe src="https://www.youtube-nocookie.com/embed/yQ50yfZ_lOY"></iframe></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- YouTube Video 2 -->
+            <div class="music-tile">
+                <div class="tile-header">
+                    <div>
+                        <div class="tile-title">Live Session</div>
+                        <div class="tile-subtitle">YouTube</div>
+                    </div>
+                </div>
+                <div class="embedded-content">
+                    <div class="youtube-wrapper">
+                        <iframe src="https://www.youtube-nocookie.com/embed/_EVD6QPpSM8" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SoundCloud Track 1: Statics -->
+            <div class="music-tile">
+                <div class="tile-header">
+                    <div>
+                        <div class="tile-title">Statics</div>
+                        <div class="tile-subtitle">SoundCloud</div>
+                    </div>
+                </div>
+                <div class="embedded-content">
+                    <div class="soundcloud-wrapper">
+                        <iframe width="100%" height="300" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1086630217&color=%236366f1&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=true"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SoundCloud Track 2: DFAMS -->
+            <div class="music-tile">
+                <div class="tile-header">
+                    <div>
+                        <div class="tile-title">DFAMS</div>
+                        <div class="tile-subtitle">SoundCloud</div>
+                    </div>
+                </div>
+                <div class="embedded-content">
+                    <div class="soundcloud-wrapper">
+                        <iframe width="100%" height="300" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1204617478&color=%236366f1&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=true"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="platforms">
+            <a href="https://shawnholzer.bandcamp.com/" target="_blank" rel="noopener noreferrer" class="platform-link">
+                <div class="platform-icon">🎵</div>
+                <div class="platform-text">
+                    <h3>Bandcamp</h3>
+                    <p>Albums & releases</p>
+                </div>
+            </a>
+            <a href="https://www.youtube.com/@DrummerSchon" target="_blank" rel="noopener noreferrer" class="platform-link">
+                <div class="platform-icon">▶️</div>
+                <div class="platform-text">
+                    <h3>YouTube</h3>
+                    <p>Videos & performances</p>
+                </div>
+            </a>
+            <a href="https://soundcloud.com/shawnholzer" target="_blank" rel="noopener noreferrer" class="platform-link">
+                <div class="platform-icon">☁️</div>
+                <div class="platform-text">
+                    <h3>SoundCloud</h3>
+                    <p>Tracks & mixes</p>
+                </div>
+            </a>
         </div>
 
         <footer>
@@ -347,7 +552,7 @@
                 id: 1,
                 title: "Minor Meditation",
                 bpm: 35,
-                description: "Dark ambient composition in G minor",
+                description: "Dark ambient in G minor",
                 code: `setcps(35/60)
 $: n("<0 4 0 9 7>*16".add("<7 _ _ 6 5 _ _ 6>*2")).scale("g:minor").trans(0) 
 .s("triangle").lpf(200)
@@ -374,25 +579,89 @@ $: n("<7 _ _ 6 5 _ <5 3> <6 4>>*0.5").scale("g:minor").trans(0)
   .fmh(1.001)
   .detune(rand)
 ._scope()`
+            },
+            {
+                id: 2,
+                title: "November Sundays",
+                bpm: 32,
+                description: "Atmospheric progressive",
+                code: `setcps(32/60)
+$: note("<[d4 fs4 a4] [e4 gs4 b4] [cs4 e4 a4] [d4 fs4 a4]>*4/32")
+  .s("gm_tubular_bells")
+  .detune(rand)
+  .lpf(1200)
+  .room(0.8).size(0.9)
+  .gain(0.4)
+  .cutoff(perlin.range(200, 1200).slow(8))
+._pianoroll()
+$: n("<[0 4 7 12] [2 5 9 14] [-3 0 4 9] [0 4 7 12]>*2/3")
+  .scale("a:minor")
+  .s("gm_lead_6_voice")
+  .lpf(1000)
+  .delay(0.3).delaytime(0.125)
+  .gain(0.5)
+  .sometimes(add(note("7")))
+._pianoroll()
+$: note("<a1 b1 gs1 a1>").transpose(+12)
+  .s("supersaw")
+  .detune(rand)
+  .room(0.7)
+  .delay(0.3)
+  .gain(0.7)
+  .lpf(620)
+._pianoroll()
+$: s("bd:2*4")
+  .gain(0.55)
+  .lpf(400)
+._scope()
+$: s("hh:8*4")
+  .gain(0.2)
+  .pan(rand)
+  .room(0.2).size(0.3)
+  .delay(0.4)
+  .lpf(8000)
+  .often(x => x.degradeBy(0.3))
+$: n("<7 9 0 9 7 4 2 0>*16/5")
+  .scale("a:minor")
+  .s("gm_lead_3_calliope")
+  .lpf(sine.range(1000, 4000).slow(4))
+  .gain(0.6).delay(.8).delaytime(2/3).delayspeed(2)
+  .room(0.3).size(0.7)
+  .attack(0.1).decay(0.3)
+  .sometimes(add(note("7")))
+  .slow(2)
+._pianoroll()`
             }
-            // Add more tracks here as you create them
-            // {
-            //     id: 2,
-            //     title: "Track Title",
-            //     bpm: 120,
-            //     description: "Description of the track",
-            //     code: `your strudel code here`
-            // }
         ];
 
         let currentTrackId = null;
+        let strudelExpanded = false;
+
+        // Toggle Strudel section
+        function toggleStrudel() {
+            strudelExpanded = !strudelExpanded;
+            const content = document.getElementById('strudelContent');
+            const icon = document.getElementById('strudelIcon');
+            
+            if (strudelExpanded) {
+                content.classList.add('active');
+                icon.classList.add('expanded');
+                // Auto-load first track if none selected
+                if (currentTrackId === null && tracks.length > 0) {
+                    loadTrack(tracks[0].id);
+                }
+            } else {
+                content.classList.remove('active');
+                icon.classList.remove('expanded');
+            }
+        }
 
         // Render track list
         function renderTracks() {
             const trackListEl = document.getElementById('trackList');
             trackListEl.innerHTML = tracks.map(track => `
                 <div class="track-item" data-track-id="${track.id}">
-                    <h3>${track.title}</h3>
+                    <h4>${track.title}</h4>
                     <p>${track.description} · ${track.bpm} BPM</p>
                 </div>
             `).join('');
@@ -438,11 +707,6 @@ ${track.code}
 
         // Initialize
         renderTracks();
-        
-        // Auto-load first track
-        if (tracks.length > 0) {
-            loadTrack(tracks[0].id);
-        }
     </script>
 </body>
 </html>
