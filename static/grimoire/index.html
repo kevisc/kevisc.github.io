@@ -201,8 +201,11 @@
         }
         
         .card-image {
-            width: 100%;
+            max-width: 100%;
+            width: auto;
+            max-height: 400px;
             display: block;
+            margin: 0 auto;
             background: #000;
         }
         
@@ -335,6 +338,80 @@
             color: var(--text-secondary);
         }
         
+        .keyword-definition {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .keyword-definition h2 {
+            font-family: 'Cinzel', serif;
+            color: var(--accent-gold);
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+        }
+        
+        .keyword-type {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(212, 175, 55, 0.2);
+            border: 1px solid var(--accent-gold);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-bottom: 15px;
+            color: var(--accent-gold);
+            font-weight: 700;
+        }
+        
+        .keyword-definition p {
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+        
+        .keyword-reminder {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-silver);
+            margin: 15px 0;
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+        
+        .keyword-examples {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .keyword-examples h3 {
+            color: var(--accent-silver);
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        
+        .example-cards {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .example-card {
+            background: var(--bg-secondary);
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .example-card:hover {
+            border-color: var(--accent-gold);
+            transform: translateY(-2px);
+        }
+        
         @media (max-width: 768px) {
             h1 {
                 font-size: 2rem;
@@ -371,6 +448,7 @@
                 <div class="tab active" data-tab="name">Search by Name</div>
                 <div class="tab" data-tab="number">Set & Number</div>
                 <div class="tab" data-tab="set">Browse Set</div>
+                <div class="tab" data-tab="keyword">Keywords</div>
             </div>
             
             <form class="search-form active" id="name-search">
@@ -403,6 +481,15 @@
                     <button type="submit">Load Set</button>
                 </div>
                 <p class="help-text">View all cards from a specific set</p>
+            </form>
+            
+            <form class="search-form" id="keyword-search">
+                <div class="input-group">
+                    <input type="text" id="keyword-input" placeholder="Enter keyword or ability..." list="keyword-suggestions" />
+                    <button type="submit">Look Up</button>
+                </div>
+                <datalist id="keyword-suggestions"></datalist>
+                <p class="help-text">Search for keyword abilities, actions, and mechanics (e.g., "Flying", "Hexproof", "Cascade")</p>
             </form>
         </div>
         
@@ -498,6 +585,332 @@
             }
         });
         
+        // Keyword database
+        const keywordDatabase = {
+            "Flying": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with flying can't be blocked except by creatures with flying or reach.",
+                reminder: "(This creature can't be blocked except by creatures with flying and/or reach.)",
+                examples: ["Serra Angel", "Sephara, Sky's Blade", "Welkin Hawk"]
+            },
+            "First Strike": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with first strike deals combat damage before creatures without first strike.",
+                reminder: "(This creature deals combat damage before creatures without first strike.)",
+                examples: ["Boros Swiftblade", "First-Sphere Gargantua", "Benalish Marshal"]
+            },
+            "Double Strike": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with double strike deals both first-strike and regular combat damage.",
+                reminder: "(This creature deals both first-strike and regular combat damage.)",
+                examples: ["Aurelia, the Warleader", "Silverblade Paladin", "Mirran Crusader"]
+            },
+            "Deathtouch": {
+                type: "Evergreen Keyword Ability",
+                definition: "Any amount of damage a creature with deathtouch deals to another creature is enough to destroy it.",
+                reminder: "(Any amount of damage this deals to a creature is enough to destroy it.)",
+                examples: ["Typhoid Rats", "Vampire of the Dire Moon", "Nighthawk Scavenger"]
+            },
+            "Haste": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with haste can attack and use activated abilities with the tap symbol the turn it comes under your control.",
+                reminder: "(This creature can attack and {T} as soon as it comes under your control.)",
+                examples: ["Lightning Bolt", "Goblin Guide", "Bonecrusher Giant"]
+            },
+            "Hexproof": {
+                type: "Evergreen Keyword Ability",
+                definition: "A permanent with hexproof can't be the target of spells or abilities your opponents control.",
+                reminder: "(This permanent can't be the target of spells or abilities your opponents control.)",
+                examples: ["Slippery Bogle", "Invisible Stalker", "Carnage Tyrant"]
+            },
+            "Indestructible": {
+                type: "Evergreen Keyword Ability",
+                definition: "A permanent with indestructible can't be destroyed by damage or effects that say 'destroy.'",
+                reminder: "(Damage and effects that say 'destroy' don't destroy this permanent.)",
+                examples: ["Darksteel Colossus", "Avacyn, Angel of Hope", "Stuffy Doll"]
+            },
+            "Lifelink": {
+                type: "Evergreen Keyword Ability",
+                definition: "Damage dealt by a source with lifelink causes that source's controller to gain that much life.",
+                reminder: "(Damage dealt by this creature also causes you to gain that much life.)",
+                examples: ["Vampire Nighthawk", "Lone Rider", "Ajani's Pridemate"]
+            },
+            "Menace": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with menace can't be blocked except by two or more creatures.",
+                reminder: "(This creature can't be blocked except by two or more creatures.)",
+                examples: ["Boggart Brute", "Blazing Hellhound", "Clattering Skeletons"]
+            },
+            "Reach": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with reach can block creatures with flying.",
+                reminder: "(This creature can block creatures with flying.)",
+                examples: ["Giant Spider", "Deadly Recluse", "Spidersilk Armor"]
+            },
+            "Trample": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with trample can deal excess combat damage to the player or planeswalker it's attacking.",
+                reminder: "(This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+                examples: ["Colossal Dreadmaw", "Ghalta, Primal Hunger", "Carnage Tyrant"]
+            },
+            "Vigilance": {
+                type: "Evergreen Keyword Ability",
+                definition: "Attacking doesn't cause a creature with vigilance to tap.",
+                reminder: "(Attacking doesn't cause this creature to tap.)",
+                examples: ["Serra Angel", "Dauntless Bodyguard", "Venerable Knight"]
+            },
+            "Ward": {
+                type: "Evergreen Keyword Ability",
+                definition: "Ward [cost] means 'Whenever this permanent becomes the target of a spell or ability an opponent controls, counter that spell or ability unless that player pays [cost].'",
+                reminder: "(Whenever this permanent becomes the target of a spell or ability an opponent controls, counter it unless that player pays the ward cost.)",
+                examples: ["Goldspan Dragon", "Nashi, Moon Sage's Scion", "Possessed Portal"]
+            },
+            "Flash": {
+                type: "Evergreen Keyword Ability",
+                definition: "You may cast a spell with flash any time you could cast an instant.",
+                reminder: "(You may cast this spell any time you could cast an instant.)",
+                examples: ["Ambush Viper", "Restoration Angel", "Mystical Dispute"]
+            },
+            "Defender": {
+                type: "Evergreen Keyword Ability",
+                definition: "A creature with defender can't attack.",
+                reminder: "(This creature can't attack.)",
+                examples: ["Wall of Omens", "Charix, the Raging Isle", "Tree of Redemption"]
+            },
+            "Prowess": {
+                type: "Evergreen Keyword Ability",
+                definition: "Whenever you cast a noncreature spell, a creature with prowess gets +1/+1 until end of turn.",
+                reminder: "(Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
+                examples: ["Monastery Swiftspear", "Soul-Scar Mage", "Stormchaser Mage"]
+            },
+            "Cascade": {
+                type: "Keyword Ability",
+                definition: "When you cast a spell with cascade, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom of your library in a random order.",
+                reminder: "(When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)",
+                examples: ["Bloodbraid Elf", "Apex Devastator", "Imoti, Celebrant of Bounty"]
+            },
+            "Convoke": {
+                type: "Keyword Ability",
+                definition: "For each colored mana in a spell's cost, you may tap an untapped creature of that color you control rather than pay that mana. For each generic mana in a spell's cost, you may tap an untapped creature you control rather than pay that mana.",
+                reminder: "(Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)",
+                examples: ["Conclave Tribunal", "Venerated Loxodon", "March of the Multitudes"]
+            },
+            "Delve": {
+                type: "Keyword Ability",
+                definition: "You may exile cards from your graveyard to pay for generic mana in the spell's cost. Each card exiled this way pays for {1}.",
+                reminder: "(Each card you exile from your graveyard while casting this spell pays for {1}.)",
+                examples: ["Treasure Cruise", "Dig Through Time", "Gurmag Angler"]
+            },
+            "Flashback": {
+                type: "Keyword Ability",
+                definition: "You may cast a card with flashback from your graveyard by paying its flashback cost. Then exile it.",
+                reminder: "(You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+                examples: ["Faithless Looting", "Ancient Grudge", "Think Twice"]
+            },
+            "Kicker": {
+                type: "Keyword Ability",
+                definition: "You may pay an additional cost as you cast a spell with kicker. If you do, the spell has additional or alternate effects.",
+                reminder: "(You may pay an additional [cost] as you cast this spell.)",
+                examples: ["Bloodbraid Marauder", "Verdurous Gearhulk", "Kicker spells vary"]
+            },
+            "Affinity": {
+                type: "Keyword Ability",
+                definition: "Affinity for [quality] means 'This spell costs {1} less to cast for each [quality] you control.'",
+                reminder: "(This spell costs {1} less to cast for each [quality] you control.)",
+                examples: ["Frogmite", "Myr Enforcer", "Thoughtcast"]
+            },
+            "Equip": {
+                type: "Keyword Ability",
+                definition: "Equip [cost] means '[Cost]: Attach this permanent to target creature you control. Activate only as a sorcery.'",
+                reminder: "([Cost]: Attach to target creature you control. Equip only as a sorcery.)",
+                examples: ["Bonesplitter", "Sword of Fire and Ice", "Colossus Hammer"]
+            },
+            "Protection": {
+                type: "Keyword Ability",
+                definition: "Protection from [quality] means this permanent can't be blocked, targeted, dealt damage, enchanted, or equipped by anything with that quality.",
+                reminder: "(This creature can't be blocked, targeted, dealt damage, enchanted, or equipped by anything [quality].)",
+                examples: ["White Knight", "Progenitus", "Mother of Runes"]
+            },
+            "Scry": {
+                type: "Keyword Action",
+                definition: "Scry N means look at the top N cards of your library, then put any number of them on the bottom of your library in any order and the rest on top in any order.",
+                reminder: "(Look at the top N cards of your library, then put any number of them on the bottom and the rest on top in any order.)",
+                examples: ["Opt", "Preordain", "Serum Visions"]
+            },
+            "Explore": {
+                type: "Keyword Action",
+                definition: "Reveal the top card of your library. If it's a land, put it into your hand. Otherwise, put a +1/+1 counter on the exploring creature, then you may put that card into your graveyard.",
+                reminder: "(Reveal the top card of your library. Put that card into your hand if it's a land. Otherwise, put a +1/+1 counter on this creature, then put the card back or put it into your graveyard.)",
+                examples: ["Jadelight Ranger", "Merfolk Branchwalker", "Path of Discovery"]
+            },
+            "Amass": {
+                type: "Keyword Action",
+                definition: "Amass N means 'If you don't control an Army creature, create a 0/0 black Zombie Army creature token. Choose an Army creature you control. Put N +1/+1 counters on it.'",
+                reminder: "(Put N +1/+1 counters on an Army you control. If you don't control one, create a 0/0 black Zombie Army creature token first.)",
+                examples: ["Dreadhorde Invasion", "Commence the Endgame", "God-Eternal Oketra"]
+            },
+            "Surveil": {
+                type: "Keyword Action",
+                definition: "Surveil N means look at the top N cards of your library, then put any number of them into your graveyard and the rest on top in any order.",
+                reminder: "(Look at the top N cards of your library, then put any number of them into your graveyard and the rest on top in any order.)",
+                examples: ["Discovery // Dispersal", "Narcomoeba", "Doom Whisperer"]
+            },
+            "Landfall": {
+                type: "Ability Word",
+                definition: "Landfall appears as 'Landfall — [Effect]' and triggers whenever a land enters the battlefield under your control.",
+                reminder: "(Landfall abilities trigger whenever a land enters the battlefield under your control.)",
+                examples: ["Omnath, Locus of Rage", "Scute Swarm", "Lotus Cobra"]
+            },
+            "Constellation": {
+                type: "Ability Word",
+                definition: "Constellation appears as 'Constellation — [Effect]' and triggers whenever an enchantment enters the battlefield under your control.",
+                reminder: "(Constellation abilities trigger whenever an enchantment enters the battlefield under your control.)",
+                examples: ["Eidolon of Blossoms", "Doomwake Giant", "Setessan Champion"]
+            },
+            "Revolt": {
+                type: "Ability Word",
+                definition: "Revolt appears as 'Revolt — [Effect]' and checks whether a permanent you controlled left the battlefield this turn.",
+                reminder: "(Revolt abilities check whether a permanent you controlled left the battlefield this turn.)",
+                examples: ["Fatal Push", "Renegade Rallier", "Hidden Stockpile"]
+            },
+            "Enrage": {
+                type: "Ability Word",
+                definition: "Enrage appears as 'Enrage — [Effect]' and triggers whenever the creature is dealt damage.",
+                reminder: "(Enrage abilities trigger whenever this creature is dealt damage.)",
+                examples: ["Raptor Hatchling", "Ranging Raptors", "Polyraptor"]
+            },
+            "Morbid": {
+                type: "Ability Word",
+                definition: "Morbid appears as 'Morbid — [Effect]' and checks whether a creature died this turn.",
+                reminder: "(Morbid abilities check whether a creature died this turn.)",
+                examples: ["Tragic Slip", "Boneyard Wurm", "Hollowhenge Scavenger"]
+            },
+            "Storm": {
+                type: "Keyword Ability",
+                definition: "When you cast a spell with storm, copy it for each spell cast before it this turn. You may choose new targets for the copies.",
+                reminder: "(When you cast this spell, copy it for each spell cast before it this turn. You may choose new targets for the copies.)",
+                examples: ["Grapeshot", "Tendrils of Agony", "Brain Freeze"]
+            },
+            "Annihilator": {
+                type: "Keyword Ability",
+                definition: "Annihilator N means 'Whenever this creature attacks, defending player sacrifices N permanents.'",
+                reminder: "(Whenever this creature attacks, defending player sacrifices N permanents.)",
+                examples: ["Ulamog, the Infinite Gyre", "It That Betrays", "Pathrazer of Ulamog"]
+            },
+            "Modular": {
+                type: "Keyword Ability",
+                definition: "Modular N means 'This creature enters the battlefield with N +1/+1 counters on it. When it dies, you may put its +1/+1 counters on target artifact creature.'",
+                reminder: "(This creature enters the battlefield with N +1/+1 counters on it. When it dies, you may put its +1/+1 counters on target artifact creature.)",
+                examples: ["Arcbound Ravager", "Arcbound Worker", "Modular creatures"]
+            },
+            "Madness": {
+                type: "Keyword Ability",
+                definition: "If you discard a card with madness, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.",
+                reminder: "(If you discard this card, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.)",
+                examples: ["Fiery Temper", "Basking Rootwalla", "Circular Logic"]
+            },
+            "Morph": {
+                type: "Keyword Ability",
+                definition: "You may cast a card with morph face down as a 2/2 creature for {3}. Turn it face up any time for its morph cost.",
+                reminder: "(You may cast this card face down as a 2/2 creature for {3}. Turn it face up any time for its morph cost.)",
+                examples: ["Willbender", "Chromeshell Crab", "Morph creatures"]
+            },
+            "Cycling": {
+                type: "Keyword Ability",
+                definition: "Cycling [cost] means '[Cost], Discard this card: Draw a card.'",
+                reminder: "([Cost], Discard this card: Draw a card.)",
+                examples: ["Renewed Faith", "Hieroglyphic Illumination", "Shark Typhoon"]
+            },
+            "Exalted": {
+                type: "Keyword Ability",
+                definition: "Whenever a creature you control attacks alone, it gets +1/+1 until end of turn for each instance of exalted among permanents you control.",
+                reminder: "(Whenever a creature you control attacks alone, that creature gets +1/+1 until end of turn for each instance of exalted among permanents you control.)",
+                examples: ["Noble Hierarch", "Rafiq of the Many", "Battlegrace Angel"]
+            },
+            "Bloodthirst": {
+                type: "Keyword Ability",
+                definition: "Bloodthirst N means 'If an opponent was dealt damage this turn, this creature enters the battlefield with N +1/+1 counters on it.'",
+                reminder: "(If an opponent was dealt damage this turn, this permanent enters the battlefield with N +1/+1 counters on it.)",
+                examples: ["Bloodthirst creatures", "Scab-Clan Mauler", "Bloodmark Mentor"]
+            },
+            "Exploit": {
+                type: "Keyword Ability",
+                definition: "When a creature with exploit enters the battlefield, you may sacrifice a creature. If you do, the exploit ability triggers.",
+                reminder: "(When this creature enters the battlefield, you may sacrifice a creature.)",
+                examples: ["Sidisi, Undead Vizier", "Silumgar Butcher", "Vulturous Aven"]
+            },
+            "Skulk": {
+                type: "Keyword Ability",
+                definition: "A creature with skulk can't be blocked by creatures with greater power.",
+                reminder: "(This creature can't be blocked by creatures with greater power.)",
+                examples: ["Slither Blade", "Wharf Infiltrator", "Drownyard Explorers"]
+            },
+            "Persist": {
+                type: "Keyword Ability",
+                definition: "When a creature with persist dies, if it had no -1/-1 counters on it, return it to the battlefield under its owner's control with a -1/-1 counter on it.",
+                reminder: "(When this creature dies, if it had no -1/-1 counters on it, return it to the battlefield under its owner's control with a -1/-1 counter on it.)",
+                examples: ["Kitchen Finks", "Murderous Redcap", "Glen Elendra Archmage"]
+            },
+            "Undying": {
+                type: "Keyword Ability",
+                definition: "When a creature with undying dies, if it had no +1/+1 counters on it, return it to the battlefield under its owner's control with a +1/+1 counter on it.",
+                reminder: "(When this creature dies, if it had no +1/+1 counters on it, return it to the battlefield under its owner's control with a +1/+1 counter on it.)",
+                examples: ["Strangleroot Geist", "Young Wolf", "Flayer of the Hatebound"]
+            },
+            "Offering": {
+                type: "Keyword Ability",
+                definition: "You may cast a spell with offering by sacrificing a creature of the specified type. If you do, the spell costs that much less to cast and you may cast it as though it had flash.",
+                reminder: "(You may cast this card any time you could cast an instant by sacrificing a [type] and paying the difference in mana costs between this and the sacrificed creature. Mana cost includes color.)",
+                examples: ["Patron of the Moon", "Patron of the Orochi", "Patron of the Akki"]
+            },
+            "Ninjutsu": {
+                type: "Keyword Ability",
+                definition: "Ninjutsu [cost] means '[Cost], Return an unblocked attacker you control to hand: Put this card onto the battlefield from your hand tapped and attacking.'",
+                reminder: "([Cost], Return an unblocked attacker you control to hand: Put this card onto the battlefield from your hand tapped and attacking.)",
+                examples: ["Ninja of the Deep Hours", "Yuriko, the Tiger's Shadow", "Ingenious Infiltrator"]
+            },
+            "Foretell": {
+                type: "Keyword Ability",
+                definition: "During your turn, you may pay {2} and exile a card with foretell from your hand face down. You may cast it on a later turn for its foretell cost.",
+                reminder: "(During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+                examples: ["Saw It Coming", "Behold the Multiverse", "Starnheim Unleashed"]
+            },
+            "Boast": {
+                type: "Keyword Ability",
+                definition: "Boast abilities are activated abilities that can be activated once each turn, but only if the creature attacked this turn.",
+                reminder: "(Boast abilities can be activated once each turn, but only if the creature attacked this turn.)",
+                examples: ["Varragoth, Bloodsky Sire", "Tuskeri Firewalker", "Goldvein Pick"]
+            }
+        };
+        
+        // Populate keyword suggestions
+        const datalist = document.getElementById('keyword-suggestions');
+        Object.keys(keywordDatabase).sort().forEach(keyword => {
+            const option = document.createElement('option');
+            option.value = keyword;
+            datalist.appendChild(option);
+        });
+        
+        // Keyword search
+        document.getElementById('keyword-search').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const keyword = document.getElementById('keyword-input').value.trim();
+            
+            if (!keyword) return;
+            
+            // Find the keyword (case-insensitive)
+            const normalizedKeyword = Object.keys(keywordDatabase).find(
+                k => k.toLowerCase() === keyword.toLowerCase()
+            );
+            
+            if (normalizedKeyword) {
+                displayKeyword(normalizedKeyword, keywordDatabase[normalizedKeyword]);
+            } else {
+                showError(`Keyword "${keyword}" not found. Try selecting from the dropdown suggestions or check spelling.`);
+            }
+        });
+
+        
         function showLoading() {
             document.getElementById('results').innerHTML = `
                 <div class="loading">
@@ -577,6 +990,29 @@
             document.getElementById('results').innerHTML = `
                 <div class="set-list">
                     ${html}
+                </div>
+            `;
+        }
+        
+        function displayKeyword(keyword, data) {
+            const examplesHTML = data.examples.length > 0 ? `
+                <div class="keyword-examples">
+                    <h3>Example Cards:</h3>
+                    <div class="example-cards">
+                        ${data.examples.map(cardName => `
+                            <div class="example-card" onclick='searchCardByName("${cardName.replace(/'/g, "\\'")}")'>${cardName}</div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : '';
+            
+            document.getElementById('results').innerHTML = `
+                <div class="keyword-definition">
+                    <h2>${keyword}</h2>
+                    <span class="keyword-type">${data.type}</span>
+                    <p><strong>Definition:</strong> ${data.definition}</p>
+                    ${data.reminder ? `<div class="keyword-reminder">${data.reminder}</div>` : ''}
+                    ${examplesHTML}
                 </div>
             `;
         }
