@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Card Lookup</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Lato:wght@300;400;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #151b2e;
+            --bg-card: #1a2236;
+            --accent-gold: #d4af37;
+            --accent-silver: #c0c0c0;
+            --text-primary: #e8e8e8;
+            --text-secondary: #a0a0a0;
+            --border-color: #2a3550;
+            --error: #ff4757;
+            --success: #26de81;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Lato', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(192, 192, 192, 0.05) 0%, transparent 50%);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 0 30px;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-gold), var(--accent-silver));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+        
+        .search-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .search-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
+        
+        .tab:hover {
+            border-color: var(--accent-gold);
+            color: var(--text-primary);
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(192, 192, 192, 0.2));
+            border-color: var(--accent-gold);
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        
+        .search-form {
+            display: none;
+        }
+        
+        .search-form.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        input, select {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+        }
+        
+        input::placeholder {
+            color: var(--text-secondary);
+        }
+        
+        button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, var(--accent-gold), #b8942c);
+            border: none;
+            border-radius: 6px;
+            color: var(--bg-primary);
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.5px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(212, 175, 55, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .help-text {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 10px;
+        }
+        
+        .results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-color: var(--accent-gold);
+        }
+        
+        .card-image {
+            width: 100%;
+            display: block;
+            background: #000;
+        }
+        
+        .card-info {
+            padding: 15px;
+        }
+        
+        .card-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: var(--accent-gold);
+        }
+        
+        .card-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+        
+        .card-text {
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        
+        .rulings-section {
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+            margin-top: 12px;
+        }
+        
+        .ruling {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            border-left: 3px solid var(--accent-silver);
+        }
+        
+        .ruling-date {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-bottom: 4px;
+        }
+        
+        .links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        
+        .link-btn {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+        
+        .link-btn:hover {
+            border-color: var(--accent-gold);
+            background: rgba(212, 175, 55, 0.1);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .spinner {
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--accent-gold);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        
+        .set-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .set-card-simple {
+            background: var(--bg-card);
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .set-card-simple:hover {
+            border-color: var(--accent-gold);
+            transform: translateX(5px);
+        }
+        
+        .set-card-simple .name {
+            font-weight: 700;
+            color: var(--accent-gold);
+            margin-bottom: 4px;
+        }
+        
+        .set-card-simple .number {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .search-tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                width: 100%;
+            }
+            
+            .input-group {
+                flex-direction: column;
+            }
+            
+            input, select, button {
+                width: 100%;
+                min-width: unset;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GRIMOIRE</h1>
+            <p class="subtitle">Magic: The Gathering Card Reference</p>
+        </header>
+        
+        <div class="search-container">
+            <div class="search-tabs">
+                <div class="tab active" data-tab="name">Search by Name</div>
+                <div class="tab" data-tab="number">Set & Number</div>
+                <div class="tab" data-tab="set">Browse Set</div>
+            </div>
+            
+            <form class="search-form active" id="name-search">
+                <div class="input-group">
+                    <input type="text" id="card-name" placeholder="Enter card name..." />
+                    <button type="submit">Search</button>
+                </div>
+                <p class="help-text">Search for any Magic card by name (e.g., "Lightning Bolt", "Black Lotus")</p>
+            </form>
+            
+            <form class="search-form" id="number-search">
+                <div class="input-group">
+                    <input type="text" id="set-code" placeholder="Set code (e.g., BRB, MH3)" />
+                    <input type="text" id="collector-number" placeholder="Number (e.g., 231)" />
+                    <select id="rarity">
+                        <option value="">Any Rarity</option>
+                        <option value="c">Common</option>
+                        <option value="u">Uncommon</option>
+                        <option value="r">Rare</option>
+                        <option value="m">Mythic</option>
+                    </select>
+                    <button type="submit">Find Card</button>
+                </div>
+                <p class="help-text">Example: Set "BRB", Number "231", Rarity "U" (Uncommon)</p>
+            </form>
+            
+            <form class="search-form" id="set-search">
+                <div class="input-group">
+                    <input type="text" id="set-code-full" placeholder="Set code (e.g., BRB, MH3, ONE)" />
+                    <button type="submit">Load Set</button>
+                </div>
+                <p class="help-text">View all cards from a specific set</p>
+            </form>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.search-form').forEach(f => f.classList.remove('active'));
+                
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                document.getElementById(`${tabName}-search`).classList.add('active');
+                
+                // Clear results
+                document.getElementById('results').innerHTML = '';
+            });
+        });
+        
+        // Search by name
+        document.getElementById('name-search').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const cardName = document.getElementById('card-name').value;
+            
+            if (!cardName) return;
+            
+            showLoading();
+            
+            try {
+                const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
+                
+                if (!response.ok) {
+                    throw new Error('Card not found');
+                }
+                
+                const card = await response.json();
+                displayCard(card);
+            } catch (error) {
+                showError('Card not found. Try a different name or check spelling.');
+            }
+        });
+        
+        // Search by set and number
+        document.getElementById('number-search').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const setCode = document.getElementById('set-code').value.toLowerCase();
+            const collectorNumber = document.getElementById('collector-number').value;
+            
+            if (!setCode || !collectorNumber) {
+                showError('Please enter both set code and collector number');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                const response = await fetch(`https://api.scryfall.com/cards/${setCode}/${collectorNumber}`);
+                
+                if (!response.ok) {
+                    throw new Error('Card not found');
+                }
+                
+                const card = await response.json();
+                displayCard(card);
+            } catch (error) {
+                showError('Card not found with that set and number combination.');
+            }
+        });
+        
+        // Browse set
+        document.getElementById('set-search').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const setCode = document.getElementById('set-code-full').value.toLowerCase();
+            
+            if (!setCode) return;
+            
+            showLoading();
+            
+            try {
+                const response = await fetch(`https://api.scryfall.com/cards/search?q=set:${setCode}&order=set`);
+                
+                if (!response.ok) {
+                    throw new Error('Set not found');
+                }
+                
+                const data = await response.json();
+                displaySetList(data.data);
+            } catch (error) {
+                showError('Set not found. Check the set code and try again.');
+            }
+        });
+        
+        function showLoading() {
+            document.getElementById('results').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Searching the multiverse...</p>
+                </div>
+            `;
+        }
+        
+        function showError(message) {
+            document.getElementById('results').innerHTML = `
+                <div class="error">${message}</div>
+            `;
+        }
+        
+        async function displayCard(card) {
+            // Fetch rulings
+            let rulingsHTML = '';
+            try {
+                const rulingsResponse = await fetch(card.rulings_uri);
+                const rulingsData = await rulingsResponse.json();
+                
+                if (rulingsData.data && rulingsData.data.length > 0) {
+                    rulingsHTML = `
+                        <div class="rulings-section">
+                            <strong>Rulings:</strong>
+                            ${rulingsData.data.map(ruling => `
+                                <div class="ruling">
+                                    <div class="ruling-date">${ruling.published_at}</div>
+                                    <div>${ruling.comment}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error fetching rulings:', error);
+            }
+            
+            const imageUrl = card.image_uris ? card.image_uris.normal : 
+                            (card.card_faces && card.card_faces[0].image_uris ? card.card_faces[0].image_uris.normal : '');
+            
+            const oracleText = card.oracle_text || (card.card_faces ? 
+                card.card_faces.map(face => `<strong>${face.name}:</strong> ${face.oracle_text}`).join('<br><br>') : '');
+            
+            document.getElementById('results').innerHTML = `
+                <div class="card">
+                    ${imageUrl ? `<img src="${imageUrl}" alt="${card.name}" class="card-image">` : ''}
+                    <div class="card-info">
+                        <div class="card-name">${card.name}</div>
+                        <div class="card-meta">
+                            ${card.type_line}<br>
+                            ${card.set_name} (${card.set.toUpperCase()}) #${card.collector_number}<br>
+                            ${card.rarity.charAt(0).toUpperCase() + card.rarity.slice(1)}
+                            ${card.mana_cost ? `• ${card.mana_cost}` : ''}
+                        </div>
+                        <div class="card-text">${oracleText || 'No oracle text available'}</div>
+                        ${rulingsHTML}
+                        <div class="links">
+                            <a href="${card.scryfall_uri}" target="_blank" class="link-btn">View on Scryfall</a>
+                            <a href="${card.rulings_uri.replace('/api.', '/').replace('/rulings', '')}" target="_blank" class="link-btn">Rulings Page</a>
+                            ${card.related_uris.gatherer ? `<a href="${card.related_uris.gatherer}" target="_blank" class="link-btn">Gatherer</a>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function displaySetList(cards) {
+            const html = cards.map(card => `
+                <div class="set-card-simple" onclick='searchCardByName("${card.name.replace(/'/g, "\\'")}")'>
+                    <div class="name">${card.name}</div>
+                    <div class="number">#${card.collector_number} • ${card.rarity.toUpperCase()}</div>
+                </div>
+            `).join('');
+            
+            document.getElementById('results').innerHTML = `
+                <div class="set-list">
+                    ${html}
+                </div>
+            `;
+        }
+        
+        async function searchCardByName(name) {
+            showLoading();
+            
+            try {
+                const response = await fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`);
+                
+                if (!response.ok) {
+                    throw new Error('Card not found');
+                }
+                
+                const card = await response.json();
+                displayCard(card);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (error) {
+                showError('Error loading card details.');
+            }
+        }
+    </script>
+</body>
+</html>
