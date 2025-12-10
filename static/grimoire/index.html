@@ -412,26 +412,265 @@
             transform: translateY(-2px);
         }
         
+        /* Game Tools Section */
+        .game-tools {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .game-tools-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .game-tools-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.3rem;
+            color: var(--accent-gold);
+        }
+
+        .game-tools-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .player-count-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-count-selector label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .player-count-selector select {
+            padding: 8px 12px;
+            min-width: 60px;
+            flex: none;
+        }
+
+        .reset-btn {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--error);
+            color: var(--error);
+            font-size: 0.9rem;
+        }
+
+        .reset-btn:hover {
+            background: rgba(255, 71, 87, 0.1);
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Health Tracker */
+        .health-tracker {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .player-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .player-card:nth-child(1) { border-top: 3px solid #e74c3c; }
+        .player-card:nth-child(2) { border-top: 3px solid #3498db; }
+        .player-card:nth-child(3) { border-top: 3px solid #2ecc71; }
+        .player-card:nth-child(4) { border-top: 3px solid #f39c12; }
+
+        .player-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .player-health {
+            font-family: 'Cinzel', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-gold);
+            margin-bottom: 10px;
+        }
+
+        .player-health.low {
+            color: var(--error);
+        }
+
+        .player-health.critical {
+            color: var(--error);
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .health-controls {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .health-btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .health-btn.minus {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .health-btn.plus {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+
+        .health-btn.big {
+            width: 36px;
+            height: 36px;
+            font-size: 0.9rem;
+        }
+
+        /* Dice and Coin Section */
+        .dice-coin-section {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .dice-coin-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dice-coin-group label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            min-width: 60px;
+        }
+
+        .dice-btn, .coin-btn {
+            padding: 10px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .dice-btn:hover, .coin-btn:hover {
+            border-color: var(--accent-gold);
+            background: rgba(212, 175, 55, 0.1);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .result-display {
+            background: var(--bg-primary);
+            border: 2px solid var(--accent-gold);
+            border-radius: 8px;
+            padding: 8px 16px;
+            min-width: 60px;
+            text-align: center;
+            font-family: 'Cinzel', serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-gold);
+        }
+
+        .result-display.rolling {
+            animation: shake 0.3s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-5deg); }
+            75% { transform: translateX(5px) rotate(5deg); }
+        }
+
+        .coin-result {
+            min-width: 80px;
+        }
+
+        .coin-result.heads {
+            color: var(--accent-gold);
+        }
+
+        .coin-result.tails {
+            color: var(--accent-silver);
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 2rem;
             }
-            
+
             .search-tabs {
                 flex-direction: column;
             }
-            
+
             .tab {
                 width: 100%;
             }
-            
+
             .input-group {
                 flex-direction: column;
             }
-            
+
             input, select, button {
                 width: 100%;
                 min-width: unset;
+            }
+
+            .game-tools-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .health-tracker {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .player-health {
+                font-size: 2rem;
+            }
+
+            .dice-coin-section {
+                flex-direction: column;
+            }
+
+            .dice-coin-group {
+                width: 100%;
+                justify-content: space-between;
             }
         }
     </style>
@@ -442,7 +681,47 @@
             <h1>GRIMOIRE</h1>
             <p class="subtitle">Magic: The Gathering Card Reference</p>
         </header>
-        
+
+        <!-- Game Tools Section - Always Visible -->
+        <div class="game-tools">
+            <div class="game-tools-header">
+                <span class="game-tools-title">Life Counter</span>
+                <div class="game-tools-controls">
+                    <div class="player-count-selector">
+                        <label for="player-count">Players:</label>
+                        <select id="player-count">
+                            <option value="2" selected>2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </div>
+                    <button class="reset-btn" onclick="resetHealth()">Reset All</button>
+                </div>
+            </div>
+
+            <div class="health-tracker" id="health-tracker">
+                <!-- Player cards will be rendered by JavaScript -->
+            </div>
+
+            <div class="dice-coin-section">
+                <div class="dice-coin-group">
+                    <label>Coin:</label>
+                    <button class="coin-btn" onclick="flipCoin()">Flip</button>
+                    <div class="result-display coin-result" id="coin-result">—</div>
+                </div>
+                <div class="dice-coin-group">
+                    <label>D6:</label>
+                    <button class="dice-btn" onclick="rollDice(6)">Roll</button>
+                    <div class="result-display" id="d6-result">—</div>
+                </div>
+                <div class="dice-coin-group">
+                    <label>D20:</label>
+                    <button class="dice-btn" onclick="rollDice(20)">Roll</button>
+                    <div class="result-display" id="d20-result">—</div>
+                </div>
+            </div>
+        </div>
+
         <div class="search-container">
             <div class="search-tabs">
                 <div class="tab active" data-tab="name">Search by Name</div>
@@ -497,6 +776,95 @@
     </div>
 
     <script>
+        // ===== GAME TOOLS =====
+        const DEFAULT_HEALTH = 20;
+        const PLAYER_NAMES = ['Player 1', 'Player 2', 'Player 3', 'Player 4'];
+        let playerHealth = [DEFAULT_HEALTH, DEFAULT_HEALTH, DEFAULT_HEALTH, DEFAULT_HEALTH];
+        let playerCount = 2;
+
+        // Initialize health tracker on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderHealthTracker();
+            document.getElementById('player-count').addEventListener('change', (e) => {
+                playerCount = parseInt(e.target.value);
+                renderHealthTracker();
+            });
+        });
+
+        function renderHealthTracker() {
+            const container = document.getElementById('health-tracker');
+            let html = '';
+
+            for (let i = 0; i < playerCount; i++) {
+                const healthClass = playerHealth[i] <= 0 ? 'critical' : playerHealth[i] <= 5 ? 'low' : '';
+                html += `
+                    <div class="player-card">
+                        <div class="player-name">${PLAYER_NAMES[i]}</div>
+                        <div class="player-health ${healthClass}" id="health-${i}">${playerHealth[i]}</div>
+                        <div class="health-controls">
+                            <button class="health-btn big minus" onclick="adjustHealth(${i}, -5)">-5</button>
+                            <button class="health-btn minus" onclick="adjustHealth(${i}, -1)">-1</button>
+                            <button class="health-btn plus" onclick="adjustHealth(${i}, 1)">+1</button>
+                            <button class="health-btn big plus" onclick="adjustHealth(${i}, 5)">+5</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function adjustHealth(playerIndex, amount) {
+            playerHealth[playerIndex] += amount;
+            const healthEl = document.getElementById(`health-${playerIndex}`);
+            healthEl.textContent = playerHealth[playerIndex];
+
+            // Update health class for visual feedback
+            healthEl.classList.remove('low', 'critical');
+            if (playerHealth[playerIndex] <= 0) {
+                healthEl.classList.add('critical');
+            } else if (playerHealth[playerIndex] <= 5) {
+                healthEl.classList.add('low');
+            }
+        }
+
+        function resetHealth() {
+            playerHealth = [DEFAULT_HEALTH, DEFAULT_HEALTH, DEFAULT_HEALTH, DEFAULT_HEALTH];
+            renderHealthTracker();
+            // Also reset dice and coin results
+            document.getElementById('coin-result').textContent = '—';
+            document.getElementById('coin-result').classList.remove('heads', 'tails');
+            document.getElementById('d6-result').textContent = '—';
+            document.getElementById('d20-result').textContent = '—';
+        }
+
+        function flipCoin() {
+            const resultEl = document.getElementById('coin-result');
+            resultEl.classList.add('rolling');
+            resultEl.textContent = '...';
+
+            setTimeout(() => {
+                const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+                resultEl.textContent = result;
+                resultEl.classList.remove('rolling', 'heads', 'tails');
+                resultEl.classList.add(result.toLowerCase());
+            }, 300);
+        }
+
+        function rollDice(sides) {
+            const resultEl = document.getElementById(`d${sides}-result`);
+            resultEl.classList.add('rolling');
+            resultEl.textContent = '...';
+
+            setTimeout(() => {
+                const result = Math.floor(Math.random() * sides) + 1;
+                resultEl.textContent = result;
+                resultEl.classList.remove('rolling');
+            }, 300);
+        }
+
+        // ===== CARD LOOKUP =====
+
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
