@@ -672,8 +672,21 @@ function setupDataChannel(channel) {
 
     // Auto-enter the Draft-off room and start the first pack (host only)
 if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff') {
-  state.draft.screen = 'draftoff';       // ensure main Draft subview
-  state.draft.off.screen = 'draftoff';   // optional mirror
+  const D = state.draft;
+  D.screen = 'draftoff';       // ensure main Draft subview
+  D.off.screen = 'draftoff';   // optional mirror
+  D.off.isLocal = false;       // mark as online mode
+  D.off.round = 0;
+  D.off.p1 = [];
+  D.off.p2 = [];
+  D.off.table = [];
+  D.off.currentSet = null;
+  D.off.startingPlayer = 1;
+  D.off.currentPicker  = 1;
+  D.off.p1LandsDone = false;
+  D.off.p2LandsDone = false;
+  D.seenIds = {};
+  D.seenNames = {};
   render();
   if (state.isHost) {
  if (window.draftOffStartNewPack) window.draftOffStartNewPack(true);  // host picks first in round 1
@@ -743,6 +756,33 @@ state.dataChannel.onmessage = (event) => {
         D.screen = 'lands';
         render();
       }
+    }
+    // Handle opponent finishing their lands fill
+    else if (data.type === 'draftoff_lands_done') {
+      const oppPlayer = data.player; // 1 or 2
+      const oppDeck = data.deck || [];
+
+      // Update opponent's deck
+      if (oppPlayer === 1) {
+        D.off.p1 = oppDeck;
+        D.off.p1LandsDone = true;
+      } else {
+        D.off.p2 = oppDeck;
+        D.off.p2LandsDone = true;
+      }
+
+      // Check if both players are done with lands
+      const myPlayer = state.currentPlayer;
+      const myDone = (myPlayer === 1) ? D.off.p1LandsDone : D.off.p2LandsDone;
+      const oppDone = (oppPlayer === 1) ? D.off.p1LandsDone : D.off.p2LandsDone;
+
+      if (myDone && oppDone) {
+        // Both done - go to results screen
+        state.decks.player1 = (D.off.p1 || []).slice();
+        state.decks.player2 = (D.off.p2 || []).slice();
+        D.screen = 'decklists';
+      }
+      render();
     }
 
 
@@ -1786,14 +1826,71 @@ for (const n of BASIC){
   }
 }
 
-// Online: set my deck so downstream screens see it
+// Online: set my deck and send to opponent
 const meKey = 'player' + state.currentPlayer;
+const myPlayer = state.currentPlayer;
 state.decks[meKey] = pool.slice();
 D.deck = pool.slice();
-// keep the user in the Draft UI or navigate as you prefer (builder/battlemenu/etc.)
+
+// Mark my lands as done
+if (myPlayer === 1) {
+  D.off.p1LandsDone = true;
+} else {
+  D.off.p2LandsDone = true;
+}
+
+// Send my finished deck to opponent
+sendDraftOff({
+  type: 'draftoff_lands_done',
+  player: myPlayer,
+  deck: pool.slice()
+});
+
+// Check if opponent already finished (from received message)
+const oppDone = (myPlayer === 1) ? D.off.p2LandsDone : D.off.p1LandsDone;
+if (oppDone) {
+  // Both done - go to results screen
+  state.decks.player1 = (D.off.p1 || []).slice();
+  state.decks.player2 = (D.off.p2 || []).slice();
+  D.screen = 'decklists';
+} else {
+  // Show waiting message
+  D.screen = 'landswait';
+}
 render();
 
   };
+
+  return wrap;
+}
+
+function LandsWaitScreen(){
+  const D = state.draft;
+  const wrap = document.createElement('div');
+  wrap.className = 'screen';
+
+  const myPlayer = state.currentPlayer;
+  const myDeck = (myPlayer === 1) ? D.off.p1 : D.off.p2;
+
+  wrap.innerHTML = `
+    <div style="max-width:600px;margin:0 auto;padding:32px;text-align:center">
+      <h2 style="font-weight:800;font-size:24px;margin-bottom:16px">
+        Lands Finalized!
+      </h2>
+      <div class="card p-4 mb-4" style="background:rgba(59,130,246,0.15);border-color:#3b82f6;">
+        <div style="font-size:48px;margin-bottom:12px">⏳</div>
+        <p style="font-size:16px;margin-bottom:8px">
+          Waiting for opponent to finish adding lands...
+        </p>
+        <p class="text-sm text-gray">
+          Your deck: ${myDeck.length} cards
+        </p>
+      </div>
+      <div class="text-xs text-gray">
+        The results screen will appear when both players have finalized their decks.
+      </div>
+    </div>
+  `;
 
   return wrap;
 }
@@ -1851,6 +1948,14 @@ function DraftOffResults(){
           </div>
         </div>
       </div>
+
+      <div class="card p-4 mt-4" style="text-align:center">
+        <h3 style="font-weight:800;margin-bottom:12px">Ready to Battle?</h3>
+        <p class="text-sm text-gray mb-3">Load both decks and start a game with your drafted cards.</p>
+        <button id="startBattle" class="btn btn-green" style="padding:12px 32px;font-size:16px">
+          Start Battle with Drafted Decks
+        </button>
+      </div>
     </div>
   `;
 
@@ -1877,6 +1982,23 @@ function DraftOffResults(){
   };
   wrap.querySelector('#dlP1').onclick = ()=> downloadNamedDeck(p1, 'draftoff_player1.json');
   wrap.querySelector('#dlP2').onclick = ()=> downloadNamedDeck(p2, 'draftoff_player2.json');
+
+  wrap.querySelector('#startBattle').onclick = ()=>{
+    // Load both decks
+    state.decks.player1 = p1.slice();
+    state.decks.player2 = p2.slice();
+
+    // If online, go to battle menu; if local (hotseat), go to local battle
+    if (D.off.isLocal) {
+      // Local hotseat battle
+      state.onlineMode = false;
+      state.screen = 'battlemenu';
+    } else {
+      // Online battle - connection should still be open
+      state.screen = 'battlemenu';
+    }
+    render();
+  };
 
   return wrap;
 }
@@ -2303,6 +2425,8 @@ if (localBtn) localBtn.onclick = async ()=>{
   D.off.startingPlayer = 1;
   D.off.currentPicker  = 1;
   D.off.isLocal = true;
+  D.off.p1LandsDone = false;
+  D.off.p2LandsDone = false;
 
   D.screen = 'draftoff';
   render();
@@ -2653,6 +2777,7 @@ else if (D.screen==='picks')   content = Picks();
 // NEW: Draft-off
 else if (D.screen==='draftoff-setup') content = DraftOffSetup();
 else if (D.screen==='draftoff')       content = DraftOffRoom();
+else if (D.screen==='landswait')      content = LandsWaitScreen();
 else if (D.screen==='decklists')   content = DraftOffResults();
 
 
