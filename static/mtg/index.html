@@ -745,9 +745,9 @@ state.dataChannel.onmessage = (event) => {
     }
     else if (data.type === 'draftoff_pick') {
       // mirror the pick
-      draftOffApplyPick(data.index, data.picker);
+      if (window.draftOffApplyPick) window.draftOffApplyPick(data.index, data.picker);
       render();
-      draftOffMaybeNextRoundOrFinish();
+      if (window.draftOffMaybeNextRoundOrFinish) window.draftOffMaybeNextRoundOrFinish();
     }
     else if (data.type === 'draftoff_done') {
       // opponent reached 42; enable lands transition if I have 42 too
@@ -2687,6 +2687,7 @@ function draftOffApplyPick(index, picker){
     draftOffCheckFinishOrNextPack();        // starts a new random 9 or moves to lands-fill at 42/42
   }
 }
+window.draftOffApplyPick = draftOffApplyPick;
 
 
 async function draftOffStartNewPack(flipStarter = true){
@@ -2760,6 +2761,7 @@ function draftOffMaybeNextRoundOrFinish(){
  if (state.isHost && window.draftOffStartNewPack) window.draftOffStartNewPack();
   }
 }
+window.draftOffMaybeNextRoundOrFinish = draftOffMaybeNextRoundOrFinish;
 // -----------------------------------------------------------
 
   
