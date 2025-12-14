@@ -13,7 +13,7 @@ __ready(function(){
     tabs.forEach(function(b){ var on=b.getAttribute('data-tab')===id; b.classList.toggle('active', on); b.setAttribute('aria-selected', on?'true':'false'); });
   }
   tabs.forEach(function(b){ b.addEventListener('click', function(){ showTab(b.getAttribute('data-tab')); }); });
-  showTab('tab-net');
+  showTab('tab-intro');
 
   var state={ money:10, goods:[] };
   var EX=[{name:'Bread',prod:2,weight:0.12},{name:'Smartphones',prod:20,weight:0.08},{name:'Electricity',prod:3,weight:0.07},{name:'Healthcare',prod:-1,weight:0.17},{name:'Education',prod:0.5,weight:0.10},{name:'Housing',prod:1,weight:0.30},{name:'Restaurants',prod:1.5,weight:0.16}];
@@ -26,13 +26,13 @@ __ready(function(){
 
   function makeRow(g,i){
     var d=document.createElement('div');
-    d.className='card'; d.style.marginBottom='8px';
+    d.className='good-row';
     d.innerHTML=''
       + '<div class="row" style="align-items:center;justify-content:space-between">'
-      + '  <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">'
-      + '    <input data-k="name" style="min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px" value="'+g.name+'">'
-      + '    <div style="width:160px"><label>Productivity ΔA (%)</label><input data-k="prod" type="range" min="-10" max="30" step="0.1" value="'+g.prod+'"><div class="small">Current: <span class="accent" data-k="prodVal">'+g.prod.toFixed(1)+'%</span></div></div>'
-      + '    <div style="width:160px"><label>Weight</label><input data-k="weight" type="range" min="0" max="1" step="0.01" value="'+g.weight+'"><div class="small">Current: <span class="accent" data-k="weightVal">'+g.weight.toFixed(2)+'</span></div></div>'
+      + '  <div class="row" style="align-items:center;gap:12px;flex-wrap:wrap">'
+      + '    <input data-k="name" type="text" style="min-width:160px" value="'+g.name+'">'
+      + '    <div style="min-width:180px"><label>Productivity ΔA (%)</label><input data-k="prod" type="range" min="-10" max="30" step="0.1" value="'+g.prod+'"><div class="small">Current: <span class="accent" data-k="prodVal">'+g.prod.toFixed(1)+'%</span></div></div>'
+      + '    <div style="min-width:180px"><label>Weight</label><input data-k="weight" type="range" min="0" max="1" step="0.01" value="'+g.weight+'"><div class="small">Current: <span class="accent" data-k="weightVal">'+g.weight.toFixed(2)+'</span></div></div>'
       + '  </div>'
       + '  <div class="row"><button class="btn" data-act="up">▲</button><button class="btn" data-act="down">▼</button><button class="btn" data-act="del">Delete</button></div>'
       + '</div>';

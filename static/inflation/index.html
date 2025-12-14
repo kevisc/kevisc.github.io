@@ -3,169 +3,990 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Inflation: an educational tool</title>
+  <title>Understanding Inflation: Interactive Educational Tool</title>
   <style>
-  :root{--bg:#0b0c0f;--panel:#131722;--panel2:#0f1320;--text:#e8edf6;--muted:#9aa6bf;--accent:#ff7a00;--border:#263042}
-  *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,var(--bg),#0c111b);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
-  .wrap{max-width:1200px;margin:0 auto;padding:18px}
-  header{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px}
-  h1{font-size:22px;margin:0 0 2px 0;font-weight:700;letter-spacing:.2px}
-  .lead{color:var(--muted);margin:0}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
-  .grid{display:grid;grid-template-columns:320px 1fr;gap:14px;margin-top:14px}@media(max-width:960px){.grid{grid-template-columns:1fr}}
-  label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}input[type=range]{width:100%}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 10px;cursor:pointer}.btn:hover{border-color:var(--accent)}
-  .small{font-size:12px;color:var(--muted)}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right}th:first-child,td:first-child{text-align:left}
-  .accent{color:var(--accent)}.note{background:var(--panel2);border:1px dashed var(--border);border-radius:12px;padding:12px;color:var(--muted);font-size:12px}
-  .chart-box{height:300px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:8px;position:relative}
-  .tabs{display:flex;gap:8px;margin-top:10px;margin-bottom:6px}.tab{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{border-color:var(--accent)}.hidden{display:none}
-  .treadmill-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}.treadmill{position:relative;height:140px;border:none;border-radius:12px;background:transparent;overflow:hidden;flex:1;min-width:260px;max-width:520px}
-  .belt{position:absolute;left:0;right:0;bottom:22px;height:36px;background:repeating-linear-gradient(90deg,#1e2434 0 20px,#283148 20px 40px);animation:belt-move var(--belt-duration,6s) linear infinite}
-  .rollers{position:absolute;left:10px;right:10px;bottom:10px;height:12px;border-radius:6px;background:#1c2232;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
-  .cat{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);font-size:46px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));animation:cat-bob var(--cat-duration,1.2s) ease-in-out infinite}
-  .treadmill.deflate .belt{animation-direction:reverse}.tip{position:absolute;pointer-events:none;background:rgba(20,24,35,.92);color:#e8edf6;border:1px solid var(--border);padding:6px 8px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .12s}
-  svg{width:100%;height:100%} .tooltip{position:absolute;pointer-events:none;background:rgba(20,24,35,.92);color:#e8edf6;border:1px solid var(--border);padding:6px 8px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .12s}
-  @keyframes belt-move{from{background-position:0 0}to{background-position:400px 0}}@keyframes cat-bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-4px)}}
-  details{margin-top:10px} details summary{cursor:pointer;color:#c9d2e3} details[open]{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:10px}
-  footer{max-width:1200px;margin:22px auto 10px auto;color:var(--muted);font-size:12px;padding:0 18px}
+  :root{
+    --bg:#0b0c0f;
+    --panel:#131722;
+    --panel2:#0f1320;
+    --panel3:#1a1f2e;
+    --text:#e8edf6;
+    --muted:#9aa6bf;
+    --accent:#ff7a00;
+    --accent2:#5aa9ff;
+    --success:#26de81;
+    --border:#263042;
+    --border-light:#32435f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,var(--bg),#0c111b);
+    color:var(--text);
+    font:15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+  .wrap{max-width:1400px;margin:0 auto;padding:24px}
+
+  /* Header */
+  header{
+    text-align:center;
+    padding:32px 20px;
+    margin-bottom:32px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+  }
+  h1{
+    font-size:36px;
+    margin:0 0 12px 0;
+    font-weight:700;
+    letter-spacing:-0.5px;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+  }
+  .lead{
+    color:var(--muted);
+    margin:0;
+    font-size:16px;
+    max-width:900px;
+    margin:0 auto;
+    line-height:1.7;
+  }
+
+  /* Cards */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:24px;
+    margin-bottom:20px;
+    transition:border-color 0.3s ease;
+  }
+  .card:hover{border-color:var(--border-light)}
+
+  /* Grid layouts */
+  .grid{display:grid;grid-template-columns:420px 1fr;gap:20px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:1100px){
+    .grid{grid-template-columns:1fr}
+    .grid-2{grid-template-columns:1fr}
+  }
+
+  /* Typography */
+  h2{
+    font-size:24px;
+    margin:0 0 16px 0;
+    font-weight:600;
+    color:var(--accent);
+  }
+  h3{
+    font-size:20px;
+    margin:0 0 12px 0;
+    font-weight:600;
+  }
+  h4{
+    font-size:16px;
+    margin:0 0 8px 0;
+    font-weight:600;
+    color:var(--accent2);
+  }
+
+  /* Form controls */
+  label{
+    display:block;
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:6px;
+    font-weight:500;
+  }
+  input[type=range]{
+    width:100%;
+    -webkit-appearance:none;
+    appearance:none;
+    height:6px;
+    border-radius:3px;
+    background:var(--panel2);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    appearance:none;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:var(--accent);
+    cursor:pointer;
+    transition:transform 0.2s ease;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{
+    transform:scale(1.2);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:var(--accent);
+    cursor:pointer;
+    border:none;
+  }
+
+  input[type=text]{
+    min-width:180px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    color:var(--text);
+    padding:10px 14px;
+    font-size:14px;
+    transition:border-color 0.3s ease;
+  }
+  input[type=text]:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+
+  /* Buttons */
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:10px;
+    padding:10px 16px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:500;
+    transition:all 0.3s ease;
+  }
+  .btn:hover{
+    border-color:var(--accent);
+    background:var(--panel3);
+    transform:translateY(-1px);
+  }
+  .btn:active{transform:translateY(0)}
+
+  /* Tabs */
+  .tabs{
+    display:flex;
+    gap:10px;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+    background:var(--panel);
+    padding:12px;
+    border-radius:14px;
+    border:1px solid var(--border);
+  }
+  .tab{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:10px;
+    padding:12px 20px;
+    cursor:pointer;
+    font-size:15px;
+    font-weight:500;
+    transition:all 0.3s ease;
+  }
+  .tab:hover{
+    border-color:var(--border-light);
+    transform:translateY(-2px);
+  }
+  .tab.active{
+    background:linear-gradient(135deg, var(--accent), #e56900);
+    border-color:var(--accent);
+    color:#fff;
+    box-shadow:0 4px 12px rgba(255, 122, 0, 0.3);
+  }
+  .hidden{display:none}
+
+  /* Info boxes */
+  .small{font-size:13px;color:var(--muted)}
+  .accent{color:var(--accent);font-weight:600}
+  .note{
+    background:var(--panel2);
+    border-left:4px solid var(--accent);
+    border-radius:10px;
+    padding:16px;
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.7;
+  }
+  .info-box{
+    background:var(--panel3);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    margin-top:16px;
+  }
+  .info-box h4{margin-top:0}
+
+  /* Tables */
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  th,td{
+    padding:12px;
+    border-bottom:1px solid var(--border);
+    text-align:right;
+  }
+  th:first-child,td:first-child{text-align:left}
+  th{
+    background:var(--panel2);
+    color:var(--accent);
+    font-weight:600;
+  }
+  tbody tr:hover{background:var(--panel2)}
+
+  /* Charts */
+  .chart-box{
+    height:340px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+    position:relative;
+  }
+  svg{width:100%;height:100%}
+  .tooltip{
+    position:absolute;
+    pointer-events:none;
+    background:rgba(20,24,35,.95);
+    color:#e8edf6;
+    border:1px solid var(--accent);
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    transition:opacity .15s;
+    z-index:100;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  /* Treadmill animation */
+  .treadmill-card{
+    display:flex;
+    gap:16px;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .treadmill{
+    position:relative;
+    height:160px;
+    border-radius:14px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    overflow:hidden;
+    flex:1;
+    min-width:300px;
+    max-width:600px;
+  }
+  .belt{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:28px;
+    height:40px;
+    background:repeating-linear-gradient(90deg,#1e2434 0 24px,#283148 24px 48px);
+    animation:belt-move var(--belt-duration,6s) linear infinite;
+  }
+  .rollers{
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:12px;
+    height:14px;
+    border-radius:7px;
+    background:#1c2232;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
+  }
+  .cat{
+    position:absolute;
+    bottom:68px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:54px;
+    filter:drop-shadow(0 6px 10px rgba(0,0,0,.6));
+    animation:cat-bob var(--cat-duration,1.2s) ease-in-out infinite;
+  }
+  .treadmill.deflate .belt{animation-direction:reverse}
+  .tip{
+    position:absolute;
+    pointer-events:none;
+    background:rgba(20,24,35,.95);
+    color:#e8edf6;
+    border:1px solid var(--accent);
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    transition:opacity .15s;
+    top:12px;
+    right:12px;
+  }
+
+  @keyframes belt-move{
+    from{background-position:0 0}
+    to{background-position:480px 0}
+  }
+  @keyframes cat-bob{
+    0%,100%{transform:translate(-50%,0)}
+    50%{transform:translate(-50%,-6px)}
+  }
+
+  /* Details/Accordion */
+  details{margin-top:16px}
+  details summary{
+    cursor:pointer;
+    color:var(--accent2);
+    font-weight:600;
+    padding:12px;
+    border-radius:10px;
+    transition:background 0.3s ease;
+  }
+  details summary:hover{background:var(--panel2)}
+  details[open]{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px;
+  }
+  details[open] summary{padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+
+  /* Good rows */
+  .good-row{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:12px;
+    transition:all 0.3s ease;
+  }
+  .good-row:hover{
+    border-color:var(--border-light);
+    box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  /* Stats grid */
+  .stats-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+    margin:16px 0;
+  }
+  .stat-card{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    text-align:center;
+  }
+  .stat-value{
+    font-size:28px;
+    font-weight:700;
+    color:var(--accent);
+    margin-bottom:4px;
+  }
+  .stat-label{
+    font-size:13px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+
+  /* Section headers */
+  .section-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+
+  /* Basket viz */
+  .basket-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:14px;
+  }
+  .basket-item{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px;
+    text-align:center;
+    transition:all 0.3s ease;
+  }
+  .basket-item:hover{
+    border-color:var(--accent);
+    transform:translateY(-2px);
+  }
+  .basket-icon{font-size:32px;margin-bottom:8px}
+  .basket-name{
+    font-weight:600;
+    font-size:14px;
+    margin-bottom:4px;
+  }
+  .basket-weight{
+    color:var(--accent);
+    font-weight:700;
+    font-size:20px;
+  }
+
+  footer{
+    max-width:1400px;
+    margin:32px auto 16px auto;
+    color:var(--muted);
+    font-size:13px;
+    padding:0 24px;
+    text-align:center;
+  }
+
+  @media(max-width:768px){
+    h1{font-size:28px}
+    .wrap{padding:16px}
+    .card{padding:18px}
+    .tabs{padding:8px}
+    .tab{padding:10px 16px;font-size:14px}
+  }
   </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div>
-      <h1>Inflation: an educational tool</h1>
-      <p class="lead">Explore how money growth (ΔM) and sector-specific productivity (ΔA) combine into net price changes (ΔM − ΔA). Adjust assumptions and watch the visuals update.</p>
-    </div>
+    <h1>Understanding Inflation</h1>
+    <p class="lead">An interactive educational tool exploring how inflation is measured as a weighted average of price changes across different goods, driven by money supply growth (ΔM) and productivity changes (ΔA). Learn about measurement biases, substitution effects, and quality adjustments.</p>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Views">
-    <button class="tab active" data-tab="tab-net" role="tab" aria-selected="true">Net inflation</button>
-    <button class="tab" data-tab="tab-bias" role="tab" aria-selected="false">Inflation biases</button>
+    <button class="tab active" data-tab="tab-intro" role="tab">Introduction</button>
+    <button class="tab" data-tab="tab-net" role="tab">Price Changes (ΔM − ΔA)</button>
+    <button class="tab" data-tab="tab-basket" role="tab">CPI Basket</button>
+    <button class="tab" data-tab="tab-biases" role="tab">Measurement Issues</button>
+    <button class="tab" data-tab="tab-effects" role="tab">Economic Effects</button>
   </nav>
 
-  <div id="tab-net" class="tabpane">
-    <section class="card" style="margin-top:0">
-      <div class="treadmill-card">
-        <div class="treadmill" id="treadmill"><div class="tip" id="treadTip">Aggregate: 0.00%</div><div class="belt"></div><div class="rollers"></div><div class="cat" id="tcat">🐈‍⬛</div></div>
-        <div class="small">Aggregate: <span id="treadVal" class="accent">0.00%</span></div>
+  <!-- INTRODUCTION TAB -->
+  <div id="tab-intro" class="tabpane">
+    <section class="card">
+      <h2>What is Inflation?</h2>
+      <p>Inflation is the rate at which the general level of prices for goods and services rises, eroding purchasing power. It's commonly measured by the Consumer Price Index (CPI), which tracks a basket of goods and services.</p>
+
+      <div class="info-box">
+        <h4>Key Insight: Inflation as a Vector</h4>
+        <p>Inflation isn't a single number—it's a <strong>weighted average</strong> of many different price changes. Each good in the economy experiences its own price trajectory, influenced by:</p>
+        <ul style="margin:12px 0 0 20px;line-height:1.8">
+          <li><strong>Money supply growth (ΔM)</strong>: More money chasing the same goods pushes prices up</li>
+          <li><strong>Productivity changes (ΔA)</strong>: Efficiency gains push prices down</li>
+          <li><strong>Supply shocks</strong>: Disruptions in production or distribution</li>
+          <li><strong>Demand shifts</strong>: Changing consumer preferences</li>
+        </ul>
+        <p style="margin-top:12px">The <strong>net price change</strong> for each good is approximately ΔM − ΔA, weighted by how much consumers spend on that good.</p>
+      </div>
+
+      <div class="stats-grid" style="margin-top:24px">
+        <div class="stat-card">
+          <div class="stat-value">~300</div>
+          <div class="stat-label">Items in CPI Basket</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">8</div>
+          <div class="stat-label">Major Categories</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">100%</div>
+          <div class="stat-label">Sum of Weights</div>
+        </div>
       </div>
     </section>
 
-    <section class="card" style="margin-top:12px">
+    <section class="card">
+      <h3>How Inflation is Measured</h3>
+      <p>The Bureau of Labor Statistics (BLS) measures inflation through the Consumer Price Index (CPI), which works as follows:</p>
+
+      <div class="grid-2" style="margin-top:20px">
+        <div class="info-box">
+          <h4>1. Define the Basket</h4>
+          <p>Select representative goods and services that consumers typically purchase (housing, food, transportation, medical care, etc.)</p>
+        </div>
+        <div class="info-box">
+          <h4>2. Assign Weights</h4>
+          <p>Weight each item by its share of average household spending, based on consumer expenditure surveys</p>
+        </div>
+        <div class="info-box">
+          <h4>3. Track Prices</h4>
+          <p>Collect price data monthly from thousands of retail stores, service providers, and online sources</p>
+        </div>
+        <div class="info-box">
+          <h4>4. Calculate Index</h4>
+          <p>Compute the weighted average of price changes to get the overall inflation rate</p>
+        </div>
+      </div>
+
+      <div class="note" style="margin-top:20px">
+        <strong>Important:</strong> Because inflation is an average, some goods' prices rise faster than the headline number while others rise slower or even fall (deflation in specific sectors). Your personal inflation rate depends on what you buy.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Drivers of Price Changes</h3>
+
+      <div class="info-box">
+        <h4>Money Supply Growth (ΔM)</h4>
+        <p>When the central bank increases the money supply (through monetary policy, quantitative easing, or other mechanisms), more money chases the same amount of goods, putting upward pressure on all prices. This affects all goods relatively uniformly in the long run.</p>
+      </div>
+
+      <div class="info-box">
+        <h4>Productivity Growth (ΔA)</h4>
+        <p>Technological improvements and efficiency gains allow us to produce more with the same inputs. This is <strong>deflationary</strong> for individual sectors:</p>
+        <ul style="margin:8px 0 0 20px">
+          <li><strong>Electronics:</strong> Moore's Law → exponential improvement in computing power per dollar</li>
+          <li><strong>Food:</strong> Agricultural mechanization → lower real food prices</li>
+          <li><strong>Manufacturing:</strong> Automation → cheaper consumer goods</li>
+        </ul>
+        <p style="margin-top:12px">Services (healthcare, education) often have <strong>lower productivity growth</strong>, so their prices tend to rise faster (Baumol's cost disease).</p>
+      </div>
+
+      <div class="note">
+        <strong>Formula:</strong> Net price change for good <em>i</em> ≈ ΔM − ΔA<sub>i</sub>
+        <br><br>
+        <strong>Example:</strong> If money supply grows 5% and smartphone production efficiency improves 15%, smartphone prices should fall by about 10% (5% − 15% = −10%).
+      </div>
+    </section>
+  </div>
+
+  <!-- NET INFLATION TAB -->
+  <div id="tab-net" class="tabpane hidden">
+    <section class="card">
+      <div class="treadmill-card">
+        <div class="treadmill" id="treadmill">
+          <div class="tip" id="treadTip">Aggregate: 0.00%</div>
+          <div class="belt"></div>
+          <div class="rollers"></div>
+          <div class="cat" id="tcat">🐈‍⬛</div>
+        </div>
+        <div>
+          <h3 style="margin:0">Aggregate Inflation</h3>
+          <div class="stat-value" id="treadVal">0.00%</div>
+          <div class="small">Cat runs right for inflation, left for deflation</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
       <details>
-        <summary><b>How to:</b> click to expand</summary>
-        <ul class="small" style="margin-top:8px">
-          <li><b>ΔM slider</b> sets the same money growth for all goods.</li>
-          <li><b>ΔA per good</b> captures productivity/efficiency; higher ΔA pushes prices down.</li>
-          <li><b>Net bar</b> shows ΔM − ΔA for each good; the final orange bar is the weighted aggregate.</li>
-          <li><b>Weights</b> approximate expenditure shares; totals are normalized to 1.</li>
-          <li><b>Cat treadmill</b> animates with aggregate inflation (rightward for inflation, leftward for deflation).</li>
-          <li>Hover bars/lines for exact values; drag sliders to explore scenarios.</li>
+        <summary>How to use this tool</summary>
+        <ul style="margin-top:12px;line-height:1.8">
+          <li><strong>ΔM slider</strong> sets the same money supply growth rate for all goods</li>
+          <li><strong>ΔA per good</strong> represents sector-specific productivity gains; higher ΔA reduces prices</li>
+          <li><strong>Net bar chart</strong> shows ΔM − ΔA for each good; the orange aggregate bar is the weighted average</li>
+          <li><strong>Weights</strong> represent expenditure shares; they're automatically normalized to sum to 1</li>
+          <li><strong>Cat treadmill</strong> speed reflects inflation magnitude; direction shows sign</li>
+          <li>Hover over chart elements to see exact values</li>
         </ul>
       </details>
     </section>
 
     <div class="grid">
       <section class="card">
-        <h3 style="margin:0 0 8px 0">Global settings</h3>
-        <div class="row" style="margin-bottom:8px">
-          <div style="flex:1">
-            <label>Money supply growth (ΔM) — %</label>
-            <input id="money" type="range" min="-10" max="30" step="0.1" value="10">
-            <div class="row"><div class="small">Current: <span id="moneyVal" class="accent">10.0%</span></div></div>
+        <h3>Global Settings</h3>
+        <div style="margin-bottom:20px">
+          <label>Money Supply Growth (ΔM) — %</label>
+          <input id="money" type="range" min="-10" max="30" step="0.1" value="10">
+          <div class="row" style="margin-top:8px">
+            <div class="small">Current: <span id="moneyVal" class="accent">10.0%</span></div>
           </div>
         </div>
-        <div class="note">Net price change ≈ ΔM − ΔA. When ΔM = ΔA, the price is stable.</div>
-        <h3 style="margin:12px 0 6px 0">Goods / sectors</h3>
-        <div class="small" style="margin-bottom:8px">Set each good’s ΔA (%) and weight.</div>
+
+        <div class="note">
+          <strong>Theory:</strong> Net price change ≈ ΔM − ΔA<br>
+          When ΔM = ΔA for a good, its price remains stable despite monetary expansion.
+        </div>
+
+        <h3 style="margin-top:24px">Goods / Sectors</h3>
+        <p class="small" style="margin-bottom:12px">Set each good's productivity growth (ΔA) and expenditure weight.</p>
         <div id="goods"></div>
-        <div class="row" style="margin-top:10px">
-          <button class="btn" id="addGood">+ Add good</button>
-          <button class="btn" id="resetGoods">Reset examples</button>
+        <div class="row" style="margin-top:16px">
+          <button class="btn" id="addGood">+ Add Good</button>
+          <button class="btn" id="resetGoods">Reset to Examples</button>
         </div>
       </section>
 
       <section class="card">
-        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div><h3 style="margin:0">Net by good (ΔM − ΔA)</h3></div>
+        <div class="section-header">
+          <h3 style="margin:0">Net Price Changes (ΔM − ΔA)</h3>
           <div class="small">Aggregate: <span id="agg" class="accent">0.0%</span></div>
         </div>
-        <div class="chart-box" id="barsBox"><svg id="barsSvg" viewBox="0 0 800 300" preserveAspectRatio="none"></svg></div>
-        <div style="margin-top:12px">
-          <table id="table"><thead><tr><th>Good</th><th>Weight</th><th>ΔM (%)</th><th>ΔA (%)</th><th>Net (%)</th><th>Index</th></tr></thead><tbody></tbody></table>
+        <div class="chart-box" id="barsBox">
+          <svg id="barsSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
+        </div>
+        <div style="margin-top:20px">
+          <table id="table">
+            <thead>
+              <tr>
+                <th>Good</th>
+                <th>Weight</th>
+                <th>ΔM (%)</th>
+                <th>ΔA (%)</th>
+                <th>Net (%)</th>
+                <th>Price Index</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
       </section>
     </div>
-  </div>
 
-  <div id="tab-bias" class="tabpane hidden">
     <section class="card">
-      <h3 style="margin:0 0 8px 0">Behavioral tendencies around inflation & deflation</h3>
-      <div class="grid" style="grid-template-columns:1fr 1fr">
-        <div>
-          <h4 style="margin:6px 0 6px 0">Inflationary biases (aggregate &gt; 0)</h4>
-          <ul class="small" style="margin:8px 0 0 18px">
-            <li><b>Money illusion & anchoring</b>: slow wage/price adjustment; nominal anchors lag.</li>
-            <li><b>Contract stickiness</b>: loans, rents, salaries need renegotiation to preserve real value.</li>
-            <li><b>Spend-now bias</b>: higher opportunity cost of cash encourages consumption.</li>
-          </ul>
+      <h3>Understanding the Results</h3>
+      <p>The table above shows how different goods experience different rates of price change even when money supply growth is uniform. This heterogeneity is crucial:</p>
+      <div class="grid-2" style="margin-top:16px">
+        <div class="info-box">
+          <h4>High Productivity Sectors</h4>
+          <p>Goods with high ΔA (technology, manufacturing) may see falling prices despite monetary inflation. This is "good deflation"—you get more for less.</p>
         </div>
-        <div>
-          <h4 style="margin:6px 0 6px 0">Deflationary effects (aggregate &lt; 0)</h4>
-          <ul class="small" style="margin:8px 0 0 18px">
-            <li><b>Intertemporal substitution</b>: defers purchases; saving looks better.</li>
-            <li><b>Debt burden rises</b> in real terms; fixed payments weigh more.</li>
-            <li><b>Sources</b>: <i>benign</i> productivity/efficiency vs. <i>bad deflation</i> from deleveraging after over-leverage (e.g., 1920).</li>
-          </ul>
+        <div class="info-box">
+          <h4>Low Productivity Sectors</h4>
+          <p>Services with low ΔA (healthcare, education, personal services) see prices rise faster than the average, concentrating inflation's impact.</p>
         </div>
       </div>
-      <details>
-        <summary><b>How to:</b> click to expand</summary>
-        <ul class="small" style="margin-top:8px">
-          <li><b>$100 over time</b> compounds at the chosen annual rate to illustrate exponential growth/decay.</li>
-          <li><b>Affordable house price</b> holds a fixed monthly payment and shows how lower rates raise present value.</li>
-          <li>Hover over lines to see the current value; tweak sliders to explore scenarios.</li>
+    </section>
+  </div>
+
+  <!-- CPI BASKET TAB -->
+  <div id="tab-basket" class="tabpane hidden">
+    <section class="card">
+      <h2>U.S. Consumer Price Index Basket</h2>
+      <p>The CPI uses a representative basket of goods and services weighted by typical consumer spending patterns. These weights are updated periodically based on Consumer Expenditure Surveys.</p>
+
+      <div class="note" style="margin-top:16px">
+        <strong>Note:</strong> These are approximate weights based on recent BLS data. Individual households may have very different spending patterns, leading to personalized inflation experiences.
+      </div>
+
+      <h3 style="margin-top:24px">Major Categories</h3>
+      <div class="basket-grid">
+        <div class="basket-item">
+          <div class="basket-icon">🏠</div>
+          <div class="basket-name">Housing</div>
+          <div class="basket-weight">42%</div>
+          <div class="small">Rent, owners' equiv., utilities</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">🚗</div>
+          <div class="basket-name">Transportation</div>
+          <div class="basket-weight">17%</div>
+          <div class="small">Vehicles, gas, insurance</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">🍔</div>
+          <div class="basket-name">Food & Beverages</div>
+          <div class="basket-weight">14%</div>
+          <div class="small">Groceries, dining out</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">🏥</div>
+          <div class="basket-name">Medical Care</div>
+          <div class="basket-weight">9%</div>
+          <div class="small">Insurance, services, drugs</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">🎓</div>
+          <div class="basket-name">Education</div>
+          <div class="basket-weight">3%</div>
+          <div class="small">Tuition, fees, supplies</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">🎮</div>
+          <div class="basket-name">Recreation</div>
+          <div class="basket-weight">6%</div>
+          <div class="small">Entertainment, hobbies</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">👕</div>
+          <div class="basket-name">Apparel</div>
+          <div class="basket-weight">3%</div>
+          <div class="small">Clothing, footwear</div>
+        </div>
+        <div class="basket-item">
+          <div class="basket-icon">📦</div>
+          <div class="basket-name">Other</div>
+          <div class="basket-weight">6%</div>
+          <div class="small">Personal care, misc.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Why Weights Matter</h3>
+      <p>The weighted average structure means that:</p>
+      <ul style="margin:12px 0 0 24px;line-height:1.8">
+        <li><strong>Housing dominates</strong> (42% weight) so rent/home price inflation heavily influences the overall CPI</li>
+        <li><strong>Small categories</strong> like apparel (3%) barely move the aggregate even if prices swing wildly</li>
+        <li><strong>Personal inflation</strong> can differ dramatically from CPI if your spending pattern differs from the average</li>
+      </ul>
+
+      <div class="info-box" style="margin-top:20px">
+        <h4>Example: Tech Worker vs. Retiree</h4>
+        <p><strong>Tech worker:</strong> Spends heavily on rent and dining out → highly exposed to urban cost increases</p>
+        <p style="margin-top:8px"><strong>Retiree:</strong> Spends more on healthcare and less on housing → different inflation experience</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>How Weights Are Updated</h3>
+      <p>The BLS updates CPI weights every two years using data from the Consumer Expenditure Survey, which tracks spending by thousands of households. This helps keep the index relevant as consumption patterns evolve.</p>
+
+      <div class="note">
+        <strong>Challenge:</strong> Rapid changes in spending (e.g., pandemic-driven shifts) may not be immediately reflected in CPI weights, potentially causing measurement lags.
+      </div>
+    </section>
+  </div>
+
+  <!-- MEASUREMENT BIASES TAB -->
+  <div id="tab-biases" class="tabpane hidden">
+    <section class="card">
+      <h2>Why CPI Might Overstate Inflation</h2>
+      <p>Several systematic biases can cause the Consumer Price Index to overestimate true inflation. The Boskin Commission (1996) estimated CPI overstates inflation by ~1.1 percentage points annually due to these factors:</p>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <h3>1. Substitution Bias</h3>
+        <p>When relative prices change, consumers substitute toward relatively cheaper goods. The CPI uses a fixed basket, so it misses this optimization.</p>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Example</h4>
+          <p><strong>Scenario:</strong> Beef prices rise 20%, chicken stays flat</p>
+          <p style="margin-top:8px"><strong>CPI assumes:</strong> You keep buying the same amount of beef</p>
+          <p style="margin-top:8px"><strong>Reality:</strong> You buy less beef, more chicken → smaller welfare loss than CPI suggests</p>
+        </div>
+
+        <div class="note" style="margin-top:16px">
+          <strong>Impact:</strong> Estimated 0.4 percentage points of annual overstatement
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>2. Quality Adjustment Bias</h3>
+        <p>When products improve in quality, the price increase partially reflects better features, not pure inflation. BLS adjusts for this but may lag or miss improvements.</p>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Example: Smartphones</h4>
+          <p>A $1,000 phone today vs. $800 ten years ago:</p>
+          <ul style="margin:8px 0 0 20px">
+            <li>100x faster processor</li>
+            <li>10x better camera</li>
+            <li>Internet speeds 50x faster</li>
+          </ul>
+          <p style="margin-top:8px">The nominal price rose 25%, but you're getting vastly more value.</p>
+        </div>
+
+        <div class="note" style="margin-top:16px">
+          <strong>Impact:</strong> Estimated 0.6 percentage points of annual overstatement
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>3. New Goods Bias</h3>
+        <p>New products (smartphones, streaming services, electric cars) aren't immediately added to the CPI basket. The consumer surplus from innovation isn't captured until years later.</p>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Example</h4>
+          <p>When Netflix launched, it provided enormous value at low cost, but didn't appear in CPI for years. The welfare gain from "entertainment for $10/month" was invisible to the index.</p>
+        </div>
+
+        <div class="note" style="margin-top:16px">
+          <strong>Impact:</strong> Hard to quantify but potentially significant
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>4. Outlet Substitution Bias</h3>
+        <p>Consumers shift to lower-price retailers (Amazon, Costco, dollar stores) when prices rise. CPI sampling may not fully capture this shift in shopping behavior.</p>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Example</h4>
+          <p>If you switch from shopping at boutique grocery stores to Costco, you're paying less for similar goods. CPI may track prices at traditional stores and miss this adaptation.</p>
+        </div>
+
+        <div class="note" style="margin-top:16px">
+          <strong>Impact:</strong> Estimated 0.1 percentage points annually
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h3>Hedonic Pricing</h3>
+      <p>The BLS uses "hedonic quality adjustment" to separate price changes from quality changes. This statistical technique estimates how much each feature contributes to a product's price.</p>
+
+      <div class="info-box">
+        <h4>How It Works</h4>
+        <p>For computers, BLS might model: Price = β₀ + β₁(RAM) + β₂(Storage) + β₃(Processor Speed) + ε</p>
+        <p style="margin-top:8px">When a new model has 2x RAM and costs 10% more, hedonic regression separates the quality improvement from pure inflation.</p>
+      </div>
+
+      <div class="note" style="margin-top:16px">
+        <strong>Debate:</strong> Some argue hedonic adjustments don't go far enough (missing intangible improvements), while others say they're too aggressive and obscure real cost increases.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Bottom Line</h3>
+      <p>These biases suggest <strong>true inflation is lower than measured CPI</strong>. If CPI reports 3%, true cost-of-living increase might be closer to 2%. This matters for:</p>
+      <ul style="margin:12px 0 0 24px;line-height:1.8">
+        <li><strong>Social Security COLAs:</strong> Benefits indexed to CPI might over-compensate</li>
+        <li><strong>Real wage calculations:</strong> Wage growth adjusted by CPI may understate real improvement</li>
+        <li><strong>Monetary policy:</strong> Fed targeting 2% measured inflation ≈ 1% true inflation</li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- ECONOMIC EFFECTS TAB -->
+  <div id="tab-effects" class="tabpane hidden">
+    <section class="card">
+      <h2>Economic Effects of Inflation & Deflation</h2>
+      <p>Inflation and deflation create different behavioral incentives and economic outcomes. Understanding these effects helps explain why central banks target moderate positive inflation rather than zero.</p>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <h3>Inflationary Environment (Inflation &gt; 0)</h3>
+        <ul style="margin:12px 0 0 20px;line-height:1.9">
+          <li><strong>Spending incentive:</strong> Money loses value over time, encouraging consumption and investment over hoarding cash</li>
+          <li><strong>Debt erosion:</strong> Fixed nominal debts become easier to repay as incomes rise with inflation</li>
+          <li><strong>Wage flexibility:</strong> Real wage adjustments can happen through inflation without nominal cuts (wage stickiness)</li>
+          <li><strong>Money illusion:</strong> People focus on nominal values; gradual inflation can feel less painful than nominal wage cuts</li>
+          <li><strong>Redistribution:</strong> Savers lose, borrowers gain; creditors lose, debtors gain</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h3>Deflationary Environment (Inflation &lt; 0)</h3>
+        <ul style="margin:12px 0 0 20px;line-height:1.9">
+          <li><strong>Deferred consumption:</strong> Waiting makes goods cheaper, reducing current demand</li>
+          <li><strong>Debt burden:</strong> Real value of debts increases, making repayment harder</li>
+          <li><strong>Wage rigidity:</strong> Nominal wage cuts are rare, so unemployment rises instead</li>
+          <li><strong>Liquidity trap risk:</strong> Monetary policy loses effectiveness at zero interest rates</li>
+          <li><strong>Two types:</strong> <em>Good deflation</em> (productivity-driven) vs. <em>bad deflation</em> (demand collapse, debt deflation)</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="card">
+      <details open>
+        <summary>How to use these tools</summary>
+        <ul style="margin-top:12px;line-height:1.8">
+          <li><strong>$100 over time</strong> shows exponential compounding at chosen inflation rate</li>
+          <li><strong>Affordable house price</strong> demonstrates how interest rates affect present value calculations</li>
+          <li>Adjust sliders to explore different scenarios; hover charts for exact values</li>
         </ul>
       </details>
     </section>
 
-    <section class="card" style="margin-top:12px">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div><h3 style="margin:0">$100 over time (compounded annually)</h3></div>
-        <div class="small">Value after <span id="yearsVal" class="accent">10</span> years at <span id="rateVal" class="accent">5.0%</span>: <span id="cashVal" class="accent">$162.89</span> · Hover: <span id="cashHover" class="accent">—</span></div>
+    <section class="card">
+      <div class="section-header">
+        <h3 style="margin:0">$100 Over Time (Compounded Annually)</h3>
+        <div class="small">
+          After <span id="yearsVal" class="accent">10</span> years at <span id="rateVal" class="accent">5.0%</span>:
+          <span id="cashVal" class="accent">$162.89</span> ·
+          Hover: <span id="cashHover" class="accent">—</span>
+        </div>
       </div>
-      <div class="row" style="gap:12px;align-items:flex-end">
-        <div style="min-width:200px;flex:1"><label>Annual rate</label><input id="biasRate" type="range" min="-20" max="30" step="0.1" value="5"></div>
-        <div style="min-width:200px;flex:1"><label>Years</label><input id="biasYears" type="range" min="1" max="40" step="1" value="10"></div>
+      <div class="row" style="gap:16px;margin-bottom:16px">
+        <div style="flex:1;min-width:240px">
+          <label>Annual Inflation/Return Rate (%)</label>
+          <input id="biasRate" type="range" min="-20" max="30" step="0.1" value="5">
+        </div>
+        <div style="flex:1;min-width:240px">
+          <label>Years</label>
+          <input id="biasYears" type="range" min="1" max="40" step="1" value="10">
+        </div>
       </div>
-      <div class="chart-box"><svg id="cashSvg" viewBox="0 0 800 300" preserveAspectRatio="none"></svg></div>
+      <div class="chart-box">
+        <svg id="cashSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="note" style="margin-top:16px">
+        This illustrates the <strong>time value of money</strong>. Positive rates (inflation or investment returns) cause exponential growth; negative rates (deflation or losses) cause exponential decay. Even small differences compound dramatically over long periods.
+      </div>
     </section>
 
-    <section class="card" style="margin-top:12px">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div><h3 style="margin:0">Affordable house price vs. mortgage rate</h3></div>
-        <div class="small">At <span id="affRateVal" class="accent">5.0%</span>, budget <span id="affBudVal" class="accent">$2,500</span>, term <span id="affTermVal" class="accent">30</span>y, down <span id="affDownVal" class="accent">20%</span> → Max: <span id="affPriceVal" class="accent">$0</span> · Hover: <span id="affHover" class="accent">—</span></div>
+    <section class="card">
+      <div class="section-header">
+        <h3 style="margin:0">Affordable House Price vs. Mortgage Rate</h3>
+        <div class="small">
+          At <span id="affRateVal" class="accent">5.0%</span>,
+          budget <span id="affBudVal" class="accent">$2,500</span>/mo,
+          term <span id="affTermVal" class="accent">30</span>y,
+          down <span id="affDownVal" class="accent">20%</span> →
+          Max price: <span id="affPriceVal" class="accent">$0</span> ·
+          Hover: <span id="affHover" class="accent">—</span>
+        </div>
       </div>
-      <div class="row" style="gap:12px;align-items:flex-end">
-        <div style="min-width:220px;flex:1"><label>Monthly budget</label><input id="affBudget" type="range" min="500" max="10000" step="50" value="2500"></div>
-        <div style="min-width:220px;flex:1"><label>Mortgage rate</label><input id="affRate" type="range" min="1" max="12" step="0.1" value="5"></div>
-        <div style="min-width:180px;flex:1"><label>Term (years)</label><input id="affTerm" type="range" min="10" max="40" step="1" value="30"></div>
-        <div style="min-width:180px;flex:1"><label>Down payment (%)</label><input id="affDown" type="range" min="0" max="50" step="1" value="20"></div>
+      <div class="row" style="gap:16px;margin-bottom:16px">
+        <div style="flex:1;min-width:220px">
+          <label>Monthly Budget ($)</label>
+          <input id="affBudget" type="range" min="500" max="10000" step="50" value="2500">
+        </div>
+        <div style="flex:1;min-width:220px">
+          <label>Mortgage Rate (%)</label>
+          <input id="affRate" type="range" min="1" max="12" step="0.1" value="5">
+        </div>
+        <div style="flex:1;min-width:200px">
+          <label>Term (years)</label>
+          <input id="affTerm" type="range" min="10" max="40" step="1" value="30">
+        </div>
+        <div style="flex:1;min-width:200px">
+          <label>Down Payment (%)</label>
+          <input id="affDown" type="range" min="0" max="50" step="1" value="20">
+        </div>
       </div>
-      <div class="chart-box"><svg id="affSvg" viewBox="0 0 800 300" preserveAspectRatio="none"></svg></div>
-      <div class="note" style="margin-top:10px">Holding the payment budget constant, lower rates raise the loan PV, making higher house prices appear “affordable”.</div>
+      <div class="chart-box">
+        <svg id="affSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="note" style="margin-top:16px">
+        <strong>Key insight:</strong> Lower interest rates dramatically increase borrowing capacity. This is why monetary easing (lowering rates) tends to inflate asset prices—the same monthly payment can finance a much larger loan principal. Conversely, rate hikes cool demand by reducing affordable price points.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Why Central Banks Target 2% Inflation</h3>
+      <p>Most modern central banks target ~2% annual inflation rather than 0%. This seemingly arbitrary choice reflects:</p>
+
+      <div class="grid-2" style="margin-top:16px">
+        <div class="info-box">
+          <h4>Measurement Cushion</h4>
+          <p>Since CPI likely overstates inflation by ~1%, a 2% target means true inflation ≈ 1%, close to zero without risking deflation.</p>
+        </div>
+        <div class="info-box">
+          <h4>Nominal Rate Buffer</h4>
+          <p>With 2% inflation, real interest rates can be negative while nominal rates stay positive. At 0% inflation, the zero lower bound binds tighter.</p>
+        </div>
+        <div class="info-box">
+          <h4>Wage Flexibility</h4>
+          <p>Moderate inflation allows real wage adjustments without nominal cuts, which workers resist due to money illusion.</p>
+        </div>
+        <div class="info-box">
+          <h4>Debt Dynamics</h4>
+          <p>Steady inflation helps debtors (including governments) manage debt burdens without explicit default.</p>
+        </div>
+      </div>
     </section>
   </div>
 </div>
 
 <footer>
-  <p>Note: These models are simplified and intended for educational purposes only. Created by Kevin Schoenholzer with the help of ChatGPT, 2025.</p>
+  <p>Note: These models are simplified and intended for educational purposes only. Real-world inflation dynamics involve many additional factors not captured here. Created by Kevin Schoenholzer with assistance from Claude AI, 2025.</p>
 </footer>
 
 <div id="tooltip" class="tooltip"></div>
 
-<!-- Mirror of your working bitcoin-retirement app: use Babel in-browser -->
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel" src="app.jsx"></script>
 </body>
