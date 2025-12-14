@@ -628,6 +628,11 @@ try {
     /* Rings / Modal resonator (worklet when served over http(s), fallback when file://) */
     const ringsIn = ctx.createGain();
     const ringsWetGain = ctx.createGain(); ringsWetGain.gain.value = 0.0;
+    const ringsEnvGain = ctx.createGain(); ringsEnvGain.gain.value = 1.0; // For ADSR control
+    const ringsFilter = ctx.createBiquadFilter(); // Optional filter for Rings
+    ringsFilter.type = "lowpass";
+    ringsFilter.frequency.value = 20000;
+    ringsFilter.Q.value = 0.7;
 
     let rings = null;           // AudioWorkletNode or fallback object
     let ringsType = "none";     // "worklet" | "modal" | "none"
@@ -669,7 +674,22 @@ try {
       ringsStrikeAt = (amp=1.0, t=ctx.currentTime) => rings.strike(amp, t);
     }
 
-    ringsWetGain.connect(sumBus);
+    // Rings signal path: ringsWetGain -> ringsFilter -> ringsEnvGain -> sumBus
+    ringsWetGain.connect(ringsFilter);
+    ringsFilter.connect(ringsEnvGain);
+    ringsEnvGain.connect(sumBus);
+
+    // Connect envelope to Rings envelope gain (for envelope following)
+    const ringsEnvDepth = ctx.createGain(); ringsEnvDepth.gain.value = 0; // 0 = no env, 1 = full env
+    envCtl.connect(ringsEnvDepth);
+
+    // LFO connections to Rings filter
+    const lfoToRingsCutoff = ctx.createGain(); lfoToRingsCutoff.gain.value = 0;
+    lfo.connect(lfoToRingsCutoff).connect(ringsFilter.frequency);
+
+    // Env to Rings filter cutoff
+    const envToRingsCutoff = ctx.createGain(); envToRingsCutoff.gain.value = 0;
+    envCtl.connect(envToRingsCutoff).connect(ringsFilter.frequency);
 
 
     /* Mic input (optional, disconnected until user enables) */
@@ -747,6 +767,10 @@ try {
       if (!env.enabled) {
         vcaEnv.gain.setTargetAtTime(1, t, 0.01);
         envCtl.gain.setTargetAtTime(1, t, 0.01);
+        // Also set Rings envelope if enabled
+        if (ref.current.nodes?._ringsEnvEnabled) {
+          ringsEnvGain.gain.setTargetAtTime(1, t, 0.01);
+        }
         return;
       }
       const amp = clamp(vel, 0, 1) * velocityToAmp;
@@ -758,6 +782,14 @@ try {
       envCtl.gain.linearRampToValueAtTime(1, t + Math.max(0.001, env.a));
       vcaEnv.gain.linearRampToValueAtTime(amp * env.s, t + Math.max(0.001, env.a) + Math.max(0.0, env.d));
       envCtl.gain.linearRampToValueAtTime(env.s, t + Math.max(0.001, env.a) + Math.max(0.0, env.d));
+
+      // Apply envelope to Rings if enabled
+      if (ref.current.nodes?._ringsEnvEnabled) {
+        safeCancelHold(ringsEnvGain.gain, t);
+        ringsEnvGain.gain.setValueAtTime(0, t);
+        ringsEnvGain.gain.linearRampToValueAtTime(amp, t + Math.max(0.001, env.a));
+        ringsEnvGain.gain.linearRampToValueAtTime(amp * env.s, t + Math.max(0.001, env.a) + Math.max(0.0, env.d));
+      }
     };
 
     const noteOffAt = (t) => {
@@ -770,6 +802,14 @@ try {
       envCtl.gain.setValueAtTime(envCtl.gain.value, t);
       vcaEnv.gain.linearRampToValueAtTime(0.0, t + Math.max(0.001, env.r));
       envCtl.gain.linearRampToValueAtTime(0.0, t + Math.max(0.001, env.r));
+
+      // Apply envelope release to Rings if enabled
+      if (ref.current.nodes?._ringsEnvEnabled) {
+        safeCancelHold(ringsEnvGain.gain, t);
+        const rv = ringsEnvGain.gain.value;
+        ringsEnvGain.gain.setValueAtTime(rv, t);
+        ringsEnvGain.gain.linearRampToValueAtTime(0.0, t + Math.max(0.001, env.r));
+      }
     };
 
     const strikeRings = (amp=1.0) => {
@@ -791,7 +831,7 @@ try {
       modOsc, fm1Gain, fm2Gain, amDepth, amOffset,
       lfo, lfoToVCA, lfoToCutoff, lfoToPitch, lfoToPan,
       env, envCtl, envToCutoff, envToPitch,
-      rings, ringsType, ringsIn, ringsWetGain, ringsSetParamsAt, ringsSetFrequencyAt, strikeRings,
+      rings, ringsType, ringsIn, ringsWetGain, ringsEnvGain, ringsFilter, ringsEnvDepth, lfoToRingsCutoff, envToRingsCutoff, ringsSetParamsAt, ringsSetFrequencyAt, strikeRings,
       micGain,
       setPitchAt, noteOnAt, noteOffAt,
       state: { lastMidi: ()=>lastMidi, held: ()=>held, setGlide:(x)=>{glide=x;}, setVelToAmp:(x)=>{velocityToAmp=x;}, setPitchParams:(p)=>{setPitchParams(p);} }
@@ -1045,7 +1085,7 @@ function savePresets(arr){
 
 /* ------------------------------ Sequencer -------------------------------- */
 
-function useStepSequencer({ engine, enabled, bpm, steps, gate, swing }){
+function useStepSequencer({ engine, enabled, bpm, steps, gate, swing, ringsOnly, ringsCfg, onStepChange }){
   const schedRef = useRef({ timer:0, nextTime:0, stepIdx:0 });
   useEffect(() => {
     const ctx = engine?.ctx;
@@ -1058,13 +1098,28 @@ function useStepSequencer({ engine, enabled, bpm, steps, gate, swing }){
     const stepDur = spb / 4; // 16th notes
 
     const scheduleStep = (idx, t) => {
+      // Update visual indicator (with slight delay to match audio)
+      const delayMs = Math.max(0, (t - ctx.currentTime) * 1000);
+      setTimeout(() => onStepChange?.(idx), delayMs);
+
       const step = steps[idx];
       if(step == null) return;
       const midi = step;
       const vel = 1.0;
-      nodes.noteOnAt(midi, t, vel);
-      // gentle auto-strike to rings if enabled via routing (handled elsewhere)
-      nodes.noteOffAt(t + stepDur * clamp(gate, 0.05, 0.98));
+
+      if (ringsOnly) {
+        // Rings-only mode: just trigger Rings without oscillators
+        if (ringsCfg?.enabled) {
+          if (ringsCfg.followPitch) {
+            try { nodes.ringsSetFrequencyAt(midiToHz(midi), t); } catch(e) {}
+          }
+          try { nodes.strikeRings(0.6 + 0.4 * vel); } catch(e) {}
+        }
+      } else {
+        // Normal mode: trigger oscillators (and auto-strike rings if configured)
+        nodes.noteOnAt(midi, t, vel);
+        nodes.noteOffAt(t + stepDur * clamp(gate, 0.05, 0.98));
+      }
     };
 
     const tick = () => {
@@ -1090,8 +1145,9 @@ function useStepSequencer({ engine, enabled, bpm, steps, gate, swing }){
     return () => {
       window.clearInterval(schedRef.current.timer);
       schedRef.current.timer = 0;
+      onStepChange?.(-1); // Reset indicator when stopped
     };
-  }, [engine, enabled, bpm, steps, gate, swing]);
+  }, [engine, enabled, bpm, steps, gate, swing, ringsOnly, ringsCfg, onStepChange]);
 }
 
 /* ------------------------------ Keyboard UI ------------------------------ */
@@ -1235,7 +1291,13 @@ function App(){
 
   const [fx, setFx] = useState({ drive:0.0, driveOut:1.0, delayTime:0.28, delayFB:0.25, delayMix:0.0, revSize:1.1, revDecay:2.2, revMix:0.0 });
 
-  const [ringsCfg, setRingsCfg] = useState({ enabled:false, external:true, followPitch:true, mix:0.45, pitch:60, structure:0.25, brightness:0.7, damping:0.7, position:0.3, autoStrike:true });
+  const [ringsCfg, setRingsCfg] = useState({
+    enabled:false, external:true, followPitch:true, mix:0.45,
+    pitch:60, structure:0.25, brightness:0.7, damping:0.7, position:0.3, autoStrike:true,
+    // FX/Mod routing for Rings
+    filterEnabled:false, filterCutoff:12000, filterQ:0.7, filterEnvAmt:0, filterLfoAmt:0,
+    envEnabled:false // Whether ADSR envelope affects Rings amplitude
+  });
 
   const [mic, setMic] = useState({ enabled:false, gain:0.0 });
 
@@ -1245,11 +1307,15 @@ function App(){
     bpm:110,
     gate:0.55,
     swing:0.12,
+    ringsOnly:false, // When true, only triggers Rings without oscillators
     steps: Array.from({length:16}, (_,i)=> (i%4===0 ? 60 : null)) // simple initial pattern
   });
 
   // held key
   const [heldMidi, setHeldMidi] = useState(null);
+
+  // Current sequencer step (for visual feedback)
+  const [currentStep, setCurrentStep] = useState(-1);
 
   // Record
   const [rec, setRec] = useState({ supported: typeof MediaRecorder !== "undefined", recording:false, url:null, bytes:0 });
@@ -1380,13 +1446,47 @@ function App(){
 
       try { ns.mix.disconnect(ns.ringsIn); } catch(e) {}
       if (ringsCfg.enabled && ringsCfg.external) ns.mix.connect(ns.ringsIn);
+
+      // Rings filter settings
+      if (ringsCfg.filterEnabled) {
+        ns.ringsFilter.frequency.setTargetAtTime(Math.max(20, ringsCfg.filterCutoff), ctx.currentTime, 0.02);
+        ns.ringsFilter.Q.setTargetAtTime(Math.max(0.1, ringsCfg.filterQ), ctx.currentTime, 0.02);
+      } else {
+        ns.ringsFilter.frequency.setTargetAtTime(20000, ctx.currentTime, 0.02);
+        ns.ringsFilter.Q.setTargetAtTime(0.7, ctx.currentTime, 0.02);
+      }
+
+      // Rings filter modulation
+      ns.envToRingsCutoff.gain.setTargetAtTime(ringsCfg.filterEnabled ? clamp(ringsCfg.filterEnvAmt, -8000, 8000) : 0, ctx.currentTime, 0.02);
+      ns.lfoToRingsCutoff.gain.setTargetAtTime(ringsCfg.filterEnabled ? clamp(ringsCfg.filterLfoAmt, 0, 6000) : 0, ctx.currentTime, 0.02);
+
+      // Rings envelope: when enabled, scale gain by envelope
+      // We need to apply the envelope to ringsEnvGain when envEnabled is true
+      if (ringsCfg.envEnabled && env.enabled) {
+        // Make ringsEnvGain follow the envelope - we'll do this by controlling it alongside vcaEnv
+        // For now, set a flag that noteOnAt/noteOffAt can check
+        ns._ringsEnvEnabled = true;
+      } else {
+        ns._ringsEnvEnabled = false;
+        ns.ringsEnvGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.02);
+      }
     }catch(e){}
 
 
   }, [engine, audioReady, master, voice, osc1, osc2, sub, noise, mod, lfo, filter, env, fx, ringsCfg, mic, scopeCfg.smoothing]);
 
   // Sequencer scheduling
-  useStepSequencer({ engine, enabled: audioReady && seq.enabled, bpm: seq.bpm, steps: seq.steps, gate: seq.gate, swing: seq.swing });
+  useStepSequencer({
+    engine,
+    enabled: audioReady && seq.enabled,
+    bpm: seq.bpm,
+    steps: seq.steps,
+    gate: seq.gate,
+    swing: seq.swing,
+    ringsOnly: seq.ringsOnly,
+    ringsCfg,
+    onStepChange: setCurrentStep
+  });
 
   // Update hint Hz for scope
   useEffect(() => {
@@ -1645,6 +1745,172 @@ function App(){
     }
   };
 
+  // MIDI file parsing
+  const parseMidiFile = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const data = new Uint8Array(buffer);
+
+    // Simple MIDI parser for note events
+    const readVarLen = (data, offset) => {
+      let value = 0;
+      let length = 0;
+      while (true) {
+        const byte = data[offset + length];
+        value = (value << 7) | (byte & 0x7F);
+        length++;
+        if ((byte & 0x80) === 0) break;
+        if (length > 4) break;
+      }
+      return { value, length };
+    };
+
+    const readUint32 = (data, offset) =>
+      (data[offset] << 24) | (data[offset+1] << 16) | (data[offset+2] << 8) | data[offset+3];
+    const readUint16 = (data, offset) => (data[offset] << 8) | data[offset+1];
+
+    // Verify MIDI header
+    const header = String.fromCharCode(...data.slice(0, 4));
+    if (header !== 'MThd') {
+      throw new Error('Not a valid MIDI file');
+    }
+
+    const headerLen = readUint32(data, 4);
+    const format = readUint16(data, 8);
+    const numTracks = readUint16(data, 10);
+    const division = readUint16(data, 12);
+
+    const ticksPerBeat = (division & 0x8000) === 0 ? division : 480;
+
+    const notes = [];
+    let offset = 8 + headerLen;
+    let defaultTempo = 500000; // microseconds per beat (120 BPM)
+
+    // Parse tracks
+    for (let track = 0; track < numTracks && offset < data.length; track++) {
+      const trackHeader = String.fromCharCode(...data.slice(offset, offset + 4));
+      if (trackHeader !== 'MTrk') break;
+
+      const trackLen = readUint32(data, offset + 4);
+      let trackOffset = offset + 8;
+      const trackEnd = trackOffset + trackLen;
+
+      let absoluteTime = 0;
+      let runningStatus = 0;
+
+      while (trackOffset < trackEnd) {
+        const delta = readVarLen(data, trackOffset);
+        trackOffset += delta.length;
+        absoluteTime += delta.value;
+
+        let status = data[trackOffset];
+        if ((status & 0x80) === 0) {
+          status = runningStatus;
+        } else {
+          trackOffset++;
+          if ((status & 0xF0) !== 0xF0) {
+            runningStatus = status;
+          }
+        }
+
+        const cmd = status & 0xF0;
+
+        if (cmd === 0x90 || cmd === 0x80) {
+          const note = data[trackOffset++];
+          const velocity = data[trackOffset++];
+          const isNoteOn = cmd === 0x90 && velocity > 0;
+          notes.push({
+            time: absoluteTime,
+            note,
+            velocity: isNoteOn ? velocity : 0,
+            isNoteOn
+          });
+        } else if (cmd === 0xA0 || cmd === 0xB0 || cmd === 0xE0) {
+          trackOffset += 2;
+        } else if (cmd === 0xC0 || cmd === 0xD0) {
+          trackOffset += 1;
+        } else if (status === 0xFF) {
+          const metaType = data[trackOffset++];
+          const metaLen = readVarLen(data, trackOffset);
+          trackOffset += metaLen.length;
+          if (metaType === 0x51 && metaLen.value === 3) {
+            defaultTempo = (data[trackOffset] << 16) | (data[trackOffset+1] << 8) | data[trackOffset+2];
+          }
+          trackOffset += metaLen.value;
+        } else if (status === 0xF0 || status === 0xF7) {
+          const sysexLen = readVarLen(data, trackOffset);
+          trackOffset += sysexLen.length + sysexLen.value;
+        }
+      }
+
+      offset = trackEnd;
+    }
+
+    // Sort by time
+    notes.sort((a, b) => a.time - b.time);
+
+    return { notes, ticksPerBeat, tempo: defaultTempo };
+  };
+
+  const convertMidiToSequence = async (file) => {
+    try {
+      const { notes, ticksPerBeat, tempo } = await parseMidiFile(file);
+
+      if (notes.length === 0) {
+        alert("No notes found in MIDI file.");
+        return;
+      }
+
+      // Calculate BPM from tempo
+      const bpm = Math.round(60000000 / tempo);
+
+      // Quantize to 16th notes
+      const ticksPer16th = ticksPerBeat / 4;
+      const noteOns = notes.filter(n => n.isNoteOn);
+
+      // Get max time to determine how many steps we need
+      const maxTime = noteOns.length > 0 ? noteOns[noteOns.length - 1].time : 0;
+      const totalSteps = Math.min(64, Math.max(16, Math.ceil(maxTime / ticksPer16th) + 1));
+
+      // Create step array (use first 16 or 32 steps)
+      const numSteps = totalSteps > 24 ? 32 : 16;
+      const steps = new Array(numSteps).fill(null);
+
+      // Fill in notes
+      for (const note of noteOns) {
+        const stepIndex = Math.round(note.time / ticksPer16th);
+        if (stepIndex >= 0 && stepIndex < steps.length) {
+          steps[stepIndex] = note.note;
+        }
+      }
+
+      // Update sequencer
+      setSeq(s => ({
+        ...s,
+        bpm: Math.min(220, Math.max(40, bpm)),
+        steps
+      }));
+
+      // Show import summary
+      const noteCount = steps.filter(s => s !== null).length;
+      alert(`MIDI imported: ${noteCount} notes across ${numSteps} steps at ${bpm} BPM`);
+
+      // Switch to sequencer tab
+      setTab("seq");
+    } catch (e) {
+      alert("Could not parse MIDI file: " + e.message);
+    }
+  };
+
+  // Unified file import handler
+  const handleFileImport = async (file) => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.mid') || name.endsWith('.midi')) {
+      await convertMidiToSequence(file);
+    } else {
+      await importPresetFile(file);
+    }
+  };
+
   // Sequencer UI helpers
   const setStep = (i, v) => {
     setSeq(s => {
@@ -1667,6 +1933,54 @@ function App(){
     }));
   };
   const clearSeq = () => setSeq(s => ({...s, steps: s.steps.map(()=>null)}));
+
+  // Sequencer pattern presets
+  const seqPatterns = {
+    fourOnFloor: () => {
+      const base = voice.note;
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => i % 4 === 0 ? base : null)
+      }));
+    },
+    arpUp: () => {
+      const base = voice.note;
+      const pattern = [0, 4, 7, 12]; // Major arpeggio
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => base + pattern[i % pattern.length])
+      }));
+    },
+    arpDown: () => {
+      const base = voice.note;
+      const pattern = [12, 7, 4, 0]; // Major arpeggio descending
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => base + pattern[i % pattern.length])
+      }));
+    },
+    bassline: () => {
+      const base = voice.note;
+      // Classic 8-note bassline pattern
+      const pattern = [0, null, 0, 0, null, 0, 7, 5];
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => {
+          const p = pattern[i % pattern.length];
+          return p === null ? null : base + p;
+        })
+      }));
+    },
+    euclidean: () => {
+      // Simple euclidean-ish pattern (5 hits over 16 steps)
+      const base = voice.note;
+      const hits = [0, 3, 6, 10, 13]; // Euclidean(5,16) approximately
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => hits.includes(i % 16) ? base : null)
+      }));
+    }
+  };
 
   // Tabs
   const tabs = [
@@ -1722,12 +2036,17 @@ function App(){
               </select>
               <Button onClick={savePreset}>Save</Button>
               <Button onClick={exportPreset}>Export</Button>
-              <label className="inline-flex">
-                <input type="file" accept="application/json" className="hidden"
-                  onChange={(e)=>{ const f=e.target.files?.[0]; if(f) importPresetFile(f); e.target.value=""; }}
-                />
-                <span className="cursor-pointer"><Button>Import</Button></span>
-              </label>
+              {(() => {
+                const inputRef = React.useRef(null);
+                return (
+                  <>
+                    <input type="file" accept="application/json,.mid,.midi" ref={inputRef} className="hidden"
+                      onChange={(e)=>{ const f=e.target.files?.[0]; if(f) handleFileImport(f); e.target.value=""; }}
+                    />
+                    <Button onClick={()=>inputRef.current?.click()}>Import</Button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1767,6 +2086,12 @@ function App(){
 
             <Section title="Voice" hint="Pitch, glide, pan">
               <Slider label="Base note (MIDI)" min={24} max={84} step={1} value={voice.note} onChange={(v)=>setVoice(s=>({...s,note:v}))} format={(v)=>`${v} (${midiToName(v)})`} />
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] text-slate-400">Octave:</span>
+                <Button onClick={()=>setVoice(s=>({...s,note:clamp(s.note-12,24,84)}))} disabled={voice.note <= 24}>-1</Button>
+                <Button onClick={()=>setVoice(s=>({...s,note:clamp(s.note+12,24,84)}))} disabled={voice.note >= 84}>+1</Button>
+                <Button onClick={()=>setVoice(s=>({...s,note:60}))}>C4</Button>
+              </div>
               <Slider label="Transpose (semitones)" min={-24} max={24} step={1} value={voice.transpose} onChange={(v)=>setVoice(s=>({...s,transpose:v}))} format={(v)=>v.toFixed(0)} />
               <Slider label="Detune (cents)" min={-50} max={50} step={0.1} value={voice.detuneCents} onChange={(v)=>setVoice(s=>({...s,detuneCents:v}))} format={(v)=>v.toFixed(1)} />
               <Slider label="Glide" min={0} max={0.25} step={0.001} value={voice.glide} onChange={(v)=>setVoice(s=>({...s,glide:v}))} format={(v)=>v.toFixed(3)} />
@@ -1913,6 +2238,18 @@ function App(){
                 <Slider label="Position (mode weighting)" min={0} max={1} step={0.001} value={ringsCfg.position} onChange={(v)=>setRingsCfg(s=>({...s,position:v}))} format={(v)=>v.toFixed(3)} disabled={!ringsCfg.enabled}/>
               </Section>
               <Divider />
+              <Section title="Rings Modulation" hint="Filter & ADSR for Rings">
+                <Toggle label="ADSR envelope on Rings" checked={ringsCfg.envEnabled} onChange={(c)=>setRingsCfg(s=>({...s,envEnabled:c}))} disabled={!ringsCfg.enabled || !env.enabled}/>
+                <div className="text-[11px] text-slate-400 mb-2">
+                  {ringsCfg.envEnabled ? "Rings amplitude follows the main ADSR envelope" : "Rings plays freely without envelope shaping"}
+                </div>
+                <Toggle label="Filter on Rings output" checked={ringsCfg.filterEnabled} onChange={(c)=>setRingsCfg(s=>({...s,filterEnabled:c}))} disabled={!ringsCfg.enabled}/>
+                <Slider label="Filter cutoff (Hz)" min={20} max={20000} step={1} value={ringsCfg.filterCutoff} onChange={(v)=>setRingsCfg(s=>({...s,filterCutoff:v}))} format={(v)=>Math.round(v)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+                <Slider label="Filter Q" min={0.1} max={20} step={0.01} value={ringsCfg.filterQ} onChange={(v)=>setRingsCfg(s=>({...s,filterQ:v}))} format={(v)=>v.toFixed(2)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+                <Slider label="Env -> Filter (Hz)" min={-8000} max={8000} step={1} value={ringsCfg.filterEnvAmt} onChange={(v)=>setRingsCfg(s=>({...s,filterEnvAmt:v}))} format={(v)=>Math.round(v)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+                <Slider label="LFO -> Filter (Hz)" min={0} max={6000} step={1} value={ringsCfg.filterLfoAmt} onChange={(v)=>setRingsCfg(s=>({...s,filterLfoAmt:v}))} format={(v)=>Math.round(v)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+              </Section>
+              <Divider />
               <Section title="Mic input (optional)">
                 <Toggle label="Enable mic routing" checked={mic.enabled} onChange={(c)=>setMic(s=>({...s,enabled:c}))} disabled={!audioReady}/>
                 <Slider label="Mic level" min={0} max={1} step={0.01} value={mic.gain} onChange={(v)=>setMic(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} disabled={!audioReady || !mic.enabled}/>
@@ -1960,35 +2297,86 @@ function App(){
             <Card title="Step Sequencer" right={<Pill tone={seq.enabled?"emerald":"slate"}>{seq.enabled?"Playing":"Stopped"}</Pill>}>
               <Section title="Transport">
                 <Toggle label="Enable sequencer" checked={seq.enabled} onChange={(c)=>setSeq(s=>({...s,enabled:c}))}/>
+                <Toggle label="Rings only (no oscillators)" checked={seq.ringsOnly} onChange={(c)=>setSeq(s=>({...s,ringsOnly:c}))}/>
                 <Slider label="BPM" min={40} max={220} step={1} value={seq.bpm} onChange={(v)=>setSeq(s=>({...s,bpm:v}))} format={(v)=>v.toFixed(0)} />
-                <Slider label="Gate" min={0.05} max={0.95} step={0.01} value={seq.gate} onChange={(v)=>setSeq(s=>({...s,gate:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Gate" min={0.05} max={0.95} step={0.01} value={seq.gate} onChange={(v)=>setSeq(s=>({...s,gate:v}))} format={(v)=>v.toFixed(2)} disabled={seq.ringsOnly}/>
                 <Slider label="Swing" min={0} max={0.45} step={0.01} value={seq.swing} onChange={(v)=>setSeq(s=>({...s,swing:v}))} format={(v)=>v.toFixed(2)} />
-                <div className="flex gap-2">
-                  <Button onClick={randomizeSeq}>Randomize</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={randomizeSeq}>Random</Button>
                   <Button onClick={clearSeq}>Clear</Button>
+                  <Button onClick={seqPatterns.fourOnFloor}>4/4</Button>
+                  <Button onClick={seqPatterns.arpUp}>Arp Up</Button>
+                  <Button onClick={seqPatterns.arpDown}>Arp Down</Button>
+                  <Button onClick={seqPatterns.bassline}>Bass</Button>
+                  <Button onClick={seqPatterns.euclidean}>Euclidean</Button>
                 </div>
+                {seq.ringsOnly && !ringsCfg.enabled && (
+                  <div className="text-[11px] text-amber-400 mt-2">
+                    Note: Enable Rings in the Rings tab for Rings-only mode to work.
+                  </div>
+                )}
               </Section>
               <Divider />
-              <Section title="Steps" hint="Each step is an absolute MIDI note or rest">
-                <div className="grid grid-cols-4 gap-2">
-                  {seq.steps.map((st, i) => (
-                    <div key={i} className="rounded-xl border border-slate-800/70 bg-slate-950/30 p-2">
-                      <div className="text-[11px] text-slate-400 mb-1">Step {i+1}</div>
-                      <select
-                        value={st==null ? "rest" : String(st)}
-                        onChange={(e)=>setStep(i, e.target.value)}
-                        className="w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1.5 text-xs"
-                      >
-                        <option value="rest">Rest</option>
-                        {Array.from({length:49}, (_,k)=>36+k).map(m => (
-                          <option key={m} value={String(m)}>{midiToName(m)} ({m})</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+              <Section title="Steps" hint={`${seq.steps.length} steps · Click to edit`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[11px] text-slate-400">Steps:</span>
+                  <select
+                    value={String(seq.steps.length)}
+                    onChange={(e) => {
+                      const newLen = parseInt(e.target.value, 10);
+                      setSeq(s => {
+                        const newSteps = [...s.steps];
+                        while (newSteps.length < newLen) newSteps.push(null);
+                        return { ...s, steps: newSteps.slice(0, newLen) };
+                      });
+                    }}
+                    className="bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <option value="8">8</option>
+                    <option value="16">16</option>
+                    <option value="24">24</option>
+                    <option value="32">32</option>
+                  </select>
+                  {seq.enabled && currentStep >= 0 && (
+                    <span className="text-emerald-400 text-[11px] ml-auto">
+                      Step {(currentStep % seq.steps.length) + 1}/{seq.steps.length}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  Sequencer is monophonic and uses the global ADSR. For live playing, disable Seq.
+                <div className="grid grid-cols-4 gap-2">
+                  {seq.steps.map((st, i) => {
+                    const isActive = seq.enabled && currentStep >= 0 && (currentStep % seq.steps.length) === i;
+                    return (
+                      <div key={i} className={clsx(
+                        "rounded-xl border p-2 transition-all duration-75",
+                        isActive
+                          ? "border-emerald-500/70 bg-emerald-900/30 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                          : "border-slate-800/70 bg-slate-950/30"
+                      )}>
+                        <div className={clsx("text-[11px] mb-1", isActive ? "text-emerald-300" : "text-slate-400")}>
+                          {i+1}
+                        </div>
+                        <select
+                          value={st==null ? "rest" : String(st)}
+                          onChange={(e)=>setStep(i, e.target.value)}
+                          className={clsx(
+                            "w-full border rounded-lg px-2 py-1.5 text-xs",
+                            isActive
+                              ? "bg-emerald-900/40 border-emerald-600/50"
+                              : "bg-slate-900/60 border-slate-700/60"
+                          )}
+                        >
+                          <option value="rest">--</option>
+                          {Array.from({length:49}, (_,k)=>36+k).map(m => (
+                            <option key={m} value={String(m)}>{midiToName(m)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-2">
+                  Tip: Import a MIDI file to load note patterns. Sequencer uses the global ADSR envelope.
                 </div>
               </Section>
             </Card>
@@ -2026,9 +2414,9 @@ function App(){
               onUp={(m)=>{ if(!audioReady) return; noteOff(); }}
             />
             <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-400">
-              <div><span className="text-slate-200">Quick start:</span> Start Audio → enable OSC1 → open filter → add Drive or Reverb.</div>
-              <div><span className="text-slate-200">Resonator:</span> enable Rings, press Space to strike, or route oscillators as exciter.</div>
-              <div><span className="text-slate-200">Recorder:</span> Record → jam → Stop → Download.</div>
+              <div><span className="text-slate-200">Quick start:</span> Start Audio → play keys → add Drive or Reverb → Record.</div>
+              <div><span className="text-slate-200">Resonator:</span> Enable Rings, press Space to strike, or use Seq with Rings-only mode.</div>
+              <div><span className="text-slate-200">Import:</span> Load JSON presets or MIDI files to populate the sequencer.</div>
             </div>
           </Card>
         </main>
