@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Educational Inequality Data Explorer</title>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simple-statistics/7.8.0/simple-statistics.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.4/jstat.min.js"></script>
+
+    <!-- Application Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header" style="position: sticky; top: 0; z-index: 50;">
+        <div class="container">
+            <div class="header-content" style="gap: 1rem;">
+                <div class="header-text">
+                    <h1>Educational Inequality Data Explorer</h1>
+                    <p class="subtitle">Analyzing Student Outcomes and Social Stratification Using International Assessment Data</p>
+                </div>
+                <div class="header-actions" style="min-width: 240px;">
+                    <button id="load-data-btn" class="btn" style="margin:0;width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <span>Load Selected Data</span>
+                        <span id="loading-spinner" class="spinner-inline" aria-hidden="true" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <h3 style="margin-bottom: 1.5rem;">Data Configuration</h3>
+
+                <div class="alert alert-info" id="data-status" style="margin-bottom: 1.5rem;">
+                    <strong>Welcome!</strong><br>
+                    Select countries and years below, then click "Load Selected Data" to begin your analysis.
+                </div>
+
+                <!-- Assessment Program -->
+                <div class="control-group">
+                    <label for="assessment">Assessment Program</label>
+                    <select id="assessment" disabled style="background: var(--code-bg);">
+                        <option value="pisa">PISA (Programme for International Student Assessment)</option>
+                    </select>
+                    <div class="weight-info">learningtower package provides PISA data (2012-2022)</div>
+                </div>
+
+                <!-- Years Selection -->
+                <div class="control-group">
+                    <label>Years</label>
+                    <div style="margin-bottom: 0.5rem;">
+                        <button id="select-all-years-btn" class="btn btn-secondary" style="width: 48%; margin-right: 4%;">Select All</button>
+                        <button id="deselect-all-years-btn" class="btn btn-secondary" style="width: 48%;">Deselect All</button>
+                    </div>
+                    <div id="year-checkboxes" class="year-selector">
+                        <!-- Year checkboxes will be populated dynamically -->
+                    </div>
+                    <div class="weight-info" id="years-selected-count">Loading available years...</div>
+                </div>
+
+                <!-- Analysis Type -->
+                <div class="control-group">
+                    <label>Analysis Type</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="analysis-type" value="pooled" id="analysis-pooled" checked>
+                            <span>Pooled Analysis (all years and countries together)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="analysis-type" value="separate" id="analysis-separate">
+                            <span>Separate Analysis (each country-year separately)</span>
+                        </label>
+                    </div>
+                    <div class="weight-info">Pooled combines all data; Separate runs analysis for each country-year combination.</div>
+                </div>
+
+                <!-- Countries Selection -->
+                <div class="control-group">
+                    <label for="countries">Countries</label>
+                    <div style="margin-bottom: 0.5rem;">
+                        <input id="country-filter-input" type="text" placeholder="Filter countries..."
+                               style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;
+                                      background:var(--surface); color:var(--text-primary); margin-bottom: 0.5rem;" />
+                    </div>
+                    <div style="display:flex; gap:8px; margin-bottom: 8px;">
+                        <button id="select-all-countries-btn" class="btn btn-secondary">Select all</button>
+                        <button id="clear-all-countries-btn" class="btn btn-secondary">Clear</button>
+                    </div>
+                    <div id="country-checkboxes">
+                        <!-- Country checkboxes will be populated dynamically -->
+                    </div>
+                    <div class="weight-info" id="countries-selected-count">Loading available countries...</div>
+                </div>
+
+                <!-- Outcome Variable -->
+                <div class="control-group">
+                    <label for="outcome">Outcome Variable</label>
+                    <select id="outcome">
+                        <option value="math">Mathematics Scores</option>
+                        <option value="reading">Reading Scores</option>
+                        <option value="science">Science Scores</option>
+                    </select>
+                </div>
+
+                <!-- Primary Predictor -->
+                <div class="control-group">
+                    <label for="predictor">Primary Stratification Variable</label>
+                    <select id="predictor">
+                        <option value="escs">Socioeconomic Status (ESCS Index)</option>
+                        <option value="parent_edu">Parental Education</option>
+                    </select>
+                </div>
+
+                <!-- Advanced Options -->
+                <div class="advanced-options">
+                    <div class="options-header" id="advanced-options-header">
+                        Advanced Options
+                    </div>
+                    <div class="options-content" id="advanced-options-content">
+                        <div class="control-group">
+                            <label for="weight-type">Sampling Weights</label>
+                            <select id="weight-type">
+                                <option value="student">Student Weight (W_FSTUWT)</option>
+                                <option value="senate">Senate Weight (W_FSENWT)</option>
+                                <option value="replicate">BRR Replicate Weights</option>
+                                <option value="none">No Weights</option>
+                            </select>
+                            <div class="weight-info">Following OECD (2023) technical standards</div>
+                        </div>
+
+                        <div class="control-group">
+                            <label>Control Variables</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" value="gender" id="ctrl-gender"> <span>Gender</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" value="parent_edu" id="ctrl-parent-edu"> <span>Parental Education</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" value="year" id="ctrl-year"> <span>Year</span>
+                                </label>
+                            </div>
+                            <div class="weight-info">
+                                Control variables will be included in regression models.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Citation -->
+                <div class="data-source">
+                    <strong>Data Source:</strong> OECD (2023). PISA Database.<br>
+                    <strong>R Package:</strong> Vaughan et al. (2021). learningtower.<br>
+                    <a href="docs/citation.html" style="color: var(--primary-color);">How to cite this tool</a>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="content-area">
+                <!-- Loading Progress -->
+                <div id="loading-progress" class="loading">
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progress-bar" style="width: 0%;">
+                            <span id="progress-percentage">0%</span>
+                        </div>
+                        <div class="progress-text" id="progress-text">Initializing...</div>
+                    </div>
+                    <div style="margin-top: 1rem; color: var(--text-secondary);" id="progress-details">
+                        Loading data...
+                    </div>
+                </div>
+
+                <!-- Tabs Navigation -->
+                <div class="tabs">
+                    <button class="tab active" data-tab="overview">Overview</button>
+                    <button class="tab" data-tab="distribution">Distribution Analysis</button>
+                    <button class="tab" data-tab="gap-decomposition">Achievement Gap Decomposition</button>
+                    <button class="tab" data-tab="regression">Regression Analysis</button>
+                    <button class="tab" data-tab="diagnostics">Diagnostics</button>
+                    <button class="tab" data-tab="comparative">Comparative Analysis</button>
+                    <button class="tab" data-tab="methodology">Methodology</button>
+                </div>
+
+                <!-- Tab Content: Overview -->
+                <div id="overview" class="tab-content active">
+                    <div class="section-title">Educational Inequality Overview</div>
+                    <p class="description">
+                        This dashboard provides empirical analysis of educational inequalities using standardized assessment data.
+                        The analysis framework draws on social stratification theory (Bourdieu & Passeron, 1977; Coleman et al., 1966)
+                        to examine how socioeconomic factors correlate with student achievement outcomes.
+                    </p>
+
+                    <div class="alert alert-info" style="margin-bottom: 1.5rem;">
+                        <strong>Key Metrics Explained:</strong><br>
+                        <strong>Inequality Index (Gini):</strong> Measures the dispersion of achievement scores (0 = perfect equality, 1 = maximum inequality).<br>
+                        <strong>SES Gradient (β):</strong> How much achievement increases per unit increase in socioeconomic status.<br>
+                        <strong>Mean Achievement:</strong> Average test score across all selected students and countries.
+                    </div>
+
+                    <div class="grid-3">
+                        <div class="stat-card">
+                            <div class="stat-value" id="mean-score">--</div>
+                            <div class="stat-label">Mean Achievement Score</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="inequality-index">--</div>
+                            <div class="stat-label">Inequality Index (Gini)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="predictor-gradient">--</div>
+                            <div class="stat-label" id="gradient-label">SES Gradient (β)</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Achievement Scores by Country</h3>
+                    <div id="overview-chart" style="margin-top: 1rem;"></div>
+
+                    <div class="data-source">
+                        Data Source: OECD PISA via learningtower R package | Analysis methodology follows OECD (2023) technical standards
+                    </div>
+                </div>
+
+                <!-- Tab Content: Distribution -->
+                <div id="distribution" class="tab-content">
+                    <div class="section-title">Score Distribution Analysis</div>
+                    <p class="description">
+                        Kernel density estimation and percentile analysis reveal patterns of educational achievement distribution
+                        across selected countries.
+                    </p>
+
+                    <div id="distribution-chart"></div>
+
+                    <div class="grid-2" style="margin-top: 2rem;">
+                        <div id="percentile-chart"></div>
+                        <div id="lorenz-curve"></div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Gap Decomposition -->
+                <div id="gap-decomposition" class="tab-content">
+                    <div class="section-title">Achievement Gap Decomposition</div>
+                    <p class="description">
+                        Decomposition of achievement gaps by socioeconomic status across and within countries
+                        (Reardon, 2011; Chmielewski, 2019).
+                    </p>
+
+                    <div class="alert alert-info">
+                        <strong>Gap Measures:</strong><br>
+                        Achievement Gap (Q4-Q1): Difference between top and bottom SES quartiles<br>
+                        Variance Decomposition: σ²_total = σ²_within + σ²_between<br>
+                        Effect Size (d): (Mean_high - Mean_low) / SD_pooled
+                    </div>
+
+                    <div id="gap-results"></div>
+                </div>
+
+                <!-- Tab Content: Regression -->
+                <div id="regression" class="tab-content">
+                    <div class="section-title">Regression Analysis</div>
+                    <p class="description">
+                        OLS regression analysis examining the relationship between socioeconomic status and achievement,
+                        with survey-weighted estimation following OECD (2023) guidelines.
+                    </p>
+
+                    <div id="regression-results"></div>
+                    <div id="regression-plot" style="margin-top: 2rem;"></div>
+                </div>
+
+                <!-- Tab Content: Diagnostics -->
+                <div id="diagnostics" class="tab-content">
+                    <div class="section-title">Model Diagnostics</div>
+                    <p class="description">
+                        Within/between country variance decomposition and model fit diagnostics.
+                    </p>
+
+                    <div id="diagnostics-results"></div>
+                </div>
+
+                <!-- Tab Content: Comparative -->
+                <div id="comparative" class="tab-content">
+                    <div class="section-title">Comparative Analysis</div>
+                    <p class="description">
+                        Cross-country comparison of inequality metrics and achievement gaps.
+                    </p>
+
+                    <div id="country-comparison"></div>
+                    <div id="decomposition-chart" style="margin-top: 2rem;"></div>
+                </div>
+
+                <!-- Tab Content: Methodology -->
+                <div id="methodology" class="tab-content">
+                    <div class="section-title">Methodology</div>
+                    <p class="description">
+                        Comprehensive documentation of statistical methods, data sources, and analytical approach.
+                    </p>
+
+                    <div class="alert alert-info">
+                        <strong>Detailed Methodology:</strong> For comprehensive documentation including formulas,
+                        assumptions, and references, please see the
+                        <a href="docs/methodology.html" style="color: var(--success-color);">full methodology appendix</a>.
+                    </div>
+
+                    <div id="methodology-content">
+                        <h3>Overview</h3>
+                        <p>This application uses survey-weighted statistical methods following OECD (2023) technical standards
+                        for analyzing PISA data. All analyses account for the complex sampling design of international assessments.</p>
+
+                        <h3>Key References</h3>
+                        <ul style="margin-left: 1.5rem; color: var(--text-secondary);">
+                            <li>OECD (2019). PISA 2018 Technical Report.</li>
+                            <li>Reardon, S. F. (2011). The widening academic achievement gap between the rich and the poor.</li>
+                            <li>Vaughan, B., et al. (2021). learningtower: OECD PISA Datasets. R package.</li>
+                        </ul>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer style="background: var(--surface); border-top: 1px solid var(--border); margin-top: 4rem; padding: 2rem 0;">
+        <div class="container" style="text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
+            <p>Educational Inequality Data Explorer |
+               <a href="docs/methodology.html" style="color: var(--primary-color);">Methodology</a> |
+               <a href="docs/citation.html" style="color: var(--primary-color);">How to Cite</a> |
+               <a href="docs/data-sources.html" style="color: var(--primary-color);">Data Sources</a>
+            </p>
+            <p style="margin-top: 0.5rem;">Kevin Schoenholzer © 2025</p>
+        </div>
+    </footer>
+
+    <!-- Application JavaScript Modules -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

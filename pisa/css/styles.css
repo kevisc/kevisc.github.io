@@ -1,0 +1,627 @@
+/* Educational Inequality Data Explorer - Styles */
+/* Author: Kevin Schoenholzer */
+/* Last updated: 2025-12-15 */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #3b82f6;
+    --secondary-color: #94a3b8;
+    --accent-color: #fb923c;
+    --success-color: #34d399;
+    --background: #0f172a;
+    --surface: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --border: #334155;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-lg: 0 10px 40px rgba(0,0,0,0.3);
+    --code-bg: #334155;
+    --plotly-bg: #1e293b;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--background);
+    color: var(--text-primary);
+    line-height: 1.6;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 0;
+    box-shadow: var(--shadow);
+    position: relative;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-text {
+    flex: 1;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+h1 {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.main-content {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.sidebar {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+    height: fit-content;
+}
+
+.content-area {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: var(--shadow);
+    min-height: 600px;
+}
+
+.control-group {
+    margin-bottom: 1.5rem;
+}
+
+label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+select, input {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    transition: all 0.2s;
+}
+
+select:hover, input:hover {
+    border-color: var(--primary-color);
+}
+
+select:focus, input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+.btn:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+    background: #475569;
+}
+
+.tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.tab {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.tab:hover {
+    color: var(--text-primary);
+}
+
+.tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.loading {
+    display: none;
+    text-align: center;
+    padding: 2rem;
+}
+
+.loading.active {
+    display: block;
+}
+
+.spinner {
+    border: 3px solid var(--border);
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.stat-card {
+    background: var(--background);
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.alert {
+    padding: 1rem;
+    background: #422006;
+    border-left: 4px solid #f59e0b;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    color: #fbbf24;
+}
+
+.alert-info {
+    background: #1e3a8a;
+    border-left-color: #3b82f6;
+    color: #93c5fd;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.description {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+}
+
+.regression-output {
+    background: var(--code-bg);
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+.regression-output h4 {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.coef-table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+}
+
+.coef-table th {
+    background: var(--background);
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+}
+
+.coef-table td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.significant {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.model-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.model-box {
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.model-header {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    padding: 0.25rem 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.checkbox-label span {
+    display: inline-block;
+    line-height: 1.2;
+}
+
+.year-selector {
+    max-height: 120px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem;
+    background: var(--surface);
+}
+
+.year-option {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0;
+}
+
+.year-option input {
+    width: auto;
+    margin-right: 0.5rem;
+}
+
+.advanced-options {
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+.options-header {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.options-header::before {
+    content: '▶';
+    margin-right: 0.5rem;
+    transition: transform 0.3s;
+    font-size: 0.75rem;
+}
+
+.options-header.expanded::before {
+    transform: rotate(90deg);
+}
+
+.options-content {
+    display: none;
+}
+
+.options-content.expanded {
+    display: block;
+}
+
+.weight-info {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+
+    .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.methodology-note {
+    background: #1e3a8a;
+    border: 1px solid #3b82f6;
+    padding: 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+    color: #93c5fd;
+}
+
+.data-source {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+#country-checkboxes, #country-checkboxes * { min-width: 0; }
+#year-checkboxes, #year-checkboxes * { min-width: 0; }
+
+/* High-contrast form controls for dark UIs */
+.ui-contrast,
+.ui-contrast select,
+select.ui-contrast,
+.ui-contrast input,
+.ui-contrast .selectlike {
+    background-color: #0b1220;
+    color: #e6f0ff;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 10px 12px;
+    line-height: 1.2;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+select.ui-contrast:focus,
+.ui-contrast:focus-within {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+/* Sampling/Weights panel */
+.panel-dark {
+    background: #0b1220;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+/* Label contrast + spacing */
+.form-label {
+    display:block;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    margin-bottom: 6px;
+    letter-spacing: .2px;
+}
+
+/* Plotly containers: fill parent, never overflow */
+#overview-chart,
+#distribution-chart,
+#percentile-chart,
+#lorenz-curve,
+#gap-plot,
+#country-comparison,
+#decomposition-chart,
+#regression-plot {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 420px;
+}
+
+/* Country selector: grid layout, no clipping, text left, checkbox right */
+#country-checkboxes {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: 6px 12px !important;
+    max-height: 260px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 6px 6px 6px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+/* Each option lays out as [label text][checkbox] with safe overflow handling */
+#country-checkboxes label {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 8px;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 2px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#country-checkboxes label span {
+    min-width: 0;
+}
+
+#country-checkboxes input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: var(--primary-color);
+}
+
+/* Belt-and-suspenders to prevent any children from expanding container */
+#country-checkboxes, #country-checkboxes * { min-width: 0; }
+
+/* Clamp any horizontal overflow app-wide */
+html, body, .container, .content-area, main {
+    overflow-x: hidden !important;
+}
+
+/* Distribution page containers never push layout sideways */
+#distribution,
+#distribution-chart,
+#percentile-chart,
+#lorenz-curve {
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* Plotly root element sometimes adds tiny overflow with transforms */
+#distribution .js-plotly-plot,
+#distribution-chart .js-plotly-plot,
+#percentile-chart .js-plotly-plot,
+#lorenz-curve .js-plotly-plot {
+    max-width: 100% !important;
+}
+
+/* Small inline spinner for buttons */
+.spinner-inline {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top: 2px solid #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Progress bar for data loading */
+.progress-container {
+    width: 100%;
+    background: var(--code-bg);
+    border-radius: 8px;
+    height: 30px;
+    margin: 1rem 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    border-radius: 8px;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 1;
+}
