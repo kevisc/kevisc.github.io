@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ZDK</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root { --bg:#0a0b0d; --panel:#111317; --panel-2:#0f1115; --text:#e6e7ea; --muted:#9aa0a6; --line:#23262b; --accent:#ffffff; --accent-text:#0c0d0f; --ok:#10b981; --warn:#f59e0b; }
+      *{box-sizing:border-box}
+      html,body{height:100%}
+      body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+      a{color:#7cc4ff;text-decoration:none} a:hover{text-decoration:underline}
+      .container{max-width:1120px;margin:0 auto;padding:0 16px}
+      header{position:sticky;top:0;z-index:30;backdrop-filter:blur(6px);background:rgba(10,11,13,.8);border-bottom:1px solid var(--line)}
+      header .bar{display:flex;align-items:center;gap:12px;padding:12px 0}
+      .brand{font-weight:600;letter-spacing:.2px}
+      .btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:8px 12px;cursor:pointer}
+      .btn:hover{background:#171a1f}
+      .btn-light{background:var(--accent);color:var(--accent-text);border-color:#d1d5db}
+      .btn-light:hover{filter:brightness(.96)}
+      .chip{position:absolute;top:-8px;right:-8px;background:var(--ok);color:#fff;border-radius:999px;font-size:11px;padding:2px 6px}
+      .hero{border-bottom:1px solid var(--line);padding:36px 0}
+      .hero h1{margin:0;font-size:28px;font-weight:600;letter-spacing:.2px}
+      .hero p{margin:8px 0 0;color:var(--muted)}
+      .grid{display:grid;gap:20px;grid-template-columns:repeat(1,minmax(0,1fr))}
+      @media(min-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(min-width:980px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+      .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:border-color .2s ease,box-shadow .2s ease}
+      .card:hover{border-color:#2f3338;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+      .card-media{position:relative;aspect-ratio:16/9;background:var(--panel-2)}
+      .card-media img{width:100%;height:100%;object-fit:cover;display:block}
+      .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 10%,rgba(0,0,0,.6) 100%)}
+      .card-body{padding:12px}
+      .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+      .muted{color:var(--muted)}
+      .clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      footer{border-top:1px solid var(--line);text-align:center;padding:20px 0;color:var(--muted);font-size:12px}
+      .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:none;z-index:50}
+      .overlay.open{display:grid;place-items:center;padding:16px}
+      .panel{width:100%;max-width:1040px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+      .panel-header{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--line)}
+      .panel-body{padding:14px}
+      .two{display:grid;gap:16px}
+      @media(min-width:860px){.two{grid-template-columns:1fr 1fr}}
+      .input,select,textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px}
+      textarea{min-height:80px}
+      .drawer{position:fixed;top:0;right:0;bottom:0;width:100%;max-width:420px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-10px 0 30px rgba(0,0,0,.4);transform:translateX(100%);transition:transform .25s ease;z-index:60;padding:16px;overflow:auto}
+      .drawer.open{transform:translateX(0)}
+      .list{display:grid;gap:10px;margin-top:12px}
+      .item{display:grid;grid-template-columns:80px 1fr;gap:10px;border:1px solid var(--line);border-radius:12px;padding:8px}
+      .thumb{width:80px;height:80px;border-radius:10px;background:var(--panel-2);object-fit:cover}
+      .mini-row{display:flex;align-items:center;gap:8px}
+      .top-actions{margin-left:auto;display:flex;align-items:center;gap:8px;position:relative}
+      .note{color:var(--muted);font-size:12px}
+      #testlog{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);white-space:pre-wrap}
+      .hidden{display:none!important}
+      .right{margin-left:auto}
+      .tiny{font-size:12px}
+      /* Prevent overflow in payment step and enlarge media */
+      #checkoutOverlay .panel{ max-width:1040px; width:calc(100% - 32px); }
+      #checkoutOverlay .panel-body{ max-height:calc(100vh - 160px); overflow:auto; }
+      #checkoutOverlay code{ word-break:break-all; overflow-wrap:anywhere; white-space:pre-wrap; }
+      #checkoutOverlay .list a{ word-break:break-all; overflow-wrap:anywhere; }
+      #checkoutOverlay #qrBox img, #checkoutOverlay #qrBox canvas{ max-width:260px; }
+      @media(min-width:860px){ #checkoutOverlay .two{ grid-template-columns:1.25fr 1fr; } }
+      #productOverlay .panel{ max-width:1040px; }
+      #productOverlay .card-media{ aspect-ratio:1 / 1; }
+      #productOverlay .card-media.zoom{ height:70vh; aspect-ratio:auto; }
+      #productOverlay .card-media.zoom img{ object-fit:contain; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container bar">
+        <div class="brand" id="brand">ZDK</div>
+        <div class="top-actions">
+          <button class="btn btn-light" id="cartBtn">Basket</button>
+          <span class="chip hidden" id="cartCount">0</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="container">
+        <h1 id="tagline">Zürich Designer Kollektive — buy direct from local artists, pay with Bitcoin.</h1>
+        <p id="subline">Shipping worldwide. Taxes & tariffs may apply.</p>
+      </div>
+    </section>
+
+    <main class="container" style="padding:24px 0 32px;">
+      <div id="grid" class="grid"></div>
+      <div id="testlog" class="hidden"></div>
+    </main>
+
+    <!-- Product modal -->
+    <div class="overlay" id="productOverlay">
+      <div class="panel">
+        <div class="panel-header">
+          <div id="productTitle" style="font-weight:600"></div>
+          <button class="btn" id="productClose">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="two">
+            <div>
+              <div class="card-media" style="border-radius:12px;overflow:hidden;border:1px solid var(--line)">
+                <img id="productImg" alt="Item" />
+              </div>
+            </div>
+            <div>
+              <div id="productDesc" class="muted" style="margin-bottom:8px"></div>
+              <label class="muted tiny">Size</label>
+              <select id="sizeSelect" class="input" style="margin-top:6px"></select>
+              <div class="mini-row" style="margin-top:10px">
+                <label class="muted tiny">Qty</label>
+                <input id="qtyInput" class="input" type="number" min="1" value="1" style="width:90px" />
+              </div>
+              <div style="margin-top:12px">
+                <button class="btn btn-light" id="addToCartBtn">Add to basket</button>
+                <span id="lineTotal" class="muted" style="margin-left:10px"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart drawer -->
+    <aside class="drawer" id="cartDrawer">
+      <div class="row">
+        <h3 style="margin:0;font-weight:600">Basket</h3>
+        <button class="btn" id="cartClose">×</button>
+      </div>
+      <div id="cartList" class="list"></div>
+      <div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+        <div class="muted">Subtotal</div>
+        <div id="cartSubtotal" style="font-weight:600">CHF 0.00</div>
+      </div>
+      <div class="note" style="margin-top:4px">Shipping calculated at checkout; taxes & import tariffs may apply.</div>
+      <div class="mini-row" style="margin-top:12px">
+        <button class="btn" id="cartClear">Clear</button>
+        <button class="btn btn-light" id="toCheckout">Checkout</button>
+      </div>
+    </aside>
+
+    <!-- Checkout modal -->
+    <div class="overlay" id="checkoutOverlay">
+      <div class="panel">
+        <div class="panel-header">
+          <div style="font-weight:600">Checkout</div>
+          <button class="btn" id="checkoutClose">×</button>
+        </div>
+        <div class="panel-body">
+          <div id="step1" class="two">
+            <div>
+              <h4 style="margin:0 0 6px">Shipping details</h4>
+              <input id="fName" class="input" placeholder="Full name" />
+              <input id="fEmail" class="input" placeholder="Email" style="margin-top:6px" />
+              <input id="fAddress" class="input" placeholder="Address" style="margin-top:6px" />
+              <div class="two" style="margin-top:6px">
+                <input id="fCity" class="input" placeholder="City" />
+                <input id="fPostal" class="input" placeholder="Postal" />
+                <input id="fCountry" class="input" placeholder="Country" />
+              </div>
+              <label class="muted tiny" style="margin-top:6px;display:block">Region (for shipping estimate)</label>
+              <select id="fRegion" class="input">
+                <option value="CH">Switzerland (CH)</option>
+                <option value="EU">European Union (EU)</option>
+                <option value="USA">United States (USA)</option>
+                <option value="OTHER">Other / Rest of World</option>
+              </select>
+              <textarea id="fNotes" class="input" placeholder="Notes (optional)" style="margin-top:6px"></textarea>
+            </div>
+            <div>
+              <h4 style="margin:0 0 6px">Order summary</h4>
+              <div id="orderSummary" class="list"></div>
+              <div class="row" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><div>Subtotal</div><div id="sumSubtotal" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Shipping (est.)</div><div id="sumShipping" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Total (est.)</div><div id="sumTotal" style="font-weight:600">CHF 0.00</div></div>
+              <div class="note" style="margin-top:4px"></div>
+            </div>
+            <div style="grid-column:1/-1;text-align:right"><button class="btn" id="cancelCheckout">Cancel</button><button class="btn btn-light" id="toStep2">Continue to Bitcoin payment</button></div>
+          </div>
+          <div id="step2" class="hidden two">
+            <div>
+              <h4 style="margin:0 0 6px">Send Bitcoin for Order <span id="orderId"></span></h4>
+              <div class="note">Lightning or on‑chain.</div>
+              <div id="qrBox" style="display:grid;place-items:center;margin:10px 0"></div>
+              <div id="payDetails" class="list"></div>
+            </div>
+            <div>
+              <h4 style="margin:0 0 6px">Order summary</h4>
+              <div id="orderSummary2" class="list"></div>
+              <div class="row" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><div>Subtotal</div><div id="sumSubtotal2" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Shipping (est.)</div><div id="sumShipping2" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Total (est.)</div><div id="sumTotal2" style="font-weight:600">CHF 0.00</div></div>
+              <div class="mini-row" style="margin-top:10px"><button class="btn" id="backToStep1">Back</button><button class="btn btn-light" id="placeOrder">Place order</button></div>
+              <div class="note" id="emailStatus" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Helpers (no fragile regex or template strings that can break) =====
+      const money = function(n){ return 'CHF\u00A0' + Number(n||0).toFixed(2); };
+      const genId = function(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); };
+      const EMPTY_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+      function setTextById(id, text){ var el=document.getElementById(id); if (el) el.textContent = text; }
+      function normalizeProduct(p){
+        var sizes = Array.isArray(p && p.sizes) ? p.sizes : [];
+        var norm = sizes.map(function(s){ return { id:(s && s.id)||genId(), label: String((s && s.label)||'').trim(), price: Number((s && s.price)||0) }; }).filter(function(s){ return s.label; });
+        return { id:(p&&p.id)||genId(), title:String((p&&p.title)||'Untitled'), description:String((p&&p.description)||''), image_url:(p&&typeof p.image_url==='string'&&p.image_url)? p.image_url : EMPTY_IMG, sizes: norm.length? norm : [{ id: genId(), label:'Single', price:0 }], asset_url:(p&&p.asset_url)||'' };
+      }
+      function drawPlaceholderQR(canvas, text){
+        var ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+        var n=21,s=Math.floor(canvas.width/n); var h=hash32(String(text||''));
+        for(var y=0;y<n;y++){ for(var x=0;x<n;x++){ var bit=((x*y+x+((h>>>((x+y)%24))))&1)^(((h>>>((x*3+y*5)%24)))&1); ctx.fillStyle=bit?'#e5e7eb':'#111318'; ctx.fillRect(x*s,y*s,s-1,s-1); } }
+        ctx.fillStyle='#e5e7eb'; var f=function(ox,oy){ ctx.fillRect(ox,oy,6*s,6*s); ctx.clearRect(ox+s,oy+s,4*s,4*s); ctx.fillRect(ox+2*s,oy+2*s,2*s,2*s); };
+        f(1*s,1*s); f((n-7)*s,1*s); f(1*s,(n-7)*s);
+      }
+      function hash32(str){ var h=2166136261>>>0; for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+      function paymentRow(label, value){ var wrap=document.createElement('div'); wrap.className='mini-row'; wrap.style.flexWrap='wrap'; var code=document.createElement('code'); code.textContent=value; code.style.padding='2px 6px'; code.style.background='var(--panel-2)'; code.style.border='1px solid var(--line)'; code.style.borderRadius='8px'; var btn=document.createElement('button'); btn.className='btn'; btn.textContent='Copy'; btn.onclick=function(){ copy(value); }; var lab=document.createElement('span'); lab.className='muted'; lab.textContent=label; lab.style.minWidth='130px'; wrap.appendChild(lab); wrap.appendChild(code); wrap.appendChild(btn); return wrap; }
+      function linkRow(label, href){ var wrap=document.createElement('div'); wrap.className='mini-row'; var a=document.createElement('a'); a.textContent=label; a.href=href; a.rel='noopener'; a.target='_blank'; wrap.appendChild(a); return wrap; }
+      function copy(text){ try{ if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(String(text||''));} else { var ta=document.createElement('textarea'); ta.value=String(text||''); document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }catch(e){} }
+
+      // Shipping estimator
+      var SHIPPING_RATES = { CH:{ base:3.0, add_per_item:1.0 }, EU:{ base:6.0, add_per_item:1.5 }, USA:{ base:8.0, add_per_item:2.0 }, OTHER:{ base:10.0, add_per_item:2.5 } };
+      function estimateShipping(region, itemsCount){ var r = SHIPPING_RATES[region] || SHIPPING_RATES.OTHER; if (!itemsCount || itemsCount<=0) return 0; return r.base + Math.max(0, itemsCount - 1) * r.add_per_item; }
+
+      // Email sender (mailto + JSON download)
+      function sendOrderEmail(order, to){
+        var subject = 'New order ' + order.id;
+        var lines = [
+          'Order ID: ' + order.id,
+          'Name: ' + order.customer.name,
+          'Email: ' + order.customer.email,
+          'Address: ' + order.customer.address + ', ' + order.customer.city + ' ' + order.customer.postal + ', ' + order.customer.country,
+          'Region: ' + order.customer.region,
+          'Items:'
+        ];
+        for (var i=0;i<order.items.length;i++){
+          var it=order.items[i]; lines.push(' - ' + it.title + ' ('+it.size+') x ' + it.qty + ' = ' + money(it.price*it.qty));
+        }
+        lines.push('Subtotal: ' + money(order.subtotal));
+        lines.push('Shipping (est.): ' + money(order.shipping));
+        lines.push('Total (est.): ' + money(order.total));
+        lines.push('Lightning: ' + (order.payment.lightning || '(none)'));
+        lines.push('BTC: ' + (order.payment.btc || '(none)'));
+        var body = lines.join('\n');
+        var link = document.createElement('a');
+        link.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        link.style.display='none'; document.body.appendChild(link); link.click(); setTimeout(function(){ link.remove(); }, 0);
+        var blob = new Blob([JSON.stringify(order,null,2)], {type:'application/json'});
+        var d = document.createElement('a'); d.href = URL.createObjectURL(blob); d.download = 'order_' + order.id + '.json'; d.style.display='none'; document.body.appendChild(d); d.click(); setTimeout(function(){ URL.revokeObjectURL(d.href); d.remove(); }, 1000);
+      }
+
+      // Resolve order email from VCF (first EMAIL: line)
+      function resolveOrderEmail(){
+        if (!CFG.order_email_vcf) return Promise.resolve();
+        return fetch(CFG.order_email_vcf)
+          .then(function(res){ return (res&&res.ok)? res.text() : ''; })
+          .then(function(txt){ if(!txt) return; var lines = txt.split('\n'); for (var i=0;i<lines.length;i++){ var L=lines[i]; if (L && L.toUpperCase().indexOf('EMAIL')===0){ var parts=L.split(':'); parts.shift(); var email=parts.join(':').trim(); if(email) CFG.order_email=email; break; } } });
+      }
+
+      // ===== Settings + Catalog =====
+      const CFG = { title:'ZDK', tagline:'Zürich Designer Kollektive — buy direct from local artists, pay with Bitcoin.', subline:'Shipping worldwide. Taxes & tariffs may apply.', lightning:'stiltedbracket08@walletofsatoshi.com', bolt11:'', btc:'', btc_qr_img:'btc.jpeg', order_email:'orders@example.com', order_email_vcf:'contact.vcf', footer:'' };
+      const CATALOG = [ { title:'Ciao ragazzi — Lugano Edition', description:'Single listing using your local SVG preview as the thumbnail.', image_url:'ciao-raggazzi.svg', asset_url:'', sizes:[ { id: genId(), label:'Single (3×3 in)', price:6 }, { id: genId(), label:'3-pack', price:15 } ] } ].map(normalizeProduct);
+
+      // ===== App =====
+      window.addEventListener('DOMContentLoaded', function(){
+        // header copy
+        setTextById('brand', CFG.title); setTextById('tagline', CFG.tagline); setTextById('subline', CFG.subline);
+        var footerEl = document.getElementById('footer'); if (footerEl && !CFG.footer) { footerEl.parentNode.removeChild(footerEl); } else if (footerEl) { footerEl.textContent = CFG.footer; }
+
+        // grid render
+        var grid = document.getElementById('grid'); grid.innerHTML='';
+        CATALOG.forEach(function(p){
+          var card=document.createElement('div'); card.className='card';
+          var media=document.createElement('div'); media.className='card-media';
+          var img=new Image(); img.src=p.image_url; img.alt=p.title; media.appendChild(img);
+          var grad=document.createElement('div'); grad.className='grad'; media.appendChild(grad);
+          var body=document.createElement('div'); body.className='card-body';
+          var row=document.createElement('div'); row.className='row';
+          var titleDiv=document.createElement('div'); titleDiv.style.fontWeight='600'; titleDiv.style.overflow='hidden'; titleDiv.style.textOverflow='ellipsis'; titleDiv.style.whiteSpace='nowrap'; titleDiv.textContent=p.title;
+          var priceDiv=document.createElement('div'); priceDiv.className='muted'; var minPrice=Math.min.apply(null,p.sizes.map(function(s){ return Number(s.price||0); })); priceDiv.textContent=isFinite(minPrice)? money(minPrice):'';
+          row.appendChild(titleDiv); row.appendChild(priceDiv);
+          var desc=document.createElement('div'); desc.className='muted clamp2'; desc.style.marginTop='4px'; desc.textContent=p.description;
+          var btnWrap=document.createElement('div'); btnWrap.style.marginTop='10px'; var btn=document.createElement('button'); btn.className='btn btn-light'; btn.textContent='View'; btn.addEventListener('click', function(){ openProduct(p); }); btnWrap.appendChild(btn);
+          body.appendChild(row); body.appendChild(desc); body.appendChild(btnWrap);
+          card.appendChild(media); card.appendChild(body); grid.appendChild(card);
+        });
+
+        // overlays
+        function openOverlay(el){ el.classList.add('open'); } function closeOverlay(el){ el.classList.remove('open'); }
+
+        // product modal
+        function openProduct(p){
+          var ov=document.getElementById('productOverlay');
+          setTextById('productTitle', p.title);
+          var im=document.getElementById('productImg'); im.src=p.image_url; im.alt=p.title;
+          setTextById('productDesc', p.description||'');
+          var sel=document.getElementById('sizeSelect'); sel.innerHTML='';
+          p.sizes.forEach(function(s){ var o=document.createElement('option'); o.value=s.id; o.textContent=s.label+' — '+money(s.price); sel.appendChild(o); });
+          document.getElementById('qtyInput').value=1;
+          var updateLine=function(){ var sx=p.sizes.find(function(x){ return x.id===sel.value; })||p.sizes[0]; var q=Math.max(1, parseInt(document.getElementById('qtyInput').value||'1',10)); setTextById('lineTotal', 'Line total: '+money((sx&&sx.price||0)*q)); };
+          sel.onchange=updateLine; document.getElementById('qtyInput').oninput=updateLine; updateLine();
+          var mediaWrap = im.parentNode; if (mediaWrap) { mediaWrap.classList.add('card-media'); mediaWrap.style.cursor='zoom-in'; mediaWrap.onclick=function(){ mediaWrap.classList.toggle('zoom'); mediaWrap.style.cursor = mediaWrap.classList.contains('zoom') ? 'zoom-out' : 'zoom-in'; }; }
+          document.getElementById('addToCartBtn').onclick=function(){ var s2=p.sizes.find(function(x){ return x.id===sel.value; })||p.sizes[0]; var q2=Math.max(1, parseInt(document.getElementById('qtyInput').value||'1',10)); addToCart(p,s2,q2); closeOverlay(ov); };
+          openOverlay(ov);
+        }
+        document.getElementById('productClose').onclick=function(){ closeOverlay(document.getElementById('productOverlay')); };
+
+        // cart
+        var cart=[];
+        function addToCart(p,s,q){ var key=p.id+'|'+s.label; var i=cart.findIndex(function(x){ return x.key===key; }); if(i>=0){ cart[i].qty+=q; } else { cart.push({ key:key, product_id:p.id, title:p.title, size:s.label, price:Number(s.price||0), qty:q, image_url:p.image_url }); } renderCart(); }
+        function renderCart(){ var list=document.getElementById('cartList'); var count=document.getElementById('cartCount'); var sub=document.getElementById('cartSubtotal'); count.textContent=String(cart.length); count.classList.toggle('hidden', cart.length===0); list.innerHTML=''; if(!cart.length){ var empty=document.createElement('div'); empty.className='muted'; empty.textContent='Your basket is empty.'; list.appendChild(empty); } else { cart.forEach(function(i){ var el=document.createElement('div'); el.className='item'; var t=new Image(); t.className='thumb'; t.src=i.image_url; t.alt=i.title; el.appendChild(t); var right=document.createElement('div'); var t1=document.createElement('div'); t1.style.fontWeight='600'; t1.style.overflow='hidden'; t1.style.textOverflow='ellipsis'; t1.style.whiteSpace='nowrap'; t1.textContent=i.title; var t2=document.createElement('div'); t2.className='muted'; t2.style.fontSize='12px'; t2.textContent=i.size; var mini=document.createElement('div'); mini.className='mini-row'; mini.style.marginTop='6px'; var q=document.createElement('input'); q.type='number'; q.min='1'; q.value=String(i.qty); q.className='input'; q.style.width='90px'; var amt=document.createElement('div'); amt.style.marginLeft='auto'; amt.textContent=money(i.price*i.qty); mini.appendChild(q); mini.appendChild(amt); var rm=document.createElement('button'); rm.className='btn'; rm.style.marginTop='6px'; rm.textContent='Remove'; q.oninput=function(){ i.qty=Math.max(1, parseInt(q.value||'1',10)); renderTotals(); amt.textContent=money(i.price*i.qty); }; rm.onclick=function(){ cart=cart.filter(function(x){ return x.key!==i.key; }); renderCart(); }; right.appendChild(t1); right.appendChild(t2); right.appendChild(mini); right.appendChild(rm); el.appendChild(right); list.appendChild(el); }); } renderTotals(); }
+        function cartSubtotal(){ return cart.reduce(function(s,i){ return s + Number(i.price||0)*Number(i.qty||0); }, 0); }
+        function renderTotals(){ document.getElementById('cartSubtotal').textContent = money(cartSubtotal()); }
+        document.getElementById('cartBtn').onclick=function(){ renderCart(); document.getElementById('cartDrawer').classList.add('open'); };
+        document.getElementById('cartClose').onclick=function(){ document.getElementById('cartDrawer').classList.remove('open'); };
+        document.getElementById('cartClear').onclick=function(){ cart=[]; renderCart(); };
+        document.getElementById('toCheckout').onclick=function(){ document.getElementById('cartDrawer').classList.remove('open'); openCheckout(); };
+
+        // checkout
+        document.getElementById('checkoutClose').onclick=function(){ closeOverlay(document.getElementById('checkoutOverlay')); };
+        document.getElementById('cancelCheckout').onclick=function(){ closeOverlay(document.getElementById('checkoutOverlay')); };
+        document.getElementById('backToStep1').onclick=function(){ document.getElementById('step2').classList.add('hidden'); document.getElementById('step1').classList.remove('hidden'); };
+
+        function bindShippingEstimate(){ var regionSel=document.getElementById('fRegion'); var update=function(){ var subtotal=cartSubtotal(); var itemsCount=cart.reduce(function(n,i){ return n + Number(i.qty||0); }, 0); var ship=estimateShipping(regionSel.value, itemsCount); document.getElementById('sumSubtotal').textContent=money(subtotal); document.getElementById('sumShipping').textContent=money(ship); document.getElementById('sumTotal').textContent=money(subtotal + ship); }; regionSel.onchange=update; update(); return update; }
+        function openCheckout(){ var sum=document.getElementById('orderSummary'); sum.innerHTML=''; cart.forEach(function(i){ var row=document.createElement('div'); row.className='row'; var left=document.createElement('div'); left.style.overflow='hidden'; left.style.textOverflow='ellipsis'; left.style.whiteSpace='nowrap'; left.textContent=i.title + ' ('+ i.size +') × ' + i.qty; var right=document.createElement('div'); right.textContent=money(i.price*i.qty); row.appendChild(left); row.appendChild(right); sum.appendChild(row); }); document.getElementById('step1').classList.remove('hidden'); document.getElementById('step2').classList.add('hidden'); openOverlay(document.getElementById('checkoutOverlay')); bindShippingEstimate(); }
+
+        document.getElementById('toStep2').onclick=function(){
+          var bip21 = CFG.btc ? ('bitcoin:'+CFG.btc) : '';
+          var lightning=(CFG.lightning||'').trim();
+          var bolt11=(CFG.bolt11||'').trim();
+          var target= lightning || bolt11 || bip21;
+          var details=document.getElementById('payDetails'); details.innerHTML='';
+          if (lightning) details.appendChild(paymentRow('Lightning address', lightning));
+          if (bolt11) { details.appendChild(paymentRow('BOLT11', bolt11.length>64? (bolt11.slice(0,63)+'…'): bolt11)); details.appendChild(linkRow('Open BOLT11', bolt11)); }
+          if (CFG.btc) { details.appendChild(paymentRow('BTC address', CFG.btc)); if (bip21) details.appendChild(linkRow('Open in wallet', bip21)); }
+          var box=document.getElementById('qrBox'); box.innerHTML='';
+          if (CFG.btc_qr_img){ var img=new Image(); img.alt='BTC QR'; img.style.maxWidth='260px'; img.style.borderRadius='8px'; img.style.border='1px solid var(--line)'; img.style.background='#0f1115'; img.onload=function(){ box.appendChild(img); }; img.onerror=function(){ var canvas=document.createElement('canvas'); canvas.width=180; canvas.height=180; canvas.style.borderRadius='8px'; canvas.style.background='#0f1115'; canvas.style.border='1px solid var(--line)'; drawPlaceholderQR(canvas, target); box.appendChild(canvas); }; img.src=CFG.btc_qr_img; } else { var canvas=document.createElement('canvas'); canvas.width=180; canvas.height=180; canvas.style.borderRadius='8px'; canvas.style.background='#0f1115'; canvas.style.border='1px solid var(--line)'; drawPlaceholderQR(canvas, target); box.appendChild(canvas); }
+          var sum2=document.getElementById('orderSummary2'); sum2.innerHTML=''; cart.forEach(function(i){ var row=document.createElement('div'); row.className='row'; var left=document.createElement('div'); left.style.overflow='hidden'; left.style.textOverflow='ellipsis'; left.style.whiteSpace='nowrap'; left.textContent=i.title + ' ('+ i.size +') × ' + i.qty; var right=document.createElement('div'); right.textContent=money(i.price*i.qty); row.appendChild(left); row.appendChild(right); sum2.appendChild(row); });
+          var itemsCount=cart.reduce(function(n,i){ return n + Number(i.qty||0); }, 0);
+          var reg=document.getElementById('fRegion').value;
+          var subtotal=cartSubtotal();
+          var ship=estimateShipping(reg, itemsCount);
+          document.getElementById('sumSubtotal2').textContent=money(subtotal);
+          document.getElementById('sumShipping2').textContent=money(ship);
+          document.getElementById('sumTotal2').textContent=money(subtotal + ship);
+          setTextById('orderId', '#'+genId().slice(0,8).toUpperCase());
+          document.getElementById('step1').classList.add('hidden'); document.getElementById('step2').classList.remove('hidden');
+        };
+
+        document.getElementById('placeOrder').onclick=function(){
+          resolveOrderEmail().then(function(){
+            var oidEl=document.getElementById('orderId'); var _oid= oidEl? oidEl.textContent : '';
+            var order={ id: (_oid||'').replace('#','') || genId().slice(0,8).toUpperCase(), created_at: new Date().toISOString(), items: cart.map(function(i){ return { title:i.title, size:i.size, qty:Number(i.qty||0), price:Number(i.price||0) }; }), subtotal: cartSubtotal(), customer: { name: document.getElementById('fName').value.trim(), email: document.getElementById('fEmail').value.trim(), address: document.getElementById('fAddress').value.trim(), city: document.getElementById('fCity').value.trim(), postal: document.getElementById('fPostal').value.trim(), country: document.getElementById('fCountry').value.trim(), region: document.getElementById('fRegion').value }, shipping: estimateShipping(document.getElementById('fRegion').value, cart.reduce(function(n,i){ return n + Number(i.qty||0); }, 0)), total: 0, payment: { lightning: CFG.lightning, btc: CFG.btc } };
+            order.total = order.subtotal + order.shipping;
+            try{ sendOrderEmail(order, CFG.order_email); var es=document.getElementById('emailStatus'); if (es){ es.style.color='var(--ok)'; es.textContent='Confirmation prepared in your email client and order JSON downloaded.'; } }
+            catch(e){ var es2=document.getElementById('emailStatus'); if (es2){ es2.style.color='var(--warn)'; es2.textContent='Could not open email client. Order JSON downloaded.'; } }
+            alert('Order placed. We will confirm by email.');
+            closeOverlay(document.getElementById('checkoutOverlay'));
+          });
+        };
+
+        // tiny tests (kept hidden)
+        (function(){
+          var out=[]; function ok(n,p){ out.push((p?'✔':'✖')+' '+n); }
+          try{
+            ok('Catalog length === 1', Array.isArray(CATALOG) && CATALOG.length===1);
+            ok('CFG present', !!CFG && CFG.title==='ZDK');
+            ok('Helpers present', typeof genId==='function' && typeof money==='function');
+            ok('openProduct is function', typeof openProduct==='function');
+          }catch(e){ ok('Tests threw', false); }
+          var el=document.getElementById('testlog'); if (el){ /* keep hidden; uncomment to view: el.classList.remove('hidden'); el.textContent = out.join('\n'); */ }
+        })();
+      });
+    </script>
+  </body>
+</html>

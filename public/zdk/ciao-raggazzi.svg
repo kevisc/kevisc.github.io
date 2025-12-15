@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="234.0" height="234.0" viewBox="0 0 234.0 234.0" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <circle id="cutCircle" cx="117.0" cy="117.0" r="108.0" />
+    <circle id="keyCircle" cx="117.0" cy="117.0" r="107.4" />
+    <circle id="textCircle" cx="117.0" cy="117.0" r="104.76" />
+  </defs>
+  <rect x="0" y="0" width="234.0" height="234.0" fill="#0F0F0F"/>
+  <!-- Cut guide -->
+  <use href="#cutCircle" fill="none" stroke="#FF00FF" stroke-width="0.5" vector-effect="non-scaling-stroke"/>
+  <!-- Keyline -->
+  <use href="#keyCircle" fill="none" stroke="#2E7FA3" stroke-width="0.6" vector-effect="non-scaling-stroke"/>
+  <!-- Terracotta tick -->
+  <line x1="107.0" y1="220.4" x2="127.0" y2="220.4" stroke="#C65A3E" stroke-width="2"/>
+  <!-- Center word -->
+  <text x="117.0" y="117.0" font-family="Helvetica, Arial, 'Noto Sans', sans-serif" font-weight="700" font-size="38pt"
+        fill="#2E7FA3" text-anchor="middle" dominant-baseline="middle">Ciao ragazzi</text>
+  <!-- Repeating caption around circle -->
+  <text font-family="Helvetica, Arial, 'Noto Sans', sans-serif" font-size="6.5pt" fill="#2E7FA3">
+    <textPath href="#textCircle" startOffset="25%">Shawn Holzerr. Edizione Lugano 2025. • Shawn Holzerr. Edizione Lugano 2025. • Shawn Holzerr. Edizione Lugano 2025. • Shawn Holzerr. Edizione Lugano 2025. • Shawn Holzerr. Edizione Lugano 2025. • Shawn Holzerr. Edizione Lugano 2025. • Shawn Holzerr. Edizione Lugano 2025.</textPath>
+  </text>
+</svg>

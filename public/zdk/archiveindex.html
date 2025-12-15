@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ZDK</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root { --bg:#0a0b0d; --panel:#111317; --panel-2:#0f1115; --text:#e6e7ea; --muted:#9aa0a6; --line:#23262b; --accent:#ffffff; --accent-text:#0c0d0f; --ok:#10b981; --warn:#f59e0b; }
+      *{box-sizing:border-box}
+      html,body{height:100%}
+      body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+      a{color:#7cc4ff;text-decoration:none} a:hover{text-decoration:underline}
+      .container{max-width:1120px;margin:0 auto;padding:0 16px}
+      header{position:sticky;top:0;z-index:30;backdrop-filter:blur(6px);background:rgba(10,11,13,.8);border-bottom:1px solid var(--line)}
+      header .bar{display:flex;align-items:center;gap:12px;padding:12px 0}
+      .brand{font-weight:600;letter-spacing:.2px}
+      .btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:8px 12px;cursor:pointer}
+      .btn:hover{background:#171a1f}
+      .btn-light{background:var(--accent);color:var(--accent-text);border-color:#d1d5db}
+      .btn-light:hover{filter:brightness(.96)}
+      .chip{position:absolute;top:-8px;right:-8px;background:var(--ok);color:#fff;border-radius:999px;font-size:11px;padding:2px 6px}
+      .hero{border-bottom:1px solid var(--line);padding:36px 0}
+      .hero h1{margin:0;font-size:28px;font-weight:600;letter-spacing:.2px}
+      .hero p{margin:8px 0 0;color:var(--muted)}
+      .grid{display:grid;gap:20px;grid-template-columns:repeat(1,minmax(0,1fr))}
+      @media(min-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(min-width:980px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+      .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:border-color .2s ease,box-shadow .2s ease}
+      .card:hover{border-color:#2f3338;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+      .card-media{position:relative;aspect-ratio:16/9;background:var(--panel-2)}
+      .card-media img{width:100%;height:100%;object-fit:cover;display:block}
+      .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 10%,rgba(0,0,0,.6) 100%)}
+      .card-body{padding:12px}
+      .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+      .muted{color:var(--muted)}
+      .clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      footer{border-top:1px solid var(--line);text-align:center;padding:20px 0;color:var(--muted);font-size:12px}
+      .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:none;z-index:50}
+      .overlay.open{display:grid;place-items:center;padding:16px}
+      .panel{width:100%;max-width:880px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+      .panel-header{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--line)}
+      .panel-body{padding:14px}
+      .two{display:grid;gap:16px}
+      @media(min-width:860px){.two{grid-template-columns:1fr 1fr}}
+      .input,select,textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px}
+      textarea{min-height:80px}
+      .drawer{position:fixed;top:0;right:0;bottom:0;width:100%;max-width:420px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-10px 0 30px rgba(0,0,0,.4);transform:translateX(100%);transition:transform .25s ease;z-index:60;padding:16px;overflow:auto}
+      .drawer.open{transform:translateX(0)}
+      .list{display:grid;gap:10px;margin-top:12px}
+      .item{display:grid;grid-template-columns:80px 1fr;gap:10px;border:1px solid var(--line);border-radius:12px;padding:8px}
+      .thumb{width:80px;height:80px;border-radius:10px;background:var(--panel-2);object-fit:cover}
+      .mini-row{display:flex;align-items:center;gap:8px}
+      .top-actions{margin-left:auto;display:flex;align-items:center;gap:8px;position:relative}
+      .note{color:var(--muted);font-size:12px}
+      #testlog{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);white-space:pre-wrap}
+      .hidden{display:none!important}
+      .right{margin-left:auto}
+      .tiny{font-size:12px}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container bar">
+        <div class="brand" id="brand">ZDK</div>
+        <div class="top-actions">
+          <button class="btn btn-light" id="cartBtn">Basket</button>
+          <span class="chip hidden" id="cartCount">0</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="container">
+        <h1 id="tagline">Zürich Designer Kollektive — buy direct from local artists, pay with Bitcoin.</h1>
+        <p id="subline">Shipping worldwide. Taxes & tariffs may apply.</p>
+      </div>
+    </section>
+
+    <main class="container" style="padding:24px 0 32px;">
+      <div id="grid" class="grid"></div>
+      <div id="testlog" class="hidden"></div>
+    </main>
+
+    <footer id="footer">Shawn Holzer, Zurich Switzerland, 2025</footer>
+
+    <!-- Product modal -->
+    <div class="overlay" id="productOverlay">
+      <div class="panel">
+        <div class="panel-header">
+          <div id="productTitle" style="font-weight:600"></div>
+          <button class="btn" id="productClose">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="two">
+            <div>
+              <div class="card-media" style="border-radius:12px;overflow:hidden;border:1px solid var(--line)">
+                <img id="productImg" alt="Item" />
+              </div>
+              <div class="mini-row" style="margin-top:10px">
+                <a id="assetLink" class="btn" target="_blank" rel="noopener">Open PDF</a>
+              </div>
+            </div>
+            <div>
+              <div id="productDesc" class="muted" style="margin-bottom:8px"></div>
+              <label class="muted tiny">Size</label>
+              <select id="sizeSelect" class="input" style="margin-top:6px"></select>
+              <div class="mini-row" style="margin-top:10px">
+                <label class="muted tiny">Qty</label>
+                <input id="qtyInput" class="input" type="number" min="1" value="1" style="width:90px" />
+              </div>
+              <div style="margin-top:12px">
+                <button class="btn btn-light" id="addToCartBtn">Add to basket</button>
+                <span id="lineTotal" class="muted" style="margin-left:10px"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart drawer -->
+    <aside class="drawer" id="cartDrawer">
+      <div class="row">
+        <h3 style="margin:0;font-weight:600">Basket</h3>
+        <button class="btn" id="cartClose">×</button>
+      </div>
+      <div id="cartList" class="list"></div>
+      <div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+        <div class="muted">Subtotal</div>
+        <div id="cartSubtotal" style="font-weight:600">CHF 0.00</div>
+      </div>
+      <div class="note" style="margin-top:4px">Shipping calculated at checkout; taxes & import tariffs may apply.</div>
+      <div class="mini-row" style="margin-top:12px">
+        <button class="btn" id="cartClear">Clear</button>
+        <button class="btn btn-light" id="toCheckout">Checkout</button>
+      </div>
+    </aside>
+
+    <!-- Checkout modal -->
+    <div class="overlay" id="checkoutOverlay">
+      <div class="panel">
+        <div class="panel-header">
+          <div style="font-weight:600">Checkout</div>
+          <button class="btn" id="checkoutClose">×</button>
+        </div>
+        <div class="panel-body">
+          <div id="step1" class="two">
+            <div>
+              <h4 style="margin:0 0 6px">Shipping details</h4>
+              <input id="fName" class="input" placeholder="Full name" />
+              <input id="fEmail" class="input" placeholder="Email" style="margin-top:6px" />
+              <input id="fAddress" class="input" placeholder="Address" style="margin-top:6px" />
+              <div class="two" style="margin-top:6px">
+                <input id="fCity" class="input" placeholder="City" />
+                <input id="fPostal" class="input" placeholder="Postal" />
+                <input id="fCountry" class="input" placeholder="Country" />
+              </div>
+              <label class="muted tiny" style="margin-top:6px;display:block">Region (for shipping estimate)</label>
+              <select id="fRegion" class="input">
+                <option value="CH">Switzerland (CH)</option>
+                <option value="EU">European Union (EU)</option>
+                <option value="USA">United States (USA)</option>
+                <option value="OTHER">Other / Rest of World</option>
+              </select>
+              <textarea id="fNotes" class="input" placeholder="Notes (optional)" style="margin-top:6px"></textarea>
+            </div>
+            <div>
+              <h4 style="margin:0 0 6px">Order summary</h4>
+              <div id="orderSummary" class="list"></div>
+              <div class="row" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><div>Subtotal</div><div id="sumSubtotal" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Shipping (est.)</div><div id="sumShipping" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Total (est.)</div><div id="sumTotal" style="font-weight:600">CHF 0.00</div></div>
+              <div class="note" style="margin-top:4px">Estimate updates with region/quantity. Final shipping confirmed in email.</div>
+            </div>
+            <div style="grid-column:1/-1;text-align:right"><button class="btn" id="cancelCheckout">Cancel</button><button class="btn btn-light" id="toStep2">Continue to Bitcoin payment</button></div>
+          </div>
+          <div id="step2" class="hidden two">
+            <div>
+              <h4 style="margin:0 0 6px">Send Bitcoin for Order <span id="orderId"></span></h4>
+              <div class="note">Lightning or on‑chain. The QR below uses your on‑chain image when provided; otherwise we generate a placeholder.</div>
+              <div id="qrBox" style="display:grid;place-items:center;margin:10px 0">
+                <!-- will be replaced with <img> if CFG.btc_qr_img is set; otherwise falls back to canvas placeholder -->
+                <canvas id="qrCanvas" width="180" height="180" style="border-radius:8px;background:#0f1115;border:1px solid var(--line)"></canvas>
+              </div>
+              <div id="payDetails" class="list"></div>
+              <div class="note">Note: demo does not auto‑verify. You will receive a confirmation email.</div>
+            </div>
+            <div>
+              <h4 style="margin:0 0 6px">Order summary</h4>
+              <div id="orderSummary2" class="list"></div>
+              <div class="row" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><div>Subtotal</div><div id="sumSubtotal2" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Shipping (est.)</div><div id="sumShipping2" style="font-weight:600">CHF 0.00</div></div>
+              <div class="row"><div>Total (est.)</div><div id="sumTotal2" style="font-weight:600">CHF 0.00</div></div>
+              <div class="mini-row" style="margin-top:10px"><button class="btn" id="backToStep1">Back</button><button class="btn btn-light" id="placeOrder">Place order</button></div>
+              <div class="note" id="emailStatus" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Helpers FIRST ===== -->
+    <script>
+      const money = n => `CHF\u00A0${Number(n||0).toFixed(2)}`;
+      const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const EMPTY_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+      function placeholderImage(){ return EMPTY_IMG; }
+      function normalizeProduct(p){ const sizes=Array.isArray(p?.sizes)?p.sizes:[]; const norm=sizes.map(s=>({id:s?.id||genId(),label:String(s?.label||'').trim(),price:Number(s?.price)||0})).filter(s=>s.label); return { id:p?.id||genId(), title:String(p?.title||'Untitled'), description:String(p?.description||''), image_url: typeof p?.image_url==='string'&&p.image_url? p.image_url: EMPTY_IMG, sizes:norm.length? norm:[{id:genId(),label:'Single',price:0}], asset_url: p.asset_url||'' }; }
+      function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[c])); }
+      function drawPlaceholderQR(canvas, text){ const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); const n=21,s=Math.floor(canvas.width/n); const h=hash32(String(text||'')); for(let y=0;y<n;y++){ for(let x=0;x<n;x++){ const bit=((x*y+x+(h>>>((x+y)%24)))&1)^((h>>>((x*3+y*5)%24))&1); ctx.fillStyle=bit?'#e5e7eb':'#111318'; ctx.fillRect(x*s,y*s,s-1,s-1); } } ctx.fillStyle='#e5e7eb'; const f=(ox,oy)=>{ ctx.fillRect(ox,oy,6*s,6*s); ctx.clearRect(ox+s,oy+s,4*s,4*s); ctx.fillRect(ox+2*s,oy+2*s,2*s,2*s); }; f(1*s,1*s); f((n-7)*s,1*s); f(1*s,(n-7)*s); }
+      function hash32(str){ let h=2166136261>>>0; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+      function paymentRow(label, value){ const wrap=document.createElement('div'); wrap.className='mini-row'; const code=document.createElement('code'); code.textContent=value; code.style.padding='2px 6px'; code.style.background='var(--panel-2)'; code.style.border='1px solid var(--line)'; code.style.borderRadius='8px'; const btn=document.createElement('button'); btn.className='btn'; btn.textContent='Copy'; btn.onclick=()=>copy(value); const lab=document.createElement('span'); lab.className='muted'; lab.textContent=label; lab.style.minWidth='130px'; wrap.append(lab,code,btn); return wrap; }
+      function linkRow(label, href){ const wrap=document.createElement('div'); wrap.className='mini-row'; const a=document.createElement('a'); a.textContent=label; a.href=href; a.rel='noopener'; a.target='_blank'; wrap.append(a); return wrap; }
+      function copy(text){ try{ if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(String(text||''));} else { const ta=document.createElement('textarea'); ta.value=String(text||''); document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }catch{} }
+
+      // Shipping estimator (simple, tiered by region and item count)
+      const SHIPPING_RATES = {
+        CH:   { base: 3.0, add_per_item: 1.0 },
+        EU:   { base: 6.0, add_per_item: 1.5 },
+        USA:  { base: 8.0, add_per_item: 2.0 },
+        OTHER:{ base:10.0, add_per_item: 2.5 },
+      };
+      function estimateShipping(region, itemsCount){
+        const r = SHIPPING_RATES[region] || SHIPPING_RATES.OTHER;
+        if (!itemsCount || itemsCount<=0) return 0;
+        return r.base + Math.max(0, itemsCount - 1) * r.add_per_item;
+      }
+
+      // Email sender (placeholder: opens a mailto and also offers a JSON download)
+      function sendOrderEmail(order, to){
+        const subject = `New order ${order.id}`;
+        const body = [
+          `Order ID: ${order.id}`,
+          `Name: ${order.customer.name}`,
+          `Email: ${order.customer.email}`,
+          `Address: ${order.customer.address}, ${order.customer.city} ${order.customer.postal}, ${order.customer.country}`,
+          `Region: ${order.customer.region}`,
+          `Items:`,
+          ...order.items.map(i=>` - ${i.title} (${i.size}) x ${i.qty} = ${money(i.price*i.qty)}`),
+          `Subtotal: ${money(order.subtotal)}`,
+          `Shipping (est.): ${money(order.shipping)}`,
+          `Total (est.): ${money(order.total)}`,
+          `Lightning: ${order.payment.lightning || '(none)'}`,
+          `BTC: ${order.payment.btc || '(none)'}`,
+        ].join('\n');
+        // mailto
+        const link = document.createElement('a');
+        link.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        link.style.display='none'; document.body.appendChild(link); link.click(); setTimeout(()=>link.remove(), 0);
+        // downloadable JSON
+        const blob = new Blob([JSON.stringify(order,null,2)], {type:'application/json'});
+        const d = document.createElement('a'); d.href = URL.createObjectURL(blob); d.download = `order_${order.id}.json`; d.style.display='none'; document.body.appendChild(d); d.click(); setTimeout(()=>{ URL.revokeObjectURL(d.href); d.remove(); }, 1000);
+      }
+    </script>
+
+    <!-- ===== Settings + Catalog (LOCAL FILES) ===== -->
+    <script>
+      const CFG = {
+        title: 'ZDK',
+        tagline: 'Zürich Designer Kollektive — buy direct from local artists, pay with Bitcoin.',
+        subline: 'Shipping worldwide. Taxes & tariffs may apply.',
+        lightning: 'stiltedbracket08@walletofsatoshi.com', // provided lightning address
+        bolt11: '',              // optional: paste pre-generated invoice if you use one
+        btc: '',                 // on-chain address (text). If left empty, we will still show QR image below
+        btc_qr_img: 'btc.jpeg', // provided QR image (will display as on-chain QR)
+        order_email: 'orders@example.com', // placeholder destination for email confirmations
+        footer: 'Shawn Holzer, Zurich Switzerland, 2025',
+      };
+
+      // PDFs are expected to sit NEXT TO index.html (same folder)
+      const CATALOG = [
+        {
+          title: 'Ciao ragazzi',
+          description: 'Ticino-flavored palette, Lago di Lugano blue with terracotta accent.',
+          image_url: EMPTY_IMG,       // empty image per your request
+          asset_url: 'ciao-ragazzi.pdf',
+          sizes: [ { id: genId(), label: 'Single (3×3 in)', price: 6 }, { id: genId(), label: '3-pack', price: 15 } ],
+        },
+        {
+          title: 'Hueresiech',
+          description: 'Swiss red type, repeating border caption.',
+          image_url: EMPTY_IMG,
+          asset_url: 'hueresiech.pdf',
+          sizes: [ { id: genId(), label: 'Single (3×3 in)', price: 6 }, { id: genId(), label: '10-pack', price: 40 } ],
+        },
+        {
+          title: 'Zürischnuri (Dark)',
+          description: 'Züri Blau, circular caption repeating around the inner edge.',
+          image_url: EMPTY_IMG,
+          asset_url: 'zurischnuri-dark.pdf',
+          sizes: [ { id: genId(), label: 'Single (3×3 in)', price: 6 }, { id: genId(), label: '3-pack', price: 15 } ],
+        },
+      ].map(normalizeProduct);
+    </script>
+
+    <!-- ===== Vanilla app (no external libs) ===== -->
+    <script>
+      window.addEventListener('DOMContentLoaded', () => {
+        const $ = (sel, root=document) => root.querySelector(sel);
+        const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+        function openOverlay(el){ el.classList.add('open'); } function closeOverlay(el){ el.classList.remove('open'); }
+
+        // Header / hero
+        $('#brand').textContent = CFG.title; $('#tagline').textContent = CFG.tagline; $('#subline').textContent = CFG.subline; $('#footer').textContent = CFG.footer;
+
+        // Grid render
+        const grid = $('#grid'); grid.innerHTML = '';
+        CATALOG.forEach(p => {
+          const minPrice = Math.min(...p.sizes.map(s => Number(s.price||0)));
+          const card = document.createElement('div'); card.className='card';
+          card.innerHTML = `
+            <div class="card-media"><img src="${p.image_url}" alt="${escapeHtml(p.title)}"/><div class="grad"></div></div>
+            <div class="card-body">
+              <div class="row"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.title)}</div><div class="muted">${isFinite(minPrice)? money(minPrice): ''}</div></div>
+              <div class="muted clamp2" style="margin-top:4px">${escapeHtml(p.description)}</div>
+              <div style="margin-top:10px"><button class="btn btn-light">View</button></div>
+            </div>`;
+          card.querySelector('button').addEventListener('click', ()=> openProduct(p));
+          grid.appendChild(card);
+        });
+
+        // Modal open
+        function openProduct(p){
+          const ov = $('#productOverlay');
+          $('#productTitle').textContent = p.title;
+          $('#productImg').src = p.image_url; $('#productImg').alt = p.title;
+          $('#productDesc').textContent = p.description || '';
+          const link = $('#assetLink'); link.href = p.asset_url || '#'; link.textContent = p.asset_url ? 'Open PDF' : 'No PDF';
+          const sel = $('#sizeSelect'); sel.innerHTML = '';
+          p.sizes.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=`${s.label} — ${money(s.price)}`; sel.appendChild(o); });
+          $('#qtyInput').value = 1;
+          const updateLine = () => { const s = p.sizes.find(x=>x.id===sel.value) || p.sizes[0]; const q = Math.max(1, parseInt($('#qtyInput').value||'1',10)); $('#lineTotal').textContent = `Line total: ${money((s?.price||0)*q)}`; };
+          sel.onchange = updateLine; $('#qtyInput').oninput = updateLine; updateLine();
+          $('#addToCartBtn').onclick = ()=>{ const s = p.sizes.find(x=>x.id===sel.value) || p.sizes[0]; const q = Math.max(1, parseInt($('#qtyInput').value||'1',10)); addToCart(p, s, q); closeOverlay(ov); };
+          openOverlay(ov);
+        }
+        $('#productClose').onclick = ()=> closeOverlay($('#productOverlay'));
+
+        // Cart
+        let cart = [];
+        function addToCart(p, s, q){ const key = p.id+'|'+s.label; const i = cart.findIndex(x=>x.key===key); if(i>=0){ cart[i].qty += q; } else { cart.push({ key, product_id:p.id, title:p.title, size:s.label, price:Number(s.price||0), qty:q, image_url:p.image_url }); } renderCart(); }
+        function renderCart(){ const list=$('#cartList'); const count=$('#cartCount'); const sub=$('#cartSubtotal'); count.textContent=String(cart.length); count.classList.toggle('hidden', cart.length===0); list.innerHTML=''; if(!cart.length){ list.innerHTML='<div class="muted">Your basket is empty.</div>'; } else { cart.forEach(i=>{ const el=document.createElement('div'); el.className='item'; el.innerHTML=`
+            <img class="thumb" src="${i.image_url}" alt="${escapeHtml(i.title)}"/>
+            <div>
+              <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(i.title)}</div>
+              <div class="muted" style="font-size:12px">${escapeHtml(i.size)}</div>
+              <div class="mini-row" style="margin-top:6px">
+                <input type="number" min="1" value="${i.qty}" class="input" style="width:90px"/>
+                <div style="margin-left:auto">${money(i.price*i.qty)}</div>
+              </div>
+              <button class="btn" style="margin-top:6px">Remove</button>
+            </div>`; const q=el.querySelector('input'); q.oninput=()=>{ i.qty=Math.max(1,parseInt(q.value||'1',10)); renderTotals(); }; el.querySelector('button').onclick=()=>{ cart=cart.filter(x=>x.key!==i.key); renderCart(); }; list.appendChild(el); }); } renderTotals(); }
+        function cartSubtotal(){ return cart.reduce((s,i)=> s + Number(i.price||0)*Number(i.qty||0), 0); }
+        function renderTotals(){ $('#cartSubtotal').textContent = money(cartSubtotal()); }
+
+        $('#cartBtn').onclick = ()=>{ renderCart(); $('#cartDrawer').classList.add('open'); };
+        $('#cartClose').onclick = ()=> $('#cartDrawer').classList.remove('open');
+        $('#cartClear').onclick = ()=>{ cart=[]; renderCart(); };
+        $('#toCheckout').onclick = ()=>{ $('#cartDrawer').classList.remove('open'); openCheckout(); };
+
+        // Checkout
+        $('#checkoutClose').onclick = ()=> closeOverlay($('#checkoutOverlay'));
+        $('#cancelCheckout').onclick = ()=> closeOverlay($('#checkoutOverlay'));
+        $('#backToStep1').onclick = ()=>{ $('#step2').classList.add('hidden'); $('#step1').classList.remove('hidden'); };
+
+        function bindShippingEstimate(){
+          const regionSel = $('#fRegion');
+          const update = ()=>{
+            // summary step 1
+            const subtotal = cartSubtotal();
+            const itemsCount = cart.reduce((n,i)=> n + Number(i.qty||0), 0);
+            const ship = estimateShipping(regionSel.value, itemsCount);
+            $('#sumSubtotal').textContent = money(subtotal);
+            $('#sumShipping').textContent = money(ship);
+            $('#sumTotal').textContent = money(subtotal + ship);
+          };
+          regionSel.onchange = update; update();
+          return update;
+        }
+
+        function openCheckout(){
+          // fill summary
+          const sum=$('#orderSummary'); sum.innerHTML=''; cart.forEach(i=>{ const r=document.createElement('div'); r.className='row'; r.innerHTML=`<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(i.title)} <span class="muted">(${escapeHtml(i.size)}) × ${i.qty}</span></div><div>${money(i.price*i.qty)}</div>`; sum.appendChild(r); });
+          $('#step1').classList.remove('hidden'); $('#step2').classList.add('hidden');
+          openOverlay($('#checkoutOverlay'));
+          bindShippingEstimate();
+        }
+
+        $('#toStep2').onclick = ()=>{
+          const bip21 = CFG.btc ? `bitcoin:${CFG.btc}` : '';
+          const lightning = (CFG.lightning||'').trim();
+          const bolt11 = (CFG.bolt11||'').trim();
+          const target = lightning || bolt11 || bip21;
+          const details=$('#payDetails'); details.innerHTML='';
+          if (lightning) details.appendChild(paymentRow('Lightning address', lightning));
+          if (bolt11) { details.appendChild(paymentRow('BOLT11', bolt11.length>64? bolt11.slice(0,63)+'…': bolt11)); details.appendChild(linkRow('Open BOLT11', bolt11)); }
+          if (CFG.btc) { details.appendChild(paymentRow('BTC address', CFG.btc)); if (bip21) details.appendChild(linkRow('Open in wallet', bip21)); }
+          if (!lightning && !bolt11 && !CFG.btc){ const warn=document.createElement('div'); warn.className='note'; warn.style.color='var(--warn)'; warn.textContent='No payment details configured.'; details.appendChild(warn); }
+          // QR image or placeholder (prefer provided image; fallback to canvas if load fails)
+          const box = $('#qrBox'); box.innerHTML='';
+          if (CFG.btc_qr_img){
+            const img = new Image();
+            img.alt = 'BTC QR';
+            img.style.maxWidth='220px';
+            img.style.borderRadius='8px';
+            img.style.border='1px solid var(--line)';
+            img.style.background='#0f1115';
+            img.onload = ()=> box.appendChild(img);
+            img.onerror = ()=>{
+              const canvas = document.createElement('canvas');
+              canvas.width=180; canvas.height=180;
+              canvas.style.borderRadius='8px'; canvas.style.background='#0f1115'; canvas.style.border='1px solid var(--line)';
+              drawPlaceholderQR(canvas, target);
+              box.appendChild(canvas);
+            };
+            img.src = CFG.btc_qr_img;
+          } else {
+            const canvas = document.createElement('canvas');
+            canvas.width=180; canvas.height=180;
+            canvas.style.borderRadius='8px'; canvas.style.background='#0f1115'; canvas.style.border='1px solid var(--line)';
+            drawPlaceholderQR(canvas, target);
+            box.appendChild(canvas);
+          }
+
+          // step 2 summary + shipping again
+          const sum2=$('#orderSummary2'); sum2.innerHTML=''; cart.forEach(i=>{ const r=document.createElement('div'); r.className='row'; r.innerHTML=`<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(i.title)} <span class="muted">(${escapeHtml(i.size)}) × ${i.qty}</span></div><div>${money(i.price*i.qty)}</div>`; sum2.appendChild(r); });
+          const itemsCount = cart.reduce((n,i)=> n + Number(i.qty||0), 0);
+          const reg = $('#fRegion').value;
+          const subtotal = cartSubtotal();
+          const ship = estimateShipping(reg, itemsCount);
+          $('#sumSubtotal2').textContent = money(subtotal);
+          $('#sumShipping2').textContent = money(ship);
+          $('#sumTotal2').textContent = money(subtotal + ship);
+
+          $('#orderId').textContent = '#'+genId().slice(0,8).toUpperCase();
+          $('#step1').classList.add('hidden'); $('#step2').classList.remove('hidden');
+        };
+
+        $('#placeOrder').onclick = ()=>{
+          const order = {
+            id: (document.getElementById('orderId').textContent||'').replace('#','') || genId().slice(0,8).toUpperCase(),
+            created_at: new Date().toISOString(),
+            items: cart.map(i=>({ title:i.title, size:i.size, qty:Number(i.qty||0), price:Number(i.price||0) })),
+            subtotal: cartSubtotal(),
+            customer: {
+              name: $('#fName').value.trim(), email: $('#fEmail').value.trim(), address: $('#fAddress').value.trim(),
+              city: $('#fCity').value.trim(), postal: $('#fPostal').value.trim(), country: $('#fCountry').value.trim(), region: $('#fRegion').value
+            },
+            shipping: estimateShipping($('#fRegion').value, cart.reduce((n,i)=> n + Number(i.qty||0), 0)),
+            total: 0, // set below
+            payment: { lightning: CFG.lightning, btc: CFG.btc }
+          };
+          order.total = order.subtotal + order.shipping;
+          try{ sendOrderEmail(order, CFG.order_email); $('#emailStatus').textContent = 'Confirmation prepared in your email client and order JSON downloaded.'; $('#emailStatus').style.color = 'var(--ok)'; } catch(e){ $('#emailStatus').textContent = 'Could not open email client. Order JSON downloaded.'; $('#emailStatus').style.color = 'var(--warn)'; }
+          alert('Order placed (demo). We will confirm by email.');
+          closeOverlay($('#checkoutOverlay'));
+        };
+
+        // Tests
+        function runTests(){ const out=[]; const ok=(name,pass,msg='')=> out.push({name,pass,msg}); try{ ok('Catalog length ≥ 3', Array.isArray(CATALOG) && CATALOG.length >= 3); ok('Each product has >0 sizes', CATALOG.every(p=>Array.isArray(p.sizes) && p.sizes.length>0)); ok('DOM nodes present', !!document.getElementById('brand') && !!document.getElementById('grid')); ok('Brand matches CFG.title', document.getElementById('brand').textContent===CFG.title); ok('Tagline matches CFG.tagline', document.getElementById('tagline').textContent===CFG.tagline); ok('Footer matches CFG.footer', document.getElementById('footer').textContent===CFG.footer); const p=CATALOG[0]; const key=p.id+'|'+p.sizes[0].label; let tcart=[{key,product_id:p.id,title:p.title,size:p.sizes[0].label,price:p.sizes[0].price,qty:1,image_url:p.image_url}]; ok('Cart add/remove', (tcart.length===1 && (tcart=tcart.filter(x=>x.key!==key)).length===0)); ok('Shipping estimate returns number', typeof estimateShipping('EU',3)==='number'); ok('Payment config present', typeof CFG.lightning==='string' ); /* QR image check */ openCheckout(); document.getElementById('toStep2').onclick(); const usedImg = !!document.querySelector('#qrBox img'); ok('QR image used when configured', !CFG.btc_qr_img || usedImg, CFG.btc_qr_img ? (usedImg? '':'image missing') : 'no image configured'); /* No stray backslashes in brand/tagline/footer */ ok('Markup clean (no \\ in key nodes)', !(/\\/.test(document.getElementById('brand').innerHTML + document.getElementById('tagline').innerHTML + document.getElementById('footer').innerHTML))); } catch(e){ ok('Tests threw', false, String(e)); } const el=document.getElementById('testlog'); el.classList.remove('hidden'); el.textContent = out.map(r=>`${r.pass?'✔':'✖'} ${r.name}${r.msg? ' — '+r.msg:''}`).join('\n'); return out; }
+        runTests();
+      });
+    </script>
+  </body>
+</html>

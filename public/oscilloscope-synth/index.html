@@ -1,0 +1,2431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>WebSynth Studio</title>
+
+    <!-- Single-file, runs in any modern browser -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+      /* nicer range styling */
+      input[type="range"]{ -webkit-appearance:none; width:100%; height:18px; background:transparent; }
+      input[type="range"]::-webkit-slider-runnable-track{ height:6px; border-radius:999px; background:rgba(148,163,184,.25); }
+      input[type="range"]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:999px; margin-top:-4px; background:rgba(167,243,208,.95); box-shadow:0 0 0 4px rgba(16,185,129,.15); }
+      input[type="range"]::-moz-range-track{ height:6px; border-radius:999px; background:rgba(148,163,184,.25); }
+      input[type="range"]::-moz-range-thumb{ width:14px; height:14px; border-radius:999px; background:rgba(167,243,208,.95); border:none; box-shadow:0 0 0 4px rgba(16,185,129,.15); }
+      canvas{ image-rendering: auto; }
+      .glass{ background: linear-gradient(180deg, rgba(15,23,42,.55), rgba(2,6,23,.35)); backdrop-filter: blur(10px); }
+      .gridbg{
+        background-image:
+          radial-gradient(circle at 1px 1px, rgba(148,163,184,.10) 1px, transparent 0);
+        background-size: 18px 18px;
+      }
+      .kbdKey{
+        user-select:none;
+        -webkit-user-select:none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .kbdKey:active{ transform: translateY(1px); }
+    </style>
+  </head>
+
+  <body class="bg-slate-950 text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="env,react">
+/* @jsx React.createElement */
+/* @jsxFrag React.Fragment */
+
+const { useEffect, useMemo, useRef, useState } = React;
+
+/* ----------------------------- UI primitives ----------------------------- */
+
+function clsx(...xs){ return xs.filter(Boolean).join(" "); }
+
+function Pill({ children, tone="slate" }){
+  const tones = {
+    slate: "bg-slate-800/60 border-slate-700/60 text-slate-200",
+    emerald:"bg-emerald-900/30 border-emerald-700/50 text-emerald-200",
+    amber:  "bg-amber-900/30 border-amber-700/50 text-amber-200",
+    rose:   "bg-rose-900/30 border-rose-700/50 text-rose-200",
+  };
+  return <span className={clsx("inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border", tones[tone] || tones.slate)}>{children}</span>;
+}
+
+function Button({ children, onClick, tone="slate", size="sm", disabled=false, title }){
+  const base = "inline-flex items-center justify-center gap-2 rounded-xl border transition active:translate-y-[1px] disabled:opacity-50 disabled:pointer-events-none";
+  const sizes = {
+    sm: "px-3 py-1.5 text-xs",
+    md: "px-3.5 py-2 text-sm",
+  };
+  const tones = {
+    slate: "bg-slate-900/60 border-slate-700/60 hover:border-slate-500/60 hover:bg-slate-900/80",
+    emerald:"bg-emerald-900/40 border-emerald-700/60 hover:border-emerald-500/70 hover:bg-emerald-900/55",
+    rose:   "bg-rose-900/35 border-rose-700/60 hover:border-rose-500/70 hover:bg-rose-900/50",
+  };
+  return (
+    <button title={title} disabled={disabled} onClick={onClick} className={clsx(base, sizes[size]||sizes.sm, tones[tone]||tones.slate)}>
+      {children}
+    </button>
+  );
+}
+
+function Card({ title, right, children, className }){
+  return (
+    <div className={clsx("rounded-2xl border border-slate-800/70 shadow-[0_0_40px_rgba(0,0,0,0.35)] overflow-hidden glass", className)}>
+      {(title || right) && (
+        <div className="px-3 py-2 border-b border-slate-800/60 flex items-center justify-between">
+          <div className="text-xs tracking-wide text-slate-200">{title}</div>
+          <div className="flex items-center gap-2">{right}</div>
+        </div>
+      )}
+      <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
+function Section({ title, hint, children }){
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[11px] font-semibold tracking-[0.2em] uppercase text-slate-300">{title}</div>
+        {hint ? <div className="text-[11px] text-slate-400">{hint}</div> : null}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function Slider({ label, min, max, step=0.01, value, onChange, format=(v)=>String(v), disabled=false }){
+  return (
+    <div className={disabled ? "opacity-50 pointer-events-none" : ""}>
+      <div className="flex items-center justify-between text-[12px] text-slate-300">
+        <span>{label}</span>
+        <span className="tabular-nums text-slate-200">{format(value)}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e)=>onChange(parseFloat(e.target.value))}
+      />
+    </div>
+  );
+}
+
+function Select({ label, value, onChange, options, disabled=false }){
+  return (
+    <div className={disabled ? "opacity-50 pointer-events-none" : ""}>
+      <div className="text-[12px] text-slate-300 mb-1">{label}</div>
+      <select value={value} onChange={(e)=>onChange(e.target.value)}
+        className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Toggle({ label, checked, onChange, disabled=false }){
+  return (
+    <label className={clsx("flex items-center justify-between gap-3 text-[12px] text-slate-300", disabled && "opacity-50 pointer-events-none")}>
+      <span>{label}</span>
+      <button
+        onClick={()=>onChange(!checked)}
+        className={clsx(
+          "relative w-11 h-6 rounded-full border transition",
+          checked ? "bg-emerald-700/40 border-emerald-600/60" : "bg-slate-900/60 border-slate-700/60"
+        )}
+        type="button"
+      >
+        <span className={clsx("absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition",
+          checked ? "left-6 bg-emerald-200" : "left-1 bg-slate-300"
+        )}/>
+      </button>
+    </label>
+  );
+}
+
+function Divider(){ return <div className="h-px bg-slate-800/70" />; }
+
+/* ----------------------------- Music helpers ----------------------------- */
+
+function midiToHz(m){ return 440 * Math.pow(2, (m - 69) / 12); }
+function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+function dbFromGain(g){ return 20 * Math.log10(Math.max(1e-6, g)); }
+
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+function midiToName(m){
+  const n = NOTE_NAMES[(m%12+12)%12];
+  const o = Math.floor(m/12)-1;
+  return `${n}${o}`;
+}
+
+/* ------------------------- Rings-style resonator -------------------------- */
+/* Educational resonator for timbral exploration; not a code port. */
+
+const RINGS_WORKLET_SRC = `
+class RingsResonator extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'frequency', defaultValue: 220, minValue: 10, maxValue: 4000, automationRate: 'k-rate' },
+      { name: 'structure', defaultValue: 0.25, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'brightness', defaultValue: 0.6, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'damping', defaultValue: 0.7, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'position', defaultValue: 0.3, minValue: 0, maxValue: 1, automationRate: 'k-rate' }
+    ];
+  }
+  constructor() {
+    super();
+    this.sr = sampleRate;
+    this.M = 12;
+    this.s1 = new Float32Array(this.M);
+    this.s2 = new Float32Array(this.M);
+    this._strike = 0;
+    this._strikeAmp = 1.0;
+    this.port.onmessage = (e) => {
+      if (e.data && e.data.type === 'strike') {
+        this._strike = Math.max(this._strike, Math.floor(this.sr * 0.012));
+        this._strikeAmp = e.data.amp || 1.0;
+      }
+    };
+  }
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    const out = outputs[0];
+    const outL = out[0];
+    const outR = out[1] || out[0];
+    const N = outL.length;
+    const f0 = Math.min(4000, Math.max(10, parameters.frequency[0]));
+    const structure = parameters.structure[0];
+    const brightness = parameters.brightness[0];
+    const damping = parameters.damping[0];
+    const position = parameters.position[0];
+
+    const stiffness = structure * 0.35;
+    const decaySec = 0.05 + (1.0 - damping) * 4.0;
+    const rBase = Math.exp(-1.0 / (decaySec * this.sr));
+    const alpha = 0.5 + (1.0 - brightness) * 3.0;
+
+    if (!this._w || this._w_f0 !== f0 || this._w_stiff !== stiffness || this._w_alpha !== alpha || this._w_pos !== position || this._w_rbase !== rBase) {
+      this._w = new Float32Array(this.M);
+      this._a1 = new Float32Array(this.M);
+      this._r2 = new Float32Array(this.M);
+      this._amp = new Float32Array(this.M);
+      for (let m = 0; m < this.M; m++) {
+        const n = m + 1;
+        const ratio = n * Math.sqrt(1.0 + stiffness * n * n);
+        const w = 2 * Math.PI * (f0 * ratio) / this.sr;
+        const r = Math.pow(rBase, 1 + m * 0.15);
+        this._w[m] = w;
+        this._a1[m] = 2.0 * r * Math.cos(w);
+        this._r2[m] = r * r;
+        const posWeight = Math.pow(Math.sin(Math.PI * n * Math.min(0.999, Math.max(0.001, position))), 2.0);
+        this._amp[m] = posWeight / Math.pow(n, alpha);
+      }
+      this._w_f0 = f0; this._w_stiff = stiffness; this._w_alpha = alpha; this._w_pos = position; this._w_rbase = rBase;
+    }
+
+    for (let i = 0; i < N; i++) {
+      let x = 0.0;
+      if (input.length > 0 && input[0].length > 0) x = input[0][i] || 0.0;
+
+      if (this._strike > 0) {
+        const env = this._strike / (this.sr * 0.012);
+        x += (Math.random() * 2 - 1) * this._strikeAmp * env * 0.85;
+        this._strike--;
+      }
+
+      let yL = 0.0, yR = 0.0;
+      const a0 = 0.0025;
+      for (let m = 0; m < this.M; m++) {
+        const yk = a0 * x + this._a1[m] * this.s1[m] - this._r2[m] * this.s2[m];
+        this.s2[m] = this.s1[m];
+        this.s1[m] = yk;
+        if ((m & 1) === 0) yL += yk * this._amp[m]; else yR += yk * this._amp[m];
+      }
+      outL[i] = Math.tanh(yL * 2.5);
+      outR[i] = Math.tanh(yR * 2.5);
+    }
+    return true;
+  }
+}
+registerProcessor('rings-resonator', RingsResonator);
+`;
+
+async function ensureRingsWorklet(ctx) {
+  // AudioWorklet modules loaded from blob: URLs are often blocked when running from file:// (origin is null).
+  // In that case we skip worklet loading and use the native-node fallback resonator instead.
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+      ctx._ringsModuleLoaded = false;
+      return false;
+    }
+  } catch(e) {}
+  if (ctx.audioWorklet && !ctx._ringsModuleLoaded) {
+    const blob = new Blob([RINGS_WORKLET_SRC], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    try {
+      await ctx.audioWorklet.addModule(url);
+      ctx._ringsModuleLoaded = true;
+    } catch (err) {
+      console.warn('Rings worklet failed to load; continuing without Rings.', err);
+      ctx._ringsModuleLoaded = false;
+    }
+  }
+  return !!ctx._ringsModuleLoaded;
+}
+
+
+/* ------------------ Native-node fallback "Rings" resonator ------------------
+   This is a lightweight modal resonator built from stock WebAudio nodes.
+   It intentionally avoids AudioWorklet so it runs even from file:// origins.
+---------------------------------------------------------------------------- */
+
+function createModalResonator(ctx, opts={}) {
+  const M = Math.max(4, Math.min(24, opts.modes || 12));
+
+  const input = ctx.createGain();
+  const sum = ctx.createGain();
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass";
+  const hp = ctx.createBiquadFilter(); hp.type = "highpass";
+  hp.frequency.value = 20;
+
+  // Slight stereo widening from mono resonator output
+  const pan = ctx.createStereoPanner(); pan.pan.value = 0;
+  const output = ctx.createGain();
+
+  // Feedback loop (with delay to avoid direct-cycle restrictions)
+  const fbGain = ctx.createGain(); fbGain.gain.value = 0.18;
+  const fbDelay = ctx.createDelay(0.05); fbDelay.delayTime.value = 0.006;
+
+  // Modal filter bank
+  const modes = [];
+  for (let i=0; i<M; i++){
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 220 * (i+1);
+    bp.Q.value = 10;
+
+    const g = ctx.createGain(); g.gain.value = 0.08 / (i+1);
+
+    input.connect(bp);
+    bp.connect(g);
+    g.connect(sum);
+
+    modes.push({ bp, g });
+  }
+
+  // Sum -> damping/brightness -> stereo -> output
+  sum.connect(hp);
+  hp.connect(lp);
+
+  // Tap for feedback before panner to keep feedback mono-ish
+  lp.connect(fbGain);
+  fbGain.connect(fbDelay);
+  fbDelay.connect(input);
+
+  lp.connect(pan);
+  pan.connect(output);
+
+  const state = {
+    frequency: 220,
+    structure: 0.25,
+    brightness: 0.7,
+    damping: 0.7,
+    position: 0.3
+  };
+
+  const clamp01 = (x)=>Math.min(1, Math.max(0, x));
+
+  const computeRatios = (structure) => {
+    // Morph harmonic series -> gently inharmonic series
+    const s = clamp01(structure);
+    const ratios = new Array(M);
+    for (let i=0;i<M;i++){
+      const n = i + 1;
+      const harm = n;
+      // inharm: exponent slightly > 1 gives spread like plates/strings w/ stiffness
+      const inh  = Math.pow(n, 1.12);
+      ratios[i] = harm * (1 - s) + inh * s;
+    }
+    return ratios;
+  };
+
+  const setParams = (p={}, t=ctx.currentTime) => {
+    if (p.frequency != null) state.frequency = Math.max(10, Math.min(4000, p.frequency));
+    if (p.structure != null) state.structure = clamp01(p.structure);
+    if (p.brightness != null) state.brightness = clamp01(p.brightness);
+    if (p.damping != null) state.damping = clamp01(p.damping);
+    if (p.position != null) state.position = clamp01(p.position);
+
+    const ratios = computeRatios(state.structure);
+
+    // Damping: 0 => long ring (high Q), 1 => short (low Q)
+    const Q = (40 * (1 - state.damping)) + (3 * state.damping);
+
+    // Brightness sets spectral tilt and lowpass cutoff
+    const cutoff = (1200 + state.brightness * 10800) * (1 - 0.6 * state.damping);
+    lp.frequency.setTargetAtTime(Math.max(200, Math.min(14000, cutoff)), t, 0.03);
+
+    // Feedback controls overall sustain (kept conservative to avoid runaway)
+    const fb = 0.05 + (1 - state.damping) * 0.28;
+    fbGain.gain.setTargetAtTime(fb, t, 0.03);
+
+    const pos = Math.min(0.99, Math.max(0.01, state.position));
+
+    for (let i=0;i<M;i++){
+      const f = state.frequency * ratios[i];
+      const safeF = Math.max(20, Math.min(ctx.sampleRate/2 - 200, f));
+      modes[i].bp.frequency.setTargetAtTime(safeF, t, 0.02);
+      modes[i].bp.Q.setTargetAtTime(Q, t, 0.04);
+
+      // Position weighting: |sin(k*pi*pos)| emphasizes different modes
+      const k = i + 1;
+      const wPos = Math.abs(Math.sin(k * Math.PI * pos));
+      // Brightness tilt: make higher modes louder when bright
+      const tilt = Math.pow((k / M), 0.4 + 1.2 * state.brightness);
+      const base = 0.09 * (1.0 / (k ** 0.35));
+      modes[i].g.gain.setTargetAtTime(base * (0.15 + 0.85 * wPos) * (0.35 + 0.65 * tilt), t, 0.03);
+    }
+  };
+
+  const strike = (amp=1.0, t=ctx.currentTime) => {
+    const a = Math.max(0, Math.min(1.5, amp));
+    const dur = 0.03;
+
+    // Noise burst buffer
+    const n = Math.max(64, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i=0;i<n;i++) ch[i] = (Math.random()*2 - 1);
+
+    const src = ctx.createBufferSource(); src.buffer = buf;
+
+    const sh = ctx.createBiquadFilter();
+    sh.type = "highpass";
+    sh.frequency.value = 200 + 2000 * state.brightness;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.8 * a, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    src.connect(sh);
+    sh.connect(g);
+    g.connect(input);
+
+    src.start(t);
+    src.stop(t + dur + 0.01);
+  };
+
+  // initialize defaults
+  setParams({}, ctx.currentTime);
+
+  return { input, output, setParams, strike };
+}
+
+
+/* ---------------------------- FX + utilities ----------------------------- */
+
+function makeWaveshaperCurve(amount=0.5){
+  // smooth-ish drive curve
+  const k = 1 + amount * 50;
+  const n = 2048;
+  const curve = new Float32Array(n);
+  for (let i=0;i<n;i++){
+    const x = (i/(n-1))*2 - 1;
+    curve[i] = Math.tanh(k * x) / Math.tanh(k);
+  }
+  return curve;
+}
+
+function makeImpulseResponse(ctx, seconds=1.2, decay=2.0){
+  const sr = ctx.sampleRate;
+  const length = Math.max(1, Math.floor(seconds * sr));
+  const irL = ctx.createBuffer(2, length, sr);
+  for (let ch=0; ch<2; ch++){
+    const data = irL.getChannelData(ch);
+    for (let i=0; i<length; i++){
+      const t = i / length;
+      const env = Math.pow(1 - t, decay);
+      data[i] = (Math.random()*2 - 1) * env;
+    }
+  }
+  return irL;
+}
+
+/* ----------------------------- Audio engine ------------------------------ */
+
+function useSynthEngine(){
+  const ref = useRef(null);
+  if (!ref.current) ref.current = { started:false, ctx:null, nodes:null, midi:null };
+
+  const start = async () => {
+    if (ref.current.started) return ref.current;
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext({ latencyHint: "interactive" });
+// Attempt to unlock audio immediately (important on iOS/Safari and some mobile browsers)
+try { if (ctx.state !== 'running') ctx.resume(); } catch(e) {}
+try {
+  const _o = ctx.createOscillator();
+  const _g = ctx.createGain(); _g.gain.value = 0.0;
+  _o.connect(_g); _g.connect(ctx.destination);
+  _o.start();
+  _o.stop(ctx.currentTime + 0.02);
+} catch(e) {}
+
+    /* Core voice */
+    const master = ctx.createGain(); master.gain.value = 0.55;
+
+    // final safety: soft limiter
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -10;
+    comp.knee.value = 18;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.12;
+
+    comp.connect(master);
+    master.connect(ctx.destination);
+
+    // record bus
+    const recordDest = ctx.createMediaStreamDestination();
+    master.connect(recordDest);
+
+    const mix = ctx.createGain(); mix.gain.value = 1.0;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 12000;
+    filter.Q.value = 0.8;
+
+    const vcaEnv = ctx.createGain(); vcaEnv.gain.value = 0;
+    const vcaAM  = ctx.createGain(); vcaAM.gain.value = 1;
+
+    const panner = ctx.createStereoPanner(); panner.pan.value = 0;
+
+    /* Analysis taps */
+    const preScope = ctx.createAnalyser();
+    preScope.fftSize = 2048; preScope.minDecibels = -100; preScope.maxDecibels = -20; preScope.smoothingTimeConstant = 0.06;
+    const preFFT = ctx.createAnalyser();
+    preFFT.fftSize = 4096; preFFT.minDecibels = -100; preFFT.maxDecibels = 0; preFFT.smoothingTimeConstant = 0.6;
+
+    const postScope = ctx.createAnalyser();
+    postScope.fftSize = 2048; postScope.minDecibels = -100; postScope.maxDecibels = -20; postScope.smoothingTimeConstant = 0.06;
+    const postFFT = ctx.createAnalyser();
+    postFFT.fftSize = 4096; postFFT.minDecibels = -100; postFFT.maxDecibels = 0; postFFT.smoothingTimeConstant = 0.6;
+
+    /* FX chain */
+    const drivePre = ctx.createGain(); drivePre.gain.value = 1.0;
+    const shaper = ctx.createWaveShaper(); shaper.curve = makeWaveshaperCurve(0.0); shaper.oversample = "2x";
+    const drivePost = ctx.createGain(); drivePost.gain.value = 1.0;
+
+    const delay = ctx.createDelay(2.0); delay.delayTime.value = 0.28;
+    const delayFB = ctx.createGain(); delayFB.gain.value = 0.25;
+    const delayWet = ctx.createGain(); delayWet.gain.value = 0.0;
+    const delayDry = ctx.createGain(); delayDry.gain.value = 1.0;
+
+    delay.connect(delayFB).connect(delay);
+    const delaySum = ctx.createGain(); delaySum.gain.value = 1.0;
+
+    const convolver = ctx.createConvolver(); convolver.buffer = makeImpulseResponse(ctx, 1.1, 2.2);
+    const revWet = ctx.createGain(); revWet.gain.value = 0.0;
+    const revDry = ctx.createGain(); revDry.gain.value = 1.0;
+    const revSum = ctx.createGain(); revSum.gain.value = 1.0;
+
+    // wire FX: preTap -> drive -> (dry + delay) -> (dry + verb) -> postTap -> comp
+    const sumBus = ctx.createGain(); sumBus.gain.value = 1.0;
+
+    mix.connect(filter);
+    filter.connect(vcaEnv);
+    vcaEnv.connect(vcaAM);
+    vcaAM.connect(panner);
+    panner.connect(sumBus);
+
+    sumBus.connect(preScope);
+    sumBus.connect(preFFT);
+
+    sumBus.connect(drivePre);
+    drivePre.connect(shaper);
+    shaper.connect(drivePost);
+
+    drivePost.connect(delayDry);
+    drivePost.connect(delay);
+    delay.connect(delayWet);
+
+    delayDry.connect(delaySum);
+    delayWet.connect(delaySum);
+
+    delaySum.connect(revDry);
+    delaySum.connect(convolver);
+    convolver.connect(revWet);
+
+    revDry.connect(revSum);
+    revWet.connect(revSum);
+
+    revSum.connect(postScope);
+    revSum.connect(postFFT);
+    revSum.connect(comp);
+
+    /* Oscillators */
+    const osc1 = ctx.createOscillator(); osc1.type = "sawtooth";
+    const osc2 = ctx.createOscillator(); osc2.type = "square";
+    const sub  = ctx.createOscillator(); sub.type = "square";
+
+    const osc1Gain = ctx.createGain(); osc1Gain.gain.value = 0.8;
+    const osc2Gain = ctx.createGain(); osc2Gain.gain.value = 0.0;
+    const subGain  = ctx.createGain(); subGain.gain.value = 0.0;
+
+    osc1.connect(osc1Gain).connect(mix);
+    osc2.connect(osc2Gain).connect(mix);
+    sub.connect(subGain).connect(mix);
+
+    // Noise (looping buffer)
+    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i=0;i<noiseData.length;i++) noiseData[i] = (Math.random()*2-1);
+    const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+    const noiseHP = ctx.createBiquadFilter(); noiseHP.type="highpass"; noiseHP.frequency.value = 80;
+    const noiseGain = ctx.createGain(); noiseGain.gain.value = 0.0;
+    noise.connect(noiseHP).connect(noiseGain).connect(mix);
+
+    /* Modulation: audio-rate mod osc + LFO + envelope control signal */
+    const modOsc = ctx.createOscillator(); modOsc.type = "sine"; modOsc.frequency.value = 110;
+    const fm1Gain = ctx.createGain(); fm1Gain.gain.value = 0;
+    const fm2Gain = ctx.createGain(); fm2Gain.gain.value = 0;
+    modOsc.connect(fm1Gain).connect(osc1.frequency);
+    modOsc.connect(fm2Gain).connect(osc2.frequency);
+
+    const amDepth = ctx.createGain(); amDepth.gain.value = 0;
+    const amOffset = ctx.createConstantSource(); amOffset.offset.value = 1.0;
+    modOsc.connect(amDepth).connect(vcaAM.gain);
+    amOffset.connect(vcaAM.gain);
+
+    const lfo = ctx.createOscillator(); lfo.type = "sine"; lfo.frequency.value = 4;
+    const lfoToVCA = ctx.createGain(); lfoToVCA.gain.value = 0;
+    const lfoToCutoff = ctx.createGain(); lfoToCutoff.gain.value = 0;
+    const lfoToPitch = ctx.createGain(); lfoToPitch.gain.value = 0;
+    const lfoToPan = ctx.createGain(); lfoToPan.gain.value = 0;
+    lfo.connect(lfoToVCA).connect(vcaAM.gain);
+    lfo.connect(lfoToCutoff).connect(filter.frequency);
+    lfo.connect(lfoToPitch).connect(osc1.frequency);
+    lfo.connect(lfoToPitch).connect(osc2.frequency);
+    lfo.connect(lfoToPan).connect(panner.pan);
+
+    const envSrc = ctx.createConstantSource(); envSrc.offset.value = 1.0;
+    const envCtl = ctx.createGain(); envCtl.gain.value = 0.0;
+    envSrc.connect(envCtl);
+
+    const envToCutoff = ctx.createGain(); envToCutoff.gain.value = 0;
+    const envToPitch  = ctx.createGain(); envToPitch.gain.value = 0;
+    envCtl.connect(envToCutoff).connect(filter.frequency);
+    envCtl.connect(envToPitch).connect(osc1.frequency);
+    envCtl.connect(envToPitch).connect(osc2.frequency);
+    /* Rings / Modal resonator (worklet when served over http(s), fallback when file://) */
+    const ringsIn = ctx.createGain();
+    const ringsWetGain = ctx.createGain(); ringsWetGain.gain.value = 0.0;
+    const ringsEnvGain = ctx.createGain(); ringsEnvGain.gain.value = 1.0; // For ADSR control
+    const ringsFilter = ctx.createBiquadFilter(); // Optional filter for Rings
+    ringsFilter.type = "lowpass";
+    ringsFilter.frequency.value = 20000;
+    ringsFilter.Q.value = 0.7;
+
+    let rings = null;           // AudioWorkletNode or fallback object
+    let ringsType = "none";     // "worklet" | "modal" | "none"
+    let ringsSetParamsAt = (p={}, t=ctx.currentTime)=>{};
+    let ringsSetFrequencyAt = (hz, t=ctx.currentTime)=>{};
+    let ringsStrikeAt = (amp=1.0, t=ctx.currentTime)=>{};
+
+    // Try worklet first (works best when not running from file://)
+    if (ctx.audioWorklet) {
+      const ok = await ensureRingsWorklet(ctx);
+      if (ok && ctx._ringsModuleLoaded) {
+        rings = new AudioWorkletNode(ctx, "rings-resonator", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
+        ringsType = "worklet";
+        ringsIn.connect(rings);
+        rings.connect(ringsWetGain);
+
+        ringsSetParamsAt = (p={}, t=ctx.currentTime) => {
+          const prm = rings.parameters;
+          if (p.frequency != null) prm.get("frequency").setTargetAtTime(p.frequency, t, 0.02);
+          if (p.structure != null) prm.get("structure").setValueAtTime(p.structure, t);
+          if (p.brightness != null) prm.get("brightness").setValueAtTime(p.brightness, t);
+          if (p.damping != null) prm.get("damping").setValueAtTime(p.damping, t);
+          if (p.position != null) prm.get("position").setValueAtTime(p.position, t);
+        };
+        ringsSetFrequencyAt = (hz, t=ctx.currentTime) => ringsSetParamsAt({ frequency: hz }, t);
+        ringsStrikeAt = (amp=1.0) => { try { rings.port.postMessage({ type: "strike", amp }); } catch(e) {} };
+      }
+    }
+
+    // Fallback: modal resonator built from native nodes (works on file://)
+    if (!rings) {
+      rings = createModalResonator(ctx, { modes: 12 });
+      ringsType = "modal";
+      ringsIn.connect(rings.input);
+      rings.output.connect(ringsWetGain);
+
+      ringsSetParamsAt = (p={}, t=ctx.currentTime) => rings.setParams(p, t);
+      ringsSetFrequencyAt = (hz, t=ctx.currentTime) => rings.setParams({ frequency: hz }, t);
+      ringsStrikeAt = (amp=1.0, t=ctx.currentTime) => rings.strike(amp, t);
+    }
+
+    // Rings signal path: ringsWetGain -> ringsFilter -> ringsEnvGain -> sumBus
+    ringsWetGain.connect(ringsFilter);
+    ringsFilter.connect(ringsEnvGain);
+    ringsEnvGain.connect(sumBus);
+
+    // Connect envelope to Rings envelope gain (for envelope following)
+    const ringsEnvDepth = ctx.createGain(); ringsEnvDepth.gain.value = 0; // 0 = no env, 1 = full env
+    envCtl.connect(ringsEnvDepth);
+
+    // LFO connections to Rings filter
+    const lfoToRingsCutoff = ctx.createGain(); lfoToRingsCutoff.gain.value = 0;
+    lfo.connect(lfoToRingsCutoff).connect(ringsFilter.frequency);
+
+    // Env to Rings filter cutoff
+    const envToRingsCutoff = ctx.createGain(); envToRingsCutoff.gain.value = 0;
+    envCtl.connect(envToRingsCutoff).connect(ringsFilter.frequency);
+
+
+    /* Mic input (optional, disconnected until user enables) */
+    const micGain = ctx.createGain(); micGain.gain.value = 0.0;
+    // (connect later once we have a MediaStream source)
+    micGain.connect(mix);
+
+    /* Start sources */
+    osc1.start(); osc2.start(); sub.start();
+    noise.start();
+    modOsc.start(); lfo.start();
+    amOffset.start(); envSrc.start();
+
+    /* Envelope + note control */
+    const env = { enabled:true, a:0.01, d:0.08, s:0.7, r:0.18 };
+    let lastMidi = 69;
+    let held = false;
+    let glide = 0.03; // seconds, time-constant-ish
+    let velocityToAmp = 0.9;
+
+    // Pitch parameters are set from the UI; note scheduling uses these values
+    const pitchParams = {
+      transpose: 0,          // semitones
+      voiceDetuneCents: 0,   // cents
+      osc1Oct: 0,
+      osc1Fine: 0,           // cents
+      osc2Lock: true,
+      osc2Ratio: 2.0,        // numeric multiplier
+      osc2Detune: 0,         // cents
+      osc2Fine: 0            // cents
+    };
+    const setPitchParams = (p={}) => { Object.assign(pitchParams, p); };
+
+
+    const safeCancelHold = (param, t) => {
+      if (typeof param.cancelAndHoldAtTime === "function") { param.cancelAndHoldAtTime(t); return; }
+      param.cancelScheduledValues(t);
+      param.setValueAtTime(param.value, t);
+    };
+
+    const setPitchAt = (midi, t) => {
+      const tc = Math.max(0.001, glide);
+      const midiT = midi + (pitchParams.transpose || 0);
+      const baseHz = midiToHz(midiT);
+      const globalDet = Math.pow(2, (pitchParams.voiceDetuneCents || 0) / 1200);
+
+      const hz1 = baseHz
+        * Math.pow(2, (pitchParams.osc1Oct || 0))
+        * Math.pow(2, (pitchParams.osc1Fine || 0) / 1200)
+        * globalDet;
+
+      const hzSub = Math.max(1, hz1 / 2);
+
+      let hz2 = baseHz
+        * Math.pow(2, (pitchParams.osc2Fine || 0) / 1200)
+        * globalDet;
+
+      if (pitchParams.osc2Lock) {
+        const ratio = pitchParams.osc2Ratio || 1;
+        hz2 = hz1
+          * ratio
+          * Math.pow(2, (pitchParams.osc2Detune || 0) / 1200)
+          * Math.pow(2, (pitchParams.osc2Fine || 0) / 1200);
+      }
+
+      osc1.frequency.setTargetAtTime(Math.max(1, hz1), t, tc);
+      osc2.frequency.setTargetAtTime(Math.max(1, hz2), t, tc);
+      sub.frequency.setTargetAtTime(hzSub, t, tc);
+      lastMidi = midi;
+    };
+
+    const noteOnAt = (midi, t, vel=1.0) => {
+      held = true;
+      setPitchAt(midi, t);
+      if (!env.enabled) {
+        vcaEnv.gain.setTargetAtTime(1, t, 0.01);
+        envCtl.gain.setTargetAtTime(1, t, 0.01);
+        // Also set Rings envelope if enabled
+        if (ref.current.nodes?._ringsEnvEnabled) {
+          ringsEnvGain.gain.setTargetAtTime(1, t, 0.01);
+        }
+        return;
+      }
+      const amp = clamp(vel, 0, 1) * velocityToAmp;
+      safeCancelHold(vcaEnv.gain, t);
+      safeCancelHold(envCtl.gain, t);
+      vcaEnv.gain.setValueAtTime(0, t);
+      envCtl.gain.setValueAtTime(0, t);
+      vcaEnv.gain.linearRampToValueAtTime(amp, t + Math.max(0.001, env.a));
+      envCtl.gain.linearRampToValueAtTime(1, t + Math.max(0.001, env.a));
+      vcaEnv.gain.linearRampToValueAtTime(amp * env.s, t + Math.max(0.001, env.a) + Math.max(0.0, env.d));
+      envCtl.gain.linearRampToValueAtTime(env.s, t + Math.max(0.001, env.a) + Math.max(0.0, env.d));
+
+      // Apply envelope to Rings if enabled
+      if (ref.current.nodes?._ringsEnvEnabled) {
+        safeCancelHold(ringsEnvGain.gain, t);
+        ringsEnvGain.gain.setValueAtTime(0, t);
+        ringsEnvGain.gain.linearRampToValueAtTime(amp, t + Math.max(0.001, env.a));
+        ringsEnvGain.gain.linearRampToValueAtTime(amp * env.s, t + Math.max(0.001, env.a) + Math.max(0.0, env.d));
+      }
+    };
+
+    const noteOffAt = (t) => {
+      held = false;
+      if (!env.enabled) return;
+      safeCancelHold(vcaEnv.gain, t);
+      safeCancelHold(envCtl.gain, t);
+      const v = vcaEnv.gain.value;
+      vcaEnv.gain.setValueAtTime(v, t);
+      envCtl.gain.setValueAtTime(envCtl.gain.value, t);
+      vcaEnv.gain.linearRampToValueAtTime(0.0, t + Math.max(0.001, env.r));
+      envCtl.gain.linearRampToValueAtTime(0.0, t + Math.max(0.001, env.r));
+
+      // Apply envelope release to Rings if enabled
+      if (ref.current.nodes?._ringsEnvEnabled) {
+        safeCancelHold(ringsEnvGain.gain, t);
+        const rv = ringsEnvGain.gain.value;
+        ringsEnvGain.gain.setValueAtTime(rv, t);
+        ringsEnvGain.gain.linearRampToValueAtTime(0.0, t + Math.max(0.001, env.r));
+      }
+    };
+
+    const strikeRings = (amp=1.0) => {
+      try { ringsStrikeAt(amp, ctx.currentTime); } catch(e) {}
+    };
+
+    ref.current.started = true;
+    ref.current.ctx = ctx;
+    ref.current.nodes = {
+      ctx,
+      master, comp, recordDest,
+      mix, filter, vcaEnv, vcaAM, panner, sumBus,
+      preScope, preFFT, postScope, postFFT,
+      drivePre, shaper, drivePost,
+      delay, delayFB, delayWet, delayDry, delaySum,
+      convolver, revWet, revDry, revSum,
+      osc1, osc2, sub, osc1Gain, osc2Gain, subGain,
+      noiseGain, noiseHP,
+      modOsc, fm1Gain, fm2Gain, amDepth, amOffset,
+      lfo, lfoToVCA, lfoToCutoff, lfoToPitch, lfoToPan,
+      env, envCtl, envToCutoff, envToPitch,
+      rings, ringsType, ringsIn, ringsWetGain, ringsEnvGain, ringsFilter, ringsEnvDepth, lfoToRingsCutoff, envToRingsCutoff, ringsSetParamsAt, ringsSetFrequencyAt, strikeRings,
+      micGain,
+      setPitchAt, noteOnAt, noteOffAt,
+      state: { lastMidi: ()=>lastMidi, held: ()=>held, setGlide:(x)=>{glide=x;}, setVelToAmp:(x)=>{velocityToAmp=x;}, setPitchParams:(p)=>{setPitchParams(p);} }
+    };
+
+    try { if (ctx.state !== 'running') ctx.resume(); } catch(e) {}
+    return ref.current;
+  };
+
+  return { engine: ref.current, start };
+}
+
+/* ---------------------------- Visual renderers --------------------------- */
+
+function useTimeScope(analyserRef, canvasEl, cfg) {
+  const rafRef = useRef(0);
+  useEffect(() => {
+    const canvas = canvasEl; if (!canvas) return;
+    const ctx2d = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+
+    function resize(){
+      const r = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(r.width*dpr);
+      canvas.height = Math.floor(r.height*dpr);
+      ctx2d.setTransform(dpr,0,0,dpr,0,0);
+    }
+    resize();
+    const ro = new ResizeObserver(resize); ro.observe(canvas);
+
+    let lastFrame = null;
+    const buf = new Float32Array(2048);
+
+    const draw = () => {
+      const an = analyserRef.current;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+
+      ctx2d.clearRect(0,0,w,h);
+      const g = ctx2d.createLinearGradient(0,0,0,h);
+      g.addColorStop(0,"rgba(2,6,23,0.95)");
+      g.addColorStop(1,"rgba(15,23,42,0.65)");
+      ctx2d.fillStyle = g; ctx2d.fillRect(0,0,w,h);
+
+      // grid
+      ctx2d.globalAlpha = 0.5;
+      ctx2d.strokeStyle = "rgba(148,163,184,0.12)";
+      ctx2d.lineWidth = 1;
+      const gx = 8, gy = 6;
+      for(let i=1;i<gx;i++){ const x = (w/gx)*i; ctx2d.beginPath(); ctx2d.moveTo(x,0); ctx2d.lineTo(x,h); ctx2d.stroke(); }
+      for(let i=1;i<gy;i++){ const y = (h/gy)*i; ctx2d.beginPath(); ctx2d.moveTo(0,y); ctx2d.lineTo(w,y); ctx2d.stroke(); }
+      ctx2d.globalAlpha = 1;
+
+      if(!an){ rafRef.current=requestAnimationFrame(draw); return; }
+
+      an.getFloatTimeDomainData(buf);
+      if(cfg?.ac){
+        let m=0; for(let i=0;i<buf.length;i++) m += buf[i]; m /= buf.length;
+        for(let i=0;i<buf.length;i++) buf[i] -= m;
+      }
+
+      const gain = cfg?.gain ?? 2.0;
+      const lw = cfg?.lineWidth ?? 2.0;
+
+      // find trigger (optional)
+      const mode = cfg?.mode ?? "rolling";
+      const trig = cfg?.triggerLevel ?? 0.0;
+      const rising = (cfg?.slope ?? "+") === "+";
+      const autoTrigger = cfg?.autoTrigger ?? true;
+
+      const renderRolling = () => {
+        ctx2d.beginPath();
+        for(let x=0;x<w;x++){
+          const idx = Math.floor((x/(w-1))*(buf.length-1));
+          const v = buf[idx]*gain;
+          const y = (h/2) - v*(h*0.45);
+          if(x===0) ctx2d.moveTo(0,y); else ctx2d.lineTo(x,y);
+        }
+        ctx2d.stroke();
+      };
+
+      const renderSingle = () => {
+        let start=-1;
+        const startSearch = Math.floor(buf.length*0.1);
+        for(let i=startSearch;i<buf.length-1;i++){
+          const a=buf[i], b=buf[i+1];
+          if(rising ? (a<trig && b>=trig) : (a>trig && b<=trig)){ start=i; break; }
+        }
+        if(start<0){
+          if(autoTrigger){ renderRolling(); return; }
+          if(lastFrame){ try{ ctx2d.putImageData(lastFrame,0,0);}catch(e){} }
+          return;
+        }
+        // span roughly one cycle if we can
+        const sr = 48000;
+        const hzHint = cfg?.hintHz ?? 220;
+        const len = clamp(Math.floor(sr/Math.max(1,hzHint)), 64, buf.length-start-1);
+        ctx2d.beginPath();
+        for(let x=0;x<w;x++){
+          const t = x/(w-1);
+          const idx = start + Math.floor(t*len);
+          const v = (buf[idx]||0)*gain;
+          const y = (h/2) - v*(h*0.45);
+          if(x===0) ctx2d.moveTo(0,y); else ctx2d.lineTo(x,y);
+        }
+        ctx2d.stroke();
+        try{ lastFrame = ctx2d.getImageData(0,0,w,h);}catch(e){}
+      };
+
+      ctx2d.strokeStyle = "rgba(110,241,166,0.95)";
+      ctx2d.lineWidth = lw;
+      ctx2d.globalCompositeOperation = "lighter";
+      if(mode==="single") renderSingle(); else renderRolling();
+      ctx2d.globalCompositeOperation = "source-over";
+
+      // center line
+      ctx2d.globalAlpha = 0.7;
+      ctx2d.strokeStyle = "rgba(148,163,184,0.30)";
+      ctx2d.lineWidth = 1;
+      ctx2d.beginPath(); ctx2d.moveTo(0,h/2); ctx2d.lineTo(w,h/2); ctx2d.stroke();
+      ctx2d.globalAlpha = 1;
+
+      rafRef.current=requestAnimationFrame(draw);
+    };
+
+    rafRef.current=requestAnimationFrame(draw);
+    return ()=>{ cancelAnimationFrame(rafRef.current); ro.disconnect(); };
+  }, [analyserRef, canvasEl, cfg]);
+}
+
+function useSpectrum(analyserRef, canvasEl) {
+  const rafRef = useRef(0);
+  useEffect(() => {
+    const canvas = canvasEl; if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr=window.devicePixelRatio||1;
+    function resize(){
+      const r=canvas.getBoundingClientRect();
+      canvas.width=Math.floor(r.width*dpr);
+      canvas.height=Math.floor(r.height*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    resize();
+    const ro=new ResizeObserver(resize); ro.observe(canvas);
+
+    let dispMax = 0.25;
+
+    const draw = () => {
+      const an = analyserRef.current;
+      const w=canvas.clientWidth, h=canvas.clientHeight;
+
+      ctx.clearRect(0,0,w,h);
+      const g=ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0,"rgba(2,6,23,0.95)");
+      g.addColorStop(1,"rgba(15,23,42,0.65)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+
+      // grid
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = "rgba(148,163,184,0.12)";
+      ctx.lineWidth = 1;
+      const gx = 8, gy = 6;
+      for(let i=1;i<gx;i++){ const x = (w/gx)*i; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+      for(let i=1;i<gy;i++){ const y = (h/gy)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+
+      if(!an){ rafRef.current=requestAnimationFrame(draw); return; }
+
+      const N = an.frequencyBinCount;
+      const data = new Uint8Array(N);
+      an.getByteFrequencyData(data);
+
+      const cols = Math.max(56, Math.min(N, Math.floor(w/2)));
+      const step = Math.ceil(N / cols);
+      const barW = Math.max(1, Math.floor(w / cols) - 1);
+
+      let frameMax = 0;
+      const bands = new Float32Array(cols);
+      for(let i=0, c=0; i<N; i+=step, c++){
+        let acc=0, n=0;
+        for(let k=0;k<step && i+k<N;k++){ acc+=data[i+k]; n++; }
+        const v = (acc / (n*255));
+        bands[c] = v;
+        if (v > frameMax) frameMax = v;
+      }
+      if (frameMax > dispMax) dispMax = dispMax*0.85 + frameMax*0.15;
+      else dispMax = dispMax*0.98 + frameMax*0.02;
+
+      const normDen = Math.max(0.05, dispMax*1.05);
+
+      ctx.fillStyle = "rgba(110,241,166,0.9)";
+      for(let c=0, x=0; c<bands.length; c++, x+=barW+1){
+        let v = bands[c] / normDen; if (v > 1) v = 1;
+        const y = h * (1 - v);
+        ctx.fillRect(x, y, barW, h - y);
+      }
+
+      rafRef.current=requestAnimationFrame(draw);
+    };
+
+    rafRef.current=requestAnimationFrame(draw);
+    return ()=>{ cancelAnimationFrame(rafRef.current); ro.disconnect(); };
+  }, [analyserRef, canvasEl]);
+}
+
+/* ------------------------------- Meters ---------------------------------- */
+
+function useMeter(analyserRef, enabled){
+  const [m, setM] = useState({ rms:0, peak:0, db:-120 });
+  useEffect(() => {
+    if(!enabled) return;
+    let t = 0;
+    const buf = new Float32Array(2048);
+    const tick = () => {
+      const an = analyserRef.current;
+      if(an){
+        an.getFloatTimeDomainData(buf);
+        let s2=0, pk=0;
+        for(let i=0;i<buf.length;i++){
+          const v = buf[i];
+          s2 += v*v;
+          const av = Math.abs(v);
+          if(av>pk) pk=av;
+        }
+        const rms = Math.sqrt(s2/buf.length);
+        setM({ rms, peak:pk, db: dbFromGain(rms) });
+      }
+      t = window.setTimeout(tick, 80);
+    };
+    tick();
+    return ()=> window.clearTimeout(t);
+  }, [analyserRef, enabled]);
+  return m;
+}
+
+/* ---------------------------- Preset handling ---------------------------- */
+
+const PRESET_KEY = "websynth_studio_presets_v1";
+
+function loadPresets(){
+  try{
+    const raw = localStorage.getItem(PRESET_KEY);
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    if(Array.isArray(arr)) return arr;
+  }catch(e){}
+  return [];
+}
+function savePresets(arr){
+  try{ localStorage.setItem(PRESET_KEY, JSON.stringify(arr.slice(0,50))); }catch(e){}
+}
+
+/* ------------------------------ Sequencer -------------------------------- */
+
+function useStepSequencer({ engine, enabled, bpm, steps, gate, swing, ringsOnly, ringsCfg, onStepChange }){
+  const schedRef = useRef({ timer:0, nextTime:0, stepIdx:0 });
+  useEffect(() => {
+    const ctx = engine?.ctx;
+    const nodes = engine?.nodes;
+    if(!enabled || !ctx || !nodes) return;
+
+    const lookahead = 0.08;  // seconds
+    const interval = 25;     // ms
+    const spb = 60 / Math.max(1, bpm);
+    const stepDur = spb / 4; // 16th notes
+
+    const scheduleStep = (idx, t) => {
+      // Update visual indicator (with slight delay to match audio)
+      const delayMs = Math.max(0, (t - ctx.currentTime) * 1000);
+      setTimeout(() => onStepChange?.(idx), delayMs);
+
+      const step = steps[idx];
+      if(step == null) return;
+      const midi = step;
+      const vel = 1.0;
+
+      if (ringsOnly) {
+        // Rings-only mode: just trigger Rings without oscillators
+        if (ringsCfg?.enabled) {
+          if (ringsCfg.followPitch) {
+            try { nodes.ringsSetFrequencyAt(midiToHz(midi), t); } catch(e) {}
+          }
+          try { nodes.strikeRings(0.6 + 0.4 * vel); } catch(e) {}
+        }
+      } else {
+        // Normal mode: trigger oscillators (and auto-strike rings if configured)
+        nodes.noteOnAt(midi, t, vel);
+        nodes.noteOffAt(t + stepDur * clamp(gate, 0.05, 0.98));
+      }
+    };
+
+    const tick = () => {
+      const s = schedRef.current;
+      const now = ctx.currentTime;
+      while (s.nextTime < now + lookahead){
+        const idx = s.stepIdx % steps.length;
+        // simple swing: delay odd steps
+        const isOdd = (idx % 2) === 1;
+        const t = s.nextTime + (isOdd ? (stepDur * clamp(swing,0,0.45)) : 0);
+        scheduleStep(idx, t);
+
+        s.stepIdx = (s.stepIdx + 1) % steps.length;
+        s.nextTime = s.nextTime + stepDur;
+      }
+    };
+
+    // init
+    schedRef.current.nextTime = ctx.currentTime + 0.05;
+    schedRef.current.stepIdx = 0;
+    schedRef.current.timer = window.setInterval(tick, interval);
+
+    return () => {
+      window.clearInterval(schedRef.current.timer);
+      schedRef.current.timer = 0;
+      onStepChange?.(-1); // Reset indicator when stopped
+    };
+  }, [engine, enabled, bpm, steps, gate, swing, ringsOnly, ringsCfg, onStepChange]);
+}
+
+/* ------------------------------ Keyboard UI ------------------------------ */
+
+function Piano({ baseMidi=60, octaves=2, onDown, onUp, latch=false, heldMidi, setHeldMidi }){
+  const keys = useMemo(() => {
+    const total = octaves * 12;
+    const arr = [];
+    for(let i=0;i<total;i++){
+      const midi = baseMidi + i;
+      const name = NOTE_NAMES[midi%12];
+      const black = name.includes("#");
+      arr.push({ midi, name, black });
+    }
+    return arr;
+  }, [baseMidi, octaves]);
+
+  const isHeld = (m)=> heldMidi === m;
+
+  const handleDown = (m) => {
+    if(latch){
+      if(isHeld(m)){ setHeldMidi(null); onUp?.(m); }
+      else { if(heldMidi!=null) onUp?.(heldMidi); setHeldMidi(m); onDown?.(m); }
+    } else {
+      setHeldMidi(m);
+      onDown?.(m);
+    }
+  };
+
+  const handleUp = (m) => {
+    if(latch) return;
+    if(isHeld(m)) setHeldMidi(null);
+    onUp?.(m);
+  };
+
+  return (
+    <div className="relative w-full select-none">
+      <div className="grid grid-cols-[repeat(24,minmax(0,1fr))] gap-[2px]">
+        {keys.map((k, i) => {
+          // only render whites in the main row
+          if(k.black) return null;
+          const active = isHeld(k.midi);
+          return (
+            <div
+              key={k.midi}
+              className={clsx(
+                "kbdKey h-20 rounded-xl border flex items-end justify-center pb-1 text-[11px]",
+                active ? "bg-emerald-600/20 border-emerald-500/40" : "bg-slate-100/5 border-slate-700/50 hover:border-slate-500/60"
+              )}
+              onPointerDown={(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); handleDown(k.midi); }}
+              onPointerUp={()=>handleUp(k.midi)}
+              onPointerLeave={()=>handleUp(k.midi)}
+            >
+              <span className="text-slate-300">{NOTE_NAMES[k.midi%12]}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* black keys overlay */}
+      <div className="pointer-events-none absolute left-0 top-0 w-full h-20">
+        <div className="grid grid-cols-[repeat(24,minmax(0,1fr))] gap-[2px] h-full">
+          {keys.map((k) => {
+            if(!k.black) return <div key={k.midi} className="relative" />;
+            const active = isHeld(k.midi);
+            return (
+              <div key={k.midi} className="relative">
+                <div
+                  className={clsx(
+                    "pointer-events-auto kbdKey absolute left-1/2 -translate-x-1/2 top-0 w-[85%] h-12 rounded-xl border flex items-end justify-center pb-1 text-[10px]",
+                    active ? "bg-emerald-600/30 border-emerald-500/50" : "bg-slate-950/90 border-slate-700/70 hover:border-slate-500/80"
+                  )}
+                  onPointerDown={(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); handleDown(k.midi); }}
+                  onPointerUp={()=>handleUp(k.midi)}
+                  onPointerLeave={()=>handleUp(k.midi)}
+                >
+                  <span className="text-slate-200">{NOTE_NAMES[k.midi%12]}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ App -------------------------------------- */
+
+function App(){
+  const [audioReady, setAudioReady] = useState(false);
+  const [tab, setTab] = useState("voice"); // voice | mod | fx | scope | rings | seq
+  const { engine, start } = useSynthEngine();
+
+  // visuals
+  const [scopeEl, setScopeEl] = useState(null);
+  const [specEl, setSpecEl] = useState(null);
+  const analyserScopeRef = useRef(null);
+  const analyserFFTRef = useRef(null);
+
+  const [scopeCfg, setScopeCfg] = useState({ source:"post", mode:"rolling", gain:2.2, ac:true, triggerLevel:0.0, slope:"+", autoTrigger:true, smoothing:0.06, lineWidth:2 });
+  const [visHintHz, setVisHintHz] = useState(220);
+
+  useEffect(() => {
+    if (!audioReady || !engine?.nodes) return;
+    const ns = engine.nodes;
+    analyserScopeRef.current = (scopeCfg.source === "pre") ? ns.preScope : ns.postScope;
+    analyserFFTRef.current = (scopeCfg.source === "pre") ? ns.preFFT : ns.postFFT;
+  }, [audioReady, engine, scopeCfg.source]);
+
+  useTimeScope(analyserScopeRef, scopeEl, Object.assign({}, scopeCfg, { hintHz: visHintHz }));
+  useSpectrum(analyserFFTRef, specEl);
+
+  const meter = useMeter(analyserScopeRef, audioReady);
+
+  // Synth state
+  const [master, setMaster] = useState(0.55);
+
+  const [voice, setVoice] = useState({
+    note: 60, // C4
+    transpose: 0,
+    detuneCents: 0,
+    glide: 0.03,
+    velToAmp: 0.9,
+    pan: 0,
+    latch: false
+  });
+
+  const [osc1, setOsc1] = useState({ on:true, type:"sawtooth", gain:0.8, octave:0, fine:0 });
+  const [osc2, setOsc2] = useState({ on:false, type:"square", gain:0.35, lock:true, ratio:"oct", detune:0, fine:0 });
+  const [sub, setSub] = useState({ on:false, gain:0.25 });
+
+  const [noise, setNoise] = useState({ gain:0.0, hp:80 });
+
+  const [mod, setMod] = useState({ type:"sine", freq:110, fm1:0, fm2:0, am:0 });
+
+  const [lfo, setLfo] = useState({ type:"sine", rate:4, toVCA:0, toCutoff:0, toPitch:0, toPan:0 });
+
+  const [filter, setFilter] = useState({ enabled:true, type:"lowpass", cutoff:12000, Q:0.8, envAmt:0 });
+  const [env, setEnv] = useState({ enabled:true, a:0.01, d:0.08, s:0.7, r:0.18 });
+
+  const [fx, setFx] = useState({ drive:0.0, driveOut:1.0, delayTime:0.28, delayFB:0.25, delayMix:0.0, revSize:1.1, revDecay:2.2, revMix:0.0 });
+
+  const [ringsCfg, setRingsCfg] = useState({
+    enabled:false, external:true, followPitch:true, mix:0.45,
+    pitch:60, structure:0.25, brightness:0.7, damping:0.7, position:0.3, autoStrike:true,
+    // FX/Mod routing for Rings
+    filterEnabled:false, filterCutoff:12000, filterQ:0.7, filterEnvAmt:0, filterLfoAmt:0,
+    envEnabled:false // Whether ADSR envelope affects Rings amplitude
+  });
+
+  const [mic, setMic] = useState({ enabled:false, gain:0.0 });
+
+  // Sequencer
+  const [seq, setSeq] = useState({
+    enabled:false,
+    bpm:110,
+    gate:0.55,
+    swing:0.12,
+    ringsOnly:false, // When true, only triggers Rings without oscillators
+    steps: Array.from({length:16}, (_,i)=> (i%4===0 ? 60 : null)) // simple initial pattern
+  });
+
+  // held key
+  const [heldMidi, setHeldMidi] = useState(null);
+
+  // Current sequencer step (for visual feedback)
+  const [currentStep, setCurrentStep] = useState(-1);
+
+  // Record
+  const [rec, setRec] = useState({ supported: typeof MediaRecorder !== "undefined", recording:false, url:null, bytes:0 });
+
+  // Presets
+  const [presets, setPresets] = useState(()=>loadPresets());
+  const [presetSel, setPresetSel] = useState(presets[0]?.name || "");
+
+  // Apply state -> engine nodes
+  useEffect(() => {
+    if(!engine?.nodes) return;
+    const ns = engine.nodes;
+    const ctx = ns.ctx;
+
+    ns.master.gain.setTargetAtTime(master, ctx.currentTime, 0.02);
+
+    ns.panner.pan.setTargetAtTime(clamp(voice.pan,-1,1), ctx.currentTime, 0.03);
+    ns.state.setGlide(clamp(voice.glide, 0, 0.5));
+    ns.state.setVelToAmp(clamp(voice.velToAmp, 0, 1));
+
+    // osc types + gains + pitch params (pitch is applied on note scheduling)
+    ns.osc1.type = osc1.type;
+    ns.osc1Gain.gain.setTargetAtTime(osc1.on ? osc1.gain : 0, ctx.currentTime, 0.02);
+
+    ns.osc2.type = osc2.type;
+    ns.osc2Gain.gain.setTargetAtTime(osc2.on ? osc2.gain : 0, ctx.currentTime, 0.02);
+
+    const osc2Ratio = (osc2.ratio==="uni") ? 1 : (osc2.ratio==="oct" ? 2 : (osc2.ratio==="fifth" ? (3/2) : 1));
+    ns.state.setPitchParams({
+      transpose: voice.transpose,
+      voiceDetuneCents: voice.detuneCents,
+      osc1Oct: osc1.octave,
+      osc1Fine: osc1.fine,
+      osc2Lock: osc2.lock,
+      osc2Ratio,
+      osc2Detune: osc2.detune,
+      osc2Fine: osc2.fine
+    });
+
+    // If a note is currently held, update pitch immediately to reflect parameter changes
+    if (ns.state.held && ns.state.held()) {
+      try { ns.setPitchAt(ns.state.lastMidi(), ctx.currentTime); } catch(e) {}
+    }
+
+    // sub
+    ns.subGain.gain.setTargetAtTime(sub.on ? sub.gain : 0, ctx.currentTime, 0.02);
+
+    // noise
+    ns.noiseHP.frequency.setTargetAtTime(Math.max(20, noise.hp), ctx.currentTime, 0.03);
+    ns.noiseGain.gain.setTargetAtTime(clamp(noise.gain,0,1), ctx.currentTime, 0.03);
+
+    // mod osc
+    ns.modOsc.type = mod.type;
+    ns.modOsc.frequency.setTargetAtTime(Math.max(0.1, mod.freq), ctx.currentTime, 0.01);
+    ns.fm1Gain.gain.setTargetAtTime(mod.fm1, ctx.currentTime, 0.02);
+    ns.fm2Gain.gain.setTargetAtTime(mod.fm2, ctx.currentTime, 0.02);
+    ns.amDepth.gain.setTargetAtTime(mod.am, ctx.currentTime, 0.02);
+
+    // lfo
+    ns.lfo.type = lfo.type;
+    ns.lfo.frequency.setTargetAtTime(Math.max(0.01, lfo.rate), ctx.currentTime, 0.02);
+    ns.lfoToVCA.gain.setTargetAtTime(lfo.toVCA, ctx.currentTime, 0.02);
+    ns.lfoToCutoff.gain.setTargetAtTime(lfo.toCutoff, ctx.currentTime, 0.02);
+    ns.lfoToPitch.gain.setTargetAtTime(lfo.toPitch, ctx.currentTime, 0.02);
+    ns.lfoToPan.gain.setTargetAtTime(lfo.toPan, ctx.currentTime, 0.02);
+
+    // filter
+    if(filter.enabled){
+      ns.filter.type = filter.type;
+      ns.filter.frequency.setTargetAtTime(Math.max(20, filter.cutoff), ctx.currentTime, 0.02);
+      ns.filter.Q.setTargetAtTime(Math.max(0.0001, filter.Q), ctx.currentTime, 0.02);
+    } else {
+      ns.filter.type = "lowpass";
+      ns.filter.frequency.setTargetAtTime(20000, ctx.currentTime, 0.02);
+      ns.filter.Q.setTargetAtTime(0.0001, ctx.currentTime, 0.02);
+    }
+    ns.envToCutoff.gain.setTargetAtTime(clamp(filter.envAmt, -8000, 8000), ctx.currentTime, 0.02);
+
+    // env
+    ns.env.enabled = env.enabled;
+    ns.env.a = env.a; ns.env.d = env.d; ns.env.s = env.s; ns.env.r = env.r;
+    if(!env.enabled){
+      ns.vcaEnv.gain.setTargetAtTime(1, ctx.currentTime, 0.01);
+      ns.envCtl.gain.setTargetAtTime(1, ctx.currentTime, 0.01);
+    }
+
+    // FX
+    ns.shaper.curve = makeWaveshaperCurve(clamp(fx.drive, 0, 1));
+    ns.drivePre.gain.setTargetAtTime(1 + fx.drive*2.5, ctx.currentTime, 0.02);
+    ns.drivePost.gain.setTargetAtTime(Math.max(0.1, fx.driveOut), ctx.currentTime, 0.02);
+
+    ns.delay.delayTime.setTargetAtTime(clamp(fx.delayTime, 0.01, 1.5), ctx.currentTime, 0.02);
+    ns.delayFB.gain.setTargetAtTime(clamp(fx.delayFB, 0, 0.92), ctx.currentTime, 0.02);
+    ns.delayWet.gain.setTargetAtTime(clamp(fx.delayMix, 0, 1), ctx.currentTime, 0.02);
+    ns.delayDry.gain.setTargetAtTime(1 - clamp(fx.delayMix, 0, 1), ctx.currentTime, 0.02);
+
+    // reverb mix
+    ns.revWet.gain.setTargetAtTime(clamp(fx.revMix, 0, 1), ctx.currentTime, 0.03);
+    ns.revDry.gain.setTargetAtTime(1 - clamp(fx.revMix, 0, 1), ctx.currentTime, 0.03);
+
+    // rebuild IR if size/decay changes (debounced)
+    if(!ns._irTimer) ns._irTimer = 0;
+    window.clearTimeout(ns._irTimer);
+    ns._irTimer = window.setTimeout(() => {
+      try{
+        ns.convolver.buffer = makeImpulseResponse(ns.ctx, clamp(fx.revSize, 0.2, 3.0), clamp(fx.revDecay, 0.2, 6.0));
+      }catch(e){}
+    }, 200);
+
+    // scope smoothing for whichever analyser is active
+    ns.preScope.smoothingTimeConstant = clamp(scopeCfg.smoothing, 0, 0.95);
+    ns.postScope.smoothingTimeConstant = clamp(scopeCfg.smoothing, 0, 0.95);
+
+    // mic gain
+    ns.micGain.gain.setTargetAtTime(mic.enabled ? clamp(mic.gain,0,1) : 0, ctx.currentTime, 0.03);
+    // rings
+    const ringsFreq = midiToHz(ringsCfg.pitch);
+    try{
+      ns.ringsSetParamsAt({
+        frequency: ringsFreq,
+        structure: ringsCfg.structure,
+        brightness: ringsCfg.brightness,
+        damping: ringsCfg.damping,
+        position: ringsCfg.position
+      }, ctx.currentTime);
+
+      ns.ringsWetGain.gain.setTargetAtTime(ringsCfg.enabled ? ringsCfg.mix : 0, ctx.currentTime, 0.02);
+
+      try { ns.mix.disconnect(ns.ringsIn); } catch(e) {}
+      if (ringsCfg.enabled && ringsCfg.external) ns.mix.connect(ns.ringsIn);
+
+      // Rings filter settings
+      if (ringsCfg.filterEnabled) {
+        ns.ringsFilter.frequency.setTargetAtTime(Math.max(20, ringsCfg.filterCutoff), ctx.currentTime, 0.02);
+        ns.ringsFilter.Q.setTargetAtTime(Math.max(0.1, ringsCfg.filterQ), ctx.currentTime, 0.02);
+      } else {
+        ns.ringsFilter.frequency.setTargetAtTime(20000, ctx.currentTime, 0.02);
+        ns.ringsFilter.Q.setTargetAtTime(0.7, ctx.currentTime, 0.02);
+      }
+
+      // Rings filter modulation
+      ns.envToRingsCutoff.gain.setTargetAtTime(ringsCfg.filterEnabled ? clamp(ringsCfg.filterEnvAmt, -8000, 8000) : 0, ctx.currentTime, 0.02);
+      ns.lfoToRingsCutoff.gain.setTargetAtTime(ringsCfg.filterEnabled ? clamp(ringsCfg.filterLfoAmt, 0, 6000) : 0, ctx.currentTime, 0.02);
+
+      // Rings envelope: when enabled, scale gain by envelope
+      // We need to apply the envelope to ringsEnvGain when envEnabled is true
+      if (ringsCfg.envEnabled && env.enabled) {
+        // Make ringsEnvGain follow the envelope - we'll do this by controlling it alongside vcaEnv
+        // For now, set a flag that noteOnAt/noteOffAt can check
+        ns._ringsEnvEnabled = true;
+      } else {
+        ns._ringsEnvEnabled = false;
+        ns.ringsEnvGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.02);
+      }
+    }catch(e){}
+
+
+  }, [engine, audioReady, master, voice, osc1, osc2, sub, noise, mod, lfo, filter, env, fx, ringsCfg, mic, scopeCfg.smoothing]);
+
+  // Sequencer scheduling
+  useStepSequencer({
+    engine,
+    enabled: audioReady && seq.enabled,
+    bpm: seq.bpm,
+    steps: seq.steps,
+    gate: seq.gate,
+    swing: seq.swing,
+    ringsOnly: seq.ringsOnly,
+    ringsCfg,
+    onStepChange: setCurrentStep
+  });
+
+  // Update hint Hz for scope
+  useEffect(() => {
+    if(heldMidi != null){ setVisHintHz(midiToHz(heldMidi + voice.transpose)); return; }
+    setVisHintHz(midiToHz(clamp(voice.note + voice.transpose, 0, 127)));
+  }, [heldMidi, voice.note, voice.transpose]);
+
+  // Start Audio
+  const handleStartAudio = async () => {
+  const e = await start();
+  setAudioReady(true);
+  // Audible confirmation ping (helps diagnose "audio didn't start")
+  try {
+    const t = e.ctx.currentTime;
+    const o = e.ctx.createOscillator();
+    const g = e.ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 440;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.08, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    o.connect(g); g.connect(e.ctx.destination);
+    o.start(t); o.stop(t + 0.10);
+  } catch(err) {}
+};
+
+
+  // Note controls
+  const noteOn = (midi, vel=1.0) => {
+    if(!engine?.nodes) return;
+    const ns = engine.nodes;
+    const t = ns.ctx.currentTime;
+    ns.noteOnAt(midi, t, vel);
+    if(ringsCfg.enabled && ringsCfg.autoStrike) ns.strikeRings(0.6 + 0.4*vel);
+    if(ringsCfg.enabled && ringsCfg.followPitch){
+      try { ns.ringsSetFrequencyAt(midiToHz(midi + voice.transpose), t); } catch(e){}
+    }
+  };
+  const noteOff = () => {
+    if(!engine?.nodes) return;
+    const ns = engine.nodes;
+    ns.noteOffAt(ns.ctx.currentTime);
+  };
+
+  // Computer keyboard mapping
+  useEffect(() => {
+    const down = (e) => {
+      if(e.repeat) return;
+      if(e.target && (e.target.tagName==="INPUT" || e.target.tagName==="SELECT" || e.target.tagName==="TEXTAREA")) return;
+      const map = {
+        "z":0,"s":1,"x":2,"d":3,"c":4,"v":5,"g":6,"b":7,"h":8,"n":9,"j":10,"m":11,
+        ",":12,"l":13,".":14,";":15,"/":16
+      };
+      const k = e.key.toLowerCase();
+      if(k === " "){ e.preventDefault(); (ringsCfg.enabled ? strikeRings() : null); return; }
+      if(k === "escape"){ panic(); return; }
+      if(map[k] != null){
+  const base = voice.note;
+  const midi = clamp(base + map[k], 0, 127);
+
+  // If user plays before pressing "Start Audio", try to unlock + then play
+  if(!audioReady){
+    start().then(()=>{ setAudioReady(true); setHeldMidi(midi); noteOn(midi, 1.0); }).catch(()=>{});
+    return;
+  }
+
+  setHeldMidi(midi);
+  noteOn(midi, 1.0);
+}
+    };
+    const up = (e) => {
+      const map = {
+        "z":0,"s":1,"x":2,"d":3,"c":4,"v":5,"g":6,"b":7,"h":8,"n":9,"j":10,"m":11,
+        ",":12,"l":13,".":14,";":15,"/":16
+      };
+      const k = e.key.toLowerCase();
+      if(map[k] != null){
+        setHeldMidi(null);
+        noteOff();
+      }
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return ()=>{ window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, [engine, audioReady, voice.note, ringsCfg.enabled, ringsCfg.autoStrike, ringsCfg.followPitch]);
+
+  // MIDI input (optional)
+  const [midiStatus, setMidiStatus] = useState({ supported: !!navigator.requestMIDIAccess, connected:false, name:"" });
+
+  useEffect(() => {
+    if(!audioReady) return;
+    if(!navigator.requestMIDIAccess) return;
+    let access = null;
+
+    const onMsg = (msg) => {
+      const [st, d1, d2] = msg.data || [];
+      const cmd = st & 0xF0;
+      if(cmd === 0x90 && d2 > 0){ // note on
+        const vel = d2/127;
+        setHeldMidi(d1);
+        noteOn(d1, vel);
+      } else if(cmd === 0x80 || (cmd===0x90 && d2===0)){ // note off
+        setHeldMidi(null);
+        noteOff();
+      }
+    };
+
+    navigator.requestMIDIAccess().then((a) => {
+      access = a;
+      const inputs = Array.from(a.inputs.values());
+      if(inputs.length){
+        const inp = inputs[0];
+        inp.onmidimessage = onMsg;
+        setMidiStatus({ supported:true, connected:true, name: inp.name || "MIDI input" });
+      }
+      a.onstatechange = () => {
+        const ins = Array.from(a.inputs.values());
+        if(ins.length && !midiStatus.connected){
+          const inp = ins[0];
+          inp.onmidimessage = onMsg;
+          setMidiStatus({ supported:true, connected:true, name: inp.name || "MIDI input" });
+        } else if(!ins.length){
+          setMidiStatus(s => ({...s, connected:false, name:""}));
+        }
+      };
+    }).catch(()=>{});
+    return () => { try{ if(access){ access.onstatechange=null; } }catch(e){} };
+  }, [audioReady]);
+
+  // Mic enable
+  const startMic = async () => {
+    if(!engine?.nodes) return;
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false });
+      const src = engine.nodes.ctx.createMediaStreamSource(stream);
+      src.connect(engine.nodes.micGain);
+      setMic(m => ({...m, enabled:true, gain: Math.max(m.gain, 0.25)}));
+    }catch(e){
+      alert("Microphone permission was denied (or unavailable).");
+    }
+  };
+
+  // Rings strike
+  const strikeRings = () => {
+    try{ engine?.nodes?.strikeRings?.(1.0); }catch(e){}
+  };
+
+  // Panic
+  const panic = () => {
+    try{
+      setHeldMidi(null);
+      if(engine?.nodes){
+        const ns = engine.nodes;
+        ns.noteOffAt(ns.ctx.currentTime);
+        ns.vcaEnv.gain.setTargetAtTime(0, ns.ctx.currentTime, 0.01);
+        ns.envCtl.gain.setTargetAtTime(0, ns.ctx.currentTime, 0.01);
+      }
+    }catch(e){}
+  };
+
+  // Recording
+  const toggleRecord = async () => {
+    if(!engine?.nodes) return;
+    if(!rec.supported){ alert("MediaRecorder not supported in this browser."); return; }
+
+    if(rec.recording){
+      try{ rec._mr?.stop?.(); }catch(e){}
+      return;
+    }
+
+    try{
+      const mr = new MediaRecorder(engine.nodes.recordDest.stream);
+      const chunks = [];
+      mr.ondataavailable = (e) => { if(e.data && e.data.size) chunks.push(e.data); setRec(r => ({...r, bytes:(r.bytes||0)+ (e.data?.size||0)})); };
+      mr.onstop = () => {
+        const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+        const url = URL.createObjectURL(blob);
+        setRec(r => ({...r, recording:false, url, _mr:null, bytes: blob.size }));
+      };
+      mr.start(150);
+      setRec(r => ({...r, recording:true, url:null, _mr:mr, bytes:0 }));
+    }catch(e){
+      alert("Could not start recording.");
+    }
+  };
+
+  const downloadRecording = () => {
+    if(!rec.url) return;
+    const a = document.createElement("a");
+    a.href = rec.url;
+    a.download = `websynth_recording_${Date.now()}.webm`;
+    a.click();
+  };
+
+  // Presets: serialize/deserialize current synth state
+  const snapshot = () => ({
+    version: 1,
+    master, voice, osc1, osc2, sub, noise, mod, lfo, filter, env, fx, ringsCfg, mic, scopeCfg, seq
+  });
+
+  const applySnapshot = (p) => {
+    if(!p) return;
+    try{
+      if(p.master!=null) setMaster(p.master);
+      if(p.voice) setVoice(p.voice);
+      if(p.osc1) setOsc1(p.osc1);
+      if(p.osc2) setOsc2(p.osc2);
+      if(p.sub) setSub(p.sub);
+      if(p.noise) setNoise(p.noise);
+      if(p.mod) setMod(p.mod);
+      if(p.lfo) setLfo(p.lfo);
+      if(p.filter) setFilter(p.filter);
+      if(p.env) setEnv(p.env);
+      if(p.fx) setFx(p.fx);
+      if(p.ringsCfg) setRingsCfg(p.ringsCfg);
+      if(p.mic) setMic(p.mic);
+      if(p.scopeCfg) setScopeCfg(p.scopeCfg);
+      if(p.seq) setSeq(p.seq);
+    }catch(e){}
+  };
+
+  const savePreset = () => {
+    const name = prompt("Preset name?");
+    if(!name) return;
+    const p = snapshot();
+    const next = [{ name, preset:p, ts: Date.now() }, ...presets.filter(x=>x.name!==name)];
+    setPresets(next);
+    savePresets(next);
+    setPresetSel(name);
+  };
+
+  const loadPreset = (name) => {
+    setPresetSel(name);
+    const hit = presets.find(p=>p.name===name);
+    if(hit) applySnapshot(hit.preset);
+  };
+
+  const exportPreset = () => {
+    const p = snapshot();
+    const blob = new Blob([JSON.stringify(p, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `websynth_preset_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importPresetFile = async (file) => {
+    try{
+      const txt = await file.text();
+      const p = JSON.parse(txt);
+      applySnapshot(p);
+    }catch(e){
+      alert("Could not import preset JSON.");
+    }
+  };
+
+  // MIDI file parsing
+  const parseMidiFile = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const data = new Uint8Array(buffer);
+
+    // Simple MIDI parser for note events
+    const readVarLen = (data, offset) => {
+      let value = 0;
+      let length = 0;
+      while (true) {
+        const byte = data[offset + length];
+        value = (value << 7) | (byte & 0x7F);
+        length++;
+        if ((byte & 0x80) === 0) break;
+        if (length > 4) break;
+      }
+      return { value, length };
+    };
+
+    const readUint32 = (data, offset) =>
+      (data[offset] << 24) | (data[offset+1] << 16) | (data[offset+2] << 8) | data[offset+3];
+    const readUint16 = (data, offset) => (data[offset] << 8) | data[offset+1];
+
+    // Verify MIDI header
+    const header = String.fromCharCode(...data.slice(0, 4));
+    if (header !== 'MThd') {
+      throw new Error('Not a valid MIDI file');
+    }
+
+    const headerLen = readUint32(data, 4);
+    const format = readUint16(data, 8);
+    const numTracks = readUint16(data, 10);
+    const division = readUint16(data, 12);
+
+    const ticksPerBeat = (division & 0x8000) === 0 ? division : 480;
+
+    const notes = [];
+    let offset = 8 + headerLen;
+    let defaultTempo = 500000; // microseconds per beat (120 BPM)
+
+    // Parse tracks
+    for (let track = 0; track < numTracks && offset < data.length; track++) {
+      const trackHeader = String.fromCharCode(...data.slice(offset, offset + 4));
+      if (trackHeader !== 'MTrk') break;
+
+      const trackLen = readUint32(data, offset + 4);
+      let trackOffset = offset + 8;
+      const trackEnd = trackOffset + trackLen;
+
+      let absoluteTime = 0;
+      let runningStatus = 0;
+
+      while (trackOffset < trackEnd) {
+        const delta = readVarLen(data, trackOffset);
+        trackOffset += delta.length;
+        absoluteTime += delta.value;
+
+        let status = data[trackOffset];
+        if ((status & 0x80) === 0) {
+          status = runningStatus;
+        } else {
+          trackOffset++;
+          if ((status & 0xF0) !== 0xF0) {
+            runningStatus = status;
+          }
+        }
+
+        const cmd = status & 0xF0;
+
+        if (cmd === 0x90 || cmd === 0x80) {
+          const note = data[trackOffset++];
+          const velocity = data[trackOffset++];
+          const isNoteOn = cmd === 0x90 && velocity > 0;
+          notes.push({
+            time: absoluteTime,
+            note,
+            velocity: isNoteOn ? velocity : 0,
+            isNoteOn
+          });
+        } else if (cmd === 0xA0 || cmd === 0xB0 || cmd === 0xE0) {
+          trackOffset += 2;
+        } else if (cmd === 0xC0 || cmd === 0xD0) {
+          trackOffset += 1;
+        } else if (status === 0xFF) {
+          const metaType = data[trackOffset++];
+          const metaLen = readVarLen(data, trackOffset);
+          trackOffset += metaLen.length;
+          if (metaType === 0x51 && metaLen.value === 3) {
+            defaultTempo = (data[trackOffset] << 16) | (data[trackOffset+1] << 8) | data[trackOffset+2];
+          }
+          trackOffset += metaLen.value;
+        } else if (status === 0xF0 || status === 0xF7) {
+          const sysexLen = readVarLen(data, trackOffset);
+          trackOffset += sysexLen.length + sysexLen.value;
+        }
+      }
+
+      offset = trackEnd;
+    }
+
+    // Sort by time
+    notes.sort((a, b) => a.time - b.time);
+
+    return { notes, ticksPerBeat, tempo: defaultTempo };
+  };
+
+  const convertMidiToSequence = async (file) => {
+    try {
+      const { notes, ticksPerBeat, tempo } = await parseMidiFile(file);
+
+      if (notes.length === 0) {
+        alert("No notes found in MIDI file.");
+        return;
+      }
+
+      // Calculate BPM from tempo
+      const bpm = Math.round(60000000 / tempo);
+
+      // Quantize to 16th notes
+      const ticksPer16th = ticksPerBeat / 4;
+      const noteOns = notes.filter(n => n.isNoteOn);
+
+      // Get max time to determine how many steps we need
+      const maxTime = noteOns.length > 0 ? noteOns[noteOns.length - 1].time : 0;
+      const totalSteps = Math.min(64, Math.max(16, Math.ceil(maxTime / ticksPer16th) + 1));
+
+      // Create step array (use first 16 or 32 steps)
+      const numSteps = totalSteps > 24 ? 32 : 16;
+      const steps = new Array(numSteps).fill(null);
+
+      // Fill in notes
+      for (const note of noteOns) {
+        const stepIndex = Math.round(note.time / ticksPer16th);
+        if (stepIndex >= 0 && stepIndex < steps.length) {
+          steps[stepIndex] = note.note;
+        }
+      }
+
+      // Update sequencer
+      setSeq(s => ({
+        ...s,
+        bpm: Math.min(220, Math.max(40, bpm)),
+        steps
+      }));
+
+      // Show import summary
+      const noteCount = steps.filter(s => s !== null).length;
+      alert(`MIDI imported: ${noteCount} notes across ${numSteps} steps at ${bpm} BPM`);
+
+      // Switch to sequencer tab
+      setTab("seq");
+    } catch (e) {
+      alert("Could not parse MIDI file: " + e.message);
+    }
+  };
+
+  // Unified file import handler
+  const handleFileImport = async (file) => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.mid') || name.endsWith('.midi')) {
+      await convertMidiToSequence(file);
+    } else {
+      await importPresetFile(file);
+    }
+  };
+
+  // Sequencer UI helpers
+  const setStep = (i, v) => {
+    setSeq(s => {
+      const steps = s.steps.slice();
+      steps[i] = (v === "rest") ? null : parseInt(v, 10);
+      return { ...s, steps };
+    });
+  };
+  const randomizeSeq = () => {
+    const scale = [0,2,3,5,7,10]; // minor-ish
+    setSeq(s => ({
+      ...s,
+      // Randomly fill ~75% of steps with notes from a minor-ish scale.
+      // Keep this as a single expression (no missing parens) so Babel can parse it.
+      steps: s.steps.map((_, i) => (
+        Math.random() < 0.25
+          ? null
+          : (voice.note + scale[Math.floor(Math.random() * scale.length)] + (Math.random() < 0.3 ? 12 : 0))
+      ))
+    }));
+  };
+  const clearSeq = () => setSeq(s => ({...s, steps: s.steps.map(()=>null)}));
+
+  // Sequencer pattern presets
+  const seqPatterns = {
+    fourOnFloor: () => {
+      const base = voice.note;
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => i % 4 === 0 ? base : null)
+      }));
+    },
+    arpUp: () => {
+      const base = voice.note;
+      const pattern = [0, 4, 7, 12]; // Major arpeggio
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => base + pattern[i % pattern.length])
+      }));
+    },
+    arpDown: () => {
+      const base = voice.note;
+      const pattern = [12, 7, 4, 0]; // Major arpeggio descending
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => base + pattern[i % pattern.length])
+      }));
+    },
+    bassline: () => {
+      const base = voice.note;
+      // Classic 8-note bassline pattern
+      const pattern = [0, null, 0, 0, null, 0, 7, 5];
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => {
+          const p = pattern[i % pattern.length];
+          return p === null ? null : base + p;
+        })
+      }));
+    },
+    euclidean: () => {
+      // Simple euclidean-ish pattern (5 hits over 16 steps)
+      const base = voice.note;
+      const hits = [0, 3, 6, 10, 13]; // Euclidean(5,16) approximately
+      setSeq(s => ({
+        ...s,
+        steps: s.steps.map((_, i) => hits.includes(i % 16) ? base : null)
+      }));
+    }
+  };
+
+  // Tabs
+  const tabs = [
+    { id:"voice", label:"Voice" },
+    { id:"mod", label:"Mod" },
+    { id:"fx", label:"FX" },
+    { id:"seq", label:"Seq" },
+    { id:"rings", label:"Rings" },
+    { id:"scope", label:"Scope" },
+  ];
+
+  const statusPills = (
+    <div className="flex flex-wrap items-center gap-2">
+      {audioReady ? <Pill tone="emerald">Audio running</Pill> : <Pill tone="amber">Audio stopped</Pill>}
+      <Pill>RMS <span className="tabular-nums">{meter.db.toFixed(1)} dB</span></Pill>
+      {midiStatus.supported ? (
+        midiStatus.connected ? <Pill tone="emerald">MIDI: {midiStatus.name}</Pill> : <Pill tone="slate">MIDI: none</Pill>
+      ) : <Pill tone="rose">MIDI unsupported</Pill>}
+    </div>
+  );
+
+  return (
+    <div className="h-screen w-full flex flex-col bg-slate-950">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-800/70 glass">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl border border-slate-700/60 bg-emerald-500/10 grid place-items-center">
+              <span className="text-emerald-200 text-sm">⟁</span>
+            </div>
+            <div>
+              <div className="text-base font-semibold tracking-tight">WebSynth Studio</div>
+              <div className="text-xs text-slate-400">WebAudio modular-ish synth · scope & spectrum · presets · sequencer · recorder</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {!audioReady ? (
+              <Button tone="emerald" onClick={handleStartAudio}>Start Audio</Button>
+            ) : (
+              <Button tone="slate" onClick={panic} title="Stop envelope and release sound">Panic (Esc)</Button>
+            )}
+            <Button tone={rec.recording ? "rose":"slate"} onClick={toggleRecord} disabled={!audioReady || !rec.supported} title="Record the synth output">
+              {rec.recording ? "Stop Rec" : "Record"}
+            </Button>
+            <Button onClick={downloadRecording} disabled={!rec.url}>Download</Button>
+
+            <div className="flex items-center gap-2">
+              <select value={presetSel} onChange={(e)=>loadPreset(e.target.value)}
+                className="bg-slate-900/60 border border-slate-700/60 rounded-xl px-2.5 py-2 text-xs min-w-[160px]">
+                <option value="">Preset…</option>
+                {presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+              </select>
+              <Button onClick={savePreset}>Save</Button>
+              <Button onClick={exportPreset}>Export</Button>
+              {(() => {
+                const inputRef = React.useRef(null);
+                return (
+                  <>
+                    <input type="file" accept="application/json,.mid,.midi" ref={inputRef} className="hidden"
+                      onChange={(e)=>{ const f=e.target.files?.[0]; if(f) handleFileImport(f); e.target.value=""; }}
+                    />
+                    <Button onClick={()=>inputRef.current?.click()}>Import</Button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          {statusPills}
+          <div className="flex items-center gap-2">
+            {tabs.map(t => (
+              <button key={t.id} onClick={()=>setTab(t.id)}
+                className={clsx(
+                  "px-3 py-1.5 text-xs rounded-xl border transition",
+                  tab===t.id ? "bg-slate-800/60 border-slate-600/60" : "bg-slate-900/40 border-slate-800/70 hover:border-slate-600/50"
+                )}
+              >{t.label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[430px_1fr] overflow-hidden">
+        {/* Controls */}
+        <aside className="h-full overflow-y-auto p-4 space-y-4 border-r border-slate-800/70 gridbg">
+          <Card title="Master & Play" right={<Pill tone="slate">Held: {heldMidi==null ? "—" : midiToName(heldMidi)}</Pill>}>
+            <Section title="Master">
+              <Slider label="Volume" min={0} max={1} step={0.01} value={master} onChange={setMaster} format={(v)=>v.toFixed(2)} />
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={()=>noteOn(clamp(voice.note,0,127),1.0)} disabled={!audioReady} tone="emerald">Note On</Button>
+                <Button onClick={()=>noteOff()} disabled={!audioReady}>Note Off</Button>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Computer keys: Z/S/X/D/C/V… · Space strikes Rings · Esc panic
+              </div>
+            </Section>
+
+            <Divider />
+
+            <Section title="Voice" hint="Pitch, glide, pan">
+              <Slider label="Base note (MIDI)" min={24} max={84} step={1} value={voice.note} onChange={(v)=>setVoice(s=>({...s,note:v}))} format={(v)=>`${v} (${midiToName(v)})`} />
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] text-slate-400">Octave:</span>
+                <Button onClick={()=>setVoice(s=>({...s,note:clamp(s.note-12,24,84)}))} disabled={voice.note <= 24}>-1</Button>
+                <Button onClick={()=>setVoice(s=>({...s,note:clamp(s.note+12,24,84)}))} disabled={voice.note >= 84}>+1</Button>
+                <Button onClick={()=>setVoice(s=>({...s,note:60}))}>C4</Button>
+              </div>
+              <Slider label="Transpose (semitones)" min={-24} max={24} step={1} value={voice.transpose} onChange={(v)=>setVoice(s=>({...s,transpose:v}))} format={(v)=>v.toFixed(0)} />
+              <Slider label="Detune (cents)" min={-50} max={50} step={0.1} value={voice.detuneCents} onChange={(v)=>setVoice(s=>({...s,detuneCents:v}))} format={(v)=>v.toFixed(1)} />
+              <Slider label="Glide" min={0} max={0.25} step={0.001} value={voice.glide} onChange={(v)=>setVoice(s=>({...s,glide:v}))} format={(v)=>v.toFixed(3)} />
+              <Slider label="Pan" min={-1} max={1} step={0.01} value={voice.pan} onChange={(v)=>setVoice(s=>({...s,pan:v}))} format={(v)=>v.toFixed(2)} />
+              <Toggle label="Latch (click keys to toggle)" checked={voice.latch} onChange={(c)=>setVoice(s=>({...s,latch:c}))} />
+              <Slider label="Velocity → Amp" min={0} max={1} step={0.01} value={voice.velToAmp} onChange={(v)=>setVoice(s=>({...s,velToAmp:v}))} format={(v)=>v.toFixed(2)} />
+            </Section>
+          </Card>
+
+          {/* Tab-specific panels */}
+          {tab === "voice" && (
+            <Card title="Oscillators" right={<Pill>Mix</Pill>}>
+              <Section title="OSC 1">
+                <Toggle label="Enabled" checked={osc1.on} onChange={(c)=>setOsc1(s=>({...s,on:c}))} />
+                <Select label="Wave" value={osc1.type} onChange={(v)=>setOsc1(s=>({...s,type:v}))}
+                  options={["sine","triangle","sawtooth","square"].map(w=>({value:w,label:w}))}
+                />
+                <Slider label="Level" min={0} max={1} step={0.01} value={osc1.gain} onChange={(v)=>setOsc1(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} />
+                <Select label="Octave" value={String(osc1.octave)} onChange={(v)=>setOsc1(s=>({...s,octave:parseInt(v,10)}))}
+                  options={[{value:"-2",label:"-2"},{value:"-1",label:"-1"},{value:"0",label:"0"},{value:"1",label:"+1"},{value:"2",label:"+2"}]}
+                />
+                <Slider label="Fine (cents)" min={-100} max={100} step={0.1} value={osc1.fine} onChange={(v)=>setOsc1(s=>({...s,fine:v}))} format={(v)=>v.toFixed(1)} />
+              </Section>
+
+              <Divider />
+
+              <Section title="OSC 2" hint="Lock = harmonic interval">
+                <Toggle label="Enabled" checked={osc2.on} onChange={(c)=>setOsc2(s=>({...s,on:c}))} />
+                <Select label="Wave" value={osc2.type} onChange={(v)=>setOsc2(s=>({...s,type:v}))}
+                  options={["sine","triangle","sawtooth","square"].map(w=>({value:w,label:w}))}
+                />
+                <Slider label="Level" min={0} max={1} step={0.01} value={osc2.gain} onChange={(v)=>setOsc2(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} />
+                <Toggle label="Lock to OSC1" checked={osc2.lock} onChange={(c)=>setOsc2(s=>({...s,lock:c}))} />
+                <Select label="Interval" value={osc2.ratio} onChange={(v)=>setOsc2(s=>({...s,ratio:v}))}
+                  options={[{value:"uni",label:"Unison"},{value:"fifth",label:"Perfect 5th"},{value:"oct",label:"Octave"}]}
+                  disabled={!osc2.lock}
+                />
+                <Slider label="Detune (cents)" min={-30} max={30} step={0.1} value={osc2.detune} onChange={(v)=>setOsc2(s=>({...s,detune:v}))} format={(v)=>v.toFixed(1)} disabled={!osc2.lock}/>
+                <Slider label="Fine (cents)" min={-100} max={100} step={0.1} value={osc2.fine} onChange={(v)=>setOsc2(s=>({...s,fine:v}))} format={(v)=>v.toFixed(1)} />
+              </Section>
+
+              <Divider />
+
+              <Section title="Sub & Noise">
+                <Toggle label="Sub (square, -1 oct)" checked={sub.on} onChange={(c)=>setSub(s=>({...s,on:c}))} />
+                <Slider label="Sub level" min={0} max={1} step={0.01} value={sub.gain} onChange={(v)=>setSub(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} disabled={!sub.on}/>
+                <Slider label="Noise level" min={0} max={1} step={0.01} value={noise.gain} onChange={(v)=>setNoise(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Noise HPF (Hz)" min={20} max={2000} step={1} value={noise.hp} onChange={(v)=>setNoise(s=>({...s,hp:v}))} format={(v)=>Math.round(v)} />
+              </Section>
+            </Card>
+          )}
+
+          {tab === "mod" && (
+            <Card title="Modulation">
+              <Section title="Audio-rate Mod Osc" hint="FM + AM">
+                <Select label="Wave" value={mod.type} onChange={(v)=>setMod(s=>({...s,type:v}))}
+                  options={["sine","triangle","sawtooth","square"].map(w=>({value:w,label:w}))}
+                />
+                <Slider label="Frequency (Hz)" min={0.1} max={2000} step={0.1} value={mod.freq} onChange={(v)=>setMod(s=>({...s,freq:v}))} format={(v)=>v.toFixed(1)} />
+                <Slider label="FM → OSC1 (Hz)" min={0} max={800} step={1} value={mod.fm1} onChange={(v)=>setMod(s=>({...s,fm1:v}))} />
+                <Slider label="FM → OSC2 (Hz)" min={0} max={800} step={1} value={mod.fm2} onChange={(v)=>setMod(s=>({...s,fm2:v}))} />
+                <Slider label="AM → VCA (depth)" min={0} max={1.5} step={0.01} value={mod.am} onChange={(v)=>setMod(s=>({...s,am:v}))} />
+              </Section>
+
+              <Divider />
+
+              <Section title="LFO" hint="Patch-style routing">
+                <Select label="Wave" value={lfo.type} onChange={(v)=>setLfo(s=>({...s,type:v}))}
+                  options={["sine","triangle","square"].map(w=>({value:w,label:w}))}
+                />
+                <Slider label="Rate (Hz)" min={0.05} max={20} step={0.01} value={lfo.rate} onChange={(v)=>setLfo(s=>({...s,rate:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="→ VCA (tremolo)" min={0} max={1} step={0.01} value={lfo.toVCA} onChange={(v)=>setLfo(s=>({...s,toVCA:v}))} />
+                <Slider label="→ Filter cutoff (Hz)" min={0} max={6000} step={1} value={lfo.toCutoff} onChange={(v)=>setLfo(s=>({...s,toCutoff:v}))} />
+                <Slider label="→ Pitch (Hz)" min={0} max={120} step={0.5} value={lfo.toPitch} onChange={(v)=>setLfo(s=>({...s,toPitch:v}))} />
+                <Slider label="→ Pan" min={0} max={1} step={0.01} value={lfo.toPan} onChange={(v)=>setLfo(s=>({...s,toPan:v}))} />
+              </Section>
+
+              <Divider />
+
+              <Section title="Filter + ADSR">
+                <Toggle label="Filter enabled" checked={filter.enabled} onChange={(c)=>setFilter(s=>({...s,enabled:c}))}/>
+                <Select label="Filter type" value={filter.type} onChange={(v)=>setFilter(s=>({...s,type:v}))}
+                  options={[{value:"lowpass",label:"Low-pass"},{value:"highpass",label:"High-pass"},{value:"bandpass",label:"Band-pass"}]}
+                  disabled={!filter.enabled}
+                />
+                <Slider label="Cutoff (Hz)" min={20} max={20000} step={1} value={filter.cutoff} onChange={(v)=>setFilter(s=>({...s,cutoff:v}))} format={(v)=>Math.round(v)} disabled={!filter.enabled}/>
+                <Slider label="Resonance (Q)" min={0.1} max={20} step={0.01} value={filter.Q} onChange={(v)=>setFilter(s=>({...s,Q:v}))} format={(v)=>v.toFixed(2)} disabled={!filter.enabled}/>
+                <Slider label="Env → cutoff (Hz)" min={-8000} max={8000} step={1} value={filter.envAmt} onChange={(v)=>setFilter(s=>({...s,envAmt:v}))} format={(v)=>Math.round(v)} disabled={!filter.enabled}/>
+                <Divider />
+                <Toggle label="Envelope enabled" checked={env.enabled} onChange={(c)=>setEnv(s=>({...s,enabled:c}))}/>
+                <div className="grid grid-cols-2 gap-2">
+                  <Slider label="Attack (s)" min={0.001} max={2} step={0.001} value={env.a} onChange={(v)=>setEnv(s=>({...s,a:v}))} format={(v)=>v.toFixed(3)} disabled={!env.enabled}/>
+                  <Slider label="Decay (s)" min={0} max={2} step={0.001} value={env.d} onChange={(v)=>setEnv(s=>({...s,d:v}))} format={(v)=>v.toFixed(3)} disabled={!env.enabled}/>
+                  <Slider label="Sustain" min={0} max={1} step={0.01} value={env.s} onChange={(v)=>setEnv(s=>({...s,s:v}))} format={(v)=>v.toFixed(2)} disabled={!env.enabled}/>
+                  <Slider label="Release (s)" min={0.001} max={3} step={0.001} value={env.r} onChange={(v)=>setEnv(s=>({...s,r:v}))} format={(v)=>v.toFixed(3)} disabled={!env.enabled}/>
+                </div>
+              </Section>
+            </Card>
+          )}
+
+          {tab === "fx" && (
+            <Card title="FX Chain" right={<Pill>Drive → Delay → Reverb → Limiter</Pill>}>
+              <Section title="Drive">
+                <Slider label="Drive" min={0} max={1} step={0.01} value={fx.drive} onChange={(v)=>setFx(s=>({...s,drive:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Output trim" min={0.2} max={2} step={0.01} value={fx.driveOut} onChange={(v)=>setFx(s=>({...s,driveOut:v}))} format={(v)=>v.toFixed(2)} />
+              </Section>
+              <Divider />
+              <Section title="Delay">
+                <Slider label="Time (s)" min={0.01} max={1.2} step={0.001} value={fx.delayTime} onChange={(v)=>setFx(s=>({...s,delayTime:v}))} format={(v)=>v.toFixed(3)} />
+                <Slider label="Feedback" min={0} max={0.92} step={0.01} value={fx.delayFB} onChange={(v)=>setFx(s=>({...s,delayFB:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Mix" min={0} max={1} step={0.01} value={fx.delayMix} onChange={(v)=>setFx(s=>({...s,delayMix:v}))} format={(v)=>v.toFixed(2)} />
+              </Section>
+              <Divider />
+              <Section title="Reverb (generated IR)">
+                <Slider label="Size (s)" min={0.2} max={3} step={0.01} value={fx.revSize} onChange={(v)=>setFx(s=>({...s,revSize:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Decay" min={0.2} max={6} step={0.05} value={fx.revDecay} onChange={(v)=>setFx(s=>({...s,revDecay:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Mix" min={0} max={1} step={0.01} value={fx.revMix} onChange={(v)=>setFx(s=>({...s,revMix:v}))} format={(v)=>v.toFixed(2)} />
+                <div className="text-[11px] text-slate-400">Impulse response is regenerated when size/decay changes (debounced).</div>
+              </Section>
+            </Card>
+          )}
+
+          {tab === "rings" && (
+            <Card title="Rings (Modal Resonator)" right={<Pill tone={ringsCfg.enabled ? "emerald":"slate"}>{ringsCfg.enabled?"Enabled":"Disabled"}</Pill>}>
+              <Section title="Routing">
+                <Toggle label="Enabled" checked={ringsCfg.enabled} onChange={(c)=>setRingsCfg(s=>({...s,enabled:c}))} />
+                <Toggle label="Use external exciter (from VCO mix)" checked={ringsCfg.external} onChange={(c)=>setRingsCfg(s=>({...s,external:c}))} disabled={!ringsCfg.enabled}/>
+                <Toggle label="Follow played pitch" checked={ringsCfg.followPitch} onChange={(c)=>setRingsCfg(s=>({...s,followPitch:c}))} disabled={!ringsCfg.enabled}/>
+                <Toggle label="Auto strike on Note On" checked={ringsCfg.autoStrike} onChange={(c)=>setRingsCfg(s=>({...s,autoStrike:c}))} disabled={!ringsCfg.enabled}/>
+                <div className="flex gap-2">
+                  <Button onClick={strikeRings} disabled={!audioReady || !ringsCfg.enabled} tone="emerald">Strike</Button>
+                </div>
+              </Section>
+              <Divider />
+              <Section title="Pitch & Mix">
+                <Slider label="Pitch (MIDI)" min={24} max={96} step={1} value={ringsCfg.pitch} onChange={(v)=>setRingsCfg(s=>({...s,pitch:v}))} format={(v)=>`${v} (${midiToName(v)})`} disabled={!ringsCfg.enabled}/>
+                <Slider label="Wet mix" min={0} max={1} step={0.01} value={ringsCfg.mix} onChange={(v)=>setRingsCfg(s=>({...s,mix:v}))} format={(v)=>v.toFixed(2)} disabled={!ringsCfg.enabled}/>
+              </Section>
+              <Divider />
+              <Section title="Resonator">
+                <Slider label="Structure (inharmonicity)" min={0} max={1} step={0.001} value={ringsCfg.structure} onChange={(v)=>setRingsCfg(s=>({...s,structure:v}))} format={(v)=>v.toFixed(3)} disabled={!ringsCfg.enabled}/>
+                <Slider label="Brightness (spectral tilt)" min={0} max={1} step={0.001} value={ringsCfg.brightness} onChange={(v)=>setRingsCfg(s=>({...s,brightness:v}))} format={(v)=>v.toFixed(3)} disabled={!ringsCfg.enabled}/>
+                <Slider label="Damping (decay)" min={0} max={1} step={0.001} value={ringsCfg.damping} onChange={(v)=>setRingsCfg(s=>({...s,damping:v}))} format={(v)=>v.toFixed(3)} disabled={!ringsCfg.enabled}/>
+                <Slider label="Position (mode weighting)" min={0} max={1} step={0.001} value={ringsCfg.position} onChange={(v)=>setRingsCfg(s=>({...s,position:v}))} format={(v)=>v.toFixed(3)} disabled={!ringsCfg.enabled}/>
+              </Section>
+              <Divider />
+              <Section title="Rings Modulation" hint="Filter & ADSR for Rings">
+                <Toggle label="ADSR envelope on Rings" checked={ringsCfg.envEnabled} onChange={(c)=>setRingsCfg(s=>({...s,envEnabled:c}))} disabled={!ringsCfg.enabled || !env.enabled}/>
+                <div className="text-[11px] text-slate-400 mb-2">
+                  {ringsCfg.envEnabled ? "Rings amplitude follows the main ADSR envelope" : "Rings plays freely without envelope shaping"}
+                </div>
+                <Toggle label="Filter on Rings output" checked={ringsCfg.filterEnabled} onChange={(c)=>setRingsCfg(s=>({...s,filterEnabled:c}))} disabled={!ringsCfg.enabled}/>
+                <Slider label="Filter cutoff (Hz)" min={20} max={20000} step={1} value={ringsCfg.filterCutoff} onChange={(v)=>setRingsCfg(s=>({...s,filterCutoff:v}))} format={(v)=>Math.round(v)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+                <Slider label="Filter Q" min={0.1} max={20} step={0.01} value={ringsCfg.filterQ} onChange={(v)=>setRingsCfg(s=>({...s,filterQ:v}))} format={(v)=>v.toFixed(2)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+                <Slider label="Env -> Filter (Hz)" min={-8000} max={8000} step={1} value={ringsCfg.filterEnvAmt} onChange={(v)=>setRingsCfg(s=>({...s,filterEnvAmt:v}))} format={(v)=>Math.round(v)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+                <Slider label="LFO -> Filter (Hz)" min={0} max={6000} step={1} value={ringsCfg.filterLfoAmt} onChange={(v)=>setRingsCfg(s=>({...s,filterLfoAmt:v}))} format={(v)=>Math.round(v)} disabled={!ringsCfg.enabled || !ringsCfg.filterEnabled}/>
+              </Section>
+              <Divider />
+              <Section title="Mic input (optional)">
+                <Toggle label="Enable mic routing" checked={mic.enabled} onChange={(c)=>setMic(s=>({...s,enabled:c}))} disabled={!audioReady}/>
+                <Slider label="Mic level" min={0} max={1} step={0.01} value={mic.gain} onChange={(v)=>setMic(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} disabled={!audioReady || !mic.enabled}/>
+                <Button onClick={startMic} disabled={!audioReady} title="Ask permission and route microphone into the synth mixer">Start Mic</Button>
+                <div className="text-[11px] text-slate-400">Useful to excite the resonator with external sound. (Mic permission required.)</div>
+              </Section>
+            </Card>
+          )}
+
+          {tab === "scope" && (
+            <Card title="Scope & Analysis">
+              <Section title="Source">
+                <Select label="Analyser tap" value={scopeCfg.source} onChange={(v)=>setScopeCfg(s=>({...s,source:v}))}
+                  options={[{value:"post",label:"Post FX (default)"},{value:"pre",label:"Pre FX (raw voice)"}]}
+                />
+              </Section>
+              <Divider />
+              <Section title="Display">
+                <Select label="Mode" value={scopeCfg.mode} onChange={(v)=>setScopeCfg(s=>({...s,mode:v}))}
+                  options={[{value:"rolling",label:"Rolling"},{value:"single",label:"Single-cycle (triggered)"}]}
+                />
+                <Slider label="Gain (vertical)" min={0.2} max={6} step={0.01} value={scopeCfg.gain} onChange={(v)=>setScopeCfg(s=>({...s,gain:v}))} format={(v)=>v.toFixed(2)} />
+                <Toggle label="AC coupling (remove DC)" checked={scopeCfg.ac} onChange={(c)=>setScopeCfg(s=>({...s,ac:c}))} />
+              </Section>
+              <Divider />
+              <Section title="Trigger">
+                <Slider label="Level" min={-1} max={1} step={0.01} value={scopeCfg.triggerLevel} onChange={(v)=>setScopeCfg(s=>({...s,triggerLevel:v}))} format={(v)=>v.toFixed(2)} />
+                <Select label="Slope" value={scopeCfg.slope} onChange={(v)=>setScopeCfg(s=>({...s,slope:v}))}
+                  options={[{value:"+",label:"Rising"},{value:"-",label:"Falling"}]}
+                />
+                <Toggle label="Auto trigger fallback" checked={scopeCfg.autoTrigger} onChange={(c)=>setScopeCfg(s=>({...s,autoTrigger:c}))} />
+              </Section>
+              <Divider />
+              <Section title="Rendering">
+                <Slider label="Smoothing" min={0} max={0.9} step={0.01} value={scopeCfg.smoothing} onChange={(v)=>setScopeCfg(s=>({...s,smoothing:v}))} format={(v)=>v.toFixed(2)} />
+                <Slider label="Line width" min={1} max={4} step={0.1} value={scopeCfg.lineWidth} onChange={(v)=>setScopeCfg(s=>({...s,lineWidth:v}))} format={(v)=>v.toFixed(1)} />
+              </Section>
+              <div className="text-[11px] text-slate-400">
+                Tip: if the trace is flat, increase gain, enable AC coupling, or switch to Rolling mode.
+              </div>
+            </Card>
+          )}
+
+          {tab === "seq" && (
+            <Card title="Step Sequencer" right={<Pill tone={seq.enabled?"emerald":"slate"}>{seq.enabled?"Playing":"Stopped"}</Pill>}>
+              <Section title="Transport">
+                <Toggle label="Enable sequencer" checked={seq.enabled} onChange={(c)=>setSeq(s=>({...s,enabled:c}))}/>
+                <Toggle label="Rings only (no oscillators)" checked={seq.ringsOnly} onChange={(c)=>setSeq(s=>({...s,ringsOnly:c}))}/>
+                <Slider label="BPM" min={40} max={220} step={1} value={seq.bpm} onChange={(v)=>setSeq(s=>({...s,bpm:v}))} format={(v)=>v.toFixed(0)} />
+                <Slider label="Gate" min={0.05} max={0.95} step={0.01} value={seq.gate} onChange={(v)=>setSeq(s=>({...s,gate:v}))} format={(v)=>v.toFixed(2)} disabled={seq.ringsOnly}/>
+                <Slider label="Swing" min={0} max={0.45} step={0.01} value={seq.swing} onChange={(v)=>setSeq(s=>({...s,swing:v}))} format={(v)=>v.toFixed(2)} />
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={randomizeSeq}>Random</Button>
+                  <Button onClick={clearSeq}>Clear</Button>
+                  <Button onClick={seqPatterns.fourOnFloor}>4/4</Button>
+                  <Button onClick={seqPatterns.arpUp}>Arp Up</Button>
+                  <Button onClick={seqPatterns.arpDown}>Arp Down</Button>
+                  <Button onClick={seqPatterns.bassline}>Bass</Button>
+                  <Button onClick={seqPatterns.euclidean}>Euclidean</Button>
+                </div>
+                {seq.ringsOnly && !ringsCfg.enabled && (
+                  <div className="text-[11px] text-amber-400 mt-2">
+                    Note: Enable Rings in the Rings tab for Rings-only mode to work.
+                  </div>
+                )}
+              </Section>
+              <Divider />
+              <Section title="Steps" hint={`${seq.steps.length} steps · Click to edit`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[11px] text-slate-400">Steps:</span>
+                  <select
+                    value={String(seq.steps.length)}
+                    onChange={(e) => {
+                      const newLen = parseInt(e.target.value, 10);
+                      setSeq(s => {
+                        const newSteps = [...s.steps];
+                        while (newSteps.length < newLen) newSteps.push(null);
+                        return { ...s, steps: newSteps.slice(0, newLen) };
+                      });
+                    }}
+                    className="bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <option value="8">8</option>
+                    <option value="16">16</option>
+                    <option value="24">24</option>
+                    <option value="32">32</option>
+                  </select>
+                  {seq.enabled && currentStep >= 0 && (
+                    <span className="text-emerald-400 text-[11px] ml-auto">
+                      Step {(currentStep % seq.steps.length) + 1}/{seq.steps.length}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {seq.steps.map((st, i) => {
+                    const isActive = seq.enabled && currentStep >= 0 && (currentStep % seq.steps.length) === i;
+                    return (
+                      <div key={i} className={clsx(
+                        "rounded-xl border p-2 transition-all duration-75",
+                        isActive
+                          ? "border-emerald-500/70 bg-emerald-900/30 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                          : "border-slate-800/70 bg-slate-950/30"
+                      )}>
+                        <div className={clsx("text-[11px] mb-1", isActive ? "text-emerald-300" : "text-slate-400")}>
+                          {i+1}
+                        </div>
+                        <select
+                          value={st==null ? "rest" : String(st)}
+                          onChange={(e)=>setStep(i, e.target.value)}
+                          className={clsx(
+                            "w-full border rounded-lg px-2 py-1.5 text-xs",
+                            isActive
+                              ? "bg-emerald-900/40 border-emerald-600/50"
+                              : "bg-slate-900/60 border-slate-700/60"
+                          )}
+                        >
+                          <option value="rest">--</option>
+                          {Array.from({length:49}, (_,k)=>36+k).map(m => (
+                            <option key={m} value={String(m)}>{midiToName(m)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-2">
+                  Tip: Import a MIDI file to load note patterns. Sequencer uses the global ADSR envelope.
+                </div>
+              </Section>
+            </Card>
+          )}
+
+          <div className="text-[10px] text-slate-500 px-1">
+            Created by Kevin Schoenholzer with the help of ChatGPT, 2025 · For educational use only.
+          </div>
+        </aside>
+
+        {/* Visuals / performance */}
+        <main className="h-full overflow-y-auto p-4 lg:p-6 space-y-4 gridbg">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card title="Time Scope" right={<Pill>Peak <span className="tabular-nums">{meter.peak.toFixed(3)}</span></Pill>}>
+              <div className="h-[32vh] md:h-[30vh]">
+                <canvas ref={setScopeEl} className="w-full h-full block rounded-xl overflow-hidden"></canvas>
+              </div>
+            </Card>
+
+            <Card title="Spectrum" right={<Pill>Source: {scopeCfg.source}</Pill>}>
+              <div className="h-[32vh] md:h-[30vh]">
+                <canvas ref={setSpecEl} className="w-full h-full block rounded-xl overflow-hidden"></canvas>
+              </div>
+            </Card>
+          </div>
+
+          <Card title="Keyboard" right={<Pill tone="slate">Click / touch · latch optional</Pill>}>
+            <Piano
+              baseMidi={voice.note}
+              octaves={2}
+              latch={voice.latch}
+              heldMidi={heldMidi}
+              setHeldMidi={setHeldMidi}
+              onDown={(m)=>{ if(!audioReady) return; noteOn(m, 1.0); }}
+              onUp={(m)=>{ if(!audioReady) return; noteOff(); }}
+            />
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-400">
+              <div><span className="text-slate-200">Quick start:</span> Start Audio → play keys → add Drive or Reverb → Record.</div>
+              <div><span className="text-slate-200">Resonator:</span> Enable Rings, press Space to strike, or use Seq with Rings-only mode.</div>
+              <div><span className="text-slate-200">Import:</span> Load JSON presets or MIDI files to populate the sequencer.</div>
+            </div>
+          </Card>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    </script>
+  </body>
+</html>

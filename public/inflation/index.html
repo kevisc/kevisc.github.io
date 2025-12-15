@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Understanding Inflation: Why CPI Understates Reality</title>
+  <style>
+  :root{
+    --bg:#0b0c0f;
+    --panel:#131722;
+    --panel2:#0f1320;
+    --panel3:#1a1f2e;
+    --text:#e8edf6;
+    --muted:#9aa6bf;
+    --accent:#ff7a00;
+    --accent2:#5aa9ff;
+    --success:#26de81;
+    --warning:#f39c12;
+    --border:#263042;
+    --border-light:#32435f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,var(--bg),#0c111b);
+    color:var(--text);
+    font:15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+  .wrap{max-width:1400px;margin:0 auto;padding:24px}
+
+  /* Header */
+  header{
+    text-align:center;
+    padding:32px 20px;
+    margin-bottom:32px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+  }
+  h1{
+    font-size:36px;
+    margin:0 0 12px 0;
+    font-weight:700;
+    letter-spacing:-0.5px;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+  }
+  .lead{
+    color:var(--muted);
+    margin:0;
+    font-size:16px;
+    max-width:900px;
+    margin:0 auto;
+    line-height:1.7;
+  }
+
+  /* Cards */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:24px;
+    margin-bottom:20px;
+    transition:border-color 0.3s ease;
+  }
+  .card:hover{border-color:var(--border-light)}
+
+  /* Grid layouts */
+  .grid{display:grid;grid-template-columns:420px 1fr;gap:20px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:1100px){
+    .grid{grid-template-columns:1fr}
+    .grid-2{grid-template-columns:1fr}
+  }
+
+  /* Typography */
+  h2{
+    font-size:24px;
+    margin:0 0 16px 0;
+    font-weight:600;
+    color:var(--accent);
+  }
+  h3{
+    font-size:20px;
+    margin:0 0 12px 0;
+    font-weight:600;
+  }
+  h4{
+    font-size:16px;
+    margin:0 0 8px 0;
+    font-weight:600;
+    color:var(--accent2);
+  }
+
+  /* Form controls */
+  label{
+    display:block;
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:6px;
+    font-weight:500;
+  }
+  input[type=range]{
+    width:100%;
+    -webkit-appearance:none;
+    appearance:none;
+    height:6px;
+    border-radius:3px;
+    background:var(--panel2);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    appearance:none;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:var(--accent);
+    cursor:pointer;
+    transition:transform 0.2s ease;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{
+    transform:scale(1.2);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:var(--accent);
+    cursor:pointer;
+    border:none;
+  }
+
+  input[type=text]{
+    min-width:180px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    color:var(--text);
+    padding:10px 14px;
+    font-size:14px;
+    transition:border-color 0.3s ease;
+  }
+  input[type=text]:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+
+  /* Buttons */
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:10px;
+    padding:10px 16px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:500;
+    transition:all 0.3s ease;
+  }
+  .btn:hover{
+    border-color:var(--accent);
+    background:var(--panel3);
+    transform:translateY(-1px);
+  }
+  .btn:active{transform:translateY(0)}
+
+  /* Tabs */
+  .tabs{
+    display:flex;
+    gap:10px;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+    background:var(--panel);
+    padding:12px;
+    border-radius:14px;
+    border:1px solid var(--border);
+  }
+  .tab{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:10px;
+    padding:12px 20px;
+    cursor:pointer;
+    font-size:15px;
+    font-weight:500;
+    transition:all 0.3s ease;
+  }
+  .tab:hover{
+    border-color:var(--border-light);
+    transform:translateY(-2px);
+  }
+  .tab.active{
+    background:linear-gradient(135deg, var(--accent), #e56900);
+    border-color:var(--accent);
+    color:#fff;
+    box-shadow:0 4px 12px rgba(255, 122, 0, 0.3);
+  }
+  .hidden{display:none}
+
+  /* Info boxes */
+  .small{font-size:13px;color:var(--muted)}
+  .accent{color:var(--accent);font-weight:600}
+  .note{
+    background:var(--panel2);
+    border-left:4px solid var(--accent);
+    border-radius:10px;
+    padding:16px;
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.7;
+  }
+  .note.warning{
+    border-left-color:var(--warning);
+  }
+  .info-box{
+    background:var(--panel3);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    margin-top:16px;
+  }
+  .info-box h4{margin-top:0}
+  .info-box.highlight{
+    border-color:var(--accent);
+    background:rgba(255, 122, 0, 0.05);
+  }
+
+  /* Tables */
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  th,td{
+    padding:12px;
+    border-bottom:1px solid var(--border);
+    text-align:right;
+  }
+  th:first-child,td:first-child{text-align:left}
+  th{
+    background:var(--panel2);
+    color:var(--accent);
+    font-weight:600;
+  }
+  tbody tr:hover{background:var(--panel2)}
+
+  /* Charts */
+  .chart-box{
+    height:340px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+    position:relative;
+  }
+  svg{width:100%;height:100%}
+  .tooltip{
+    position:absolute;
+    pointer-events:none;
+    background:rgba(20,24,35,.95);
+    color:#e8edf6;
+    border:1px solid var(--accent);
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    transition:opacity .15s;
+    z-index:100;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  /* Treadmill animation */
+  .treadmill-card{
+    display:flex;
+    gap:16px;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .treadmill{
+    position:relative;
+    height:160px;
+    border-radius:14px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    overflow:hidden;
+    flex:1;
+    min-width:300px;
+    max-width:600px;
+  }
+  .belt{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:28px;
+    height:40px;
+    background:repeating-linear-gradient(90deg,#1e2434 0 24px,#283148 24px 48px);
+    animation:belt-move var(--belt-duration,6s) linear infinite;
+  }
+  .rollers{
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:12px;
+    height:14px;
+    border-radius:7px;
+    background:#1c2232;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
+  }
+  .cat{
+    position:absolute;
+    bottom:68px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:54px;
+    filter:drop-shadow(0 6px 10px rgba(0,0,0,.6));
+    animation:cat-bob var(--cat-duration,1.2s) ease-in-out infinite;
+  }
+  .treadmill.deflate .belt{animation-direction:reverse}
+  .tip{
+    position:absolute;
+    pointer-events:none;
+    background:rgba(20,24,35,.95);
+    color:#e8edf6;
+    border:1px solid var(--accent);
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    transition:opacity .15s;
+    top:12px;
+    right:12px;
+  }
+
+  @keyframes belt-move{
+    from{background-position:0 0}
+    to{background-position:480px 0}
+  }
+  @keyframes cat-bob{
+    0%,100%{transform:translate(-50%,0)}
+    50%{transform:translate(-50%,-6px)}
+  }
+
+  /* Details/Accordion */
+  details{margin-top:16px}
+  details summary{
+    cursor:pointer;
+    color:var(--accent2);
+    font-weight:600;
+    padding:12px;
+    border-radius:10px;
+    transition:background 0.3s ease;
+  }
+  details summary:hover{background:var(--panel2)}
+  details[open]{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px;
+  }
+  details[open] summary{padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+
+  /* Good rows */
+  .good-row{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:12px;
+    transition:all 0.3s ease;
+  }
+  .good-row:hover{
+    border-color:var(--border-light);
+    box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  /* Stats grid */
+  .stats-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+    margin:16px 0;
+  }
+  .stat-card{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    text-align:center;
+  }
+  .stat-value{
+    font-size:28px;
+    font-weight:700;
+    color:var(--accent);
+    margin-bottom:4px;
+  }
+  .stat-label{
+    font-size:13px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+
+  /* Section headers */
+  .section-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+
+  footer{
+    max-width:1400px;
+    margin:32px auto 16px auto;
+    color:var(--muted);
+    font-size:13px;
+    padding:0 24px;
+    text-align:center;
+  }
+
+  @media(max-width:768px){
+    h1{font-size:28px}
+    .wrap{padding:16px}
+    .card{padding:18px}
+    .tabs{padding:8px}
+    .tab{padding:10px 16px;font-size:14px}
+  }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Understanding Inflation</h1>
+    <p class="lead">Why official CPI systematically understates true inflation, especially for essential goods and middle-class households. Explore money supply growth (ΔM), productivity changes (ΔA), and the hidden inflation gap.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab active" data-tab="tab-intro" role="tab">The Underreporting Problem</button>
+    <button class="tab" data-tab="tab-net" role="tab">Money Supply vs Prices</button>
+    <button class="tab" data-tab="tab-reality" role="tab">Real-World Prices</button>
+    <button class="tab" data-tab="tab-effects" role="tab">Who Gets Hurt?</button>
+  </nav>
+
+  <!-- INTRODUCTION TAB -->
+  <div id="tab-intro" class="tabpane">
+    <section class="card">
+      <h2>The Inflation Measurement Gap</h2>
+      <p>According to official CPI, inflation averaged about 2.5% annually from 1990-2020. But if you look at what people actually buy, the picture is very different.</p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">+100%</div>
+          <div class="stat-label">Official CPI (1990-2020)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+180%</div>
+          <div class="stat-label">Median House Price</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+300%</div>
+          <div class="stat-label">College Tuition</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+240%</div>
+          <div class="stat-label">Healthcare Costs</div>
+        </div>
+      </div>
+
+      <div class="info-box highlight">
+        <h4>The Core Issue</h4>
+        <p>Housing, healthcare, education, and food make up <strong>60-70% of household spending</strong>. All rose faster than CPI. Meanwhile, the categories that DID deflate (electronics, apparel) only represent ~25% of spending.</p>
+        <p style="margin-top:12px">This isn't a minor discrepancy—it's a systematic measurement problem that hides the true erosion of purchasing power for essentials.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Three Types of Inflation</h3>
+
+      <div class="info-box">
+        <h4>1. Monetary Inflation (Money Supply Growth)</h4>
+        <p>The increase in broad money supply (M2). From 1990-2020, M2 per capita grew about <strong>5% annually</strong>—twice as fast as official CPI.</p>
+      </div>
+
+      <div class="info-box">
+        <h4>2. Consumer Price Inflation (CPI)</h4>
+        <p>The "official" measure tracking a basket of goods. But the basket composition, weighting, and quality adjustments all systematically understate inflation.</p>
+      </div>
+
+      <div class="info-box">
+        <h4>3. Asset Price Inflation</h4>
+        <p>Stocks, bonds, real estate going up. When money supply grows but gets concentrated at the top, you get asset inflation without consumer price inflation.</p>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The Gap:</strong> Money supply per capita (+5%/yr) → Official CPI (+2.5%/yr) → But essentials rose +3-4%/yr or more. Where did the inflation go? Into assets held by the wealthy, and into essential goods that can't be outsourced.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>How CPI Understates Inflation</h3>
+
+      <div class="grid-2">
+        <div class="info-box">
+          <h4>Hedonic Adjustments</h4>
+          <p><strong>Example:</strong> A new car costs $40,000 vs $15,000 in 1990 (167% increase). But CPI says new cars only rose 22% because they're "better quality."</p>
+          <p style="margin-top:8px">While some adjustment makes sense, this dramatically understates what you actually pay.</p>
+        </div>
+
+        <div class="info-box">
+          <h4>Substitution Bias</h4>
+          <p>CPI assumes when beef gets expensive, you buy chicken instead. So it measures the "cost of survival," not the cost of the same lifestyle.</p>
+          <p style="margin-top:8px">This masks declining living standards as "stable prices."</p>
+        </div>
+
+        <div class="info-box">
+          <h4>Owner's Equivalent Rent</h4>
+          <p>Instead of tracking house prices, CPI tracks estimated rental equivalent. Lower interest rates reduce monthly payments even as house prices soar.</p>
+          <p style="margin-top:8px">If you pay cash or want to buy, this grossly understates your cost.</p>
+        </div>
+
+        <div class="info-box">
+          <h4>Weighting Games</h4>
+          <p>CPI gives housing a 33% weight, but many households spend 40-50% on housing. Tech (which DID deflate) gets overweighted relative to real spending.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>The Bottom Line</h3>
+      <p>Comparing apples-to-apples, the "American Dream" basket (house, kids, education, healthcare, car, quality food) has inflated closer to <strong>3-4% annually</strong>, not 2.5%.</p>
+
+      <div class="note">
+        <p><strong>What this means over 30 years:</strong></p>
+        <ul style="margin:8px 0 0 20px">
+          <li>Official CPI: Prices doubled (2x)</li>
+          <li>Reality for essentials: Prices tripled (3x) or more</li>
+          <li>Money supply per capita: Grew 4.5x</li>
+          <li>Bottom 90% wealth share: Fell from 40% to 30%</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <!-- MONEY SUPPLY TAB -->
+  <div id="tab-net" class="tabpane hidden">
+    <section class="card">
+      <div class="treadmill-card">
+        <div class="treadmill" id="treadmill">
+          <div class="tip" id="treadTip">Aggregate: 0.00%</div>
+          <div class="belt"></div>
+          <div class="rollers"></div>
+          <div class="cat" id="tcat">🐈‍⬛</div>
+        </div>
+        <div>
+          <h3 style="margin:0">Net Price Change</h3>
+          <div class="stat-value" id="treadVal">0.00%</div>
+          <div class="small">ΔM (money growth) − ΔA (productivity) = net inflation</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>The Theory: ΔM − ΔA</h3>
+      <p>For any good, the net price change ≈ <strong>Money Supply Growth (ΔM)</strong> − <strong>Productivity Growth (ΔA)</strong></p>
+
+      <div class="info-box">
+        <h4>Examples</h4>
+        <ul style="margin:8px 0 0 20px;line-height:1.8">
+          <li><strong>Smartphones:</strong> ΔM = 5%, ΔA = 20% → Prices fall 15%</li>
+          <li><strong>Healthcare:</strong> ΔM = 5%, ΔA = -1% → Prices rise 6%</li>
+          <li><strong>Housing:</strong> ΔM = 5%, ΔA = 1% → Prices rise 4%</li>
+        </ul>
+      </div>
+
+      <div class="note" style="margin-top:16px">
+        <strong>Key Insight:</strong> CPI heavily weights goods with high ΔA (tech) that deflate, while underweighting services with low ΔA that inflate rapidly. This creates the measurement gap.
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h3>Adjust the Model</h3>
+        <div style="margin-bottom:20px">
+          <label>Money Supply Growth (ΔM) — %</label>
+          <input id="money" type="range" min="-10" max="30" step="0.1" value="10">
+          <div class="row" style="margin-top:8px">
+            <div class="small">Current: <span id="moneyVal" class="accent">10.0%</span></div>
+          </div>
+        </div>
+
+        <div class="note">
+          US M2 per capita grew ~5% annually from 1990-2020, while CPI reported ~2.5%
+        </div>
+
+        <h3 style="margin-top:24px">Sector Examples</h3>
+        <p class="small" style="margin-bottom:12px">Adjust productivity (ΔA) for each sector:</p>
+        <div id="goods"></div>
+        <div class="row" style="margin-top:16px">
+          <button class="btn" id="addGood">+ Add Sector</button>
+          <button class="btn" id="resetGoods">Reset</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-header">
+          <h3 style="margin:0">Net Price Changes by Sector</h3>
+          <div class="small">Weighted Aggregate: <span id="agg" class="accent">0.0%</span></div>
+        </div>
+        <div class="chart-box" id="barsBox">
+          <svg id="barsSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
+        </div>
+        <div style="margin-top:20px">
+          <table id="table">
+            <thead>
+              <tr>
+                <th>Sector</th>
+                <th>Weight</th>
+                <th>ΔM (%)</th>
+                <th>ΔA (%)</th>
+                <th>Net (%)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h3>Why This Matters</h3>
+      <p>Notice how sectors with low productivity growth (healthcare, education, housing) see the fastest price increases. These are the sectors that:</p>
+      <ul style="margin:12px 0 0 24px;line-height:1.8">
+        <li>Can't be outsourced to cheaper labor markets</li>
+        <li>Can't be easily automated</li>
+        <li>Represent the bulk of middle-class spending</li>
+        <li>Are often mandatory or essential</li>
+      </ul>
+
+      <div class="note" style="margin-top:16px">
+        <strong>Result:</strong> Official CPI says 2.5%, but your cost of living went up 3-4% or more if you need housing, healthcare, and education.
+      </div>
+    </section>
+  </div>
+
+  <!-- REAL WORLD PRICES TAB -->
+  <div id="tab-reality" class="tabpane hidden">
+    <section class="card">
+      <h2>Real-World Price Comparisons</h2>
+      <p>Let's look at actual prices, not hedonic-adjusted indexes.</p>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <h3>The Big Mac Index</h3>
+        <p>From 1990-2020:</p>
+        <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:22px">~$2.00</div>
+            <div class="stat-label">1990 Price</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:22px">~$5.00</div>
+            <div class="stat-label">2020 Price</div>
+          </div>
+        </div>
+        <p style="margin-top:16px"><strong>Increase:</strong> 150% (3% annually)</p>
+        <p><strong>CPI for same period:</strong> 100% (2.5% annually)</p>
+
+        <div class="note" style="margin-top:16px">
+          The Big Mac requires beef, labor, energy, and real estate—all things that can't be outsourced or hedonic-adjusted away.
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Median Home Price</h3>
+        <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:20px">$125k</div>
+            <div class="stat-label">1990 Median</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:20px">$350k</div>
+            <div class="stat-label">2020 Median</div>
+          </div>
+        </div>
+        <p style="margin-top:16px"><strong>Increase:</strong> 180% (3.5% annually)</p>
+        <p><strong>CPI housing component:</strong> Much lower due to "owner's equivalent rent" methodology</p>
+
+        <div class="note" style="margin-top:16px">
+          Lower interest rates reduced monthly payments, but the asset itself got much more expensive. CPI tracks payments, not prices.
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>College Tuition</h3>
+        <div class="stats-grid" style="grid-template-columns:1fr">
+          <div class="stat-card">
+            <div class="stat-value">+300%</div>
+            <div class="stat-label">Tuition Increase (1990-2020)</div>
+          </div>
+        </div>
+        <p style="margin-top:16px"><strong>Annual rate:</strong> ~4.7%</p>
+        <p><strong>CPI for same period:</strong> +100% (2.5% annually)</p>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>The Hidden Tax</h4>
+          <p>Education wasn't mandatory for median wage in 1990. Now it is. So you need to add student debt just to earn inflation-adjusted wages.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Healthcare Costs</h3>
+        <div class="stats-grid" style="grid-template-columns:1fr">
+          <div class="stat-card">
+            <div class="stat-value">+240%</div>
+            <div class="stat-label">Healthcare CPI (1990-2020)</div>
+          </div>
+        </div>
+        <p style="margin-top:16px">Even official healthcare CPI rose 2.4x faster than broad CPI</p>
+
+        <div class="note" style="margin-top:16px">
+          This is one area where CPI actually captures some of the pain. Healthcare has near-zero productivity growth but captures money supply growth fully.
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h3>What About Deflation?</h3>
+      <p>Yes, some categories genuinely deflated:</p>
+
+      <div class="grid-2" style="margin-top:16px">
+        <div class="info-box">
+          <h4>Electronics & Apparel</h4>
+          <p>Smartphones, TVs, clothing all got cheaper due to massive productivity gains and offshoring to China/Southeast Asia.</p>
+          <p style="margin-top:8px"><strong>Problem:</strong> These are only 25% of household spending</p>
+        </div>
+
+        <div class="info-box">
+          <h4>Why the Gap Exists</h4>
+          <p>Essentials (housing, healthcare, education, food) = 70% of spending, inflated 3-4%/yr</p>
+          <p style="margin-top:8px">Discretionary (electronics, apparel) = 25% of spending, deflated</p>
+          <p style="margin-top:8px"><strong>CPI averages these and says 2.5%</strong></p>
+        </div>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The iPad Argument:</strong> In 2011, NY Fed Chair Dudley told inflation-concerned Queens residents that an iPad 2 came out at the same price as iPad 1 but was better, so on a quality-adjusted basis, prices fell. Someone yelled back: <strong>"You can't eat an iPad!"</strong>
+      </div>
+    </section>
+  </div>
+
+  <!-- WHO GETS HURT TAB -->
+  <div id="tab-effects" class="tabpane hidden">
+    <section class="card">
+      <h2>Who Benefits, Who Gets Squeezed?</h2>
+      <p>Inflation's impact depends heavily on your balance sheet and income source.</p>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <h3>Top 10% (Winners)</h3>
+        <ul style="margin:12px 0 0 20px;line-height:1.9">
+          <li><strong>Debt/Equity ratio:</strong> ~2% (almost all assets, minimal debt)</li>
+          <li><strong>Asset ownership:</strong> 70% of stocks, bonds, real estate</li>
+          <li><strong>Income source:</strong> Capital gains, dividends (grew with money supply)</li>
+          <li><strong>Spending:</strong> Small % on essentials, large % on discretionary</li>
+        </ul>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Why They Win</h4>
+          <p>Their assets inflate with money supply growth. Essential goods are a small % of their budget. They benefit from cheap debt and rising asset prices.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Bottom 50% (Losers)</h3>
+        <ul style="margin:12px 0 0 20px;line-height:1.9">
+          <li><strong>Debt/Equity ratio:</strong> ~200% (more debt than equity)</li>
+          <li><strong>Asset ownership:</strong> 2% of total household wealth</li>
+          <li><strong>Income source:</strong> Wages (flat in real terms for 40 years)</li>
+          <li><strong>Spending:</strong> 70%+ on essentials (housing, food, healthcare)</li>
+        </ul>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Why They Lose</h4>
+          <p>Wages barely keep up with CPI. But actual costs (essentials) rose faster. They have little asset exposure to benefit from money supply growth. Need more education/debt just to earn median wage.</p>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h3>The Wealth Concentration Result</h3>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">40% → 30%</div>
+          <div class="stat-label">Bottom 90% Wealth Share</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">60% → 70%</div>
+          <div class="stat-label">Top 10% Wealth Share</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">775x</div>
+          <div class="stat-label">Top 1% vs Bottom 50% Per Capita</div>
+        </div>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The Mechanism:</strong> Money supply grows 5%/yr → Asset prices grow ~5%/yr → CPI only shows 2.5%/yr → Real wages grow 0%/yr → Bottom 90% fall behind while top 10% accumulate assets
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>The Productivity Paradox</h3>
+
+      <div class="info-box">
+        <h4>What Happened</h4>
+        <p>From 1990-2020:</p>
+        <ul style="margin:8px 0 0 20px">
+          <li>Worker productivity rose ~75%</li>
+          <li>Median wages rose ~25% (barely keeping pace with essentials inflation)</li>
+          <li>Corporate profits as % of GDP rose dramatically</li>
+          <li>Automation and offshoring displaced labor</li>
+        </ul>
+      </div>
+
+      <div class="info-box" style="margin-top:16px">
+        <h4>The Result</h4>
+        <p>Workers became more productive but didn't capture those gains. Instead, productivity gains went to:</p>
+        <ul style="margin:8px 0 0 20px">
+          <li>Capital owners (shareholders)</li>
+          <li>Consumers (via lower prices for manufactured goods)</li>
+          <li>NOT to labor (wages stagnated)</li>
+        </ul>
+      </div>
+
+      <div class="note" style="margin-top:16px">
+        So the working class got cheaper iPhones and t-shirts, but housing, healthcare, and education ate up any savings—and then some.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Why Policymakers Allow This</h3>
+
+      <div class="grid-2">
+        <div class="info-box">
+          <h4>Benefits of Underreporting</h4>
+          <ul style="margin:8px 0 0 20px">
+            <li>Social Security COLAs are lower (saves government money)</li>
+            <li>Can claim "stable prices" while running loose monetary policy</li>
+            <li>Inflates away government debt quietly</li>
+            <li>Boosts asset prices (makes wealthy happy)</li>
+          </ul>
+        </div>
+
+        <div class="info-box">
+          <h4>Costs of Honest Reporting</h4>
+          <ul style="margin:8px 0 0 20px">
+            <li>Would show wages haven't kept pace with reality</li>
+            <li>Would force higher Social Security payments</li>
+            <li>Would reveal actual decline in living standards</li>
+            <li>Would limit ability to run loose monetary policy</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The Trade-Off:</strong> Accurate inflation measurement vs political/fiscal convenience. Current system chose convenience.
+      </div>
+    </section>
+  </div>
+</div>
+
+<footer>
+  <p>Based on research by Lyn Alden and others who have documented the CPI underreporting problem. Created by Kevin Schoenholzer with assistance from Claude AI, 2025.</p>
+</footer>
+
+<div id="tooltip" class="tooltip"></div>
+
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
