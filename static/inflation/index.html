@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Understanding Inflation: Interactive Educational Tool</title>
+  <title>Understanding Inflation: Why CPI Understates Reality</title>
   <style>
   :root{
     --bg:#0b0c0f;
@@ -15,6 +15,7 @@
     --accent:#ff7a00;
     --accent2:#5aa9ff;
     --success:#26de81;
+    --warning:#f39c12;
     --border:#263042;
     --border-light:#32435f;
   }
@@ -214,6 +215,9 @@
     font-size:14px;
     line-height:1.7;
   }
+  .note.warning{
+    border-left-color:var(--warning);
+  }
   .info-box{
     background:var(--panel3);
     border:1px solid var(--border);
@@ -222,6 +226,10 @@
     margin-top:16px;
   }
   .info-box h4{margin-top:0}
+  .info-box.highlight{
+    border-color:var(--accent);
+    background:rgba(255, 122, 0, 0.05);
+  }
 
   /* Tables */
   table{
@@ -409,36 +417,6 @@
     gap:12px;
   }
 
-  /* Basket viz */
-  .basket-grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
-    gap:14px;
-  }
-  .basket-item{
-    background:var(--panel2);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:14px;
-    text-align:center;
-    transition:all 0.3s ease;
-  }
-  .basket-item:hover{
-    border-color:var(--accent);
-    transform:translateY(-2px);
-  }
-  .basket-icon{font-size:32px;margin-bottom:8px}
-  .basket-name{
-    font-weight:600;
-    font-size:14px;
-    margin-bottom:4px;
-  }
-  .basket-weight{
-    color:var(--accent);
-    font-weight:700;
-    font-size:20px;
-  }
-
   footer{
     max-width:1400px;
     margin:32px auto 16px auto;
@@ -461,107 +439,117 @@
 <div class="wrap">
   <header>
     <h1>Understanding Inflation</h1>
-    <p class="lead">An interactive educational tool exploring how inflation is measured as a weighted average of price changes across different goods, driven by money supply growth (ΔM) and productivity changes (ΔA). Learn about measurement biases, substitution effects, and quality adjustments.</p>
+    <p class="lead">Why official CPI systematically understates true inflation, especially for essential goods and middle-class households. Explore money supply growth (ΔM), productivity changes (ΔA), and the hidden inflation gap.</p>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Views">
-    <button class="tab active" data-tab="tab-intro" role="tab">Introduction</button>
-    <button class="tab" data-tab="tab-net" role="tab">Price Changes (ΔM − ΔA)</button>
-    <button class="tab" data-tab="tab-basket" role="tab">CPI Basket</button>
-    <button class="tab" data-tab="tab-biases" role="tab">Measurement Issues</button>
-    <button class="tab" data-tab="tab-effects" role="tab">Economic Effects</button>
+    <button class="tab active" data-tab="tab-intro" role="tab">The Underreporting Problem</button>
+    <button class="tab" data-tab="tab-net" role="tab">Money Supply vs Prices</button>
+    <button class="tab" data-tab="tab-reality" role="tab">Real-World Prices</button>
+    <button class="tab" data-tab="tab-effects" role="tab">Who Gets Hurt?</button>
   </nav>
 
   <!-- INTRODUCTION TAB -->
   <div id="tab-intro" class="tabpane">
     <section class="card">
-      <h2>What is Inflation?</h2>
-      <p>Inflation is the rate at which the general level of prices for goods and services rises, eroding purchasing power. It's commonly measured by the Consumer Price Index (CPI), which tracks a basket of goods and services.</p>
+      <h2>The Inflation Measurement Gap</h2>
+      <p>According to official CPI, inflation averaged about 2.5% annually from 1990-2020. But if you look at what people actually buy, the picture is very different.</p>
 
-      <div class="info-box">
-        <h4>Key Insight: Inflation as a Vector</h4>
-        <p>Inflation isn't a single number—it's a <strong>weighted average</strong> of many different price changes. Each good in the economy experiences its own price trajectory, influenced by:</p>
-        <ul style="margin:12px 0 0 20px;line-height:1.8">
-          <li><strong>Money supply growth (ΔM)</strong>: More money chasing the same goods pushes prices up</li>
-          <li><strong>Productivity changes (ΔA)</strong>: Efficiency gains push prices down</li>
-          <li><strong>Supply shocks</strong>: Disruptions in production or distribution</li>
-          <li><strong>Demand shifts</strong>: Changing consumer preferences</li>
-        </ul>
-        <p style="margin-top:12px">The <strong>net price change</strong> for each good is approximately ΔM − ΔA, weighted by how much consumers spend on that good.</p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">+100%</div>
+          <div class="stat-label">Official CPI (1990-2020)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+180%</div>
+          <div class="stat-label">Median House Price</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+300%</div>
+          <div class="stat-label">College Tuition</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+240%</div>
+          <div class="stat-label">Healthcare Costs</div>
+        </div>
       </div>
 
-      <div class="stats-grid" style="margin-top:24px">
-        <div class="stat-card">
-          <div class="stat-value">~300</div>
-          <div class="stat-label">Items in CPI Basket</div>
+      <div class="info-box highlight">
+        <h4>The Core Issue</h4>
+        <p>Housing, healthcare, education, and food make up <strong>60-70% of household spending</strong>. All rose faster than CPI. Meanwhile, the categories that DID deflate (electronics, apparel) only represent ~25% of spending.</p>
+        <p style="margin-top:12px">This isn't a minor discrepancy—it's a systematic measurement problem that hides the true erosion of purchasing power for essentials.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Three Types of Inflation</h3>
+
+      <div class="info-box">
+        <h4>1. Monetary Inflation (Money Supply Growth)</h4>
+        <p>The increase in broad money supply (M2). From 1990-2020, M2 per capita grew about <strong>5% annually</strong>—twice as fast as official CPI.</p>
+      </div>
+
+      <div class="info-box">
+        <h4>2. Consumer Price Inflation (CPI)</h4>
+        <p>The "official" measure tracking a basket of goods. But the basket composition, weighting, and quality adjustments all systematically understate inflation.</p>
+      </div>
+
+      <div class="info-box">
+        <h4>3. Asset Price Inflation</h4>
+        <p>Stocks, bonds, real estate going up. When money supply grows but gets concentrated at the top, you get asset inflation without consumer price inflation.</p>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The Gap:</strong> Money supply per capita (+5%/yr) → Official CPI (+2.5%/yr) → But essentials rose +3-4%/yr or more. Where did the inflation go? Into assets held by the wealthy, and into essential goods that can't be outsourced.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>How CPI Understates Inflation</h3>
+
+      <div class="grid-2">
+        <div class="info-box">
+          <h4>Hedonic Adjustments</h4>
+          <p><strong>Example:</strong> A new car costs $40,000 vs $15,000 in 1990 (167% increase). But CPI says new cars only rose 22% because they're "better quality."</p>
+          <p style="margin-top:8px">While some adjustment makes sense, this dramatically understates what you actually pay.</p>
         </div>
-        <div class="stat-card">
-          <div class="stat-value">8</div>
-          <div class="stat-label">Major Categories</div>
+
+        <div class="info-box">
+          <h4>Substitution Bias</h4>
+          <p>CPI assumes when beef gets expensive, you buy chicken instead. So it measures the "cost of survival," not the cost of the same lifestyle.</p>
+          <p style="margin-top:8px">This masks declining living standards as "stable prices."</p>
         </div>
-        <div class="stat-card">
-          <div class="stat-value">100%</div>
-          <div class="stat-label">Sum of Weights</div>
+
+        <div class="info-box">
+          <h4>Owner's Equivalent Rent</h4>
+          <p>Instead of tracking house prices, CPI tracks estimated rental equivalent. Lower interest rates reduce monthly payments even as house prices soar.</p>
+          <p style="margin-top:8px">If you pay cash or want to buy, this grossly understates your cost.</p>
+        </div>
+
+        <div class="info-box">
+          <h4>Weighting Games</h4>
+          <p>CPI gives housing a 33% weight, but many households spend 40-50% on housing. Tech (which DID deflate) gets overweighted relative to real spending.</p>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h3>How Inflation is Measured</h3>
-      <p>The Bureau of Labor Statistics (BLS) measures inflation through the Consumer Price Index (CPI), which works as follows:</p>
-
-      <div class="grid-2" style="margin-top:20px">
-        <div class="info-box">
-          <h4>1. Define the Basket</h4>
-          <p>Select representative goods and services that consumers typically purchase (housing, food, transportation, medical care, etc.)</p>
-        </div>
-        <div class="info-box">
-          <h4>2. Assign Weights</h4>
-          <p>Weight each item by its share of average household spending, based on consumer expenditure surveys</p>
-        </div>
-        <div class="info-box">
-          <h4>3. Track Prices</h4>
-          <p>Collect price data monthly from thousands of retail stores, service providers, and online sources</p>
-        </div>
-        <div class="info-box">
-          <h4>4. Calculate Index</h4>
-          <p>Compute the weighted average of price changes to get the overall inflation rate</p>
-        </div>
-      </div>
-
-      <div class="note" style="margin-top:20px">
-        <strong>Important:</strong> Because inflation is an average, some goods' prices rise faster than the headline number while others rise slower or even fall (deflation in specific sectors). Your personal inflation rate depends on what you buy.
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>Drivers of Price Changes</h3>
-
-      <div class="info-box">
-        <h4>Money Supply Growth (ΔM)</h4>
-        <p>When the central bank increases the money supply (through monetary policy, quantitative easing, or other mechanisms), more money chases the same amount of goods, putting upward pressure on all prices. This affects all goods relatively uniformly in the long run.</p>
-      </div>
-
-      <div class="info-box">
-        <h4>Productivity Growth (ΔA)</h4>
-        <p>Technological improvements and efficiency gains allow us to produce more with the same inputs. This is <strong>deflationary</strong> for individual sectors:</p>
-        <ul style="margin:8px 0 0 20px">
-          <li><strong>Electronics:</strong> Moore's Law → exponential improvement in computing power per dollar</li>
-          <li><strong>Food:</strong> Agricultural mechanization → lower real food prices</li>
-          <li><strong>Manufacturing:</strong> Automation → cheaper consumer goods</li>
-        </ul>
-        <p style="margin-top:12px">Services (healthcare, education) often have <strong>lower productivity growth</strong>, so their prices tend to rise faster (Baumol's cost disease).</p>
-      </div>
+      <h3>The Bottom Line</h3>
+      <p>Comparing apples-to-apples, the "American Dream" basket (house, kids, education, healthcare, car, quality food) has inflated closer to <strong>3-4% annually</strong>, not 2.5%.</p>
 
       <div class="note">
-        <strong>Formula:</strong> Net price change for good <em>i</em> ≈ ΔM − ΔA<sub>i</sub>
-        <br><br>
-        <strong>Example:</strong> If money supply grows 5% and smartphone production efficiency improves 15%, smartphone prices should fall by about 10% (5% − 15% = −10%).
+        <p><strong>What this means over 30 years:</strong></p>
+        <ul style="margin:8px 0 0 20px">
+          <li>Official CPI: Prices doubled (2x)</li>
+          <li>Reality for essentials: Prices tripled (3x) or more</li>
+          <li>Money supply per capita: Grew 4.5x</li>
+          <li>Bottom 90% wealth share: Fell from 40% to 30%</li>
+        </ul>
       </div>
     </section>
   </div>
 
-  <!-- NET INFLATION TAB -->
+  <!-- MONEY SUPPLY TAB -->
   <div id="tab-net" class="tabpane hidden">
     <section class="card">
       <div class="treadmill-card">
@@ -572,30 +560,34 @@
           <div class="cat" id="tcat">🐈‍⬛</div>
         </div>
         <div>
-          <h3 style="margin:0">Aggregate Inflation</h3>
+          <h3 style="margin:0">Net Price Change</h3>
           <div class="stat-value" id="treadVal">0.00%</div>
-          <div class="small">Cat runs right for inflation, left for deflation</div>
+          <div class="small">ΔM (money growth) − ΔA (productivity) = net inflation</div>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <details>
-        <summary>How to use this tool</summary>
-        <ul style="margin-top:12px;line-height:1.8">
-          <li><strong>ΔM slider</strong> sets the same money supply growth rate for all goods</li>
-          <li><strong>ΔA per good</strong> represents sector-specific productivity gains; higher ΔA reduces prices</li>
-          <li><strong>Net bar chart</strong> shows ΔM − ΔA for each good; the orange aggregate bar is the weighted average</li>
-          <li><strong>Weights</strong> represent expenditure shares; they're automatically normalized to sum to 1</li>
-          <li><strong>Cat treadmill</strong> speed reflects inflation magnitude; direction shows sign</li>
-          <li>Hover over chart elements to see exact values</li>
+      <h3>The Theory: ΔM − ΔA</h3>
+      <p>For any good, the net price change ≈ <strong>Money Supply Growth (ΔM)</strong> − <strong>Productivity Growth (ΔA)</strong></p>
+
+      <div class="info-box">
+        <h4>Examples</h4>
+        <ul style="margin:8px 0 0 20px;line-height:1.8">
+          <li><strong>Smartphones:</strong> ΔM = 5%, ΔA = 20% → Prices fall 15%</li>
+          <li><strong>Healthcare:</strong> ΔM = 5%, ΔA = -1% → Prices rise 6%</li>
+          <li><strong>Housing:</strong> ΔM = 5%, ΔA = 1% → Prices rise 4%</li>
         </ul>
-      </details>
+      </div>
+
+      <div class="note" style="margin-top:16px">
+        <strong>Key Insight:</strong> CPI heavily weights goods with high ΔA (tech) that deflate, while underweighting services with low ΔA that inflate rapidly. This creates the measurement gap.
+      </div>
     </section>
 
     <div class="grid">
       <section class="card">
-        <h3>Global Settings</h3>
+        <h3>Adjust the Model</h3>
         <div style="margin-bottom:20px">
           <label>Money Supply Growth (ΔM) — %</label>
           <input id="money" type="range" min="-10" max="30" step="0.1" value="10">
@@ -605,23 +597,22 @@
         </div>
 
         <div class="note">
-          <strong>Theory:</strong> Net price change ≈ ΔM − ΔA<br>
-          When ΔM = ΔA for a good, its price remains stable despite monetary expansion.
+          US M2 per capita grew ~5% annually from 1990-2020, while CPI reported ~2.5%
         </div>
 
-        <h3 style="margin-top:24px">Goods / Sectors</h3>
-        <p class="small" style="margin-bottom:12px">Set each good's productivity growth (ΔA) and expenditure weight.</p>
+        <h3 style="margin-top:24px">Sector Examples</h3>
+        <p class="small" style="margin-bottom:12px">Adjust productivity (ΔA) for each sector:</p>
         <div id="goods"></div>
         <div class="row" style="margin-top:16px">
-          <button class="btn" id="addGood">+ Add Good</button>
-          <button class="btn" id="resetGoods">Reset to Examples</button>
+          <button class="btn" id="addGood">+ Add Sector</button>
+          <button class="btn" id="resetGoods">Reset</button>
         </div>
       </section>
 
       <section class="card">
         <div class="section-header">
-          <h3 style="margin:0">Net Price Changes (ΔM − ΔA)</h3>
-          <div class="small">Aggregate: <span id="agg" class="accent">0.0%</span></div>
+          <h3 style="margin:0">Net Price Changes by Sector</h3>
+          <div class="small">Weighted Aggregate: <span id="agg" class="accent">0.0%</span></div>
         </div>
         <div class="chart-box" id="barsBox">
           <svg id="barsSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
@@ -630,12 +621,11 @@
           <table id="table">
             <thead>
               <tr>
-                <th>Good</th>
+                <th>Sector</th>
                 <th>Weight</th>
                 <th>ΔM (%)</th>
                 <th>ΔA (%)</th>
                 <th>Net (%)</th>
-                <th>Price Index</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -645,344 +635,253 @@
     </div>
 
     <section class="card">
-      <h3>Understanding the Results</h3>
-      <p>The table above shows how different goods experience different rates of price change even when money supply growth is uniform. This heterogeneity is crucial:</p>
-      <div class="grid-2" style="margin-top:16px">
-        <div class="info-box">
-          <h4>High Productivity Sectors</h4>
-          <p>Goods with high ΔA (technology, manufacturing) may see falling prices despite monetary inflation. This is "good deflation"—you get more for less.</p>
-        </div>
-        <div class="info-box">
-          <h4>Low Productivity Sectors</h4>
-          <p>Services with low ΔA (healthcare, education, personal services) see prices rise faster than the average, concentrating inflation's impact.</p>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <!-- CPI BASKET TAB -->
-  <div id="tab-basket" class="tabpane hidden">
-    <section class="card">
-      <h2>U.S. Consumer Price Index Basket</h2>
-      <p>The CPI uses a representative basket of goods and services weighted by typical consumer spending patterns. These weights are updated periodically based on Consumer Expenditure Surveys.</p>
-
-      <div class="note" style="margin-top:16px">
-        <strong>Note:</strong> These are approximate weights based on recent BLS data. Individual households may have very different spending patterns, leading to personalized inflation experiences.
-      </div>
-
-      <h3 style="margin-top:24px">Major Categories</h3>
-      <div class="basket-grid">
-        <div class="basket-item">
-          <div class="basket-icon">🏠</div>
-          <div class="basket-name">Housing</div>
-          <div class="basket-weight">42%</div>
-          <div class="small">Rent, owners' equiv., utilities</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">🚗</div>
-          <div class="basket-name">Transportation</div>
-          <div class="basket-weight">17%</div>
-          <div class="small">Vehicles, gas, insurance</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">🍔</div>
-          <div class="basket-name">Food & Beverages</div>
-          <div class="basket-weight">14%</div>
-          <div class="small">Groceries, dining out</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">🏥</div>
-          <div class="basket-name">Medical Care</div>
-          <div class="basket-weight">9%</div>
-          <div class="small">Insurance, services, drugs</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">🎓</div>
-          <div class="basket-name">Education</div>
-          <div class="basket-weight">3%</div>
-          <div class="small">Tuition, fees, supplies</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">🎮</div>
-          <div class="basket-name">Recreation</div>
-          <div class="basket-weight">6%</div>
-          <div class="small">Entertainment, hobbies</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">👕</div>
-          <div class="basket-name">Apparel</div>
-          <div class="basket-weight">3%</div>
-          <div class="small">Clothing, footwear</div>
-        </div>
-        <div class="basket-item">
-          <div class="basket-icon">📦</div>
-          <div class="basket-name">Other</div>
-          <div class="basket-weight">6%</div>
-          <div class="small">Personal care, misc.</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>Why Weights Matter</h3>
-      <p>The weighted average structure means that:</p>
+      <h3>Why This Matters</h3>
+      <p>Notice how sectors with low productivity growth (healthcare, education, housing) see the fastest price increases. These are the sectors that:</p>
       <ul style="margin:12px 0 0 24px;line-height:1.8">
-        <li><strong>Housing dominates</strong> (42% weight) so rent/home price inflation heavily influences the overall CPI</li>
-        <li><strong>Small categories</strong> like apparel (3%) barely move the aggregate even if prices swing wildly</li>
-        <li><strong>Personal inflation</strong> can differ dramatically from CPI if your spending pattern differs from the average</li>
+        <li>Can't be outsourced to cheaper labor markets</li>
+        <li>Can't be easily automated</li>
+        <li>Represent the bulk of middle-class spending</li>
+        <li>Are often mandatory or essential</li>
       </ul>
 
-      <div class="info-box" style="margin-top:20px">
-        <h4>Example: Tech Worker vs. Retiree</h4>
-        <p><strong>Tech worker:</strong> Spends heavily on rent and dining out → highly exposed to urban cost increases</p>
-        <p style="margin-top:8px"><strong>Retiree:</strong> Spends more on healthcare and less on housing → different inflation experience</p>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>How Weights Are Updated</h3>
-      <p>The BLS updates CPI weights every two years using data from the Consumer Expenditure Survey, which tracks spending by thousands of households. This helps keep the index relevant as consumption patterns evolve.</p>
-
-      <div class="note">
-        <strong>Challenge:</strong> Rapid changes in spending (e.g., pandemic-driven shifts) may not be immediately reflected in CPI weights, potentially causing measurement lags.
+      <div class="note" style="margin-top:16px">
+        <strong>Result:</strong> Official CPI says 2.5%, but your cost of living went up 3-4% or more if you need housing, healthcare, and education.
       </div>
     </section>
   </div>
 
-  <!-- MEASUREMENT BIASES TAB -->
-  <div id="tab-biases" class="tabpane hidden">
+  <!-- REAL WORLD PRICES TAB -->
+  <div id="tab-reality" class="tabpane hidden">
     <section class="card">
-      <h2>Why CPI Might Overstate Inflation</h2>
-      <p>Several systematic biases can cause the Consumer Price Index to overestimate true inflation. The Boskin Commission (1996) estimated CPI overstates inflation by ~1.1 percentage points annually due to these factors:</p>
+      <h2>Real-World Price Comparisons</h2>
+      <p>Let's look at actual prices, not hedonic-adjusted indexes.</p>
     </section>
 
     <div class="grid-2">
       <section class="card">
-        <h3>1. Substitution Bias</h3>
-        <p>When relative prices change, consumers substitute toward relatively cheaper goods. The CPI uses a fixed basket, so it misses this optimization.</p>
-
-        <div class="info-box" style="margin-top:16px">
-          <h4>Example</h4>
-          <p><strong>Scenario:</strong> Beef prices rise 20%, chicken stays flat</p>
-          <p style="margin-top:8px"><strong>CPI assumes:</strong> You keep buying the same amount of beef</p>
-          <p style="margin-top:8px"><strong>Reality:</strong> You buy less beef, more chicken → smaller welfare loss than CPI suggests</p>
+        <h3>The Big Mac Index</h3>
+        <p>From 1990-2020:</p>
+        <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:22px">~$2.00</div>
+            <div class="stat-label">1990 Price</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:22px">~$5.00</div>
+            <div class="stat-label">2020 Price</div>
+          </div>
         </div>
+        <p style="margin-top:16px"><strong>Increase:</strong> 150% (3% annually)</p>
+        <p><strong>CPI for same period:</strong> 100% (2.5% annually)</p>
 
         <div class="note" style="margin-top:16px">
-          <strong>Impact:</strong> Estimated 0.4 percentage points of annual overstatement
+          The Big Mac requires beef, labor, energy, and real estate—all things that can't be outsourced or hedonic-adjusted away.
         </div>
       </section>
 
       <section class="card">
-        <h3>2. Quality Adjustment Bias</h3>
-        <p>When products improve in quality, the price increase partially reflects better features, not pure inflation. BLS adjusts for this but may lag or miss improvements.</p>
-
-        <div class="info-box" style="margin-top:16px">
-          <h4>Example: Smartphones</h4>
-          <p>A $1,000 phone today vs. $800 ten years ago:</p>
-          <ul style="margin:8px 0 0 20px">
-            <li>100x faster processor</li>
-            <li>10x better camera</li>
-            <li>Internet speeds 50x faster</li>
-          </ul>
-          <p style="margin-top:8px">The nominal price rose 25%, but you're getting vastly more value.</p>
+        <h3>Median Home Price</h3>
+        <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:20px">$125k</div>
+            <div class="stat-label">1990 Median</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:20px">$350k</div>
+            <div class="stat-label">2020 Median</div>
+          </div>
         </div>
+        <p style="margin-top:16px"><strong>Increase:</strong> 180% (3.5% annually)</p>
+        <p><strong>CPI housing component:</strong> Much lower due to "owner's equivalent rent" methodology</p>
 
         <div class="note" style="margin-top:16px">
-          <strong>Impact:</strong> Estimated 0.6 percentage points of annual overstatement
+          Lower interest rates reduced monthly payments, but the asset itself got much more expensive. CPI tracks payments, not prices.
         </div>
       </section>
 
       <section class="card">
-        <h3>3. New Goods Bias</h3>
-        <p>New products (smartphones, streaming services, electric cars) aren't immediately added to the CPI basket. The consumer surplus from innovation isn't captured until years later.</p>
+        <h3>College Tuition</h3>
+        <div class="stats-grid" style="grid-template-columns:1fr">
+          <div class="stat-card">
+            <div class="stat-value">+300%</div>
+            <div class="stat-label">Tuition Increase (1990-2020)</div>
+          </div>
+        </div>
+        <p style="margin-top:16px"><strong>Annual rate:</strong> ~4.7%</p>
+        <p><strong>CPI for same period:</strong> +100% (2.5% annually)</p>
 
         <div class="info-box" style="margin-top:16px">
-          <h4>Example</h4>
-          <p>When Netflix launched, it provided enormous value at low cost, but didn't appear in CPI for years. The welfare gain from "entertainment for $10/month" was invisible to the index.</p>
-        </div>
-
-        <div class="note" style="margin-top:16px">
-          <strong>Impact:</strong> Hard to quantify but potentially significant
+          <h4>The Hidden Tax</h4>
+          <p>Education wasn't mandatory for median wage in 1990. Now it is. So you need to add student debt just to earn inflation-adjusted wages.</p>
         </div>
       </section>
 
       <section class="card">
-        <h3>4. Outlet Substitution Bias</h3>
-        <p>Consumers shift to lower-price retailers (Amazon, Costco, dollar stores) when prices rise. CPI sampling may not fully capture this shift in shopping behavior.</p>
-
-        <div class="info-box" style="margin-top:16px">
-          <h4>Example</h4>
-          <p>If you switch from shopping at boutique grocery stores to Costco, you're paying less for similar goods. CPI may track prices at traditional stores and miss this adaptation.</p>
+        <h3>Healthcare Costs</h3>
+        <div class="stats-grid" style="grid-template-columns:1fr">
+          <div class="stat-card">
+            <div class="stat-value">+240%</div>
+            <div class="stat-label">Healthcare CPI (1990-2020)</div>
+          </div>
         </div>
+        <p style="margin-top:16px">Even official healthcare CPI rose 2.4x faster than broad CPI</p>
 
         <div class="note" style="margin-top:16px">
-          <strong>Impact:</strong> Estimated 0.1 percentage points annually
+          This is one area where CPI actually captures some of the pain. Healthcare has near-zero productivity growth but captures money supply growth fully.
         </div>
       </section>
     </div>
 
     <section class="card">
-      <h3>Hedonic Pricing</h3>
-      <p>The BLS uses "hedonic quality adjustment" to separate price changes from quality changes. This statistical technique estimates how much each feature contributes to a product's price.</p>
+      <h3>What About Deflation?</h3>
+      <p>Yes, some categories genuinely deflated:</p>
 
-      <div class="info-box">
-        <h4>How It Works</h4>
-        <p>For computers, BLS might model: Price = β₀ + β₁(RAM) + β₂(Storage) + β₃(Processor Speed) + ε</p>
-        <p style="margin-top:8px">When a new model has 2x RAM and costs 10% more, hedonic regression separates the quality improvement from pure inflation.</p>
+      <div class="grid-2" style="margin-top:16px">
+        <div class="info-box">
+          <h4>Electronics & Apparel</h4>
+          <p>Smartphones, TVs, clothing all got cheaper due to massive productivity gains and offshoring to China/Southeast Asia.</p>
+          <p style="margin-top:8px"><strong>Problem:</strong> These are only 25% of household spending</p>
+        </div>
+
+        <div class="info-box">
+          <h4>Why the Gap Exists</h4>
+          <p>Essentials (housing, healthcare, education, food) = 70% of spending, inflated 3-4%/yr</p>
+          <p style="margin-top:8px">Discretionary (electronics, apparel) = 25% of spending, deflated</p>
+          <p style="margin-top:8px"><strong>CPI averages these and says 2.5%</strong></p>
+        </div>
       </div>
 
-      <div class="note" style="margin-top:16px">
-        <strong>Debate:</strong> Some argue hedonic adjustments don't go far enough (missing intangible improvements), while others say they're too aggressive and obscure real cost increases.
+      <div class="note warning" style="margin-top:20px">
+        <strong>The iPad Argument:</strong> In 2011, NY Fed Chair Dudley told inflation-concerned Queens residents that an iPad 2 came out at the same price as iPad 1 but was better, so on a quality-adjusted basis, prices fell. Someone yelled back: <strong>"You can't eat an iPad!"</strong>
       </div>
-    </section>
-
-    <section class="card">
-      <h3>Bottom Line</h3>
-      <p>These biases suggest <strong>true inflation is lower than measured CPI</strong>. If CPI reports 3%, true cost-of-living increase might be closer to 2%. This matters for:</p>
-      <ul style="margin:12px 0 0 24px;line-height:1.8">
-        <li><strong>Social Security COLAs:</strong> Benefits indexed to CPI might over-compensate</li>
-        <li><strong>Real wage calculations:</strong> Wage growth adjusted by CPI may understate real improvement</li>
-        <li><strong>Monetary policy:</strong> Fed targeting 2% measured inflation ≈ 1% true inflation</li>
-      </ul>
     </section>
   </div>
 
-  <!-- ECONOMIC EFFECTS TAB -->
+  <!-- WHO GETS HURT TAB -->
   <div id="tab-effects" class="tabpane hidden">
     <section class="card">
-      <h2>Economic Effects of Inflation & Deflation</h2>
-      <p>Inflation and deflation create different behavioral incentives and economic outcomes. Understanding these effects helps explain why central banks target moderate positive inflation rather than zero.</p>
+      <h2>Who Benefits, Who Gets Squeezed?</h2>
+      <p>Inflation's impact depends heavily on your balance sheet and income source.</p>
     </section>
 
     <div class="grid-2">
       <section class="card">
-        <h3>Inflationary Environment (Inflation &gt; 0)</h3>
+        <h3>Top 10% (Winners)</h3>
         <ul style="margin:12px 0 0 20px;line-height:1.9">
-          <li><strong>Spending incentive:</strong> Money loses value over time, encouraging consumption and investment over hoarding cash</li>
-          <li><strong>Debt erosion:</strong> Fixed nominal debts become easier to repay as incomes rise with inflation</li>
-          <li><strong>Wage flexibility:</strong> Real wage adjustments can happen through inflation without nominal cuts (wage stickiness)</li>
-          <li><strong>Money illusion:</strong> People focus on nominal values; gradual inflation can feel less painful than nominal wage cuts</li>
-          <li><strong>Redistribution:</strong> Savers lose, borrowers gain; creditors lose, debtors gain</li>
+          <li><strong>Debt/Equity ratio:</strong> ~2% (almost all assets, minimal debt)</li>
+          <li><strong>Asset ownership:</strong> 70% of stocks, bonds, real estate</li>
+          <li><strong>Income source:</strong> Capital gains, dividends (grew with money supply)</li>
+          <li><strong>Spending:</strong> Small % on essentials, large % on discretionary</li>
         </ul>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Why They Win</h4>
+          <p>Their assets inflate with money supply growth. Essential goods are a small % of their budget. They benefit from cheap debt and rising asset prices.</p>
+        </div>
       </section>
 
       <section class="card">
-        <h3>Deflationary Environment (Inflation &lt; 0)</h3>
+        <h3>Bottom 50% (Losers)</h3>
         <ul style="margin:12px 0 0 20px;line-height:1.9">
-          <li><strong>Deferred consumption:</strong> Waiting makes goods cheaper, reducing current demand</li>
-          <li><strong>Debt burden:</strong> Real value of debts increases, making repayment harder</li>
-          <li><strong>Wage rigidity:</strong> Nominal wage cuts are rare, so unemployment rises instead</li>
-          <li><strong>Liquidity trap risk:</strong> Monetary policy loses effectiveness at zero interest rates</li>
-          <li><strong>Two types:</strong> <em>Good deflation</em> (productivity-driven) vs. <em>bad deflation</em> (demand collapse, debt deflation)</li>
+          <li><strong>Debt/Equity ratio:</strong> ~200% (more debt than equity)</li>
+          <li><strong>Asset ownership:</strong> 2% of total household wealth</li>
+          <li><strong>Income source:</strong> Wages (flat in real terms for 40 years)</li>
+          <li><strong>Spending:</strong> 70%+ on essentials (housing, food, healthcare)</li>
         </ul>
+
+        <div class="info-box" style="margin-top:16px">
+          <h4>Why They Lose</h4>
+          <p>Wages barely keep up with CPI. But actual costs (essentials) rose faster. They have little asset exposure to benefit from money supply growth. Need more education/debt just to earn median wage.</p>
+        </div>
       </section>
     </div>
 
     <section class="card">
-      <details open>
-        <summary>How to use these tools</summary>
-        <ul style="margin-top:12px;line-height:1.8">
-          <li><strong>$100 over time</strong> shows exponential compounding at chosen inflation rate</li>
-          <li><strong>Affordable house price</strong> demonstrates how interest rates affect present value calculations</li>
-          <li>Adjust sliders to explore different scenarios; hover charts for exact values</li>
+      <h3>The Wealth Concentration Result</h3>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">40% → 30%</div>
+          <div class="stat-label">Bottom 90% Wealth Share</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">60% → 70%</div>
+          <div class="stat-label">Top 10% Wealth Share</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">775x</div>
+          <div class="stat-label">Top 1% vs Bottom 50% Per Capita</div>
+        </div>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The Mechanism:</strong> Money supply grows 5%/yr → Asset prices grow ~5%/yr → CPI only shows 2.5%/yr → Real wages grow 0%/yr → Bottom 90% fall behind while top 10% accumulate assets
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>The Productivity Paradox</h3>
+
+      <div class="info-box">
+        <h4>What Happened</h4>
+        <p>From 1990-2020:</p>
+        <ul style="margin:8px 0 0 20px">
+          <li>Worker productivity rose ~75%</li>
+          <li>Median wages rose ~25% (barely keeping pace with essentials inflation)</li>
+          <li>Corporate profits as % of GDP rose dramatically</li>
+          <li>Automation and offshoring displaced labor</li>
         </ul>
-      </details>
-    </section>
+      </div>
 
-    <section class="card">
-      <div class="section-header">
-        <h3 style="margin:0">$100 Over Time (Compounded Annually)</h3>
-        <div class="small">
-          After <span id="yearsVal" class="accent">10</span> years at <span id="rateVal" class="accent">5.0%</span>:
-          <span id="cashVal" class="accent">$162.89</span> ·
-          Hover: <span id="cashHover" class="accent">—</span>
-        </div>
+      <div class="info-box" style="margin-top:16px">
+        <h4>The Result</h4>
+        <p>Workers became more productive but didn't capture those gains. Instead, productivity gains went to:</p>
+        <ul style="margin:8px 0 0 20px">
+          <li>Capital owners (shareholders)</li>
+          <li>Consumers (via lower prices for manufactured goods)</li>
+          <li>NOT to labor (wages stagnated)</li>
+        </ul>
       </div>
-      <div class="row" style="gap:16px;margin-bottom:16px">
-        <div style="flex:1;min-width:240px">
-          <label>Annual Inflation/Return Rate (%)</label>
-          <input id="biasRate" type="range" min="-20" max="30" step="0.1" value="5">
-        </div>
-        <div style="flex:1;min-width:240px">
-          <label>Years</label>
-          <input id="biasYears" type="range" min="1" max="40" step="1" value="10">
-        </div>
-      </div>
-      <div class="chart-box">
-        <svg id="cashSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
-      </div>
+
       <div class="note" style="margin-top:16px">
-        This illustrates the <strong>time value of money</strong>. Positive rates (inflation or investment returns) cause exponential growth; negative rates (deflation or losses) cause exponential decay. Even small differences compound dramatically over long periods.
+        So the working class got cheaper iPhones and t-shirts, but housing, healthcare, and education ate up any savings—and then some.
       </div>
     </section>
 
     <section class="card">
-      <div class="section-header">
-        <h3 style="margin:0">Affordable House Price vs. Mortgage Rate</h3>
-        <div class="small">
-          At <span id="affRateVal" class="accent">5.0%</span>,
-          budget <span id="affBudVal" class="accent">$2,500</span>/mo,
-          term <span id="affTermVal" class="accent">30</span>y,
-          down <span id="affDownVal" class="accent">20%</span> →
-          Max price: <span id="affPriceVal" class="accent">$0</span> ·
-          Hover: <span id="affHover" class="accent">—</span>
-        </div>
-      </div>
-      <div class="row" style="gap:16px;margin-bottom:16px">
-        <div style="flex:1;min-width:220px">
-          <label>Monthly Budget ($)</label>
-          <input id="affBudget" type="range" min="500" max="10000" step="50" value="2500">
-        </div>
-        <div style="flex:1;min-width:220px">
-          <label>Mortgage Rate (%)</label>
-          <input id="affRate" type="range" min="1" max="12" step="0.1" value="5">
-        </div>
-        <div style="flex:1;min-width:200px">
-          <label>Term (years)</label>
-          <input id="affTerm" type="range" min="10" max="40" step="1" value="30">
-        </div>
-        <div style="flex:1;min-width:200px">
-          <label>Down Payment (%)</label>
-          <input id="affDown" type="range" min="0" max="50" step="1" value="20">
-        </div>
-      </div>
-      <div class="chart-box">
-        <svg id="affSvg" viewBox="0 0 800 340" preserveAspectRatio="none"></svg>
-      </div>
-      <div class="note" style="margin-top:16px">
-        <strong>Key insight:</strong> Lower interest rates dramatically increase borrowing capacity. This is why monetary easing (lowering rates) tends to inflate asset prices—the same monthly payment can finance a much larger loan principal. Conversely, rate hikes cool demand by reducing affordable price points.
-      </div>
-    </section>
+      <h3>Why Policymakers Allow This</h3>
 
-    <section class="card">
-      <h3>Why Central Banks Target 2% Inflation</h3>
-      <p>Most modern central banks target ~2% annual inflation rather than 0%. This seemingly arbitrary choice reflects:</p>
+      <div class="grid-2">
+        <div class="info-box">
+          <h4>Benefits of Underreporting</h4>
+          <ul style="margin:8px 0 0 20px">
+            <li>Social Security COLAs are lower (saves government money)</li>
+            <li>Can claim "stable prices" while running loose monetary policy</li>
+            <li>Inflates away government debt quietly</li>
+            <li>Boosts asset prices (makes wealthy happy)</li>
+          </ul>
+        </div>
 
-      <div class="grid-2" style="margin-top:16px">
         <div class="info-box">
-          <h4>Measurement Cushion</h4>
-          <p>Since CPI likely overstates inflation by ~1%, a 2% target means true inflation ≈ 1%, close to zero without risking deflation.</p>
+          <h4>Costs of Honest Reporting</h4>
+          <ul style="margin:8px 0 0 20px">
+            <li>Would show wages haven't kept pace with reality</li>
+            <li>Would force higher Social Security payments</li>
+            <li>Would reveal actual decline in living standards</li>
+            <li>Would limit ability to run loose monetary policy</li>
+          </ul>
         </div>
-        <div class="info-box">
-          <h4>Nominal Rate Buffer</h4>
-          <p>With 2% inflation, real interest rates can be negative while nominal rates stay positive. At 0% inflation, the zero lower bound binds tighter.</p>
-        </div>
-        <div class="info-box">
-          <h4>Wage Flexibility</h4>
-          <p>Moderate inflation allows real wage adjustments without nominal cuts, which workers resist due to money illusion.</p>
-        </div>
-        <div class="info-box">
-          <h4>Debt Dynamics</h4>
-          <p>Steady inflation helps debtors (including governments) manage debt burdens without explicit default.</p>
-        </div>
+      </div>
+
+      <div class="note warning" style="margin-top:20px">
+        <strong>The Trade-Off:</strong> Accurate inflation measurement vs political/fiscal convenience. Current system chose convenience.
       </div>
     </section>
   </div>
 </div>
 
 <footer>
-  <p>Note: These models are simplified and intended for educational purposes only. Real-world inflation dynamics involve many additional factors not captured here. Created by Kevin Schoenholzer with assistance from Claude AI, 2025.</p>
+  <p>Based on research by Lyn Alden and others who have documented the CPI underreporting problem. Created by Kevin Schoenholzer with assistance from Claude AI, 2025.</p>
 </footer>
 
 <div id="tooltip" class="tooltip"></div>
