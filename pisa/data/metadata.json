@@ -1,5 +1,5 @@
 {
-  "generated": "2025-12-16T00:09:52+0100",
+  "generated": "2025-12-16T14:18:10+0100",
   "version": "1.0.0",
   "source": "learningtower R package (OECD PISA data)",
   "citations": {
@@ -744,6 +744,6 @@
       }
     ]
   },
-  "total_chunks": 298,
-  "estimated_total_size_mb": 780.3
+  "total_chunks": 513,
+  "estimated_total_size_mb": 1241
 }
