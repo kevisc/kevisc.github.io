@@ -10,7 +10,8 @@ library(tidyr)
 
 # Configuration
 OUTPUT_DIR <- "C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/data/country-year"
-YEARS <- c(2012, 2015, 2018, 2022)
+# Include all PISA assessment cycles from 2000-present
+YEARS <- c(2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022)
 
 # Create output directory
 dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
