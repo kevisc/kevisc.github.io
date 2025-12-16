@@ -334,7 +334,56 @@ Y<sub>ij</sub>* = Y<sub>ij</sub> - θ · Ȳ<sub>j</sub>
 where θ = 1 - √[σ² / (σ² + n<sub>j</sub>·τ²)]
         </div>
 
-        <h3>3.5 Variance Decomposition</h3>
+        <h3>3.5 Model Selection and Diagnostics</h3>
+
+        <h4>Information Criteria</h4>
+        <p>Model comparison uses information-theoretic criteria that balance goodness-of-fit with parsimony:</p>
+
+        <div class="formula">
+<strong>Akaike Information Criterion (AIC):</strong>
+AIC = n · log(RSS/n) + 2k
+
+<strong>Bayesian Information Criterion (BIC):</strong>
+BIC = n · log(RSS/n) + k · log(n)
+
+where:
+  n = number of observations
+  k = number of parameters (including intercept)
+  RSS = residual sum of squares
+        </div>
+
+        <p><strong>Interpretation:</strong> Lower AIC/BIC values indicate better model fit. BIC penalizes model complexity more heavily than AIC (k·log(n) vs 2k), making it more conservative for large samples. AIC tends to select more complex models, while BIC favors parsimony (Burnham & Anderson, 2004).</p>
+
+        <h4>Residual Diagnostics</h4>
+        <p>Regression assumptions are validated through graphical diagnostics:</p>
+
+        <p><strong>Residual vs Fitted Plot:</strong> Detects violations of homoscedasticity (constant variance). Under the assumption ε ~ N(0, σ²), residuals should be randomly scattered around zero without systematic patterns. Fanning patterns indicate heteroscedasticity, which may require robust standard errors or variance-stabilizing transformations.</p>
+
+        <p><strong>Q-Q Plot (Quantile-Quantile Plot):</strong> Tests residual normality by comparing sample quantiles against theoretical normal quantiles. The standardized residuals are computed as:</p>
+
+        <div class="formula">
+z<sub>i</sub> = (e<sub>i</sub> - ē) / SD(e)
+
+where:
+  e<sub>i</sub> = residual for observation i
+  ē = mean residual (should be ≈ 0)
+  SD(e) = standard deviation of residuals
+        </div>
+
+        <p>Points lying close to the 45-degree reference line indicate normally distributed residuals. Systematic deviations (S-curves, fat tails) suggest departures from normality. Theoretical quantiles are computed using the inverse normal CDF approximation (Beasley-Springer-Moro algorithm).</p>
+
+        <p><strong>Hausman Specification Test:</strong> Tests whether random effects assumptions hold by comparing FE and RE estimates (Hausman, 1978):</p>
+
+        <div class="formula">
+H = (β̂<sub>FE</sub> - β̂<sub>RE</sub>)' · [Var(β̂<sub>FE</sub>) - Var(β̂<sub>RE</sub>)]<sup>-1</sup> · (β̂<sub>FE</sub> - β̂<sub>RE</sub>) ~ χ²<sub>k</sub>
+
+H<sub>0</sub>: E(u<sub>j</sub> | X) = 0 (RE is consistent)
+H<sub>1</sub>: E(u<sub>j</sub> | X) ≠ 0 (only FE is consistent)
+        </div>
+
+        <p>If p < 0.05, reject random effects in favor of fixed effects.</p>
+
+        <h3>3.6 Variance Decomposition</h3>
         <p>The intraclass correlation coefficient (ICC) partitions total variance into within-country and between-country components:</p>
 
         <div class="formula">
@@ -347,7 +396,7 @@ where:
 
         <p>The ICC represents the proportion of total variance in achievement that is due to differences between countries. An ICC of 0.15 means 15% of variance is between countries and 85% is within countries.</p>
 
-        <h3>3.6 Achievement Gap Decomposition</h3>
+        <h3>3.7 Achievement Gap Decomposition</h3>
         <p>Achievement gaps are calculated by comparing students in different SES quartiles:</p>
 
         <div class="formula">
@@ -363,7 +412,7 @@ where:
 
         <p>Effect sizes are interpreted using Cohen's conventions: small (0.2), medium (0.5), large (0.8) (Cohen, 1988).</p>
 
-        <h3>3.7 Standard Errors</h3>
+        <h3>3.8 Standard Errors</h3>
         <p>For most analyses, standard errors are computed using classical formulas with sampling weights. For robust inference, the application supports balanced repeated replication (BRR) using the 80 replicate weights provided by PISA:</p>
 
         <div class="formula">
