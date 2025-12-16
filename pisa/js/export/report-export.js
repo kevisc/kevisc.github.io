@@ -1,0 +1,632 @@
+/**
+ * Report Export Module
+ * Generates comprehensive HTML analysis reports
+ * Author: Kevin Schoenholzer
+ * Date: 2025-12-16
+ */
+
+import { getChartAsBase64PNG } from './figure-export.js';
+
+/**
+ * Generate and download complete HTML analysis report
+ * @param {Object} state - Application state with all results
+ * @param {String} filename - Optional filename
+ */
+export async function generateFullReport(state, filename = 'pisa_analysis_report.html') {
+    if (!state || !state.mergedData) {
+        alert('No data loaded. Please load data before generating a report.');
+        return;
+    }
+
+    console.log('Generating comprehensive analysis report...');
+
+    try {
+        // Collect all chart images as base64
+        const charts = await collectChartImages();
+
+        // Build HTML report
+        const html = await buildReportHTML(state, charts);
+
+        // Download as HTML file
+        downloadHTML(html, filename);
+
+        console.log(`✓ Report generated: ${filename}`);
+        alert(`Analysis report generated successfully!\n\nFile: ${filename}\n\nThe report is a self-contained HTML file that can be opened in any web browser.`);
+
+    } catch (error) {
+        console.error('Error generating report:', error);
+        alert(`Error generating report: ${error.message}`);
+    }
+}
+
+/**
+ * Collect all chart images as base64-encoded PNGs
+ * @returns {Promise<Object>} Object with chart IDs as keys and base64 data as values
+ */
+async function collectChartImages() {
+    const chartIds = [
+        'overview-chart',
+        'distribution-chart',
+        'percentile-chart',
+        'lorenz-curve',
+        'regression-plot',
+        'country-comparison',
+        'decomposition-chart'
+    ];
+
+    const charts = {};
+
+    for (const chartId of chartIds) {
+        const chartDiv = document.getElementById(chartId);
+        if (chartDiv && chartDiv.data && chartDiv.data.length > 0) {
+            try {
+                const base64 = await getChartAsBase64PNG(chartId, 800, 600);
+                if (base64) {
+                    charts[chartId] = base64;
+                }
+            } catch (error) {
+                console.warn(`Could not capture chart: ${chartId}`, error);
+            }
+        }
+    }
+
+    return charts;
+}
+
+/**
+ * Build complete HTML report
+ * @param {Object} state - Application state
+ * @param {Object} charts - Chart images as base64
+ * @returns {Promise<String>} HTML content
+ */
+async function buildReportHTML(state, charts) {
+    const results = state.analysisResults || {};
+    const data = state.mergedData || [];
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PISA Educational Inequality Analysis Report</title>
+    <style>
+        ${getReportStyles()}
+    </style>
+</head>
+<body>
+    <div class="container">
+        ${buildReportHeader(state)}
+        ${buildDataOverview(state, data)}
+        ${buildDescriptiveStatistics(results)}
+        ${buildInequalityMeasures(results)}
+        ${buildGapAnalysis(results)}
+        ${buildRegressionResults(state)}
+        ${buildVarianceDecomposition(results)}
+        ${buildComparativeAnalysis(results)}
+        ${buildChartsSection(charts)}
+        ${buildMethodologySection()}
+        ${buildCitationSection()}
+        ${buildFooter()}
+    </div>
+</body>
+</html>`;
+
+    return html;
+}
+
+/**
+ * Get CSS styles for report
+ * @returns {String} CSS
+ */
+function getReportStyles() {
+    return `
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background: #f8fafc;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 3rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            color: #0f172a;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 0.5rem;
+        }
+        h2 {
+            color: #1e293b;
+            font-size: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        h3 {
+            color: #334155;
+            font-size: 1.25rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        p {
+            margin-bottom: 1rem;
+            color: #475569;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        .metadata {
+            background: #f1f5f9;
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+        .metadata strong {
+            color: #0f172a;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        tr:hover {
+            background: #f8fafc;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .stat-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+        }
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin: 0.5rem 0;
+        }
+        .stat-card .label {
+            font-size: 0.875rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .chart-container {
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .chart-container img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+        .chart-caption {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+        }
+        .alert-info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            color: #1e40af;
+        }
+        .methodology {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            border-left: 4px solid #10b981;
+        }
+        .citation {
+            background: #fef3c7;
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            border-left: 4px solid #f59e0b;
+        }
+        .footer {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+                padding: 1rem;
+            }
+        }
+    `;
+}
+
+/**
+ * Build report header
+ */
+function buildReportHeader(state) {
+    const date = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    return `
+        <div class="header">
+            <h1>Educational Inequality Analysis Report</h1>
+            <p class="subtitle">PISA Assessment Data Explorer</p>
+            <div class="metadata">
+                <strong>Generated:</strong> ${date}<br>
+                <strong>Countries:</strong> ${state.selectedCountries?.join(', ') || 'N/A'}<br>
+                <strong>Years:</strong> ${state.selectedYears?.join(', ') || 'N/A'}<br>
+                <strong>Total Students:</strong> ${state.mergedData?.length.toLocaleString() || 'N/A'}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Build data overview section
+ */
+function buildDataOverview(state, data) {
+    const countries = [...new Set(data.map(d => d.country))];
+    const years = [...new Set(data.map(d => d.year))].sort();
+
+    return `
+        <h2>1. Data Overview</h2>
+        <p>This report presents an analysis of educational inequality using data from the Programme for International Student Assessment (PISA). The analysis examines ${countries.length} ${countries.length === 1 ? 'country' : 'countries'} across ${years.length} ${years.length === 1 ? 'year' : 'years'}, totaling ${data.length.toLocaleString()} student observations.</p>
+
+        <h3>Sample Composition</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Country</th>
+                    <th>Years</th>
+                    <th>Students</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${countries.map(country => {
+                    const countryData = data.filter(d => d.country === country);
+                    const countryYears = [...new Set(countryData.map(d => d.year))].sort();
+                    return `
+                        <tr>
+                            <td>${country}</td>
+                            <td>${countryYears.join(', ')}</td>
+                            <td>${countryData.length.toLocaleString()}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Build descriptive statistics section
+ */
+function buildDescriptiveStatistics(results) {
+    const desc = results.descriptive;
+    if (!desc) return '';
+
+    return `
+        <h2>2. Descriptive Statistics</h2>
+        <p>Summary statistics for achievement scores across all selected countries and years.</p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="label">Mean Score</div>
+                <div class="value">${desc.mean?.toFixed(2) || 'N/A'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Standard Deviation</div>
+                <div class="value">${desc.sd?.toFixed(2) || 'N/A'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Median</div>
+                <div class="value">${desc.median?.toFixed(2) || 'N/A'}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Sample Size</div>
+                <div class="value">${desc.n?.toLocaleString() || 'N/A'}</div>
+            </div>
+        </div>
+
+        <h3>Percentiles</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Percentile</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>10th (P10)</td><td>${desc.p10?.toFixed(2) || 'N/A'}</td></tr>
+                <tr><td>25th (Q1)</td><td>${desc.p25?.toFixed(2) || 'N/A'}</td></tr>
+                <tr><td>50th (Median)</td><td>${desc.p50?.toFixed(2) || 'N/A'}</td></tr>
+                <tr><td>75th (Q3)</td><td>${desc.p75?.toFixed(2) || 'N/A'}</td></tr>
+                <tr><td>90th (P90)</td><td>${desc.p90?.toFixed(2) || 'N/A'}</td></tr>
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Build inequality measures section
+ */
+function buildInequalityMeasures(results) {
+    const ineq = results.inequality;
+    if (!ineq) return '';
+
+    return `
+        <h2>3. Inequality Measures</h2>
+        <p>Measures of dispersion and inequality in achievement scores.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Measure</th>
+                    <th>Value</th>
+                    <th>Interpretation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Gini Coefficient</td>
+                    <td>${ineq.gini?.toFixed(4) || 'N/A'}</td>
+                    <td>0 = perfect equality, 1 = maximum inequality</td>
+                </tr>
+                <tr>
+                    <td>Coefficient of Variation</td>
+                    <td>${ineq.cv?.toFixed(4) || 'N/A'}</td>
+                    <td>Standardized measure of dispersion</td>
+                </tr>
+                <tr>
+                    <td>P90/P10 Ratio</td>
+                    <td>${ineq.p90p10?.toFixed(2) || 'N/A'}</td>
+                    <td>Top 10% score relative to bottom 10%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        ${results.gradient !== undefined ? `
+        <h3>SES Gradient</h3>
+        <p>The socioeconomic status (SES) gradient measures how much achievement increases per unit increase in SES.</p>
+        <div class="stat-card">
+            <div class="label">SES Gradient (β)</div>
+            <div class="value">${results.gradient?.toFixed(2) || 'N/A'}</div>
+            <p style="margin-top: 0.5rem; font-size: 0.875rem;">Score points per 1-unit increase in ESCS index</p>
+        </div>
+        ` : ''}
+    `;
+}
+
+/**
+ * Build gap analysis section
+ */
+function buildGapAnalysis(results) {
+    // This would need gap results from state
+    return `
+        <h2>4. Achievement Gap Analysis</h2>
+        <p>Analysis of achievement gaps by socioeconomic status quartiles.</p>
+        <p class="alert alert-info">Gap decomposition results available in separate export.</p>
+    `;
+}
+
+/**
+ * Build regression results section
+ */
+function buildRegressionResults(state) {
+    // This would show regression tables if available
+    return `
+        <div class="page-break"></div>
+        <h2>5. Regression Analysis</h2>
+        <p>Regression models examining the relationship between socioeconomic status and achievement.</p>
+        <p class="alert alert-info">Detailed regression results available in CSV export format.</p>
+    `;
+}
+
+/**
+ * Build variance decomposition section
+ */
+function buildVarianceDecomposition(results) {
+    return `
+        <h2>6. Variance Decomposition</h2>
+        <p>Partitioning of total achievement variance into within-country and between-country components.</p>
+        <p class="alert alert-info">Variance decomposition chart included in visualizations section below.</p>
+    `;
+}
+
+/**
+ * Build comparative analysis section
+ */
+function buildComparativeAnalysis(results) {
+    const comp = results.comparative;
+    if (!comp) return '';
+
+    return `
+        <h2>7. Comparative Analysis</h2>
+        <p>Country-level statistics for selected years.</p>
+        <p class="alert alert-info">Full comparative statistics available in CSV export format.</p>
+    `;
+}
+
+/**
+ * Build charts section with embedded images
+ */
+function buildChartsSection(charts) {
+    let html = `
+        <div class="page-break"></div>
+        <h2>8. Visualizations</h2>
+        <p>Key charts from the analysis.</p>
+    `;
+
+    const chartTitles = {
+        'overview-chart': 'Achievement and Stratification Overview',
+        'distribution-chart': 'Score Distribution by Country',
+        'percentile-chart': 'Achievement Percentiles',
+        'lorenz-curve': 'Lorenz Curve (Inequality)',
+        'regression-plot': 'Regression Coefficient Comparison',
+        'country-comparison': 'Cross-National Comparison',
+        'decomposition-chart': 'Variance Decomposition'
+    };
+
+    Object.keys(charts).forEach(chartId => {
+        const base64 = charts[chartId];
+        const title = chartTitles[chartId] || chartId;
+
+        html += `
+            <div class="chart-container">
+                <h3>${title}</h3>
+                <img src="${base64}" alt="${title}" />
+            </div>
+        `;
+    });
+
+    return html;
+}
+
+/**
+ * Build methodology section
+ */
+function buildMethodologySection() {
+    return `
+        <div class="page-break"></div>
+        <h2>9. Methodology</h2>
+        <div class="methodology">
+            <h3>Data Source</h3>
+            <p>OECD Programme for International Student Assessment (PISA), accessed via the learningtower R package (Vaughan et al., 2021).</p>
+
+            <h3>Statistical Methods</h3>
+            <ul>
+                <li><strong>Weighted Statistics:</strong> All analyses use student sampling weights (W_FSTUWT) following OECD (2023) technical standards.</li>
+                <li><strong>Gini Coefficient:</strong> Measures inequality in achievement distribution (0 = perfect equality, 1 = maximum inequality).</li>
+                <li><strong>SES Gradient:</strong> Regression slope of achievement on ESCS index, indicating score points gained per unit increase in socioeconomic status.</li>
+                <li><strong>Variance Decomposition:</strong> Partitioning of total variance into within-country and between-country components using intraclass correlation (ICC).</li>
+            </ul>
+
+            <h3>Assumptions & Limitations</h3>
+            <ul>
+                <li>Cross-sectional design precludes causal inference</li>
+                <li>Missing data handled via listwise deletion</li>
+                <li>Sampling weights account for complex survey design</li>
+                <li>Results represent participating countries only</li>
+            </ul>
+        </div>
+    `;
+}
+
+/**
+ * Build citation section
+ */
+function buildCitationSection() {
+    return `
+        <h2>10. How to Cite</h2>
+        <div class="citation">
+            <h3>This Tool</h3>
+            <p>Schoenholzer, K. (2025). <em>Educational Inequality Data Explorer</em> [Web application]. https://kevinschoenholzer.com/pisa/</p>
+
+            <h3>Data Source</h3>
+            <p>OECD (2023). <em>PISA Database</em>. Organisation for Economic Co-operation and Development. https://www.oecd.org/pisa/data/</p>
+
+            <h3>R Package</h3>
+            <p>Vaughan, B., Stanke, L., Teng, T., Hyndman, R., & O'Hara-Wild, E. (2021). <em>learningtower: OECD PISA Datasets from 2000-2018 in an Easy-to-Use Format</em>. R package version 1.0.1.</p>
+
+            <h3>Key References</h3>
+            <ul>
+                <li>OECD (2019). <em>PISA 2018 Technical Report</em>. OECD Publishing.</li>
+                <li>Reardon, S. F. (2011). The widening academic achievement gap between the rich and the poor: New evidence and possible explanations. In R. Murnane & G. Duncan (Eds.), <em>Whither Opportunity?</em> (pp. 91–116). Russell Sage Foundation.</li>
+            </ul>
+        </div>
+    `;
+}
+
+/**
+ * Build footer
+ */
+function buildFooter() {
+    return `
+        <div class="footer">
+            <p>Educational Inequality Data Explorer | Generated with Claude Code</p>
+            <p>Kevin Schoenholzer © 2025</p>
+            <p style="margin-top: 1rem; font-size: 0.75rem;">
+                This report was generated automatically from the PISA Educational Inequality Data Explorer.<br>
+                For interactive analysis, visit: https://kevinschoenholzer.com/pisa/
+            </p>
+        </div>
+    `;
+}
+
+/**
+ * Download HTML content as file
+ */
+function downloadHTML(htmlContent, filename) {
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const link = document.createElement('a');
+
+    if (navigator.msSaveBlob) { // IE 10+
+        navigator.msSaveBlob(blob, filename);
+    } else {
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+}
+
+export default {
+    generateFullReport
+};

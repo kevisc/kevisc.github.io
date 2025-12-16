@@ -12,6 +12,25 @@ import { initLoadingIndicator, updateProgress, showDataStatus, hideLoading,
          showButtonSpinner, hideButtonSpinner, resetProgress } from './ui/loading-indicator.js';
 import { initSelectors, populateFromMetadata } from './ui/country-selector.js';
 
+// Import analysis modules
+import { calculateDescriptiveStats, calculateInequalityMeasures, calculateSESGradient,
+         calculateStatsByGroup } from './analysis/descriptive.js';
+import { runPooledOLS, runFixedEffects, runRandomEffects } from './analysis/regression.js';
+import { decomposeAchievementGap, calculateVarianceDecomposition } from './analysis/decomposition.js';
+import { hausmanTest } from './analysis/diagnostics.js';
+
+// Import visualization modules
+import { updateOverviewStats, renderOverviewChart } from './visualization/overview-viz.js';
+import { renderAllDistributionCharts } from './visualization/distribution-viz.js';
+import { renderRegressionComparison, renderCoefficientPlot, renderHausmanTest } from './visualization/regression-viz.js';
+import { renderAllComparativeCharts } from './visualization/comparative-viz.js';
+
+// Import export modules
+import { exportComprehensiveSummary, exportDescriptiveStats, exportAllRegressionModels } from './export/csv-export.js';
+import { exportCurrentDataset } from './export/data-export.js';
+import { exportAllAnalysisCharts } from './export/figure-export.js';
+import { generateFullReport } from './export/report-export.js';
+
 // Application initialization
 async function initApp() {
     console.log('==================================================');
@@ -102,11 +121,48 @@ function onTabSwitch(tabName) {
 
     console.log(`Switched to tab: ${tabName}`);
 
-    // Run tab-specific logic
-    // TODO: In Phase 3, call appropriate visualization functions here
-    // Example:
-    // if (tabName === 'overview') renderOverview();
-    // if (tabName === 'regression') renderRegression();
+    const data = state.mergedData;
+    const outcomeVar = getCurrentOutcome();
+    const predictorVar = getCurrentPredictor();
+    const weightType = getWeightType();
+
+    // Run tab-specific visualizations
+    try {
+        switch (tabName) {
+            case 'overview':
+                updateOverviewStats(data, outcomeVar, predictorVar, weightType);
+                renderOverviewChart(data, outcomeVar, predictorVar, weightType);
+                break;
+
+            case 'distribution':
+                renderAllDistributionCharts(data, outcomeVar);
+                break;
+
+            case 'gap-decomposition':
+                renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
+                break;
+
+            case 'regression':
+                runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+                break;
+
+            case 'comparative':
+                const comparativeResults = state.analysisResults?.comparative;
+                if (comparativeResults) {
+                    renderAllComparativeCharts(data, comparativeResults, outcomeVar);
+                }
+                break;
+
+            case 'diagnostics':
+                renderDiagnostics(data, outcomeVar);
+                break;
+
+            default:
+                console.log(`No specific rendering for tab: ${tabName}`);
+        }
+    } catch (error) {
+        console.error(`Error rendering ${tabName} tab:`, error);
+    }
 }
 
 /**
@@ -146,8 +202,13 @@ function initEventListeners() {
             // Re-run analyses if data is loaded
             const state = getState();
             if (state.mergedData && state.mergedData.length > 0) {
-                // TODO: Phase 3 - trigger re-analysis
-                console.log('Outcome changed - would re-run analyses');
+                console.log('Outcome changed - re-running analyses');
+                runInitialAnalyses(state.mergedData);
+                // Re-render current tab
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) {
+                    onTabSwitch(activeTab.getAttribute('data-tab'));
+                }
             }
         });
     }
@@ -162,8 +223,13 @@ function initEventListeners() {
             // Re-run analyses if data is loaded
             const state = getState();
             if (state.mergedData && state.mergedData.length > 0) {
-                // TODO: Phase 3 - trigger re-analysis
-                console.log('Predictor changed - would re-run analyses');
+                console.log('Predictor changed - re-running analyses');
+                runInitialAnalyses(state.mergedData);
+                // Re-render current tab
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) {
+                    onTabSwitch(activeTab.getAttribute('data-tab'));
+                }
             }
         });
     }
@@ -176,6 +242,32 @@ function initEventListeners() {
             console.log('Analysis type changed to:', e.target.value);
         });
     });
+
+    // Export buttons
+    const exportSummaryBtn = document.getElementById('export-summary-btn');
+    if (exportSummaryBtn) {
+        exportSummaryBtn.addEventListener('click', handleExportSummary);
+    }
+
+    const exportRegressionBtn = document.getElementById('export-regression-btn');
+    if (exportRegressionBtn) {
+        exportRegressionBtn.addEventListener('click', handleExportRegression);
+    }
+
+    const exportDataBtn = document.getElementById('export-data-btn');
+    if (exportDataBtn) {
+        exportDataBtn.addEventListener('click', handleExportData);
+    }
+
+    const exportChartsBtn = document.getElementById('export-charts-btn');
+    if (exportChartsBtn) {
+        exportChartsBtn.addEventListener('click', handleExportCharts);
+    }
+
+    const exportReportBtn = document.getElementById('export-report-btn');
+    if (exportReportBtn) {
+        exportReportBtn.addEventListener('click', handleExportReport);
+    }
 
     console.log('Event listeners initialized');
 }
@@ -271,8 +363,16 @@ async function handleLoadData() {
 function runInitialAnalyses(data) {
     console.log('Running initial analyses...');
 
-    // TODO: Phase 3 - Implement actual analysis
-    // For now, just log basic info
+    if (!data || data.length === 0) {
+        console.warn('No data to analyze');
+        return;
+    }
+
+    // Get current selections
+    const outcomeVar = getCurrentOutcome();
+    const predictorVar = getCurrentPredictor();
+    const state = getState();
+    const weightType = getWeightType();
 
     // Get unique countries and years
     const countries = [...new Set(data.map(d => d.country))];
@@ -283,18 +383,78 @@ function runInitialAnalyses(data) {
     console.log('- Countries:', countries.length, '-', countries.join(', '));
     console.log('- Years:', years.length, '-', years.join(', '));
 
-    // Check for required variables
-    const sampleRecord = data[0];
-    console.log('Sample record fields:', Object.keys(sampleRecord));
+    try {
+        // 1. Calculate descriptive statistics
+        const descriptive = calculateDescriptiveStats(data, outcomeVar, weightType);
+        const inequality = calculateInequalityMeasures(data, outcomeVar, weightType);
+        const gradient = calculateSESGradient(data, outcomeVar, predictorVar, weightType);
 
-    // TODO: Phase 3 tasks:
-    // 1. Calculate descriptive statistics (mean, SD, Gini)
-    // 2. Calculate SES gradient
-    // 3. Update overview stat cards
-    // 4. Render overview chart
-    // 5. Store results in state
+        console.log('✓ Descriptive statistics calculated');
+        console.log('  - Mean:', descriptive?.mean?.toFixed(2));
+        console.log('  - Gini:', inequality?.gini?.toFixed(3));
+        console.log('  - Gradient:', gradient?.toFixed(2));
 
-    console.log('✓ Initial analyses complete (placeholder)');
+        // 2. Update overview stats and chart
+        updateOverviewStats(data, outcomeVar, predictorVar, weightType);
+        renderOverviewChart(data, outcomeVar, predictorVar, weightType);
+
+        console.log('✓ Overview tab updated');
+
+        // 3. Calculate comparative statistics by country-year
+        const comparativeResults = calculateComparativeStats(data, outcomeVar, predictorVar, weightType);
+
+        // 4. Store results in state
+        setState({
+            analysisResults: {
+                descriptive,
+                inequality,
+                gradient,
+                comparative: comparativeResults
+            }
+        });
+
+        console.log('✓ Initial analyses complete');
+
+    } catch (error) {
+        console.error('Error in initial analyses:', error);
+    }
+}
+
+/**
+ * Calculate comparative statistics (by country and year)
+ * @param {Array} data - Student data
+ * @param {String} outcomeVar - Outcome variable
+ * @param {String} predictorVar - Predictor variable
+ * @param {String} weightType - Weight type
+ * @returns {Object} Comparative results
+ */
+function calculateComparativeStats(data, outcomeVar, predictorVar, weightType) {
+    const results = {};
+    const countries = [...new Set(data.map(d => d.country))];
+    const years = [...new Set(data.map(d => d.year))];
+
+    countries.forEach(country => {
+        results[country] = {};
+
+        years.forEach(year => {
+            const subData = data.filter(d => d.country === country && d.year === year);
+
+            if (subData.length > 0) {
+                const stats = calculateDescriptiveStats(subData, outcomeVar, weightType);
+                const ineq = calculateInequalityMeasures(subData, outcomeVar, weightType);
+                const grad = calculateSESGradient(subData, outcomeVar, predictorVar, weightType);
+
+                results[country][year] = {
+                    mean: stats?.mean || NaN,
+                    gini: ineq?.gini || NaN,
+                    predictorGradient: grad || NaN,
+                    n: subData.length
+                };
+            }
+        });
+    });
+
+    return results;
 }
 
 /**
@@ -344,6 +504,261 @@ function getSelectedControls() {
     }
 
     return controls;
+}
+
+/**
+ * Get selected weight type
+ * @returns {String} Weight type
+ */
+function getWeightType() {
+    const weightSelect = document.getElementById('weight-type');
+    return weightSelect ? weightSelect.value : 'student';
+}
+
+/**
+ * Render gap decomposition analysis
+ * @param {Array} data - Student data
+ * @param {String} outcomeVar - Outcome variable
+ * @param {String} predictorVar - Predictor variable
+ * @param {String} weightType - Weight type
+ */
+function renderGapDecomposition(data, outcomeVar, predictorVar, weightType) {
+    console.log('Rendering gap decomposition...');
+
+    const gap = decomposeAchievementGap(data, outcomeVar, predictorVar, weightType);
+    const decomp = calculateVarianceDecomposition(data, outcomeVar);
+
+    if (!gap && !decomp) {
+        console.warn('No gap decomposition results');
+        return;
+    }
+
+    const resultsDiv = document.getElementById('gap-results');
+    if (!resultsDiv) return;
+
+    let html = '<div class="grid-2" style="gap: 2rem;">';
+
+    // Achievement gap card
+    if (gap) {
+        html += `
+            <div class="stat-card">
+                <h3>Achievement Gap (Q4-Q1 SES)</h3>
+                <div class="methodology-note">
+                    <strong>Gap:</strong> ${gap.gap_q4_q1.toFixed(2)} score points<br>
+                    <strong>Effect Size:</strong> ${gap.effect_size.toFixed(2)} (Cohen's d)<br>
+                    <strong>Q1 Mean:</strong> ${gap.q1.mean.toFixed(2)} (n=${gap.q1.n})<br>
+                    <strong>Q4 Mean:</strong> ${gap.q4.mean.toFixed(2)} (n=${gap.q4.n})
+                </div>
+            </div>
+        `;
+    }
+
+    // Variance decomposition card
+    if (decomp) {
+        html += `
+            <div class="stat-card">
+                <h3>Variance Decomposition</h3>
+                <div class="methodology-note">
+                    <strong>Total Variance:</strong> ${decomp.totalVariance.toFixed(2)}<br>
+                    <strong>Within-country:</strong> ${decomp.percentWithin.toFixed(1)}%<br>
+                    <strong>Between-country:</strong> ${decomp.percentBetween.toFixed(1)}%<br>
+                    <strong>ICC (ρ):</strong> ${decomp.icc.toFixed(3)}
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    resultsDiv.innerHTML = html;
+}
+
+/**
+ * Run and render regression analyses
+ * @param {Array} data - Student data
+ * @param {String} outcomeVar - Outcome variable
+ * @param {String} predictorVar - Predictor variable
+ * @param {String} weightType - Weight type
+ */
+function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
+    console.log('Running regression analyses...');
+
+    const controls = getSelectedControls();
+    const models = {};
+
+    // Check which models are selected
+    const wantOLS = document.getElementById('ols-model')?.checked !== false; // Default true
+    const wantFE = document.getElementById('fe-model')?.checked !== false; // Default true
+    const wantRE = document.getElementById('re-model')?.checked !== false; // Default true
+
+    try {
+        if (wantOLS) {
+            const ols = runPooledOLS(data, outcomeVar, predictorVar, controls, weightType);
+            if (ols) models.ols = ols;
+        }
+
+        if (wantFE) {
+            const fe = runFixedEffects(data, outcomeVar, predictorVar, controls, weightType);
+            if (fe) models.fixedEffects = fe;
+        }
+
+        if (wantRE) {
+            const re = runRandomEffects(data, outcomeVar, predictorVar, controls, weightType);
+            if (re) models.randomEffects = re;
+        }
+
+        // Render results
+        renderRegressionComparison(models);
+
+        // Render coefficient plot
+        const predLabel = getPredictorLabel(predictorVar);
+        renderCoefficientPlot(models, predLabel);
+
+        // Hausman test if both FE and RE are available
+        if (models.fixedEffects && models.randomEffects) {
+            const hausman = hausmanTest(models.fixedEffects, models.randomEffects, predLabel);
+            if (hausman) {
+                renderHausmanTest(hausman);
+            }
+        }
+
+        console.log('✓ Regression analyses complete');
+
+    } catch (error) {
+        console.error('Error in regression analyses:', error);
+    }
+}
+
+/**
+ * Render diagnostics tab
+ * @param {Array} data - Student data
+ * @param {String} outcomeVar - Outcome variable
+ */
+function renderDiagnostics(data, outcomeVar) {
+    console.log('Rendering diagnostics...');
+
+    const decomp = calculateVarianceDecomposition(data, outcomeVar);
+    if (!decomp) return;
+
+    const diagnosticsDiv = document.getElementById('diagnostics-results');
+    if (!diagnosticsDiv) return;
+
+    const html = `
+        <div class="stat-card">
+            <h3>Variance Decomposition</h3>
+            <div class="methodology-note">
+                <strong>Within-country variance:</strong> ${decomp.withinVariance.toFixed(2)} (${decomp.percentWithin.toFixed(1)}%)<br>
+                <strong>Between-country variance:</strong> ${decomp.betweenVariance.toFixed(2)} (${decomp.percentBetween.toFixed(1)}%)<br>
+                <strong>Intraclass correlation (ICC):</strong> ${decomp.icc.toFixed(3)}<br><br>
+                <em>ICC = ${decomp.icc.toFixed(3)} means ${(decomp.icc * 100).toFixed(1)}% of total variance in achievement is due to differences between countries.</em>
+            </div>
+        </div>
+    `;
+
+    diagnosticsDiv.innerHTML = html;
+}
+
+/**
+ * Get predictor label for display
+ * @param {String} predictor - Predictor variable name
+ * @returns {String} Display label
+ */
+function getPredictorLabel(predictor) {
+    const labels = {
+        'escs': 'Socioeconomic Status (ESCS)',
+        'parent_edu': 'Parental Education'
+    };
+    return labels[predictor] || predictor;
+}
+
+/**
+ * Export handlers
+ */
+function handleExportSummary() {
+    const state = getState();
+
+    if (!state.mergedData || state.mergedData.length === 0) {
+        alert('No data loaded. Please load data before exporting.');
+        return;
+    }
+
+    exportComprehensiveSummary(state);
+}
+
+function handleExportRegression() {
+    const state = getState();
+
+    if (!state.mergedData || state.mergedData.length === 0) {
+        alert('No data loaded. Please load data before exporting.');
+        return;
+    }
+
+    // Run regressions and export
+    const outcomeVar = getCurrentOutcome();
+    const predictorVar = getCurrentPredictor();
+    const weightType = getWeightType();
+    const controls = getSelectedControls();
+
+    const models = {};
+    try {
+        const ols = runPooledOLS(state.mergedData, outcomeVar, predictorVar, controls, weightType);
+        if (ols) models.ols = ols;
+
+        const fe = runFixedEffects(state.mergedData, outcomeVar, predictorVar, controls, weightType);
+        if (fe) models.fixedEffects = fe;
+
+        const re = runRandomEffects(state.mergedData, outcomeVar, predictorVar, controls, weightType);
+        if (re) models.randomEffects = re;
+
+        if (Object.keys(models).length > 0) {
+            exportAllRegressionModels(models);
+        } else {
+            alert('No regression models available to export.');
+        }
+    } catch (error) {
+        console.error('Error exporting regressions:', error);
+        alert(`Error exporting regressions: ${error.message}`);
+    }
+}
+
+function handleExportData() {
+    const state = getState();
+
+    if (!state.mergedData || state.mergedData.length === 0) {
+        alert('No data loaded. Please load data before exporting.');
+        return;
+    }
+
+    exportCurrentDataset(state.mergedData, state);
+}
+
+function handleExportCharts() {
+    const state = getState();
+
+    if (!state.mergedData || state.mergedData.length === 0) {
+        alert('No data loaded. Please load data and view charts before exporting.');
+        return;
+    }
+
+    exportAllAnalysisCharts('png');
+}
+
+async function handleExportReport() {
+    const state = getState();
+
+    if (!state.mergedData || state.mergedData.length === 0) {
+        alert('No data loaded. Please load data before generating a report.');
+        return;
+    }
+
+    // Show loading message
+    alert('Generating comprehensive analysis report...\n\nThis may take a few seconds as charts are being captured.');
+
+    try {
+        await generateFullReport(state);
+    } catch (error) {
+        console.error('Error generating report:', error);
+        alert(`Error generating report: ${error.message}`);
+    }
 }
 
 // Initialize app when DOM is ready
