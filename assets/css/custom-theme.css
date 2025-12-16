@@ -35,3 +35,32 @@ a:hover{color:#93c5fd!important}
 code,kbd,pre{border:1px solid var(--ks-border)!important}
 pre{background:rgba(255,255,255,.03)!important}
 
+/* Minimal header on sub-pages (PaperMod header is disabled on home) */
+.header,.nav{background:transparent!important;border-bottom:0!important;box-shadow:none!important}
+#menu,.logo-switches{display:none!important}
+.logo{margin:auto var(--gap)!important}
+.logo a{
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  border:1px solid var(--ks-border);
+  background:rgba(255,255,255,.02);
+  font-size:0!important; /* hide site title text */
+}
+.logo a:hover{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.35)}
+.logo a img{margin:0!important;transform:none!important}
+
+@supports ((-webkit-mask:url("")) or (mask:url(""))) {
+  .logo a img{display:none!important}
+  .logo a::before{
+    content:"";
+    width:18px;
+    height:18px;
+    background:currentColor;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A//www.w3.org/2000/svg'%20viewBox%3D'0%200%2024%2024'%3E%3Cpath%20fill%3D'black'%20d%3D'M12%203L2%2012h3v9h6v-6h2v6h6v-9h3z'/%3E%3C/svg%3E") no-repeat 50% 50%/contain;
+    mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A//www.w3.org/2000/svg'%20viewBox%3D'0%200%2024%2024'%3E%3Cpath%20fill%3D'black'%20d%3D'M12%203L2%2012h3v9h6v-6h2v6h6v-9h3z'/%3E%3C/svg%3E") no-repeat 50% 50%/contain;
+  }
+}
