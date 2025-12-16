@@ -8,6 +8,35 @@
 import { weightedMean } from '../core/utils.js';
 
 /**
+ * Calculate Akaike Information Criterion (AIC)
+ * AIC = n * log(RSS/n) + 2k
+ * Lower values indicate better model fit
+ * @param {Number} n - Number of observations
+ * @param {Number} k - Number of parameters (including intercept)
+ * @param {Number} rss - Residual sum of squares
+ * @returns {Number} AIC value
+ */
+function calculateAIC(n, k, rss) {
+    if (n <= 0 || rss <= 0) return NaN;
+    return n * Math.log(rss / n) + 2 * k;
+}
+
+/**
+ * Calculate Bayesian Information Criterion (BIC)
+ * BIC = n * log(RSS/n) + k * log(n)
+ * Lower values indicate better model fit
+ * Penalizes model complexity more heavily than AIC
+ * @param {Number} n - Number of observations
+ * @param {Number} k - Number of parameters (including intercept)
+ * @param {Number} rss - Residual sum of squares
+ * @returns {Number} BIC value
+ */
+function calculateBIC(n, k, rss) {
+    if (n <= 0 || rss <= 0) return NaN;
+    return n * Math.log(rss / n) + k * Math.log(n);
+}
+
+/**
  * Run weighted OLS regression with ridge stabilization
  * @param {Array} y - Dependent variable (1D array)
  * @param {Array} X - Design matrix (2D array: rows x columns)
@@ -65,7 +94,11 @@ export function weightedOLS(y, X, w) {
     const r2 = (SST > 0) ? 1 - (SSE / SST) : NaN;
     const adjR2 = Number.isFinite(r2) ? 1 - (1 - r2) * ((n - 1) / df) : NaN;
 
-    return { beta, se, tStats, pVals, r2, adjR2, n, k, df, vcov, residuals: resid, yhat };
+    // AIC and BIC for model comparison
+    const aic = calculateAIC(n, k, SSE);
+    const bic = calculateBIC(n, k, SSE);
+
+    return { beta, se, tStats, pVals, r2, adjR2, n, k, df, vcov, residuals: resid, yhat, aic, bic };
 }
 
 /**
@@ -205,6 +238,8 @@ export function runPooledOLS(data, outcomeVar, predictorVar, controls = [], weig
         pValues: fit.pVals,
         r2: fit.r2,
         adjR2: fit.adjR2,
+        aic: fit.aic,
+        bic: fit.bic,
         nobs: fit.n,
         df: fit.df,
         ngroups: null,
@@ -249,6 +284,8 @@ export function runFixedEffects(data, outcomeVar, predictorVar, controls = [], w
         r2Within,
         r2Between,
         adjR2: fit.adjR2,
+        aic: fit.aic,
+        bic: fit.bic,
         nobs: fit.n,
         df: fit.df,
         ngroups: dm.countries.length,
@@ -292,9 +329,11 @@ export function runRandomEffects(data, outcomeVar, predictorVar, controls = [], 
         coefficients: fit.beta,
         standardErrors: fit.se,
         tStatistics: fit.tStats,
-        pValues: fit.pVals,
+        pValues: fit.pValues,
         r2: fit.r2,
         adjR2: fit.adjR2,
+        aic: fit.aic,
+        bic: fit.bic,
         nobs: fit.n,
         df: fit.df,
         ngroups: groups.length,

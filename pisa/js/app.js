@@ -22,7 +22,14 @@ import { hausmanTest } from './analysis/diagnostics.js';
 // Import visualization modules
 import { updateOverviewStats, renderOverviewChart } from './visualization/overview-viz.js';
 import { renderAllDistributionCharts } from './visualization/distribution-viz.js';
-import { renderRegressionComparison, renderCoefficientPlot, renderHausmanTest } from './visualization/regression-viz.js';
+import {
+    renderRegressionComparison,
+    renderCoefficientPlot,
+    renderHausmanTest,
+    renderRegressionScatterPlots,
+    renderResidualPlot,
+    renderQQPlot
+} from './visualization/regression-viz.js';
 import { renderAllComparativeCharts } from './visualization/comparative-viz.js';
 
 // Import export modules
@@ -613,12 +620,29 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
         const predLabel = getPredictorLabel(predictorVar);
         renderCoefficientPlot(models, predLabel);
 
+        // Render regression scatter plots with fitted lines
+        renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
+
         // Hausman test if both FE and RE are available
         if (models.fixedEffects && models.randomEffects) {
             const hausman = hausmanTest(models.fixedEffects, models.randomEffects, predLabel);
             if (hausman) {
                 renderHausmanTest(hausman);
             }
+        }
+
+        // Render residual plots and QQ plots for diagnostics tab
+        if (models.ols) {
+            renderResidualPlot(models.ols, 'OLS (Pooled)', 'residual-plot-ols');
+            renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
+        }
+        if (models.fixedEffects) {
+            renderResidualPlot(models.fixedEffects, 'Fixed Effects', 'residual-plot-fe');
+            renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
+        }
+        if (models.randomEffects) {
+            renderResidualPlot(models.randomEffects, 'Random Effects', 'residual-plot-re');
+            renderQQPlot(models.randomEffects, 'Random Effects', 'qq-plot-re');
         }
 
         console.log('✓ Regression analyses complete');

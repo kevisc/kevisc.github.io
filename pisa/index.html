@@ -298,17 +298,46 @@
                     </p>
 
                     <div id="regression-results"></div>
-                    <div id="regression-plot" style="margin-top: 2rem;"></div>
+
+                    <div style="margin-top: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Scatter Plot with Fitted Regression Lines</h3>
+                        <div id="regression-scatter"></div>
+                    </div>
+
+                    <div style="margin-top: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Coefficient Comparison Across Models</h3>
+                        <div id="coefficient-plot"></div>
+                    </div>
                 </div>
 
                 <!-- Tab Content: Diagnostics -->
                 <div id="diagnostics" class="tab-content">
                     <div class="section-title">Model Diagnostics</div>
                     <p class="description">
-                        Within/between country variance decomposition and model fit diagnostics.
+                        Within/between country variance decomposition and model fit diagnostics including residual analysis and normality tests.
                     </p>
 
                     <div id="diagnostics-results"></div>
+
+                    <div style="margin-top: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Residual vs Fitted Values</h3>
+                        <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
+                            Detects heteroscedasticity (non-constant variance). Points should be randomly scattered around the zero line.
+                        </p>
+                        <div id="residual-plot-ols"></div>
+                        <div id="residual-plot-fe" style="margin-top: 1rem;"></div>
+                        <div id="residual-plot-re" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <div style="margin-top: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Q-Q Plot (Normality Test)</h3>
+                        <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
+                            Tests if residuals follow a normal distribution. Points should lie close to the diagonal reference line.
+                        </p>
+                        <div id="qq-plot-ols"></div>
+                        <div id="qq-plot-fe" style="margin-top: 1rem;"></div>
+                        <div id="qq-plot-re" style="margin-top: 1rem;"></div>
+                    </div>
                 </div>
 
                 <!-- Tab Content: Comparative -->
