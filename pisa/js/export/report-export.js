@@ -118,7 +118,7 @@ async function buildReportHTML(state, charts) {
         ${buildDataOverview(state, data)}
         ${buildDescriptiveStatistics(results)}
         ${buildInequalityMeasures(results)}
-        ${buildGapAnalysis(results)}
+        ${buildGapAnalysis(results, state)}
         ${buildRegressionResults(state)}
         ${buildVarianceDecomposition(results)}
         ${buildComparativeAnalysis(results)}
@@ -513,26 +513,187 @@ function buildInequalityMeasures(results) {
 /**
  * Build gap analysis section
  */
-function buildGapAnalysis(results) {
-    // This would need gap results from state
-    return `
+function buildGapAnalysis(results, state) {
+    let html = `
+        <div class="page-break"></div>
         <h2>4. Achievement Gap Analysis</h2>
         <p>Analysis of achievement gaps by socioeconomic status quartiles.</p>
-        <p class="alert alert-info">Gap decomposition results available in separate export.</p>
     `;
+
+    // Try to get gap data from decomposition calculation
+    const data = state.mergedData || [];
+    const outcomeVar = state.currentOutcome || 'math';
+    const predictorVar = state.currentPredictor || 'escs';
+    const weightType = state.weightType || 'student';
+
+    if (data.length > 0 && window.decomposeAchievementGap && window.calculateVarianceDecomposition) {
+        try {
+            const gap = window.decomposeAchievementGap(data, outcomeVar, predictorVar, weightType);
+            const decomp = window.calculateVarianceDecomposition(data, outcomeVar);
+
+            if (gap) {
+                html += `
+                    <div class="results-table-container">
+                        <h3>Achievement Gap (Q4-Q1 SES Quartiles)</h3>
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Measure</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Gap (Q4 - Q1)</td>
+                                    <td><strong>${gap.gap_q4_q1.toFixed(2)} points</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Effect Size (Cohen's d)</td>
+                                    <td>${gap.effect_size.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Q1 Mean Score</td>
+                                    <td>${gap.q1.mean.toFixed(2)} (n=${gap.q1.n.toLocaleString()})</td>
+                                </tr>
+                                <tr>
+                                    <td>Q4 Mean Score</td>
+                                    <td>${gap.q4.mean.toFixed(2)} (n=${gap.q4.n.toLocaleString()})</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            if (decomp) {
+                html += `
+                    <div class="results-table-container" style="margin-top: 2rem;">
+                        <h3>Variance Decomposition</h3>
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Total Variance</td>
+                                    <td>${decomp.totalVariance.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Within-Country Variance</td>
+                                    <td>${decomp.varianceWithin.toFixed(2)} (${decomp.percentWithin.toFixed(1)}%)</td>
+                                </tr>
+                                <tr>
+                                    <td>Between-Country Variance</td>
+                                    <td>${decomp.varianceBetween.toFixed(2)} (${decomp.percentBetween.toFixed(1)}%)</td>
+                                </tr>
+                                <tr>
+                                    <td>Intraclass Correlation (ICC)</td>
+                                    <td>${decomp.icc.toFixed(3)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.warn('Could not calculate gap analysis for report:', error);
+            html += `<p class="alert alert-info">Gap decomposition results available in separate export.</p>`;
+        }
+    } else {
+        html += `<p class="alert alert-info">Gap decomposition results available in separate export.</p>`;
+    }
+
+    return html;
 }
 
 /**
  * Build regression results section
  */
 function buildRegressionResults(state) {
-    // This would show regression tables if available
-    return `
+    let html = `
         <div class="page-break"></div>
         <h2>5. Regression Analysis</h2>
         <p>Regression models examining the relationship between socioeconomic status and achievement.</p>
-        <p class="alert alert-info">Detailed regression results available in CSV export format.</p>
     `;
+
+    // Try to get regression results from state
+    const data = state.mergedData || [];
+    const outcomeVar = state.currentOutcome || 'math';
+    const predictorVar = state.currentPredictor || 'escs';
+    const weightType = state.weightType || 'student';
+
+    if (data.length > 0 && window.runPooledOLS) {
+        try {
+            // Run regressions to get fresh results
+            const ols = window.runPooledOLS(data, outcomeVar, predictorVar, [], weightType);
+
+            if (ols && ols.coefficients) {
+                const predLabel = predictorVar === 'escs' ? 'SES (ESCS)' : 'Parental Education';
+
+                html += `
+                    <div class="results-table-container">
+                        <h3>OLS Regression Results</h3>
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Variable</th>
+                                    <th>Coefficient</th>
+                                    <th>Std. Error</th>
+                                    <th>t-statistic</th>
+                                    <th>p-value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Intercept</td>
+                                    <td>${ols.coefficients[0].toFixed(3)}</td>
+                                    <td>${ols.standardErrors[0].toFixed(3)}</td>
+                                    <td>${ols.tStats[0].toFixed(3)}</td>
+                                    <td>${ols.pValues[0] < 0.001 ? '<0.001' : ols.pValues[0].toFixed(3)}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>${predLabel}</strong></td>
+                                    <td><strong>${ols.coefficients[1].toFixed(3)}</strong></td>
+                                    <td>${ols.standardErrors[1].toFixed(3)}</td>
+                                    <td><strong>${ols.tStats[1].toFixed(3)}</strong></td>
+                                    <td><strong>${ols.pValues[1] < 0.001 ? '<0.001' : ols.pValues[1].toFixed(3)}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 1rem; font-size: 0.9em;">
+                            <strong>Model Fit:</strong> R² = ${(ols.r2 * 100).toFixed(2)}% |
+                            N = ${ols.nobs.toLocaleString()} |
+                            F-statistic = ${ols.fStatistic ? ols.fStatistic.toFixed(2) : 'N/A'}
+                        </p>
+                    </div>
+                `;
+
+                // Interpretation
+                const gradient = ols.coefficients[1];
+                const isSignificant = ols.pValues[1] < 0.05;
+
+                html += `
+                    <div class="alert alert-info" style="margin-top: 1.5rem;">
+                        <strong>Interpretation:</strong> ${isSignificant ? 'A statistically significant' : 'An'} positive relationship exists between ${predLabel.toLowerCase()} and achievement.
+                        On average, a one-unit increase in ${predLabel.toLowerCase()} is associated with a ${Math.abs(gradient).toFixed(2)}-point ${gradient > 0 ? 'increase' : 'decrease'} in ${outcomeVar} scores${isSignificant ? ' (p < 0.05)' : ''}.
+                        The model explains ${(ols.r2 * 100).toFixed(1)}% of the variance in achievement.
+                    </div>
+                `;
+            } else {
+                html += `<p class="alert alert-info">Detailed regression results available in CSV export format.</p>`;
+            }
+        } catch (error) {
+            console.warn('Could not calculate regression for report:', error);
+            html += `<p class="alert alert-info">Detailed regression results available in CSV export format.</p>`;
+        }
+    } else {
+        html += `<p class="alert alert-info">Detailed regression results available in CSV export format.</p>`;
+    }
+
+    return html;
 }
 
 /**

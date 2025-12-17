@@ -61,6 +61,8 @@ async function initApp() {
         // Make decomposition functions available globally
         window.calculateGapTrend = calculateGapTrend;
         window.calculateComparativeDecomposition = calculateComparativeDecomposition;
+        window.decomposeAchievementGap = decomposeAchievementGap;
+        window.calculateVarianceDecomposition = calculateVarianceDecomposition;
 
         // Load metadata
         showDataStatus('Loading metadata...', 'info');
@@ -1477,14 +1479,94 @@ async function handleExportReport() {
     }
 
     // Show loading message
-    alert('Generating comprehensive analysis report...\n\nThis may take a few seconds as charts are being captured.');
+    alert('Generating comprehensive analysis report...\n\nThis may take a few seconds as all visualizations are being rendered and captured.');
 
     try {
+        // Force render ALL visualizations before exporting
+        console.log('Pre-rendering all visualizations for report...');
+        await renderAllVisualizationsForReport();
+
+        // Wait a bit for Plotly to finish rendering all charts
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         await generateFullReport(state);
     } catch (error) {
         console.error('Error generating report:', error);
         alert(`Error generating report: ${error.message}`);
     }
+}
+
+/**
+ * Render all visualizations across all tabs for report generation
+ * This ensures every chart is available for capture, regardless of which tabs/options the user selected
+ */
+async function renderAllVisualizationsForReport() {
+    const state = getState();
+    const data = state.mergedData;
+    const outcomeVar = getCurrentOutcome();
+    const predictorVar = getCurrentPredictor();
+    const weightType = getWeightType();
+
+    console.log('Rendering all tabs and visualizations...');
+
+    // 1. Overview tab
+    updateOverviewStats(data, outcomeVar, predictorVar, weightType);
+    renderOverviewChart(data, outcomeVar, predictorVar, weightType);
+
+    // 2. Distribution tab
+    renderAllDistributionCharts(data, outcomeVar);
+
+    // 3. Gap decomposition tab - render all granularity levels
+    // Save current granularity
+    const gapSelect = document.getElementById('gap-granularity');
+    const originalGranularity = gapSelect ? gapSelect.value : 'overall';
+
+    // Render overall view (which includes variance decomposition)
+    if (gapSelect) gapSelect.value = 'overall';
+    renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
+
+    // 4. Regression tab - run all analyses and force render optional plots
+    const models = runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+
+    // Force render scatter plot (even if checkbox not selected)
+    if (models && Object.keys(models).length > 0) {
+        renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
+
+        // Force render coefficient plot
+        renderCoefficientPlot(models, predictorVar);
+    }
+
+    // 5. Diagnostics - force render all diagnostic plots
+    const showResidualPlots = document.getElementById('show-residual-plots');
+    const showQQPlots = document.getElementById('show-qq-plots');
+
+    // Temporarily check both boxes to force rendering
+    const wasResidualChecked = showResidualPlots?.checked;
+    const wasQQChecked = showQQPlots?.checked;
+
+    if (showResidualPlots) showResidualPlots.checked = true;
+    if (showQQPlots) showQQPlots.checked = true;
+
+    // Re-run regressions with diagnostics enabled
+    runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+
+    // Restore original checkbox states
+    if (showResidualPlots) showResidualPlots.checked = wasResidualChecked;
+    if (showQQPlots) showQQPlots.checked = wasQQChecked;
+
+    // 6. Comparative tab
+    const comparativeResults = state.analysisResults?.comparative;
+    if (comparativeResults) {
+        renderAllComparativeCharts(data, comparativeResults, outcomeVar);
+    }
+
+    // Restore original gap granularity
+    if (gapSelect) {
+        gapSelect.value = originalGranularity;
+        renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
+    }
+
+    console.log('✓ All visualizations rendered for report');
 }
 
 // Initialize app when DOM is ready
