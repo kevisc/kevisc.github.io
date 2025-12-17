@@ -83,6 +83,37 @@ async function initApp() {
 }
 
 /**
+ * Show loading cursor during calculations
+ */
+function startCalculating() {
+    document.body.classList.add('calculating');
+}
+
+/**
+ * Hide loading cursor after calculations
+ */
+function stopCalculating() {
+    document.body.classList.remove('calculating');
+}
+
+/**
+ * Wrap async function with loading indicator
+ * @param {Function} fn - Async function to execute
+ * @returns {Function} Wrapped function
+ */
+function withLoading(fn) {
+    return async function(...args) {
+        startCalculating();
+        try {
+            return await fn(...args);
+        } finally {
+            // Small delay to ensure UI updates
+            setTimeout(() => stopCalculating(), 100);
+        }
+    };
+}
+
+/**
  * Initialize tab system
  */
 function initTabSystem() {
@@ -133,43 +164,50 @@ function onTabSwitch(tabName) {
     const predictorVar = getCurrentPredictor();
     const weightType = getWeightType();
 
-    // Run tab-specific visualizations
-    try {
-        switch (tabName) {
-            case 'overview':
-                updateOverviewStats(data, outcomeVar, predictorVar, weightType);
-                renderOverviewChart(data, outcomeVar, predictorVar, weightType);
-                break;
+    // Run tab-specific visualizations with loading indicator
+    startCalculating();
 
-            case 'distribution':
-                renderAllDistributionCharts(data, outcomeVar);
-                break;
+    // Use setTimeout to ensure cursor updates before heavy computation
+    setTimeout(() => {
+        try {
+            switch (tabName) {
+                case 'overview':
+                    updateOverviewStats(data, outcomeVar, predictorVar, weightType);
+                    renderOverviewChart(data, outcomeVar, predictorVar, weightType);
+                    break;
 
-            case 'gap-decomposition':
-                renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
-                break;
+                case 'distribution':
+                    renderAllDistributionCharts(data, outcomeVar);
+                    break;
 
-            case 'regression':
-                runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
-                break;
+                case 'gap-decomposition':
+                    renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
+                    break;
 
-            case 'comparative':
-                const comparativeResults = state.analysisResults?.comparative;
-                if (comparativeResults) {
-                    renderAllComparativeCharts(data, comparativeResults, outcomeVar);
-                }
-                break;
+                case 'regression':
+                    runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+                    break;
 
-            case 'diagnostics':
-                renderDiagnostics(data, outcomeVar);
-                break;
+                case 'comparative':
+                    const comparativeResults = state.analysisResults?.comparative;
+                    if (comparativeResults) {
+                        renderAllComparativeCharts(data, comparativeResults, outcomeVar);
+                    }
+                    break;
 
-            default:
-                console.log(`No specific rendering for tab: ${tabName}`);
+                case 'diagnostics':
+                    renderDiagnostics(data, outcomeVar);
+                    break;
+
+                default:
+                    console.log(`No specific rendering for tab: ${tabName}`);
+            }
+        } catch (error) {
+            console.error(`Error rendering ${tabName} tab:`, error);
+        } finally {
+            stopCalculating();
         }
-    } catch (error) {
-        console.error(`Error rendering ${tabName} tab:`, error);
-    }
+    }, 50);
 }
 
 /**

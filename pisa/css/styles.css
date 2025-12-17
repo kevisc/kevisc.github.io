@@ -219,6 +219,18 @@ select:focus, input:focus {
     100% { transform: rotate(360deg); }
 }
 
+/* Loading cursor state */
+body.calculating,
+body.calculating * {
+    cursor: wait !important;
+}
+
+body.calculating button:not(:disabled),
+body.calculating .tab {
+    cursor: wait !important;
+    pointer-events: none;
+}
+
 .stat-card {
     background: var(--background);
     padding: 1.5rem;
