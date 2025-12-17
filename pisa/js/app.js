@@ -150,11 +150,47 @@ function initTabSystem() {
 }
 
 /**
+ * Clear Plotly charts from non-active tabs to save memory
+ * @param {String} activeTab - Currently active tab name
+ */
+function clearInactivePlotlyCharts(activeTab) {
+    // Map tabs to their chart div IDs
+    const tabCharts = {
+        'overview': ['overview-chart'],
+        'distribution': ['distribution-chart', 'percentile-chart', 'lorenz-curve'],
+        'gap-decomposition': ['gap-plot'],
+        'regression': ['coefficient-plot', 'regression-scatter-plots'],
+        'diagnostics': ['residual-plot-ols', 'residual-plot-fe', 'residual-plot-re',
+                       'qq-plot-ols', 'qq-plot-fe', 'qq-plot-re', 'decomposition-chart'],
+        'comparative': ['country-comparison', 'world-map', 'temporal-trends', 'gap-comparison']
+    };
+
+    // Clear charts from all tabs except the active one
+    Object.keys(tabCharts).forEach(tab => {
+        if (tab !== activeTab) {
+            tabCharts[tab].forEach(chartId => {
+                const chartDiv = document.getElementById(chartId);
+                if (chartDiv && typeof Plotly !== 'undefined') {
+                    try {
+                        Plotly.purge(chartDiv);
+                    } catch (e) {
+                        // Chart might not exist yet, ignore
+                    }
+                }
+            });
+        }
+    });
+}
+
+/**
  * Handle tab switching
  * @param {String} tabName - Name of activated tab
  */
 function onTabSwitch(tabName) {
     const state = getState();
+
+    // Clear Plotly charts from inactive tabs to save memory
+    clearInactivePlotlyCharts(tabName);
 
     // Only run analyses if data is loaded
     if (!state.mergedData || state.mergedData.length === 0) {
@@ -690,13 +726,13 @@ function runSeparateRegressions(data, outcomeVar, predictorVar, weightType, cont
 
         try {
             const ols = runPooledOLS(groupData, outcomeVar, predictorVar, controls, weightType);
-            if (ols && ols.coefficients) {
+            if (ols && ols.coefficients && ols.coefficients.length > 1) {
                 results.push({
                     country,
                     year,
                     gradient: ols.coefficients[1], // Coefficient on predictor
                     se: ols.standardErrors[1],
-                    tStat: ols.tStats[1],
+                    tStat: ols.tStatistics[1], // Note: property is tStatistics not tStats
                     pValue: ols.pValues[1],
                     r2: ols.r2,
                     adjR2: ols.adjR2,
@@ -704,6 +740,8 @@ function runSeparateRegressions(data, outcomeVar, predictorVar, weightType, cont
                     bic: ols.bic,
                     n: ols.nobs
                 });
+            } else {
+                console.warn(`Skipping ${country} ${year}: invalid model (${ols ? `${ols.coefficients?.length || 0} coefficients` : 'no model'})`);
             }
         } catch (error) {
             console.warn(`Error running regression for ${country} ${year}:`, error.message);

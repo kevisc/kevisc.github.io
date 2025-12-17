@@ -571,9 +571,37 @@ select.ui-contrast:focus,
 /* Belt-and-suspenders to prevent any children from expanding container */
 #country-checkboxes, #country-checkboxes * { min-width: 0; }
 
-/* Clamp any horizontal overflow app-wide */
-html, body, .container, .content-area, main {
+/* Clamp any horizontal overflow app-wide (but allow table containers to scroll) */
+html, body {
     overflow-x: hidden !important;
+}
+
+.container, main {
+    overflow-x: hidden !important;
+}
+
+.content-area {
+    overflow-x: hidden !important;
+}
+
+/* Allow tables and stat-cards to scroll horizontally when needed */
+.stat-card, .tab-content > div {
+    overflow-x: visible !important;
+}
+
+.stat-card > div[style*="overflow-x: auto"] {
+    overflow-x: auto !important;
+    max-width: 100%;
+}
+
+/* Ensure regression tables can scroll */
+#regression-results, #regression-results > div, #regression-results table {
+    max-width: 100%;
+}
+
+#regression-results > div[style*="overflow"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Distribution page containers never push layout sideways */
