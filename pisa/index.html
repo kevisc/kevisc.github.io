@@ -293,26 +293,28 @@
 
                     <div id="regression-results"></div>
 
-                    <div style="margin-top: 2rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
-                        <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary);">📊 Optional Visualizations</h3>
-                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                <input type="checkbox" id="show-scatter-plot" style="cursor: pointer;">
-                                <span>Scatter Plot with Fitted Lines</span>
+                    <div class="optional-viz-controls">
+                        <h3>📊 Optional Visualizations</h3>
+                        <div class="viz-options">
+                            <label class="viz-checkbox">
+                                <input type="checkbox" id="show-scatter-plot">
+                                <span class="checkmark"></span>
+                                <span class="label-text">Scatter Plot with Fitted Lines</span>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                <input type="checkbox" id="show-coefficient-plot" style="cursor: pointer;">
-                                <span>Coefficient Comparison</span>
+                            <label class="viz-checkbox">
+                                <input type="checkbox" id="show-coefficient-plot">
+                                <span class="checkmark"></span>
+                                <span class="label-text">Coefficient Comparison</span>
                             </label>
                         </div>
-                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.75rem;">
+                        <p class="viz-info">
                             ℹ️ Visualizations are optional to reduce memory usage. Exports include all plots regardless of selection.
                         </p>
                     </div>
 
                     <div id="regression-scatter-container" style="margin-top: 2rem; display: none;">
                         <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Scatter Plot with Fitted Regression Lines</h3>
-                        <div id="regression-scatter-plots"></div>
+                        <div id="regression-scatter"></div>
                     </div>
 
                     <div id="coefficient-plot-container" style="margin-top: 2rem; display: none;">
@@ -330,20 +332,25 @@
 
                     <div id="diagnostics-results"></div>
 
-                    <div style="margin-top: 2rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
-                        <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary);">📊 Optional Diagnostic Plots</h3>
-                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                <input type="checkbox" id="show-residual-plots" style="cursor: pointer;">
-                                <span>Residual vs Fitted Plots</span>
+                    <div class="optional-viz-controls">
+                        <h3>📊 Optional Diagnostic Plots</h3>
+                        <div class="viz-options">
+                            <label class="viz-checkbox">
+                                <input type="checkbox" id="show-residual-plots">
+                                <span class="checkmark"></span>
+                                <span class="label-text">Residual vs Fitted Plots</span>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                <input type="checkbox" id="show-qq-plots" style="cursor: pointer;">
-                                <span>Q-Q Plots (Normality)</span>
+                            <label class="viz-checkbox">
+                                <input type="checkbox" id="show-qq-plots">
+                                <span class="checkmark"></span>
+                                <span class="label-text">Q-Q Plots (Normality)</span>
                             </label>
                         </div>
-                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.75rem;">
-                            ℹ️ Diagnostic plots are optional to reduce memory usage. Exports include all plots regardless of selection.
+                        <button id="render-diagnostics-btn" class="btn btn-secondary" style="margin-top: 1rem;">
+                            🔄 Render Selected Plots
+                        </button>
+                        <p class="viz-info">
+                            ℹ️ Select plots above and click render. Exports include all plots regardless of selection.
                         </p>
                     </div>
 
@@ -516,6 +523,6 @@
     </footer>
 
     <!-- Application JavaScript Modules -->
-    <script type="module" src="js/app.js?v=3.0.2"></script>
+    <script type="module" src="js/app.js?v=3.1.0"></script>
 </body>
 </html>

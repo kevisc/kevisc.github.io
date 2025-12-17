@@ -397,35 +397,33 @@ function initEventListeners() {
         });
     }
 
-    // Optional visualization checkboxes - Diagnostics tab
-    const showResidualPlots = document.getElementById('show-residual-plots');
-    if (showResidualPlots) {
-        showResidualPlots.addEventListener('change', (e) => {
-            const container = document.getElementById('residual-plots-container');
-            if (container) {
-                container.style.display = e.target.checked ? 'block' : 'none';
-                if (e.target.checked) {
-                    const state = getState();
-                    if (state.mergedData && state.mergedData.length > 0) {
-                        renderDiagnostics(state.mergedData, getCurrentOutcome());
-                    }
-                }
-            }
-        });
-    }
+    // Render diagnostics button
+    const renderDiagnosticsBtn = document.getElementById('render-diagnostics-btn');
+    if (renderDiagnosticsBtn) {
+        renderDiagnosticsBtn.addEventListener('click', () => {
+            const showResidualPlots = document.getElementById('show-residual-plots');
+            const showQQPlots = document.getElementById('show-qq-plots');
+            const state = getState();
 
-    const showQQPlots = document.getElementById('show-qq-plots');
-    if (showQQPlots) {
-        showQQPlots.addEventListener('change', (e) => {
-            const container = document.getElementById('qq-plots-container');
-            if (container) {
-                container.style.display = e.target.checked ? 'block' : 'none';
-                if (e.target.checked) {
-                    const state = getState();
-                    if (state.mergedData && state.mergedData.length > 0) {
-                        renderDiagnostics(state.mergedData, getCurrentOutcome());
-                    }
-                }
+            if (!state.mergedData || state.mergedData.length === 0) {
+                alert('Please load data first before rendering diagnostic plots.');
+                return;
+            }
+
+            // Show/hide containers based on checkboxes
+            const residualContainer = document.getElementById('residual-plots-container');
+            const qqContainer = document.getElementById('qq-plots-container');
+
+            if (residualContainer) {
+                residualContainer.style.display = showResidualPlots?.checked ? 'block' : 'none';
+            }
+            if (qqContainer) {
+                qqContainer.style.display = showQQPlots?.checked ? 'block' : 'none';
+            }
+
+            // Re-run diagnostics to render the plots
+            if (showResidualPlots?.checked || showQQPlots?.checked) {
+                renderDiagnostics(state.mergedData, getCurrentOutcome());
             }
         });
     }

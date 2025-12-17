@@ -665,3 +665,100 @@ html, body {
     font-weight: 600;
     z-index: 1;
 }
+
+/* Optional Visualization Controls */
+.optional-viz-controls {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(16, 185, 129, 0.05));
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 8px;
+}
+
+.optional-viz-controls h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.viz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Custom styled checkboxes */
+.viz-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.75rem;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+    position: relative;
+    user-select: none;
+}
+
+.viz-checkbox:hover {
+    background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Hide default checkbox */
+.viz-checkbox input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* Custom checkbox appearance */
+.viz-checkbox .checkmark {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--secondary-color);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.viz-checkbox:hover .checkmark {
+    border-color: var(--primary-color);
+}
+
+/* Checkmark icon */
+.viz-checkbox input[type="checkbox"]:checked ~ .checkmark {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.viz-checkbox input[type="checkbox"]:checked ~ .checkmark::after {
+    content: "✓";
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.viz-checkbox .label-text {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.viz-checkbox input[type="checkbox"]:checked ~ .label-text {
+    color: var(--primary-color);
+}
+
+.viz-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.08);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-color);
+}
