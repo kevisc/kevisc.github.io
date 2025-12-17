@@ -5,7 +5,11 @@
       "Bash(git -C \"c:\\Users\\Kevin\\Documents\\GitHub\\kevisc.github.io\" log --oneline --all --graph -20)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nfeat: add PISA educational inequality explorer (Phase 1 & 2 complete)\n\nPhase 1: Data Pipeline\n- R scripts to generate 320 country-year data chunks from learningtower\n- Metadata generation and validation scripts\n- ~1GB of PISA data (2012, 2015, 2018, 2022) for 101 countries\n\nPhase 2: Core Application Infrastructure\n- Modular ES6 architecture with progressive data loading\n- State management with caching and reactivity\n- Progressive chunk loading (only fetch selected data)\n- Real-time progress tracking\n- 20+ statistical utility functions (weighted stats, Gini, etc.)\n- Dark theme UI with 7 analysis tabs\n\nWorking Features:\n- Automatic metadata loading\n- Country/year selection with filtering\n- On-demand data chunk fetching (~5MB per chunk)\n- Data caching (instant reload of same selections)\n- 80,451+ students loaded in test (3 countries × 2 years)\n\nTech Stack: Vanilla JS (ES6 modules), Plotly 2.35, jStat, simple-statistics\n\nTODO: Phase 3 (analysis), Phase 4 (export), Phase 5 (documentation)\nEOF\n)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)",
+      "Bash(git ls-files:*)",
+      "Bash(find:*)"
     ]
   }
 }
