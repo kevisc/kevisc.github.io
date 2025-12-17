@@ -400,13 +400,18 @@ function initEventListeners() {
     // Render diagnostics button
     const renderDiagnosticsBtn = document.getElementById('render-diagnostics-btn');
     if (renderDiagnosticsBtn) {
-        renderDiagnosticsBtn.addEventListener('click', () => {
+        renderDiagnosticsBtn.addEventListener('click', async () => {
             const showResidualPlots = document.getElementById('show-residual-plots');
             const showQQPlots = document.getElementById('show-qq-plots');
             const state = getState();
 
             if (!state.mergedData || state.mergedData.length === 0) {
                 alert('Please load data first before rendering diagnostic plots.');
+                return;
+            }
+
+            if (!showResidualPlots?.checked && !showQQPlots?.checked) {
+                alert('Please select at least one diagnostic plot type to render.');
                 return;
             }
 
@@ -421,10 +426,32 @@ function initEventListeners() {
                 qqContainer.style.display = showQQPlots?.checked ? 'block' : 'none';
             }
 
-            // Re-run diagnostics to render the plots
-            if (showResidualPlots?.checked || showQQPlots?.checked) {
-                renderDiagnostics(state.mergedData, getCurrentOutcome());
-            }
+            // Show loading indicator
+            renderDiagnosticsBtn.disabled = true;
+            renderDiagnosticsBtn.innerHTML = '⏳ Rendering...';
+            startCalculating();
+
+            // Use setTimeout to ensure UI updates before heavy computation
+            setTimeout(() => {
+                try {
+                    const data = state.mergedData;
+                    const outcomeVar = getCurrentOutcome();
+                    const predictorVar = getCurrentPredictor();
+                    const weightType = getWeightType();
+
+                    // Re-run regression to get fresh models with diagnostics
+                    runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+
+                    console.log('✓ Diagnostic plots rendered');
+                } catch (error) {
+                    console.error('Error rendering diagnostics:', error);
+                    alert('Error rendering diagnostic plots. Check console for details.');
+                } finally {
+                    stopCalculating();
+                    renderDiagnosticsBtn.disabled = false;
+                    renderDiagnosticsBtn.innerHTML = '🔄 Render Selected Plots';
+                }
+            }, 100);
         });
     }
 
@@ -993,15 +1020,16 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
             }
         }
 
-        // Render coefficient plot (only if checkbox is checked)
-        const predLabel = getPredictorLabel(predictorVar);
+        // Render optional visualizations based on checkbox state
         const showCoefficientPlot = document.getElementById('show-coefficient-plot');
+        const showScatterPlot = document.getElementById('show-scatter-plot');
+
+        // Always render if checkboxes are checked (they persist across re-renders)
         if (showCoefficientPlot && showCoefficientPlot.checked) {
-            renderCoefficientPlot(models, predLabel);
+            // Pass the actual variable name, not the display label
+            renderCoefficientPlot(models, predictorVar);
         }
 
-        // Render regression scatter plots with fitted lines (only if checkbox is checked)
-        const showScatterPlot = document.getElementById('show-scatter-plot');
         if (showScatterPlot && showScatterPlot.checked) {
             renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
         }

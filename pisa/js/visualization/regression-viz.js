@@ -171,55 +171,84 @@ export function renderRegressionComparison(models) {
  */
 export function renderCoefficientPlot(models, predictorName) {
     if (!models || Object.keys(models).length === 0) {
+        console.warn('No models available for coefficient plot');
         return;
     }
 
-    const traces = [];
+    const modelNames = [];
+    const coefficients = [];
+    const errorBars = [];
 
     Object.values(models).forEach(model => {
         if (model && Array.isArray(model.variableNames)) {
             const idx = model.variableNames.findIndex(name => name === predictorName);
 
             if (idx >= 0 && model.coefficients && model.standardErrors) {
-                traces.push({
-                    x: [model.modelName],
-                    y: [model.coefficients[idx]],
-                    error_y: {
-                        type: 'data',
-                        array: [1.96 * model.standardErrors[idx]],
-                        visible: true
-                    },
-                    type: 'scatter',
-                    mode: 'markers',
-                    name: model.modelName,
-                    marker: { size: 12 }
-                });
+                modelNames.push(model.modelName);
+                coefficients.push(model.coefficients[idx]);
+                errorBars.push(1.96 * model.standardErrors[idx]); // 95% CI
             }
         }
     });
 
-    if (traces.length === 0) {
+    if (modelNames.length === 0) {
+        console.warn(`No valid coefficients found for ${predictorName}`);
         return;
     }
 
+    const trace = {
+        x: modelNames,
+        y: coefficients,
+        error_y: {
+            type: 'data',
+            array: errorBars,
+            visible: true,
+            color: '#94a3b8',
+            thickness: 2,
+            width: 8
+        },
+        type: 'scatter',
+        mode: 'markers',
+        marker: {
+            size: 14,
+            color: '#3b82f6',
+            line: {
+                color: '#1e40af',
+                width: 2
+            }
+        },
+        hovertemplate: '<b>%{x}</b><br>Coefficient: %{y:.3f}<br>95% CI: %{y:.3f} ± %{error_y.array:.3f}<extra></extra>'
+    };
+
+    // Create nice display label
+    const displayLabel = predictorName === 'escs'
+        ? 'Socioeconomic Status (ESCS)'
+        : predictorName === 'parent_edu'
+        ? 'Parental Education'
+        : predictorName;
+
     const layout = {
-        title: `${predictorName} Coefficient Across Models (95% CI)`,
+        title: {
+            text: `${displayLabel} Coefficient Comparison (95% CI)`,
+            font: { color: '#f1f5f9', size: 16 }
+        },
         xaxis: {
-            title: 'Model',
+            title: 'Model Type',
             gridcolor: '#334155'
         },
         yaxis: {
-            title: `${predictorName} Coefficient`,
+            title: `${displayLabel} Coefficient<br>(Achievement Points per SD)`,
             gridcolor: '#334155',
             zeroline: true,
-            zerolinecolor: '#64748b',
+            zerolinecolor: '#ef4444',
             zerolinewidth: 2
         },
         paper_bgcolor: '#1e293b',
         plot_bgcolor: '#1e293b',
         font: { color: '#f1f5f9' },
         showlegend: false,
-        hovermode: 'closest'
+        hovermode: 'closest',
+        margin: { t: 80, b: 80, l: 80, r: 40 }
     };
 
     const config = {
@@ -230,7 +259,10 @@ export function renderCoefficientPlot(models, predictorName) {
 
     const chartDiv = document.getElementById('coefficient-plot');
     if (chartDiv) {
-        Plotly.newPlot(chartDiv, traces, layout, config);
+        Plotly.newPlot(chartDiv, [trace], layout, config);
+        console.log('✓ Coefficient plot rendered');
+    } else {
+        console.warn('coefficient-plot div not found');
     }
 }
 
