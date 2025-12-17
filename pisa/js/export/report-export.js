@@ -45,13 +45,29 @@ export async function generateFullReport(state, filename = 'pisa_analysis_report
  */
 async function collectChartImages() {
     const chartIds = [
+        // Overview & Distribution
         'overview-chart',
         'distribution-chart',
         'percentile-chart',
         'lorenz-curve',
-        'regression-plot',
+        // Achievement Gap
+        'gap-plot',
+        // Regression
+        'regression-scatter',
+        'coefficient-plot',
+        // Diagnostics
+        'residual-plot-ols',
+        'residual-plot-fe',
+        'residual-plot-re',
+        'qq-plot-ols',
+        'qq-plot-fe',
+        'qq-plot-re',
+        'decomposition-chart',
+        // Comparative
+        'world-map',
+        'temporal-trends',
         'country-comparison',
-        'decomposition-chart'
+        'gap-comparison'
     ];
 
     const charts = {};
@@ -63,10 +79,13 @@ async function collectChartImages() {
                 const base64 = await getChartAsBase64PNG(chartId, 800, 600);
                 if (base64) {
                     charts[chartId] = base64;
+                    console.log(`✓ Captured chart: ${chartId}`);
                 }
             } catch (error) {
                 console.warn(`Could not capture chart: ${chartId}`, error);
             }
+        } else {
+            console.log(`Skipping chart: ${chartId} (no data or not rendered)`);
         }
     }
 
@@ -320,29 +339,70 @@ function buildReportHeader(state) {
 function buildDataOverview(state, data) {
     const countries = [...new Set(data.map(d => d.country))];
     const years = [...new Set(data.map(d => d.year))].sort();
+    const outcome = state.currentOutcome || 'math';
+    const predictor = state.currentPredictor || 'escs';
+
+    // Calculate basic summary statistics
+    const validScores = data.filter(d => isFinite(d[outcome])).map(d => +d[outcome]);
+    const mean = validScores.reduce((sum, v) => sum + v, 0) / validScores.length;
+    const sorted = validScores.sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const min = Math.min(...validScores);
+    const max = Math.max(...validScores);
+    const sd = Math.sqrt(validScores.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / validScores.length);
 
     return `
-        <h2>1. Data Overview</h2>
-        <p>This report presents an analysis of educational inequality using data from the Programme for International Student Assessment (PISA). The analysis examines ${countries.length} ${countries.length === 1 ? 'country' : 'countries'} across ${years.length} ${years.length === 1 ? 'year' : 'years'}, totaling ${data.length.toLocaleString()} student observations.</p>
+        <h2>1. Data Overview & Summary Statistics</h2>
+        <p>This report presents an analysis of educational inequality using data from the Programme for International Student Assessment (PISA). The analysis examines <strong>${countries.length} ${countries.length === 1 ? 'country' : 'countries'}</strong> across <strong>${years.length} ${years.length === 1 ? 'year' : 'years'}</strong>, totaling <strong>${data.length.toLocaleString()} student observations</strong>.</p>
 
-        <h3>Sample Composition</h3>
+        <h3>Analysis Parameters</h3>
+        <ul>
+            <li><strong>Outcome Variable:</strong> ${outcome.charAt(0).toUpperCase() + outcome.slice(1)} Achievement</li>
+            <li><strong>Predictor Variable:</strong> ${predictor === 'escs' ? 'ESCS (Economic, Social and Cultural Status)' : 'Parental Education'}</li>
+            <li><strong>Years:</strong> ${years.join(', ')}</li>
+            <li><strong>Countries:</strong> ${countries.join(', ')}</li>
+        </ul>
+
+        <h3>Summary Statistics (${outcome.charAt(0).toUpperCase() + outcome.slice(1)} Scores)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Statistic</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Sample Size</td><td>${validScores.length.toLocaleString()}</td></tr>
+                <tr><td>Mean</td><td>${mean.toFixed(2)}</td></tr>
+                <tr><td>Median</td><td>${median.toFixed(2)}</td></tr>
+                <tr><td>Standard Deviation</td><td>${sd.toFixed(2)}</td></tr>
+                <tr><td>Minimum</td><td>${min.toFixed(2)}</td></tr>
+                <tr><td>Maximum</td><td>${max.toFixed(2)}</td></tr>
+                <tr><td>Range</td><td>${(max - min).toFixed(2)}</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Sample Composition by Country</h3>
         <table>
             <thead>
                 <tr>
                     <th>Country</th>
                     <th>Years</th>
                     <th>Students</th>
+                    <th>% of Total</th>
                 </tr>
             </thead>
             <tbody>
                 ${countries.map(country => {
                     const countryData = data.filter(d => d.country === country);
                     const countryYears = [...new Set(countryData.map(d => d.year))].sort();
+                    const pct = (countryData.length / data.length * 100).toFixed(1);
                     return `
                         <tr>
                             <td>${country}</td>
                             <td>${countryYears.join(', ')}</td>
                             <td>${countryData.length.toLocaleString()}</td>
+                            <td>${pct}%</td>
                         </tr>
                     `;
                 }).join('')}
@@ -507,17 +567,33 @@ function buildChartsSection(charts) {
     let html = `
         <div class="page-break"></div>
         <h2>8. Visualizations</h2>
-        <p>Key charts from the analysis.</p>
+        <p>All charts and plots generated during the analysis. Charts are included regardless of which visualizations were selected in the interactive interface.</p>
     `;
 
     const chartTitles = {
+        // Overview & Distribution
         'overview-chart': 'Achievement and Stratification Overview',
         'distribution-chart': 'Score Distribution by Country',
         'percentile-chart': 'Achievement Percentiles',
         'lorenz-curve': 'Lorenz Curve (Inequality)',
-        'regression-plot': 'Regression Coefficient Comparison',
-        'country-comparison': 'Cross-National Comparison',
-        'decomposition-chart': 'Variance Decomposition'
+        // Achievement Gap
+        'gap-plot': 'Achievement Gap by SES Quartiles',
+        // Regression
+        'regression-scatter': 'Scatter Plot with Fitted Regression Lines',
+        'coefficient-plot': 'Regression Coefficient Comparison',
+        // Diagnostics
+        'residual-plot-ols': 'Residual Plot (OLS)',
+        'residual-plot-fe': 'Residual Plot (Fixed Effects)',
+        'residual-plot-re': 'Residual Plot (Random Effects)',
+        'qq-plot-ols': 'Q-Q Plot (OLS)',
+        'qq-plot-fe': 'Q-Q Plot (Fixed Effects)',
+        'qq-plot-re': 'Q-Q Plot (Random Effects)',
+        'decomposition-chart': 'Variance Decomposition',
+        // Comparative
+        'world-map': 'Global Intergenerational Educational Stratification Map',
+        'temporal-trends': 'Temporal Trends in SES Gradients',
+        'country-comparison': 'Cross-National Achievement Comparison',
+        'gap-comparison': 'Cross-National Gap Comparison'
     };
 
     Object.keys(charts).forEach(chartId => {
@@ -531,6 +607,10 @@ function buildChartsSection(charts) {
             </div>
         `;
     });
+
+    if (Object.keys(charts).length === 0) {
+        html += `<p style="color: #888; font-style: italic;">No charts were rendered. Please ensure you navigate through all tabs and render visualizations before generating the report.</p>`;
+    }
 
     return html;
 }
