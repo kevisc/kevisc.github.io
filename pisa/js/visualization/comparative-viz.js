@@ -354,6 +354,151 @@ export function renderWorldMap(data, outcomeVar = 'math', predictorVar = 'escs')
 }
 
 /**
+ * Render temporal trends showing how SES gradients change over time
+ * @param {Array} data - Array of student records
+ * @param {String} outcomeVar - Name of outcome variable
+ * @param {String} predictorVar - Name of predictor (usually 'escs')
+ */
+export function renderTemporalTrends(data, outcomeVar = 'math', predictorVar = 'escs') {
+    const runPooledOLS = window.runPooledOLS;
+    if (!runPooledOLS) {
+        console.warn('runPooledOLS not available for temporal trends');
+        return;
+    }
+
+    // Group data by country AND year
+    const byCountryYear = {};
+    data.forEach(d => {
+        const key = `${d.country}_${d.year}`;
+        if (!byCountryYear[key]) {
+            byCountryYear[key] = {
+                country: d.country,
+                year: d.year,
+                data: []
+            };
+        }
+        byCountryYear[key].data.push(d);
+    });
+
+    // Calculate gradient for each country-year combination
+    const countryGradients = {};
+
+    Object.values(byCountryYear).forEach(entry => {
+        const { country, year, data: countryYearData } = entry;
+
+        if (countryYearData.length < 100) return; // Skip small samples
+
+        try {
+            const model = runPooledOLS(countryYearData, outcomeVar, predictorVar, [], 'student');
+            if (model && model.coefficients && model.coefficients[1]) {
+                if (!countryGradients[country]) {
+                    countryGradients[country] = [];
+                }
+                countryGradients[country].push({
+                    year: year,
+                    gradient: model.coefficients[1],
+                    r2: model.r2 || 0,
+                    n: model.nobs
+                });
+            }
+        } catch (error) {
+            console.warn(`Could not calculate gradient for ${country} ${year}:`, error.message);
+        }
+    });
+
+    // Filter countries with at least 2 time points
+    const validCountries = Object.keys(countryGradients).filter(
+        country => countryGradients[country].length >= 2
+    );
+
+    if (validCountries.length === 0) {
+        const chartDiv = document.getElementById('temporal-trends');
+        if (chartDiv) {
+            chartDiv.innerHTML = '<p style="text-align: center; color: #94a3b8; padding: 2rem;">Need at least 2 years of data per country to show temporal trends.</p>';
+        }
+        return;
+    }
+
+    // Sort each country's data by year
+    validCountries.forEach(country => {
+        countryGradients[country].sort((a, b) => a.year - b.year);
+    });
+
+    // Create traces for each country
+    const traces = validCountries.map(country => {
+        const countryData = countryGradients[country];
+        const years = countryData.map(d => d.year);
+        const gradients = countryData.map(d => d.gradient);
+        const hoverText = countryData.map(d =>
+            `<b>${country} (${d.year})</b><br>` +
+            `Gradient: ${d.gradient.toFixed(2)} points/SD<br>` +
+            `R²: ${(d.r2 * 100).toFixed(1)}%<br>` +
+            `N: ${d.n.toLocaleString()}`
+        );
+
+        return {
+            x: years,
+            y: gradients,
+            mode: 'lines+markers',
+            type: 'scatter',
+            name: country,
+            text: hoverText,
+            hoverinfo: 'text',
+            line: {
+                width: 2
+            },
+            marker: {
+                size: 8
+            }
+        };
+    });
+
+    const layout = {
+        title: {
+            text: 'Temporal Trends: SES → Achievement Gradient Over Time',
+            font: { color: '#f1f5f9', size: 16 }
+        },
+        xaxis: {
+            title: 'Year',
+            gridcolor: '#334155',
+            dtick: 3,
+            tickmode: 'linear'
+        },
+        yaxis: {
+            title: 'SES Gradient (points per SD)',
+            gridcolor: '#334155'
+        },
+        paper_bgcolor: '#1e293b',
+        plot_bgcolor: '#1e293b',
+        font: { color: '#f1f5f9' },
+        showlegend: true,
+        legend: {
+            x: 1.05,
+            y: 1,
+            xanchor: 'left',
+            bgcolor: 'rgba(30, 41, 59, 0.8)',
+            bordercolor: '#475569',
+            borderwidth: 1
+        },
+        hovermode: 'closest',
+        margin: { t: 80, b: 60, l: 60, r: 200 },
+        height: 600
+    };
+
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    };
+
+    const chartDiv = document.getElementById('temporal-trends');
+    if (chartDiv) {
+        Plotly.newPlot(chartDiv, traces, layout, config);
+    }
+}
+
+/**
  * Render all comparative charts
  * @param {Array} data - Array of student records
  * @param {Object} comparativeResults - Comparative analysis results
@@ -363,6 +508,7 @@ export function renderAllComparativeCharts(data, comparativeResults, outcomeVar 
     const years = [...new Set(data.map(d => d.year))].sort();
     renderCountryComparison(comparativeResults, years);
     renderWorldMap(data, outcomeVar, 'escs');
+    renderTemporalTrends(data, outcomeVar, 'escs');
     renderDecompositionChart(data, outcomeVar);
 }
 
@@ -371,5 +517,6 @@ export default {
     renderDecompositionChart,
     renderGapComparison,
     renderWorldMap,
+    renderTemporalTrends,
     renderAllComparativeCharts
 };
