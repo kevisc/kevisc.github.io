@@ -280,7 +280,21 @@
                         Effect Size (d): (Mean_high - Mean_low) / SD_pooled
                     </div>
 
+                    <div class="controls-section" style="margin-bottom: 1.5rem;">
+                        <label for="gap-granularity" style="font-weight: 600; color: #f1f5f9; margin-right: 0.5rem;">
+                            Gap Analysis Level:
+                        </label>
+                        <select id="gap-granularity" class="select-input" style="min-width: 200px;">
+                            <option value="overall">Overall (All Data)</option>
+                            <option value="by-country">By Country</option>
+                            <option value="by-year">By Year</option>
+                            <option value="by-country-year">By Country × Year</option>
+                        </select>
+                    </div>
+
                     <div id="gap-results"></div>
+
+                    <div id="gap-plot" style="margin-top: 2rem;"></div>
                 </div>
 
                 <!-- Tab Content: Regression -->
@@ -523,6 +537,6 @@
     </footer>
 
     <!-- Application JavaScript Modules -->
-    <script type="module" src="js/app.js?v=3.1.1"></script>
+    <script type="module" src="js/app.js?v=3.2.0"></script>
 </body>
 </html>

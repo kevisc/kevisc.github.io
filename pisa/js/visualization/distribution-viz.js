@@ -6,7 +6,7 @@
  */
 
 /**
- * Render distribution histogram by country
+ * Render distribution box plots by country and year
  * @param {Array} data - Array of student records
  * @param {String} outcomeVar - Name of outcome variable
  */
@@ -15,46 +15,71 @@ export function renderDistributionChart(data, outcomeVar = 'math') {
         return;
     }
 
-    const countries = [...new Set(data.map(d => d.country))];
+    const countries = [...new Set(data.map(d => d.country))].sort();
+    const years = [...new Set(data.map(d => d.year))].sort();
     const traces = [];
 
-    countries.forEach(country => {
-        const countryData = data.filter(d => d.country === country);
-        const scores = countryData.map(d => +d[outcomeVar]).filter(isFinite);
+    // Create a box plot trace for each country-year combination
+    years.forEach(year => {
+        countries.forEach(country => {
+            const countryYearData = data.filter(d => d.country === country && d.year === year);
+            const scores = countryYearData.map(d => +d[outcomeVar]).filter(isFinite);
 
-        if (scores.length > 0) {
-            traces.push({
-                x: scores,
-                type: 'histogram',
-                name: country,
-                opacity: 0.6,
-                histnorm: 'probability density',
-                nbinsx: 30
-            });
-        }
+            if (scores.length > 0) {
+                traces.push({
+                    y: scores,
+                    x: Array(scores.length).fill(`${country}`),
+                    name: `${year}`,
+                    type: 'box',
+                    boxpoints: false,
+                    marker: { size: 4 },
+                    line: { width: 2 },
+                    offsetgroup: year,
+                    legendgroup: year,
+                    showlegend: country === countries[0], // Only show legend for first country
+                    hovertemplate: `<b>${country} (${year})</b><br>` +
+                                   `Score: %{y:.1f}<br>` +
+                                   `<extra></extra>`
+                });
+            }
+        });
     });
 
     const layout = {
-        title: `${getOutcomeLabel(outcomeVar)} Score Distributions by Country`,
+        title: {
+            text: `${getOutcomeLabel(outcomeVar)} Score Distributions: Country × Year Comparison`,
+            font: { color: '#f1f5f9', size: 16 }
+        },
         xaxis: {
-            title: `${getOutcomeLabel(outcomeVar)} Score`,
+            title: 'Country',
             gridcolor: '#334155'
         },
         yaxis: {
-            title: 'Density',
+            title: `${getOutcomeLabel(outcomeVar)} Score`,
             gridcolor: '#334155'
         },
         paper_bgcolor: '#1e293b',
         plot_bgcolor: '#1e293b',
         font: { color: '#f1f5f9' },
-        barmode: 'overlay',
-        showlegend: true
+        boxmode: 'group',
+        showlegend: true,
+        legend: {
+            title: { text: 'Year' },
+            x: 1.02,
+            xanchor: 'left',
+            bgcolor: 'rgba(30, 41, 59, 0.8)',
+            bordercolor: '#475569',
+            borderwidth: 1
+        },
+        hovermode: 'closest',
+        margin: { l: 60, r: 150, t: 80, b: 80 }
     };
 
     const config = {
         responsive: true,
         displayModeBar: true,
-        displaylogo: false
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
     };
 
     const chartDiv = document.getElementById('distribution-chart');

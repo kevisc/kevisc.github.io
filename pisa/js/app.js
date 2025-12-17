@@ -16,7 +16,7 @@ import { initSelectors, populateFromMetadata } from './ui/country-selector.js';
 import { calculateDescriptiveStats, calculateInequalityMeasures, calculateSESGradient,
          calculateStatsByGroup } from './analysis/descriptive.js';
 import { runPooledOLS, runFixedEffects, runRandomEffects } from './analysis/regression.js';
-import { decomposeAchievementGap, calculateVarianceDecomposition } from './analysis/decomposition.js';
+import { decomposeAchievementGap, calculateVarianceDecomposition, calculateGapTrend, calculateComparativeDecomposition } from './analysis/decomposition.js';
 import { hausmanTest } from './analysis/diagnostics.js';
 
 // Import visualization modules
@@ -57,6 +57,10 @@ async function initApp() {
         window.runPooledOLS = runPooledOLS;
         window.runFixedEffects = runFixedEffects;
         window.runRandomEffects = runRandomEffects;
+
+        // Make decomposition functions available globally
+        window.calculateGapTrend = calculateGapTrend;
+        window.calculateComparativeDecomposition = calculateComparativeDecomposition;
 
         // Load metadata
         showDataStatus('Loading metadata...', 'info');
@@ -328,6 +332,24 @@ function initEventListeners() {
             console.log('Analysis type changed to:', e.target.value);
         });
     });
+
+    // Gap granularity selector
+    const gapGranularitySelect = document.getElementById('gap-granularity');
+    if (gapGranularitySelect) {
+        gapGranularitySelect.addEventListener('change', (e) => {
+            console.log('Gap granularity changed to:', e.target.value);
+
+            // Re-render gap decomposition if data is loaded
+            const state = getState();
+            if (state.mergedData && state.mergedData.length > 0) {
+                const data = state.mergedData;
+                const outcomeVar = getCurrentOutcome();
+                const predictorVar = getCurrentPredictor();
+                const weightType = getWeightType();
+                renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
+            }
+        });
+    }
 
     // Export buttons
     const exportSummaryBtn = document.getElementById('export-summary-btn');
@@ -711,51 +733,305 @@ function getWeightType() {
 function renderGapDecomposition(data, outcomeVar, predictorVar, weightType) {
     console.log('Rendering gap decomposition...');
 
-    const gap = decomposeAchievementGap(data, outcomeVar, predictorVar, weightType);
-    const decomp = calculateVarianceDecomposition(data, outcomeVar);
-
-    if (!gap && !decomp) {
-        console.warn('No gap decomposition results');
-        return;
-    }
+    const granularitySelect = document.getElementById('gap-granularity');
+    const granularity = granularitySelect ? granularitySelect.value : 'overall';
 
     const resultsDiv = document.getElementById('gap-results');
     if (!resultsDiv) return;
 
-    let html = '<div class="grid-2" style="gap: 2rem;">';
+    let html = '';
 
-    // Achievement gap card
-    if (gap) {
-        html += `
-            <div class="stat-card">
-                <h3>Achievement Gap (Q4-Q1 SES)</h3>
-                <div class="methodology-note">
-                    <strong>Gap:</strong> ${gap.gap_q4_q1.toFixed(2)} score points<br>
-                    <strong>Effect Size:</strong> ${gap.effect_size.toFixed(2)} (Cohen's d)<br>
-                    <strong>Q1 Mean:</strong> ${gap.q1.mean.toFixed(2)} (n=${gap.q1.n})<br>
-                    <strong>Q4 Mean:</strong> ${gap.q4.mean.toFixed(2)} (n=${gap.q4.n})
+    // Import decomposition functions
+    const { calculateGapTrend, calculateComparativeDecomposition } = window;
+
+    if (granularity === 'overall') {
+        // Overall gap across all data
+        const gap = decomposeAchievementGap(data, outcomeVar, predictorVar, weightType);
+        const decomp = calculateVarianceDecomposition(data, outcomeVar);
+
+        if (!gap && !decomp) {
+            console.warn('No gap decomposition results');
+            return;
+        }
+
+        html = '<div class="grid-2" style="gap: 2rem;">';
+
+        // Achievement gap card
+        if (gap) {
+            html += `
+                <div class="stat-card">
+                    <h3>Achievement Gap (Q4-Q1 SES)</h3>
+                    <div class="methodology-note">
+                        <strong>Gap:</strong> ${gap.gap_q4_q1.toFixed(2)} score points<br>
+                        <strong>Effect Size:</strong> ${gap.effect_size.toFixed(2)} (Cohen's d)<br>
+                        <strong>Q1 Mean:</strong> ${gap.q1.mean.toFixed(2)} (n=${gap.q1.n})<br>
+                        <strong>Q4 Mean:</strong> ${gap.q4.mean.toFixed(2)} (n=${gap.q4.n})
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
+
+        // Variance decomposition card
+        if (decomp) {
+            html += `
+                <div class="stat-card">
+                    <h3>Variance Decomposition</h3>
+                    <div class="methodology-note">
+                        <strong>Total Variance:</strong> ${decomp.totalVariance.toFixed(2)}<br>
+                        <strong>Within-country:</strong> ${decomp.percentWithin.toFixed(1)}%<br>
+                        <strong>Between-country:</strong> ${decomp.percentBetween.toFixed(1)}%<br>
+                        <strong>ICC (ρ):</strong> ${decomp.icc.toFixed(3)}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+
+    } else if (granularity === 'by-country') {
+        // Gap by country
+        const comparative = calculateComparativeDecomposition(data, outcomeVar, predictorVar, weightType);
+
+        if (!comparative || !comparative.byCountry) {
+            html = '<p>No country-level gap data available.</p>';
+        } else {
+            html = '<div class="table-container"><table class="results-table">';
+            html += '<thead><tr><th>Country</th><th>Gap (Q4-Q1)</th><th>Effect Size</th><th>Q1 Mean</th><th>Q4 Mean</th><th>N</th></tr></thead><tbody>';
+
+            comparative.ranked.forEach(country => {
+                const gap = comparative.byCountry[country];
+                if (gap) {
+                    html += `<tr>
+                        <td><strong>${country}</strong></td>
+                        <td>${gap.gap_q4_q1.toFixed(2)}</td>
+                        <td>${gap.effect_size.toFixed(2)}</td>
+                        <td>${gap.q1.mean.toFixed(2)}</td>
+                        <td>${gap.q4.mean.toFixed(2)}</td>
+                        <td>${(gap.q1.n + gap.q4.n).toLocaleString()}</td>
+                    </tr>`;
+                }
+            });
+
+            html += '</tbody></table></div>';
+
+            // Render visualization
+            renderGapPlot(comparative.byCountry, 'country', outcomeVar);
+        }
+
+    } else if (granularity === 'by-year') {
+        // Gap by year
+        const trends = calculateGapTrend(data, outcomeVar, predictorVar, weightType);
+
+        if (!trends || !trends.byYear) {
+            html = '<p>No year-level gap data available.</p>';
+        } else {
+            html = '<div class="table-container"><table class="results-table">';
+            html += '<thead><tr><th>Year</th><th>Gap (Q4-Q1)</th><th>Effect Size</th><th>Q1 Mean</th><th>Q4 Mean</th><th>N</th></tr></thead><tbody>';
+
+            trends.years.forEach(year => {
+                const gap = trends.byYear[year];
+                if (gap) {
+                    html += `<tr>
+                        <td><strong>${year}</strong></td>
+                        <td>${gap.gap_q4_q1.toFixed(2)}</td>
+                        <td>${gap.effect_size.toFixed(2)}</td>
+                        <td>${gap.q1.mean.toFixed(2)}</td>
+                        <td>${gap.q4.mean.toFixed(2)}</td>
+                        <td>${(gap.q1.n + gap.q4.n).toLocaleString()}</td>
+                    </tr>`;
+                }
+            });
+
+            html += '</tbody></table></div>';
+
+            if (trends.trend !== null) {
+                html += `<div class="stat-card" style="margin-top: 1rem;">
+                    <h3>Temporal Trend</h3>
+                    <div class="methodology-note">
+                        <strong>Trend:</strong> ${trends.interpretation} (${trends.trend.toFixed(2)} points/year)
+                    </div>
+                </div>`;
+            }
+
+            // Render visualization
+            renderGapPlot(trends.byYear, 'year', outcomeVar);
+        }
+
+    } else if (granularity === 'by-country-year') {
+        // Gap by country × year
+        const countries = [...new Set(data.map(d => d.country))].sort();
+        const years = [...new Set(data.map(d => d.year))].sort();
+
+        const gapsByCountryYear = {};
+        countries.forEach(country => {
+            years.forEach(year => {
+                const countryYearData = data.filter(d => d.country === country && d.year === year);
+                if (countryYearData.length > 100) { // Minimum sample size
+                    const gap = decomposeAchievementGap(countryYearData, outcomeVar, predictorVar, weightType);
+                    if (!gapsByCountryYear[country]) {
+                        gapsByCountryYear[country] = {};
+                    }
+                    gapsByCountryYear[country][year] = gap;
+                }
+            });
+        });
+
+        html = '<div class="table-container"><table class="results-table">';
+        html += '<thead><tr><th>Country</th><th>Year</th><th>Gap (Q4-Q1)</th><th>Effect Size</th><th>Q1 Mean</th><th>Q4 Mean</th><th>N</th></tr></thead><tbody>';
+
+        Object.keys(gapsByCountryYear).sort().forEach(country => {
+            Object.keys(gapsByCountryYear[country]).sort().forEach(year => {
+                const gap = gapsByCountryYear[country][year];
+                if (gap) {
+                    html += `<tr>
+                        <td><strong>${country}</strong></td>
+                        <td>${year}</td>
+                        <td>${gap.gap_q4_q1.toFixed(2)}</td>
+                        <td>${gap.effect_size.toFixed(2)}</td>
+                        <td>${gap.q1.mean.toFixed(2)}</td>
+                        <td>${gap.q4.mean.toFixed(2)}</td>
+                        <td>${(gap.q1.n + gap.q4.n).toLocaleString()}</td>
+                    </tr>`;
+                }
+            });
+        });
+
+        html += '</tbody></table></div>';
+
+        // Render visualization
+        renderGapPlot(gapsByCountryYear, 'country-year', outcomeVar);
     }
 
-    // Variance decomposition card
-    if (decomp) {
-        html += `
-            <div class="stat-card">
-                <h3>Variance Decomposition</h3>
-                <div class="methodology-note">
-                    <strong>Total Variance:</strong> ${decomp.totalVariance.toFixed(2)}<br>
-                    <strong>Within-country:</strong> ${decomp.percentWithin.toFixed(1)}%<br>
-                    <strong>Between-country:</strong> ${decomp.percentBetween.toFixed(1)}%<br>
-                    <strong>ICC (ρ):</strong> ${decomp.icc.toFixed(3)}
-                </div>
-            </div>
-        `;
-    }
-
-    html += '</div>';
     resultsDiv.innerHTML = html;
+}
+
+/**
+ * Render gap visualization (bar chart)
+ * @param {Object} gapData - Gap data by country, year, or country-year
+ * @param {String} type - 'country', 'year', or 'country-year'
+ * @param {String} outcomeVar - Outcome variable
+ */
+function renderGapPlot(gapData, type, outcomeVar) {
+    const chartDiv = document.getElementById('gap-plot');
+    if (!chartDiv) return;
+
+    let traces = [];
+
+    if (type === 'country') {
+        // Bar chart by country
+        const countries = Object.keys(gapData).filter(c => gapData[c] && isFinite(gapData[c].gap_q4_q1));
+        countries.sort((a, b) => gapData[a].gap_q4_q1 - gapData[b].gap_q4_q1);
+
+        const gaps = countries.map(c => gapData[c].gap_q4_q1);
+        const effectSizes = countries.map(c => gapData[c].effect_size);
+
+        traces.push({
+            x: countries,
+            y: gaps,
+            name: 'Gap (Q4-Q1)',
+            type: 'bar',
+            marker: { color: '#3b82f6' },
+            yaxis: 'y'
+        });
+
+        traces.push({
+            x: countries,
+            y: effectSizes,
+            name: 'Effect Size',
+            type: 'scatter',
+            mode: 'markers+lines',
+            marker: { size: 10, color: '#ef4444' },
+            line: { color: '#ef4444', width: 2 },
+            yaxis: 'y2'
+        });
+
+    } else if (type === 'year') {
+        // Bar chart by year
+        const years = Object.keys(gapData).filter(y => gapData[y] && isFinite(gapData[y].gap_q4_q1));
+        years.sort();
+
+        const gaps = years.map(y => gapData[y].gap_q4_q1);
+
+        traces.push({
+            x: years,
+            y: gaps,
+            name: 'Gap (Q4-Q1)',
+            type: 'bar',
+            marker: { color: '#10b981' }
+        });
+
+    } else if (type === 'country-year') {
+        // Grouped bar chart by country and year
+        const countries = Object.keys(gapData).sort();
+        const allYears = new Set();
+
+        countries.forEach(country => {
+            Object.keys(gapData[country]).forEach(year => allYears.add(year));
+        });
+
+        const years = Array.from(allYears).sort();
+
+        years.forEach(year => {
+            const gaps = [];
+            const countryNames = [];
+
+            countries.forEach(country => {
+                if (gapData[country][year] && isFinite(gapData[country][year].gap_q4_q1)) {
+                    gaps.push(gapData[country][year].gap_q4_q1);
+                    countryNames.push(country);
+                }
+            });
+
+            if (gaps.length > 0) {
+                traces.push({
+                    x: countryNames,
+                    y: gaps,
+                    name: `Year ${year}`,
+                    type: 'bar'
+                });
+            }
+        });
+    }
+
+    const layout = {
+        title: {
+            text: `Achievement Gap by ${type === 'country' ? 'Country' : type === 'year' ? 'Year' : 'Country × Year'}`,
+            font: { color: '#f1f5f9', size: 16 }
+        },
+        xaxis: {
+            title: type === 'year' ? 'Year' : 'Country',
+            gridcolor: '#334155'
+        },
+        yaxis: {
+            title: 'Achievement Gap (Q4-Q1 score points)',
+            gridcolor: '#334155'
+        },
+        paper_bgcolor: '#1e293b',
+        plot_bgcolor: '#1e293b',
+        font: { color: '#f1f5f9' },
+        barmode: type === 'country-year' ? 'group' : 'relative',
+        showlegend: type === 'country-year' || type === 'country',
+        margin: { l: 60, r: type === 'country' ? 120 : 40, t: 80, b: 80 }
+    };
+
+    // Add second y-axis for country comparison (effect size)
+    if (type === 'country') {
+        layout.yaxis2 = {
+            title: 'Effect Size (Cohen\'s d)',
+            overlaying: 'y',
+            side: 'right',
+            gridcolor: 'transparent'
+        };
+    }
+
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    };
+
+    Plotly.newPlot(chartDiv, traces, layout, config);
 }
 
 /**
