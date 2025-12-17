@@ -157,11 +157,30 @@
                     </div>
                 </div>
 
-                <!-- Data Citation -->
+                <!-- Documentation & Resources -->
                 <div class="data-source">
-                    <strong>Data Source:</strong> OECD (2023). PISA Database.<br>
-                    <strong>R Package:</strong> Vaughan et al. (2021). learningtower.<br>
-                    <a href="docs/citation.html" style="color: var(--primary-color);">How to cite this tool</a>
+                    <strong style="font-size: 1.05rem; display: block; margin-bottom: 0.75rem;">📚 Documentation</strong>
+
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Data Source:</strong><br>
+                        OECD (2023). PISA Database<br>
+                        <small style="color: var(--text-secondary);">Vaughan et al. (2021). learningtower</small>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <a href="docs/methodology.html" style="color: var(--primary-color); text-decoration: none; padding: 0.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 4px; display: block;">
+                            📖 Methodology
+                        </a>
+                        <a href="docs/data-sources.html" style="color: var(--primary-color); text-decoration: none; padding: 0.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 4px; display: block;">
+                            📊 Data Sources
+                        </a>
+                        <a href="docs/citation.html" style="color: var(--primary-color); text-decoration: none; padding: 0.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 4px; display: block;">
+                            📝 How to Cite
+                        </a>
+                        <a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank" style="color: var(--primary-color); text-decoration: none; padding: 0.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 4px; display: block;">
+                            💻 Source Code
+                        </a>
+                    </div>
                 </div>
             </aside>
 
@@ -184,12 +203,11 @@
                 <div class="tabs">
                     <button class="tab active" data-tab="overview">Overview</button>
                     <button class="tab" data-tab="distribution">Distribution Analysis</button>
-                    <button class="tab" data-tab="gap-decomposition">Achievement Gap Decomposition</button>
-                    <button class="tab" data-tab="regression">Regression Analysis</button>
+                    <button class="tab" data-tab="gap-decomposition">Achievement Gap</button>
+                    <button class="tab" data-tab="regression">Regression</button>
                     <button class="tab" data-tab="diagnostics">Diagnostics</button>
-                    <button class="tab" data-tab="comparative">Comparative Analysis</button>
-                    <button class="tab" data-tab="export">Export Results</button>
-                    <button class="tab" data-tab="methodology">Methodology</button>
+                    <button class="tab" data-tab="comparative">Comparative</button>
+                    <button class="tab" data-tab="export">Export</button>
                 </div>
 
                 <!-- Tab Content: Overview -->
@@ -320,11 +338,26 @@
                 <div id="comparative" class="tab-content">
                     <div class="section-title">Comparative Analysis</div>
                     <p class="description">
-                        Cross-country comparison of inequality metrics and achievement gaps.
+                        Cross-country and cross-year comparison of inequality metrics, achievement gaps, and intergenerational effects.
                     </p>
 
-                    <div id="country-comparison"></div>
-                    <div id="decomposition-chart" style="margin-top: 2rem;"></div>
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Intergenerational Educational Stratification Map</h3>
+                        <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
+                            Global view of how strongly parental socioeconomic status predicts student achievement. Darker red indicates stronger intergenerational effects (lower mobility).
+                        </p>
+                        <div id="world-map"></div>
+                    </div>
+
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Cross-Country Trends</h3>
+                        <div id="country-comparison"></div>
+                    </div>
+
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Variance Decomposition</h3>
+                        <div id="decomposition-chart"></div>
+                    </div>
                 </div>
 
                 <!-- Tab Content: Export -->
@@ -428,32 +461,6 @@
                     </div>
                 </div>
 
-                <!-- Tab Content: Methodology -->
-                <div id="methodology" class="tab-content">
-                    <div class="section-title">Methodology</div>
-                    <p class="description">
-                        Comprehensive documentation of statistical methods, data sources, and analytical approach.
-                    </p>
-
-                    <div class="alert alert-info">
-                        <strong>Detailed Methodology:</strong> For comprehensive documentation including formulas,
-                        assumptions, and references, please see the
-                        <a href="docs/methodology.html" style="color: var(--success-color);">full methodology appendix</a>.
-                    </div>
-
-                    <div id="methodology-content">
-                        <h3>Overview</h3>
-                        <p>This application uses survey-weighted statistical methods following OECD (2023) technical standards
-                        for analyzing PISA data. All analyses account for the complex sampling design of international assessments.</p>
-
-                        <h3>Key References</h3>
-                        <ul style="margin-left: 1.5rem; color: var(--text-secondary);">
-                            <li>OECD (2019). PISA 2018 Technical Report.</li>
-                            <li>Reardon, S. F. (2011). The widening academic achievement gap between the rich and the poor.</li>
-                            <li>Vaughan, B., et al. (2021). learningtower: OECD PISA Datasets. R package.</li>
-                        </ul>
-                    </div>
-                </div>
             </main>
         </div>
     </div>

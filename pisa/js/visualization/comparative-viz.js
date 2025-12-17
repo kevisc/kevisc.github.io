@@ -222,6 +222,138 @@ export function renderGapComparison(gapResults) {
 }
 
 /**
+ * Render world map showing SES gradient (intergenerational effect) by country
+ * @param {Array} data - Array of student records
+ * @param {String} outcomeVar - Name of outcome variable
+ * @param {String} predictorVar - Name of predictor (usually 'escs')
+ */
+export function renderWorldMap(data, outcomeVar = 'math', predictorVar = 'escs') {
+    // Import regression function dynamically
+    const runPooledOLS = window.runPooledOLS;
+    if (!runPooledOLS) {
+        console.warn('runPooledOLS not available for world map');
+        return;
+    }
+
+    // Group data by country
+    const byCountry = {};
+    data.forEach(d => {
+        if (!byCountry[d.country]) {
+            byCountry[d.country] = [];
+        }
+        byCountry[d.country].push(d);
+    });
+
+    // Calculate gradient for each country
+    const countries = [];
+    const gradients = [];
+    const nobs = [];
+    const r2values = [];
+
+    Object.keys(byCountry).forEach(country => {
+        const countryData = byCountry[country];
+        if (countryData.length < 100) return; // Skip small samples
+
+        try {
+            const model = runPooledOLS(countryData, outcomeVar, predictorVar, [], 'student');
+            if (model && model.coefficients && model.coefficients[1]) {
+                countries.push(country);
+                // Gradient is the coefficient on the predictor (index 1, after intercept)
+                gradients.push(model.coefficients[1]);
+                nobs.push(model.nobs);
+                r2values.push(model.r2 || 0);
+            }
+        } catch (error) {
+            console.warn(`Could not calculate gradient for ${country}:`, error.message);
+        }
+    });
+
+    if (countries.length === 0) {
+        console.warn('No country gradients available for world map');
+        return;
+    }
+
+    // Create hover text
+    const hoverText = countries.map((country, i) => {
+        return `<b>${country}</b><br>` +
+               `Gradient: ${gradients[i].toFixed(2)} points/SD<br>` +
+               `R²: ${(r2values[i] * 100).toFixed(1)}%<br>` +
+               `N: ${nobs[i].toLocaleString()}`;
+    });
+
+    const trace = {
+        type: 'choropleth',
+        locations: countries,
+        locationmode: 'ISO-3',
+        z: gradients,
+        text: hoverText,
+        hoverinfo: 'text',
+        colorscale: [
+            [0, '#1e3a8a'],      // Dark blue (low gradient)
+            [0.25, '#3b82f6'],   // Blue
+            [0.5, '#fbbf24'],    // Yellow (medium)
+            [0.75, '#f97316'],   // Orange
+            [1, '#dc2626']       // Red (high gradient)
+        ],
+        reversescale: false,
+        colorbar: {
+            title: {
+                text: 'SES Gradient<br>(points per SD)',
+                font: { color: '#f1f5f9', size: 12 }
+            },
+            tickfont: { color: '#f1f5f9' },
+            x: 1.02
+        },
+        marker: {
+            line: {
+                color: '#334155',
+                width: 0.5
+            }
+        }
+    };
+
+    const layout = {
+        title: {
+            text: 'Intergenerational Educational Stratification: SES → Achievement Gradient by Country',
+            font: { color: '#f1f5f9', size: 16 }
+        },
+        geo: {
+            projection: {
+                type: 'natural earth'
+            },
+            bgcolor: '#1e293b',
+            showframe: false,
+            showcoastlines: true,
+            coastlinecolor: '#64748b',
+            showcountries: true,
+            countrycolor: '#475569',
+            showland: true,
+            landcolor: '#0f172a',
+            showocean: true,
+            oceancolor: '#0a1628',
+            showlakes: false
+        },
+        paper_bgcolor: '#1e293b',
+        plot_bgcolor: '#1e293b',
+        font: { color: '#f1f5f9' },
+        margin: { t: 80, b: 20, l: 20, r: 80 },
+        height: 600
+    };
+
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    };
+
+    const chartDiv = document.getElementById('world-map');
+    if (chartDiv) {
+        Plotly.newPlot(chartDiv, [trace], layout, config);
+    }
+}
+
+/**
  * Render all comparative charts
  * @param {Array} data - Array of student records
  * @param {Object} comparativeResults - Comparative analysis results
@@ -230,6 +362,7 @@ export function renderGapComparison(gapResults) {
 export function renderAllComparativeCharts(data, comparativeResults, outcomeVar = 'math') {
     const years = [...new Set(data.map(d => d.year))].sort();
     renderCountryComparison(comparativeResults, years);
+    renderWorldMap(data, outcomeVar, 'escs');
     renderDecompositionChart(data, outcomeVar);
 }
 
@@ -237,5 +370,6 @@ export default {
     renderCountryComparison,
     renderDecompositionChart,
     renderGapComparison,
+    renderWorldMap,
     renderAllComparativeCharts
 };

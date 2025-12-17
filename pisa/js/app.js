@@ -53,6 +53,11 @@ async function initApp() {
         initAdvancedOptions();
         initEventListeners();
 
+        // Make regression functions available globally for visualizations
+        window.runPooledOLS = runPooledOLS;
+        window.runFixedEffects = runFixedEffects;
+        window.runRandomEffects = runRandomEffects;
+
         // Load metadata
         showDataStatus('Loading metadata...', 'info');
         const metadata = await loadMetadata();
