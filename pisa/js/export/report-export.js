@@ -121,7 +121,7 @@ async function buildReportHTML(state, charts) {
         ${buildGapAnalysis(results, state)}
         ${buildRegressionResults(state)}
         ${buildVarianceDecomposition(results)}
-        ${buildComparativeAnalysis(results)}
+        ${buildComparativeAnalysis(results, state)}
         ${buildChartsSection(charts)}
         ${buildMethodologySection()}
         ${buildCitationSection()}
@@ -710,63 +710,294 @@ function buildVarianceDecomposition(results) {
 /**
  * Build comparative analysis section
  */
-function buildComparativeAnalysis(results) {
-    const comp = results.comparative;
-    if (!comp) return '';
-
-    return `
+function buildComparativeAnalysis(results, state) {
+    let html = `
+        <div class="page-break"></div>
         <h2>7. Comparative Analysis</h2>
-        <p>Country-level statistics for selected years.</p>
-        <p class="alert alert-info">Full comparative statistics available in CSV export format.</p>
+        <p><strong>Purpose:</strong> This section compares educational achievement and inequality patterns across countries, revealing which nations have high performance combined with equity, and which face trade-offs between excellence and equality.</p>
     `;
+
+    // Try to generate comparative statistics from data
+    const data = state.mergedData || [];
+    const outcomeVar = state.currentOutcome || 'math';
+    const predictorVar = state.currentPredictor || 'escs';
+    const weightType = state.weightType || 'student';
+
+    if (data.length > 0 && window.runPooledOLS && window.calculateDescriptiveStats && window.decomposeAchievementGap) {
+        try {
+            const countries = [...new Set(data.map(d => d.country))].sort();
+            const years = [...new Set(data.map(d => d.year))].sort();
+
+            // Create comprehensive country-level table
+            const countryStats = [];
+
+            countries.forEach(country => {
+                const countryData = data.filter(d => d.country === country);
+                if (countryData.length < 100) return; // Skip small samples
+
+                try {
+                    // Descriptive stats
+                    const desc = window.calculateDescriptiveStats(countryData, outcomeVar, weightType);
+
+                    // Gap analysis
+                    const gap = window.decomposeAchievementGap(countryData, outcomeVar, predictorVar, weightType);
+
+                    // Regression
+                    const model = window.runPooledOLS(countryData, outcomeVar, predictorVar, [], weightType);
+
+                    if (desc && gap && model) {
+                        countryStats.push({
+                            country,
+                            n: countryData.length,
+                            mean: desc.mean,
+                            sd: desc.sd,
+                            p10: desc.percentiles['10'],
+                            p90: desc.percentiles['90'],
+                            gap: gap.gap_q4_q1,
+                            effectSize: gap.effect_size,
+                            gradient: model.coefficients[1],
+                            r2: model.r2
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`Could not calculate stats for ${country}:`, error);
+                }
+            });
+
+            if (countryStats.length > 0) {
+                html += `
+                    <h3>Country-Level Achievement and Inequality Summary</h3>
+                    <p><strong>How to Read This Table:</strong> Each row shows a country's achievement level (Mean), dispersion (SD, P10-P90 range), SES-based inequality (Gap, Effect Size), and the strength of the SES-achievement relationship (Gradient, R²).</p>
+
+                    <div class="results-table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th>N</th>
+                                    <th>Mean</th>
+                                    <th>SD</th>
+                                    <th>P10</th>
+                                    <th>P90</th>
+                                    <th>Gap (Q4-Q1)</th>
+                                    <th>Effect Size</th>
+                                    <th>SES Gradient</th>
+                                    <th>R²</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${countryStats.map(stat => `
+                                    <tr>
+                                        <td><strong>${stat.country}</strong></td>
+                                        <td>${stat.n.toLocaleString()}</td>
+                                        <td>${stat.mean.toFixed(1)}</td>
+                                        <td>${stat.sd.toFixed(1)}</td>
+                                        <td>${stat.p10 ? stat.p10.toFixed(1) : 'N/A'}</td>
+                                        <td>${stat.p90 ? stat.p90.toFixed(1) : 'N/A'}</td>
+                                        <td>${stat.gap.toFixed(1)}</td>
+                                        <td>${stat.effectSize.toFixed(2)}</td>
+                                        <td>${stat.gradient.toFixed(2)}</td>
+                                        <td>${(stat.r2 * 100).toFixed(1)}%</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top: 1.5rem;">
+                        <h4>Interpreting the Columns:</h4>
+                        <ul>
+                            <li><strong>Mean:</strong> Average achievement score (higher is better)</li>
+                            <li><strong>SD:</strong> Standard deviation (higher = more dispersion)</li>
+                            <li><strong>P10/P90:</strong> 10th and 90th percentile scores (range shows inequality)</li>
+                            <li><strong>Gap (Q4-Q1):</strong> Achievement difference between top and bottom SES quartiles in score points</li>
+                            <li><strong>Effect Size:</strong> Standardized gap (Cohen's d); >0.8 is large</li>
+                            <li><strong>SES Gradient:</strong> Score point increase per 1-unit increase in ESCS (steeper = more inequality)</li>
+                            <li><strong>R²:</strong> Percent of variance explained by SES (higher = SES more determinative)</li>
+                        </ul>
+                    </div>
+                `;
+
+                // Add Excellence-Equity Classification
+                const highMean = countryStats.reduce((sum, s) => sum + s.mean, 0) / countryStats.length;
+                const highGap = countryStats.reduce((sum, s) => sum + s.gap, 0) / countryStats.length;
+
+                const highExcellenceHighEquity = countryStats.filter(s => s.mean > highMean && s.gap < highGap);
+                const highExcellenceLowEquity = countryStats.filter(s => s.mean > highMean && s.gap >= highGap);
+                const lowExcellenceHighEquity = countryStats.filter(s => s.mean <= highMean && s.gap < highGap);
+                const lowExcellenceLowEquity = countryStats.filter(s => s.mean <= highMean && s.gap >= highGap);
+
+                html += `
+                    <div style="margin-top: 2rem;">
+                        <h3>Excellence-Equity Classification</h3>
+                        <p><strong>Purpose:</strong> Countries are classified into four quadrants based on whether they have above or below average achievement (Excellence) and above or below average SES gaps (Equity).</p>
+
+                        <div class="grid-2" style="gap: 1rem; margin-top: 1rem;">
+                            <div class="stat-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                                <h4 style="color: white;">High Excellence, High Equity ✓✓</h4>
+                                <p style="color: white; font-size: 0.9em;">Above average achievement, below average inequality</p>
+                                <p style="color: white;"><strong>${highExcellenceHighEquity.length > 0 ? highExcellenceHighEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
+                            </div>
+                            <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                                <h4 style="color: white;">High Excellence, Low Equity ✓✗</h4>
+                                <p style="color: white; font-size: 0.9em;">Above average achievement, above average inequality</p>
+                                <p style="color: white;"><strong>${highExcellenceLowEquity.length > 0 ? highExcellenceLowEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
+                            </div>
+                            <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                                <h4 style="color: white;">Low Excellence, High Equity ✗✓</h4>
+                                <p style="color: white; font-size: 0.9em;">Below average achievement, below average inequality</p>
+                                <p style="color: white;"><strong>${lowExcellenceHighEquity.length > 0 ? lowExcellenceHighEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
+                            </div>
+                            <div class="stat-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                                <h4 style="color: white;">Low Excellence, Low Equity ✗✗</h4>
+                                <p style="color: white; font-size: 0.9em;">Below average achievement, above average inequality</p>
+                                <p style="color: white;"><strong>${lowExcellenceLowEquity.length > 0 ? lowExcellenceLowEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `<p class="alert alert-info">Comparative statistics could not be calculated.</p>`;
+            }
+
+        } catch (error) {
+            console.warn('Could not build comparative analysis:', error);
+            html += `<p class="alert alert-info">Full comparative statistics available in CSV export format.</p>`;
+        }
+    } else {
+        html += `<p class="alert alert-info">Full comparative statistics available in CSV export format.</p>`;
+    }
+
+    return html;
 }
 
 /**
- * Build charts section with embedded images
+ * Build charts section with embedded images and explanations
  */
 function buildChartsSection(charts) {
     let html = `
         <div class="page-break"></div>
-        <h2>8. Visualizations</h2>
-        <p>All charts and plots generated during the analysis. Charts are included regardless of which visualizations were selected in the interactive interface.</p>
+        <h2>8. Visualizations & Interpretations</h2>
+        <p>This section presents all charts and plots generated during the analysis, with detailed explanations of their purpose and how to interpret them.</p>
     `;
 
-    const chartTitles = {
-        // Overview & Distribution
-        'overview-chart': 'Achievement and Stratification Overview',
-        'distribution-chart': 'Score Distribution by Country',
-        'percentile-chart': 'Achievement Percentiles',
-        'lorenz-curve': 'Lorenz Curve (Inequality)',
-        // Achievement Gap
-        'gap-plot': 'Achievement Gap by SES Quartiles',
-        // Regression
-        'regression-scatter': 'Scatter Plot with Fitted Regression Lines',
-        'coefficient-plot': 'Regression Coefficient Comparison',
-        // Diagnostics
-        'residual-plot-ols': 'Residual Plot (OLS)',
-        'residual-plot-fe': 'Residual Plot (Fixed Effects)',
-        'residual-plot-re': 'Residual Plot (Random Effects)',
-        'qq-plot-ols': 'Q-Q Plot (OLS)',
-        'qq-plot-fe': 'Q-Q Plot (Fixed Effects)',
-        'qq-plot-re': 'Q-Q Plot (Random Effects)',
-        'decomposition-chart': 'Variance Decomposition',
-        // Comparative
-        'world-map': 'Global Intergenerational Educational Stratification Map',
-        'temporal-trends': 'Temporal Trends in SES Gradients',
-        'country-comparison': 'Cross-National Achievement Comparison',
-        'gap-comparison': 'Cross-National Gap Comparison'
+    const chartInfo = {
+        'overview-chart': {
+            title: 'Achievement and Stratification Overview',
+            purpose: 'Shows the relationship between mean achievement scores and SES gradients across countries and years.',
+            interpretation: 'Each point represents a country-year combination. Countries in the upper-right have both high achievement and strong SES gradients (high inequality). Countries in the lower-left have lower achievement and weaker SES gradients. This chart reveals the trade-off (or lack thereof) between excellence and equity in education systems.'
+        },
+        'distribution-chart': {
+            title: 'Score Distribution by Country and Year',
+            purpose: 'Displays the distribution of achievement scores using box plots grouped by country and year.',
+            interpretation: 'Each box shows the interquartile range (25th to 75th percentile), with the median line in the middle. Whiskers extend to 1.5 times the IQR. Wider boxes indicate greater dispersion within countries. Compare boxes across years to see temporal changes in achievement distributions. This reveals both central tendency and inequality within each country-year.'
+        },
+        'percentile-chart': {
+            title: 'Achievement Percentiles by Country',
+            purpose: 'Compares achievement levels at key percentile points (P10, P25, P50, P75, P90) across countries.',
+            interpretation: 'Steeper lines indicate greater within-country inequality. Compare the vertical distance between P90 and P10 to see the achievement gap between top and bottom performers. Countries with parallel lines have similar inequality patterns, while crossing lines suggest different inequality structures.'
+        },
+        'lorenz-curve': {
+            title: 'Lorenz Curve (Cumulative Achievement Inequality)',
+            purpose: 'Visualizes achievement inequality using the Lorenz curve framework, adapted from economics.',
+            interpretation: 'The diagonal line represents perfect equality. Curves further from this line indicate greater inequality. The area between the curve and the diagonal is related to the Gini coefficient. This shows what proportion of total achievement is held by the bottom X% of students.'
+        },
+        'gap-plot': {
+            title: 'Achievement Gap by SES Quartiles',
+            purpose: 'Shows the achievement gap between the top (Q4) and bottom (Q1) SES quartiles, broken down by country or year as selected.',
+            interpretation: 'Larger bars indicate greater inequality between high and low SES students. Effect sizes (Cohen\'s d) above 0.8 are considered large. This gap represents the achievement difference attributable to socioeconomic background differences.'
+        },
+        'regression-scatter': {
+            title: 'Scatter Plot with Fitted Regression Lines',
+            purpose: 'Visualizes the raw relationship between socioeconomic status (ESCS) and achievement scores, with fitted regression lines overlaid.',
+            interpretation: 'Each point is a student. The slope of the fitted line is the SES gradient - steeper slopes mean stronger SES-achievement relationships. The spread of points around the line indicates how much variance remains unexplained. Multiple lines (if shown) represent different model specifications.'
+        },
+        'coefficient-plot': {
+            title: 'Regression Coefficient Comparison Across Models',
+            purpose: 'Compares the estimated SES effect (coefficient) across different regression model specifications (OLS, Fixed Effects, Random Effects).',
+            interpretation: 'Error bars show 95% confidence intervals. Overlapping bars suggest similar estimates across models. If Fixed Effects estimates differ substantially from OLS, this indicates important between-country heterogeneity that biases pooled estimates. The zero line (red) helps assess statistical significance.'
+        },
+        'residual-plot-ols': {
+            title: 'Residual Plot (OLS Model)',
+            purpose: 'Diagnostic plot showing residuals (prediction errors) versus fitted values to assess model assumptions.',
+            interpretation: 'Residuals should scatter randomly around zero with no patterns. Funnel shapes indicate heteroscedasticity (non-constant variance). Curved patterns suggest non-linearity. Outliers appear as extreme points far from zero. Systematic patterns indicate model misspecification.'
+        },
+        'residual-plot-fe': {
+            title: 'Residual Plot (Fixed Effects Model)',
+            purpose: 'Diagnostic plot for the Fixed Effects model, checking whether country-specific intercepts adequately capture between-country differences.',
+            interpretation: 'Similar to OLS residual plot, but after accounting for country fixed effects. Remaining patterns suggest within-country non-linearity or other model violations. Compare to OLS plot - better behavior suggests fixed effects improved the model.'
+        },
+        'residual-plot-re': {
+            title: 'Residual Plot (Random Effects Model)',
+            purpose: 'Diagnostic plot for the Random Effects model, assessing model fit after partial pooling of country effects.',
+            interpretation: 'Residuals should be randomly scattered. This model assumes country effects are random draws from a distribution. Patterns here suggest violations of the random effects assumptions or remaining misspecification.'
+        },
+        'qq-plot-ols': {
+            title: 'Q-Q Plot: Normality of Residuals (OLS)',
+            purpose: 'Tests whether regression residuals follow a normal distribution, an assumption of OLS inference.',
+            interpretation: 'Points should fall along the diagonal line if residuals are normally distributed. Deviations at the tails indicate heavier or lighter tails than normal. S-shapes suggest skewness. With large samples, minor deviations are acceptable due to Central Limit Theorem, but major departures warrant concern for inference.'
+        },
+        'qq-plot-fe': {
+            title: 'Q-Q Plot: Normality of Residuals (Fixed Effects)',
+            purpose: 'Assesses normality of Fixed Effects model residuals for valid statistical inference.',
+            interpretation: 'Similar interpretation to OLS Q-Q plot. Deviations from the line indicate non-normal residuals, which may affect confidence intervals and p-values, though estimates remain unbiased.'
+        },
+        'qq-plot-re': {
+            title: 'Q-Q Plot: Normality of Residuals (Random Effects)',
+            purpose: 'Tests normality assumption for Random Effects model residuals.',
+            interpretation: 'The Random Effects model assumes both within-group errors and random effects are normally distributed. Departures from linearity suggest violations of these distributional assumptions.'
+        },
+        'decomposition-chart': {
+            title: 'Variance Decomposition (Within vs. Between Countries)',
+            purpose: 'Partitions total achievement variance into within-country and between-country components using multilevel modeling.',
+            interpretation: 'The bar heights show what percentage of total variance occurs within versus between countries. High between-country variance (large blue bar) means countries differ substantially in average achievement. High within-country variance (large green bar) means more inequality exists within than between countries. The ICC (ρ) quantifies the proportion of variance at the country level.'
+        },
+        'world-map': {
+            title: 'Global Map of Intergenerational Educational Stratification',
+            purpose: 'Visualizes the strength of the SES → achievement relationship (intergenerational inequality) across countries using a choropleth map.',
+            interpretation: 'Darker/warmer colors indicate stronger SES gradients, meaning greater intergenerational persistence of inequality. Lighter/cooler colors show weaker gradients and more educational mobility. Hover over countries to see exact gradient values, R², and sample sizes. This reveals geographic patterns in educational opportunity structures.'
+        },
+        'temporal-trends': {
+            title: 'Temporal Trends in SES Gradients Over Time',
+            purpose: 'Tracks changes in the SES → achievement gradient over multiple PISA waves to detect trends in educational inequality.',
+            interpretation: 'Rising lines indicate increasing inequality (growing SES effects). Falling lines show decreasing inequality (shrinking SES effects). Flat lines suggest stable inequality. Compare slopes across countries to see which education systems are becoming more or less equitable over time. This addresses the key question: is educational inequality increasing or decreasing?'
+        },
+        'country-comparison': {
+            title: 'Cross-National Achievement Comparison',
+            purpose: 'Compares mean achievement scores across countries, grouped by year to show temporal changes.',
+            interpretation: 'Bar heights show average achievement levels. Countries are ranked from lowest to highest within each year. Compare bar heights across years to see whether countries improved or declined. This provides context on overall achievement levels before examining inequality patterns.'
+        },
+        'gap-comparison': {
+            title: 'Cross-National Gap Comparison (Q4-Q1 Quartiles)',
+            purpose: 'Compares achievement gaps between top and bottom SES quartiles across countries, with both raw gaps and standardized effect sizes.',
+            interpretation: 'Blue bars show the raw score gap (points). Red line shows effect sizes (Cohen\'s d). Larger values indicate greater SES-based inequality. Compare gaps across countries to identify which have the most and least equitable outcomes. Effect sizes above 0.8 are considered large in educational research.'
+        }
     };
 
     Object.keys(charts).forEach(chartId => {
         const base64 = charts[chartId];
-        const title = chartTitles[chartId] || chartId;
+        const info = chartInfo[chartId];
 
-        html += `
-            <div class="chart-container">
-                <h3>${title}</h3>
-                <img src="${base64}" alt="${title}" />
-            </div>
-        `;
+        if (info) {
+            html += `
+                <div class="chart-container">
+                    <h3>${info.title}</h3>
+                    <div class="chart-explanation" style="background: #f8f9fa; padding: 1rem; border-left: 4px solid #3b82f6; margin-bottom: 1rem;">
+                        <p><strong>Purpose:</strong> ${info.purpose}</p>
+                        <p><strong>How to Interpret:</strong> ${info.interpretation}</p>
+                    </div>
+                    <img src="${base64}" alt="${info.title}" />
+                </div>
+            `;
+        } else {
+            // Fallback for any charts without detailed info
+            html += `
+                <div class="chart-container">
+                    <h3>${chartId}</h3>
+                    <img src="${base64}" alt="${chartId}" />
+                </div>
+            `;
+        }
     });
 
     if (Object.keys(charts).length === 0) {

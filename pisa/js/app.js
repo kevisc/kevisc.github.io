@@ -64,6 +64,9 @@ async function initApp() {
         window.decomposeAchievementGap = decomposeAchievementGap;
         window.calculateVarianceDecomposition = calculateVarianceDecomposition;
 
+        // Make descriptive stats available globally for report generation
+        window.calculateDescriptiveStats = calculateDescriptiveStats;
+
         // Load metadata
         showDataStatus('Loading metadata...', 'info');
         const metadata = await loadMetadata();
@@ -1539,6 +1542,8 @@ async function renderAllVisualizationsForReport() {
     // 5. Diagnostics - force render all diagnostic plots
     const showResidualPlots = document.getElementById('show-residual-plots');
     const showQQPlots = document.getElementById('show-qq-plots');
+    const residualContainer = document.getElementById('residual-plots-container');
+    const qqContainer = document.getElementById('qq-plots-container');
 
     // Temporarily check both boxes to force rendering
     const wasResidualChecked = showResidualPlots?.checked;
@@ -1547,12 +1552,18 @@ async function renderAllVisualizationsForReport() {
     if (showResidualPlots) showResidualPlots.checked = true;
     if (showQQPlots) showQQPlots.checked = true;
 
+    // Show containers so plots can be rendered and captured
+    if (residualContainer) residualContainer.style.display = 'block';
+    if (qqContainer) qqContainer.style.display = 'block';
+
     // Re-run regressions with diagnostics enabled
     runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
 
-    // Restore original checkbox states
+    // Restore original checkbox states and container visibility
     if (showResidualPlots) showResidualPlots.checked = wasResidualChecked;
     if (showQQPlots) showQQPlots.checked = wasQQChecked;
+    if (residualContainer) residualContainer.style.display = wasResidualChecked ? 'block' : 'none';
+    if (qqContainer) qqContainer.style.display = wasQQChecked ? 'block' : 'none';
 
     // 6. Comparative tab
     const comparativeResults = state.analysisResults?.comparative;
