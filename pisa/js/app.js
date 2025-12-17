@@ -618,6 +618,37 @@ function renderGapDecomposition(data, outcomeVar, predictorVar, weightType) {
 }
 
 /**
+ * Determine which regression models are appropriate for the data structure
+ * @param {Array} data - Student data
+ * @returns {Object} Object indicating which models can be run
+ */
+function determineApplicableModels(data) {
+    // Count unique countries and years
+    const uniqueCountries = [...new Set(data.map(d => d.country))];
+    const uniqueYears = [...new Set(data.map(d => d.year))];
+
+    const nCountries = uniqueCountries.length;
+    const nYears = uniqueYears.length;
+
+    console.log(`Data structure: ${nCountries} countries, ${nYears} years`);
+
+    return {
+        canRunOLS: true, // OLS always applicable
+        canRunFE: nCountries > 1, // Need multiple countries for country FE
+        canRunRE: nCountries > 1, // Need multiple countries for RE
+        nCountries,
+        nYears,
+        isSingleCountry: nCountries === 1,
+        isSingleYear: nYears === 1,
+        message: nCountries === 1
+            ? 'Single country selected: Only OLS regression available (FE/RE require multiple countries)'
+            : nYears === 1
+            ? 'Single year selected: FE and RE available without year controls'
+            : null
+    };
+}
+
+/**
  * Run and render regression analyses
  * @param {Array} data - Student data
  * @param {String} outcomeVar - Outcome variable
@@ -630,29 +661,53 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
     const controls = getSelectedControls();
     const models = {};
 
+    // Determine which models are appropriate for this data
+    const applicable = determineApplicableModels(data);
+
     // Check which models are selected
     const wantOLS = document.getElementById('ols-model')?.checked !== false; // Default true
     const wantFE = document.getElementById('fe-model')?.checked !== false; // Default true
     const wantRE = document.getElementById('re-model')?.checked !== false; // Default true
 
+    // Show info message if models are restricted
+    if (applicable.message) {
+        console.warn(applicable.message);
+    }
+
     try {
-        if (wantOLS) {
+        if (wantOLS && applicable.canRunOLS) {
             const ols = runPooledOLS(data, outcomeVar, predictorVar, controls, weightType);
             if (ols) models.ols = ols;
         }
 
-        if (wantFE) {
+        if (wantFE && applicable.canRunFE) {
             const fe = runFixedEffects(data, outcomeVar, predictorVar, controls, weightType);
             if (fe) models.fixedEffects = fe;
+        } else if (wantFE && !applicable.canRunFE) {
+            console.log('Skipping Fixed Effects: requires multiple countries');
         }
 
-        if (wantRE) {
+        if (wantRE && applicable.canRunRE) {
             const re = runRandomEffects(data, outcomeVar, predictorVar, controls, weightType);
             if (re) models.randomEffects = re;
+        } else if (wantRE && !applicable.canRunRE) {
+            console.log('Skipping Random Effects: requires multiple countries');
         }
 
         // Render results
         renderRegressionComparison(models);
+
+        // Show info message if models were skipped
+        if (applicable.message) {
+            const resultsDiv = document.getElementById('regression-results');
+            if (resultsDiv) {
+                const infoBox = document.createElement('div');
+                infoBox.className = 'alert alert-info';
+                infoBox.style.marginTop = '1rem';
+                infoBox.innerHTML = `<strong>ℹ️ Note:</strong> ${applicable.message}`;
+                resultsDiv.insertBefore(infoBox, resultsDiv.firstChild);
+            }
+        }
 
         // Render coefficient plot
         const predLabel = getPredictorLabel(predictorVar);

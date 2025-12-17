@@ -157,31 +157,6 @@
                     </div>
                 </div>
 
-                <!-- Export Options -->
-                <div class="control-group">
-                    <label>Export Results</label>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <button id="export-summary-btn" class="btn btn-secondary" style="width: 100%;">
-                            📊 Export Summary (CSV)
-                        </button>
-                        <button id="export-regression-btn" class="btn btn-secondary" style="width: 100%;">
-                            📈 Export Regressions (CSV)
-                        </button>
-                        <button id="export-data-btn" class="btn btn-secondary" style="width: 100%;">
-                            💾 Export Dataset (CSV)
-                        </button>
-                        <button id="export-charts-btn" class="btn btn-secondary" style="width: 100%;">
-                            📸 Export All Charts (PNG)
-                        </button>
-                        <button id="export-report-btn" class="btn" style="width: 100%;">
-                            📄 Generate Full Report (HTML)
-                        </button>
-                    </div>
-                    <div class="weight-info">
-                        Export analysis results in various formats for use in publications or presentations.
-                    </div>
-                </div>
-
                 <!-- Data Citation -->
                 <div class="data-source">
                     <strong>Data Source:</strong> OECD (2023). PISA Database.<br>
@@ -213,6 +188,7 @@
                     <button class="tab" data-tab="regression">Regression Analysis</button>
                     <button class="tab" data-tab="diagnostics">Diagnostics</button>
                     <button class="tab" data-tab="comparative">Comparative Analysis</button>
+                    <button class="tab" data-tab="export">Export Results</button>
                     <button class="tab" data-tab="methodology">Methodology</button>
                 </div>
 
@@ -349,6 +325,107 @@
 
                     <div id="country-comparison"></div>
                     <div id="decomposition-chart" style="margin-top: 2rem;"></div>
+                </div>
+
+                <!-- Tab Content: Export -->
+                <div id="export" class="tab-content">
+                    <div class="section-title">Export Results</div>
+                    <p class="description">
+                        Export analysis results, visualizations, and datasets in various formats for publications, presentations, and further analysis.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-top: 2rem;">
+                        <!-- Summary Statistics Export -->
+                        <div class="stat-card">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📊 Summary Statistics</h3>
+                            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem;">
+                                Export descriptive statistics, inequality measures, and achievement gaps in CSV format.
+                            </p>
+                            <button id="export-summary-btn" class="btn" style="width: 100%;">
+                                Export Summary (CSV)
+                            </button>
+                            <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                Includes: mean, SD, Gini, gradients, gaps, effect sizes
+                            </p>
+                        </div>
+
+                        <!-- Regression Results Export -->
+                        <div class="stat-card">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📈 Regression Models</h3>
+                            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem;">
+                                Export regression coefficients, standard errors, and fit statistics for all models.
+                            </p>
+                            <button id="export-regression-btn" class="btn" style="width: 100%;">
+                                Export Regressions (CSV)
+                            </button>
+                            <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                Includes: OLS, FE, RE with SE, t-stats, p-values, AIC/BIC
+                            </p>
+                        </div>
+
+                        <!-- Dataset Export -->
+                        <div class="stat-card">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">💾 Dataset</h3>
+                            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem;">
+                                Export the currently loaded dataset with all variables included in your analysis.
+                            </p>
+                            <button id="export-data-btn" class="btn" style="width: 100%;">
+                                Export Dataset (CSV)
+                            </button>
+                            <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                Filtered by selected countries/years with survey weights
+                            </p>
+                        </div>
+
+                        <!-- Charts Export -->
+                        <div class="stat-card">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📸 Visualizations</h3>
+                            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem;">
+                                Download all current visualizations as high-resolution PNG images.
+                            </p>
+                            <button id="export-charts-btn" class="btn" style="width: 100%;">
+                                Export All Charts (PNG)
+                            </button>
+                            <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                Individual PNG files for each visualization
+                            </p>
+                        </div>
+
+                        <!-- Full Report Export -->
+                        <div class="stat-card">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📄 Full Report</h3>
+                            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem;">
+                                Generate a comprehensive HTML report with all analyses, tables, and visualizations.
+                            </p>
+                            <button id="export-report-btn" class="btn btn-primary" style="width: 100%;">
+                                Generate Report (HTML)
+                            </button>
+                            <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                Publication-ready report with embedded charts
+                            </p>
+                        </div>
+
+                        <!-- Citation Helper -->
+                        <div class="stat-card" style="grid-column: span 2;">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--success-color);">📚 Citation & License</h3>
+                            <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.95rem;">
+                                <strong>Free to use:</strong> All exported results can be used freely in publications, presentations, and reports.
+                                Please cite the tool and data source.
+                            </p>
+                            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                                <a href="docs/citation.html" class="btn btn-secondary" style="flex: 1; min-width: 200px; text-align: center; text-decoration: none;">
+                                    How to Cite
+                                </a>
+                                <a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank" class="btn btn-secondary" style="flex: 1; min-width: 200px; text-align: center; text-decoration: none;">
+                                    View Source Code
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top: 2rem;">
+                        <strong>💡 Tip:</strong> Load data and run analyses first. Export functions will use the most recent analysis results from each tab.
+                    </div>
                 </div>
 
                 <!-- Tab Content: Methodology -->
