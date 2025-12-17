@@ -355,6 +355,81 @@ function initEventListeners() {
         exportReportBtn.addEventListener('click', handleExportReport);
     }
 
+    // Optional visualization checkboxes - Regression tab
+    const showScatterPlot = document.getElementById('show-scatter-plot');
+    if (showScatterPlot) {
+        showScatterPlot.addEventListener('change', (e) => {
+            const container = document.getElementById('regression-scatter-container');
+            if (container) {
+                container.style.display = e.target.checked ? 'block' : 'none';
+                if (e.target.checked) {
+                    // Re-render if already have data
+                    const state = getState();
+                    if (state.mergedData && state.mergedData.length > 0) {
+                        const data = state.mergedData;
+                        const outcomeVar = getCurrentOutcome();
+                        const predictorVar = getCurrentPredictor();
+                        const weightType = getWeightType();
+                        runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+                    }
+                }
+            }
+        });
+    }
+
+    const showCoefficientPlot = document.getElementById('show-coefficient-plot');
+    if (showCoefficientPlot) {
+        showCoefficientPlot.addEventListener('change', (e) => {
+            const container = document.getElementById('coefficient-plot-container');
+            if (container) {
+                container.style.display = e.target.checked ? 'block' : 'none';
+                if (e.target.checked) {
+                    const state = getState();
+                    if (state.mergedData && state.mergedData.length > 0) {
+                        const data = state.mergedData;
+                        const outcomeVar = getCurrentOutcome();
+                        const predictorVar = getCurrentPredictor();
+                        const weightType = getWeightType();
+                        runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
+                    }
+                }
+            }
+        });
+    }
+
+    // Optional visualization checkboxes - Diagnostics tab
+    const showResidualPlots = document.getElementById('show-residual-plots');
+    if (showResidualPlots) {
+        showResidualPlots.addEventListener('change', (e) => {
+            const container = document.getElementById('residual-plots-container');
+            if (container) {
+                container.style.display = e.target.checked ? 'block' : 'none';
+                if (e.target.checked) {
+                    const state = getState();
+                    if (state.mergedData && state.mergedData.length > 0) {
+                        renderDiagnostics(state.mergedData, getCurrentOutcome());
+                    }
+                }
+            }
+        });
+    }
+
+    const showQQPlots = document.getElementById('show-qq-plots');
+    if (showQQPlots) {
+        showQQPlots.addEventListener('change', (e) => {
+            const container = document.getElementById('qq-plots-container');
+            if (container) {
+                container.style.display = e.target.checked ? 'block' : 'none';
+                if (e.target.checked) {
+                    const state = getState();
+                    if (state.mergedData && state.mergedData.length > 0) {
+                        renderDiagnostics(state.mergedData, getCurrentOutcome());
+                    }
+                }
+            }
+        });
+    }
+
     console.log('Event listeners initialized');
 }
 
@@ -920,12 +995,18 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
             }
         }
 
-        // Render coefficient plot
+        // Render coefficient plot (only if checkbox is checked)
         const predLabel = getPredictorLabel(predictorVar);
-        renderCoefficientPlot(models, predLabel);
+        const showCoefficientPlot = document.getElementById('show-coefficient-plot');
+        if (showCoefficientPlot && showCoefficientPlot.checked) {
+            renderCoefficientPlot(models, predLabel);
+        }
 
-        // Render regression scatter plots with fitted lines
-        renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
+        // Render regression scatter plots with fitted lines (only if checkbox is checked)
+        const showScatterPlot = document.getElementById('show-scatter-plot');
+        if (showScatterPlot && showScatterPlot.checked) {
+            renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
+        }
 
         // Hausman test if both FE and RE are available
         if (models.fixedEffects && models.randomEffects) {
@@ -935,18 +1016,33 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
             }
         }
 
-        // Render residual plots and QQ plots for diagnostics tab
+        // Render residual plots and QQ plots for diagnostics tab (only if checkboxes are checked)
+        const showResidualPlots = document.getElementById('show-residual-plots');
+        const showQQPlots = document.getElementById('show-qq-plots');
+
         if (models.ols) {
-            renderResidualPlot(models.ols, 'OLS (Pooled)', 'residual-plot-ols');
-            renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
+            if (showResidualPlots && showResidualPlots.checked) {
+                renderResidualPlot(models.ols, 'OLS (Pooled)', 'residual-plot-ols');
+            }
+            if (showQQPlots && showQQPlots.checked) {
+                renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
+            }
         }
         if (models.fixedEffects) {
-            renderResidualPlot(models.fixedEffects, 'Fixed Effects', 'residual-plot-fe');
-            renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
+            if (showResidualPlots && showResidualPlots.checked) {
+                renderResidualPlot(models.fixedEffects, 'Fixed Effects', 'residual-plot-fe');
+            }
+            if (showQQPlots && showQQPlots.checked) {
+                renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
+            }
         }
         if (models.randomEffects) {
-            renderResidualPlot(models.randomEffects, 'Random Effects', 'residual-plot-re');
-            renderQQPlot(models.randomEffects, 'Random Effects', 'qq-plot-re');
+            if (showResidualPlots && showResidualPlots.checked) {
+                renderResidualPlot(models.randomEffects, 'Random Effects', 'residual-plot-re');
+            }
+            if (showQQPlots && showQQPlots.checked) {
+                renderQQPlot(models.randomEffects, 'Random Effects', 'qq-plot-re');
+            }
         }
 
         console.log('✓ Regression analyses complete');

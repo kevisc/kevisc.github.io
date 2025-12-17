@@ -293,13 +293,30 @@
 
                     <div id="regression-results"></div>
 
-                    <div style="margin-top: 2rem;">
-                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Scatter Plot with Fitted Regression Lines</h3>
-                        <div id="regression-scatter"></div>
+                    <div style="margin-top: 2rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
+                        <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary);">📊 Optional Visualizations</h3>
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="show-scatter-plot" style="cursor: pointer;">
+                                <span>Scatter Plot with Fitted Lines</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="show-coefficient-plot" style="cursor: pointer;">
+                                <span>Coefficient Comparison</span>
+                            </label>
+                        </div>
+                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.75rem;">
+                            ℹ️ Visualizations are optional to reduce memory usage. Exports include all plots regardless of selection.
+                        </p>
                     </div>
 
-                    <div style="margin-top: 2rem;">
-                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Coefficient Comparison Across Models</h3>
+                    <div id="regression-scatter-container" style="margin-top: 2rem; display: none;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Scatter Plot with Fitted Regression Lines</h3>
+                        <div id="regression-scatter-plots"></div>
+                    </div>
+
+                    <div id="coefficient-plot-container" style="margin-top: 2rem; display: none;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Coefficient Comparison</h3>
                         <div id="coefficient-plot"></div>
                     </div>
                 </div>
@@ -313,7 +330,24 @@
 
                     <div id="diagnostics-results"></div>
 
-                    <div style="margin-top: 2rem;">
+                    <div style="margin-top: 2rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
+                        <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary);">📊 Optional Diagnostic Plots</h3>
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="show-residual-plots" style="cursor: pointer;">
+                                <span>Residual vs Fitted Plots</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="show-qq-plots" style="cursor: pointer;">
+                                <span>Q-Q Plots (Normality)</span>
+                            </label>
+                        </div>
+                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.75rem;">
+                            ℹ️ Diagnostic plots are optional to reduce memory usage. Exports include all plots regardless of selection.
+                        </p>
+                    </div>
+
+                    <div id="residual-plots-container" style="margin-top: 2rem; display: none;">
                         <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Residual vs Fitted Values</h3>
                         <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
                             Detects heteroscedasticity (non-constant variance). Points should be randomly scattered around the zero line.
@@ -323,7 +357,7 @@
                         <div id="residual-plot-re" style="margin-top: 1rem;"></div>
                     </div>
 
-                    <div style="margin-top: 2rem;">
+                    <div id="qq-plots-container" style="margin-top: 2rem; display: none;">
                         <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Q-Q Plot (Normality Test)</h3>
                         <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
                             Tests if residuals follow a normal distribution. Points should lie close to the diagonal reference line.
@@ -476,16 +510,12 @@
     <!-- Footer -->
     <footer style="background: var(--surface); border-top: 1px solid var(--border); margin-top: 4rem; padding: 2rem 0;">
         <div class="container" style="text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
-            <p>Educational Inequality Data Explorer |
-               <a href="docs/methodology.html" style="color: var(--primary-color);">Methodology</a> |
-               <a href="docs/citation.html" style="color: var(--primary-color);">How to Cite</a> |
-               <a href="docs/data-sources.html" style="color: var(--primary-color);">Data Sources</a>
-            </p>
+            <p>Educational Inequality Data Explorer</p>
             <p style="margin-top: 0.5rem;">Kevin Schoenholzer © 2025</p>
         </div>
     </footer>
 
     <!-- Application JavaScript Modules -->
-    <script type="module" src="js/app.js?v=3.0.1"></script>
+    <script type="module" src="js/app.js?v=3.0.2"></script>
 </body>
 </html>
