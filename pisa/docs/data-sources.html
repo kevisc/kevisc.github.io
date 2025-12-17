@@ -184,28 +184,28 @@
                     <td>Reading</td>
                     <td>43</td>
                     <td>~265,000</td>
-                    <td>Complete</td>
+                    <td><strong>Available in App</strong></td>
                 </tr>
                 <tr>
                     <td>2003</td>
                     <td>Mathematics</td>
                     <td>41</td>
                     <td>~276,000</td>
-                    <td>Complete</td>
+                    <td><strong>Available in App</strong></td>
                 </tr>
                 <tr>
                     <td>2006</td>
                     <td>Science</td>
                     <td>57</td>
                     <td>~398,000</td>
-                    <td>Complete</td>
+                    <td><strong>Available in App</strong></td>
                 </tr>
                 <tr>
                     <td>2009</td>
                     <td>Reading</td>
                     <td>65</td>
                     <td>~475,000</td>
-                    <td>Complete</td>
+                    <td><strong>Available in App</strong></td>
                 </tr>
                 <tr>
                     <td>2012</td>
@@ -238,7 +238,7 @@
             </tbody>
         </table>
 
-        <p><strong>This application includes data from the 2012, 2015, 2018, and 2022 cycles</strong>, covering 101 unique countries/economies across these four assessment years.</p>
+        <p><strong>This application includes data from all PISA cycles from 2000-2022</strong> (8 assessment cycles: 2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022), covering 513 country-year combinations across 101+ unique countries/economies.</p>
 
         <h2>2. Assessment Framework</h2>
 
@@ -353,7 +353,7 @@ codebook <- load_codebook()</code></pre>
         <h2>5. Data Structure in This Application</h2>
 
         <h3>5.1 JSON Chunk Format</h3>
-        <p>This application pre-generates 320 country-year specific JSON files (e.g., <span class="code">USA_2018.json</span>) for efficient progressive loading. Each chunk contains:</p>
+        <p>This application pre-generates 513 country-year specific JSON files (e.g., <span class="code">USA_2018.json</span>) for efficient progressive loading. Each chunk contains:</p>
 
         <pre style="background: #1e293b; color: #f1f5f9; padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 1rem 0;"><code>{
   "country": "USA",
@@ -393,7 +393,7 @@ codebook <- load_codebook()</code></pre>
         <p>The application also includes a <span class="code">metadata.json</span> file that catalogs all available data:</p>
         <pre style="background: #1e293b; color: #f1f5f9; padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 1rem 0;"><code>{
   "countries": ["ALB", "ARG", "AUS", ...],
-  "years": [2012, 2015, 2018, 2022],
+  "years": [2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022],
   "variables": {
     "math": "Mathematics achievement score",
     "reading": "Reading achievement score",
