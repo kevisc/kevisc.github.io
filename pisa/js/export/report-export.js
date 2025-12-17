@@ -321,6 +321,7 @@ function buildReportHeader(state) {
 
     return `
         <div class="header">
+            <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 1rem;">
             <h1>Educational Inequality Analysis Report</h1>
             <p class="subtitle">PISA Assessment Data Explorer</p>
             <div class="metadata">
@@ -1068,6 +1069,7 @@ function buildCitationSection() {
 function buildFooter() {
     return `
         <div class="footer">
+            <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 40px; height: 40px; object-fit: contain; margin-bottom: 0.5rem;">
             <p>Educational Inequality Data Explorer | Generated with Claude Code</p>
             <p>Kevin Schoenholzer © 2025</p>
             <p style="margin-top: 1rem; font-size: 0.75rem;">
