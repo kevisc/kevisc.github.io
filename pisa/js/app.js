@@ -50,7 +50,7 @@ async function initApp() {
         initLoadingIndicator();
         initSelectors();
         initTabSystem();
-        initAdvancedOptions();
+        // initAdvancedOptions(); // Removed - no longer needed without sidebar
         initEventListeners();
 
         // Make regression functions available globally for visualizations
@@ -262,20 +262,21 @@ function onTabSwitch(tabName) {
 
 /**
  * Initialize advanced options toggle
+ * DEPRECATED - No longer needed with tab-based layout
  */
-function initAdvancedOptions() {
-    const header = document.getElementById('advanced-options-header');
-    const content = document.getElementById('advanced-options-content');
+// function initAdvancedOptions() {
+//     const header = document.getElementById('advanced-options-header');
+//     const content = document.getElementById('advanced-options-content');
 
-    if (header && content) {
-        header.addEventListener('click', () => {
-            header.classList.toggle('expanded');
-            content.classList.toggle('expanded');
-        });
-    }
+//     if (header && content) {
+//         header.addEventListener('click', () => {
+//             header.classList.toggle('expanded');
+//             content.classList.toggle('expanded');
+//         });
+//     }
 
-    console.log('Advanced options initialized');
-}
+//     console.log('Advanced options initialized');
+// }
 
 /**
  * Initialize event listeners
@@ -382,105 +383,8 @@ function initEventListeners() {
         exportReportBtn.addEventListener('click', handleExportReport);
     }
 
-    // Optional visualization checkboxes - Regression tab
-    const showScatterPlot = document.getElementById('show-scatter-plot');
-    if (showScatterPlot) {
-        showScatterPlot.addEventListener('change', (e) => {
-            const container = document.getElementById('regression-scatter-container');
-            if (container) {
-                container.style.display = e.target.checked ? 'block' : 'none';
-                if (e.target.checked) {
-                    // Re-render if already have data
-                    const state = getState();
-                    if (state.mergedData && state.mergedData.length > 0) {
-                        const data = state.mergedData;
-                        const outcomeVar = getCurrentOutcome();
-                        const predictorVar = getCurrentPredictor();
-                        const weightType = getWeightType();
-                        runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
-                    }
-                }
-            }
-        });
-    }
-
-    const showCoefficientPlot = document.getElementById('show-coefficient-plot');
-    if (showCoefficientPlot) {
-        showCoefficientPlot.addEventListener('change', (e) => {
-            const container = document.getElementById('coefficient-plot-container');
-            if (container) {
-                container.style.display = e.target.checked ? 'block' : 'none';
-                if (e.target.checked) {
-                    const state = getState();
-                    if (state.mergedData && state.mergedData.length > 0) {
-                        const data = state.mergedData;
-                        const outcomeVar = getCurrentOutcome();
-                        const predictorVar = getCurrentPredictor();
-                        const weightType = getWeightType();
-                        runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
-                    }
-                }
-            }
-        });
-    }
-
-    // Render diagnostics button
-    const renderDiagnosticsBtn = document.getElementById('render-diagnostics-btn');
-    if (renderDiagnosticsBtn) {
-        renderDiagnosticsBtn.addEventListener('click', async () => {
-            const showResidualPlots = document.getElementById('show-residual-plots');
-            const showQQPlots = document.getElementById('show-qq-plots');
-            const state = getState();
-
-            if (!state.mergedData || state.mergedData.length === 0) {
-                alert('Please load data first before rendering diagnostic plots.');
-                return;
-            }
-
-            if (!showResidualPlots?.checked && !showQQPlots?.checked) {
-                alert('Please select at least one diagnostic plot type to render.');
-                return;
-            }
-
-            // Show/hide containers based on checkboxes
-            const residualContainer = document.getElementById('residual-plots-container');
-            const qqContainer = document.getElementById('qq-plots-container');
-
-            if (residualContainer) {
-                residualContainer.style.display = showResidualPlots?.checked ? 'block' : 'none';
-            }
-            if (qqContainer) {
-                qqContainer.style.display = showQQPlots?.checked ? 'block' : 'none';
-            }
-
-            // Show loading indicator
-            renderDiagnosticsBtn.disabled = true;
-            renderDiagnosticsBtn.innerHTML = '⏳ Rendering...';
-            startCalculating();
-
-            // Use setTimeout to ensure UI updates before heavy computation
-            setTimeout(() => {
-                try {
-                    const data = state.mergedData;
-                    const outcomeVar = getCurrentOutcome();
-                    const predictorVar = getCurrentPredictor();
-                    const weightType = getWeightType();
-
-                    // Re-run regression to get fresh models with diagnostics
-                    runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
-
-                    console.log('✓ Diagnostic plots rendered');
-                } catch (error) {
-                    console.error('Error rendering diagnostics:', error);
-                    alert('Error rendering diagnostic plots. Check console for details.');
-                } finally {
-                    stopCalculating();
-                    renderDiagnosticsBtn.disabled = false;
-                    renderDiagnosticsBtn.innerHTML = '🔄 Render Selected Plots';
-                }
-            }, 100);
-        });
-    }
+    // DEPRECATED: Optional visualization toggles removed - all visualizations now auto-render
+    // Visualization checkboxes and render buttons have been removed from the UI
 
     console.log('Event listeners initialized');
 }
@@ -1301,19 +1205,9 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
             }
         }
 
-        // Render optional visualizations based on checkbox state
-        const showCoefficientPlot = document.getElementById('show-coefficient-plot');
-        const showScatterPlot = document.getElementById('show-scatter-plot');
-
-        // Always render if checkboxes are checked (they persist across re-renders)
-        if (showCoefficientPlot && showCoefficientPlot.checked) {
-            // Pass the actual variable name, not the display label
-            renderCoefficientPlot(models, predictorVar);
-        }
-
-        if (showScatterPlot && showScatterPlot.checked) {
-            renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
-        }
+        // Always render all regression visualizations
+        renderCoefficientPlot(models, predictorVar);
+        renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
 
         // Hausman test if both FE and RE are available
         if (models.fixedEffects && models.randomEffects) {
@@ -1323,34 +1217,8 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
             }
         }
 
-        // Render residual plots and QQ plots for diagnostics tab (only if checkboxes are checked)
-        const showResidualPlots = document.getElementById('show-residual-plots');
-        const showQQPlots = document.getElementById('show-qq-plots');
-
-        if (models.ols) {
-            if (showResidualPlots && showResidualPlots.checked) {
-                renderResidualPlot(models.ols, 'OLS (Pooled)', 'residual-plot-ols');
-            }
-            if (showQQPlots && showQQPlots.checked) {
-                renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
-            }
-        }
-        if (models.fixedEffects) {
-            if (showResidualPlots && showResidualPlots.checked) {
-                renderResidualPlot(models.fixedEffects, 'Fixed Effects', 'residual-plot-fe');
-            }
-            if (showQQPlots && showQQPlots.checked) {
-                renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
-            }
-        }
-        if (models.randomEffects) {
-            if (showResidualPlots && showResidualPlots.checked) {
-                renderResidualPlot(models.randomEffects, 'Random Effects', 'residual-plot-re');
-            }
-            if (showQQPlots && showQQPlots.checked) {
-                renderQQPlot(models.randomEffects, 'Random Effects', 'qq-plot-re');
-            }
-        }
+        // Store models globally for diagnostics tab to access
+        window.lastRegressionModels = models;
 
         console.log('✓ Regression analyses complete');
 
@@ -1360,32 +1228,31 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
 }
 
 /**
- * Render diagnostics tab
+ * Render diagnostics tab with all diagnostic plots
  * @param {Array} data - Student data
  * @param {String} outcomeVar - Outcome variable
  */
 function renderDiagnostics(data, outcomeVar) {
     console.log('Rendering diagnostics...');
 
-    const decomp = calculateVarianceDecomposition(data, outcomeVar);
-    if (!decomp) return;
+    // Get the stored regression models from the last regression run
+    const models = window.lastRegressionModels || {};
 
-    const diagnosticsDiv = document.getElementById('diagnostics-results');
-    if (!diagnosticsDiv) return;
+    // Always render residual and QQ plots for all available models
+    if (models.ols) {
+        renderResidualPlot(models.ols, 'OLS (Pooled)', 'residual-plot-ols');
+        renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
+    }
+    if (models.fixedEffects) {
+        renderResidualPlot(models.fixedEffects, 'Fixed Effects', 'residual-plot-fe');
+        renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
+    }
+    if (models.randomEffects) {
+        renderResidualPlot(models.randomEffects, 'Random Effects', 'residual-plot-re');
+        renderQQPlot(models.randomEffects, 'Random Effects', 'qq-plot-re');
+    }
 
-    const html = `
-        <div class="stat-card">
-            <h3>Variance Decomposition</h3>
-            <div class="methodology-note">
-                <strong>Within-country variance:</strong> ${decomp.withinVariance.toFixed(2)} (${decomp.percentWithin.toFixed(1)}%)<br>
-                <strong>Between-country variance:</strong> ${decomp.betweenVariance.toFixed(2)} (${decomp.percentBetween.toFixed(1)}%)<br>
-                <strong>Intraclass correlation (ICC):</strong> ${decomp.icc.toFixed(3)}<br><br>
-                <em>ICC = ${decomp.icc.toFixed(3)} means ${(decomp.icc * 100).toFixed(1)}% of total variance in achievement is due to differences between countries.</em>
-            </div>
-        </div>
-    `;
-
-    diagnosticsDiv.innerHTML = html;
+    console.log('✓ Diagnostics rendered');
 }
 
 /**
@@ -1528,42 +1395,11 @@ async function renderAllVisualizationsForReport() {
     if (gapSelect) gapSelect.value = 'overall';
     renderGapDecomposition(data, outcomeVar, predictorVar, weightType);
 
-    // 4. Regression tab - run all analyses and force render optional plots
-    const models = runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
-
-    // Force render scatter plot (even if checkbox not selected)
-    if (models && Object.keys(models).length > 0) {
-        renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
-
-        // Force render coefficient plot
-        renderCoefficientPlot(models, predictorVar);
-    }
-
-    // 5. Diagnostics - force render all diagnostic plots
-    const showResidualPlots = document.getElementById('show-residual-plots');
-    const showQQPlots = document.getElementById('show-qq-plots');
-    const residualContainer = document.getElementById('residual-plots-container');
-    const qqContainer = document.getElementById('qq-plots-container');
-
-    // Temporarily check both boxes to force rendering
-    const wasResidualChecked = showResidualPlots?.checked;
-    const wasQQChecked = showQQPlots?.checked;
-
-    if (showResidualPlots) showResidualPlots.checked = true;
-    if (showQQPlots) showQQPlots.checked = true;
-
-    // Show containers so plots can be rendered and captured
-    if (residualContainer) residualContainer.style.display = 'block';
-    if (qqContainer) qqContainer.style.display = 'block';
-
-    // Re-run regressions with diagnostics enabled
+    // 4. Regression tab - run all analyses (visualizations auto-render)
     runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
 
-    // Restore original checkbox states and container visibility
-    if (showResidualPlots) showResidualPlots.checked = wasResidualChecked;
-    if (showQQPlots) showQQPlots.checked = wasQQChecked;
-    if (residualContainer) residualContainer.style.display = wasResidualChecked ? 'block' : 'none';
-    if (qqContainer) qqContainer.style.display = wasQQChecked ? 'block' : 'none';
+    // 5. Diagnostics - render all diagnostic plots
+    renderDiagnostics(data, outcomeVar);
 
     // 6. Comparative tab
     const comparativeResults = state.analysisResults?.comparative;
