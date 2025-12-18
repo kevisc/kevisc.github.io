@@ -299,13 +299,29 @@ export function renderRegressionScatterPlots(data, outcomeVar, predictorVar, mod
     const x = validData.map(d => +d[predictorVar]);
     const y = validData.map(d => +d[outcomeVar]);
 
+    // Sample data points to prevent graph overload
+    const MAX_POINTS = 3000;
+    let sampledX = x;
+    let sampledY = y;
+
+    if (x.length > MAX_POINTS) {
+        // Systematic sampling to maintain distribution
+        const step = Math.floor(x.length / MAX_POINTS);
+        sampledX = [];
+        sampledY = [];
+        for (let i = 0; i < x.length; i += step) {
+            sampledX.push(x[i]);
+            sampledY.push(y[i]);
+        }
+    }
+
     // Create scatter plot trace
     const scatterTrace = {
-        x: x,
-        y: y,
+        x: sampledX,
+        y: sampledY,
         mode: 'markers',
         type: 'scatter',
-        name: 'Data',
+        name: `Data (n=${x.length.toLocaleString()}, showing ${sampledX.length.toLocaleString()})`,
         marker: {
             size: 4,
             color: '#3b82f6',

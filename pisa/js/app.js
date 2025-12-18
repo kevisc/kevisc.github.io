@@ -383,6 +383,25 @@ function initEventListeners() {
         exportReportBtn.addEventListener('click', handleExportReport);
     }
 
+    // Regression country filter dropdown
+    const regressionCountryFilter = document.getElementById('regression-country-filter');
+    if (regressionCountryFilter) {
+        regressionCountryFilter.addEventListener('change', (e) => {
+            console.log('Regression country filter changed to:', e.target.value);
+
+            // Re-render regression visualizations with the selected country filter
+            const state = getState();
+            if (state.mergedData && state.mergedData.length > 0) {
+                const outcomeVar = getCurrentOutcome();
+                const predictorVar = getCurrentPredictor();
+                const weightType = getWeightType();
+
+                // Re-run regression analyses which will respect the dropdown selection
+                runRegressionAnalyses(state.mergedData, outcomeVar, predictorVar, weightType);
+            }
+        });
+    }
+
     // DEPRECATED: Optional visualization toggles removed - all visualizations now auto-render
     // Visualization checkboxes and render buttons have been removed from the UI
 
@@ -530,6 +549,9 @@ function runInitialAnalyses(data) {
             }
         });
 
+        // 5. Populate regression country dropdown
+        populateRegressionCountryDropdown(countries);
+
         console.log('✓ Initial analyses complete');
 
     } catch (error) {
@@ -572,6 +594,40 @@ function calculateComparativeStats(data, outcomeVar, predictorVar, weightType) {
     });
 
     return results;
+}
+
+/**
+ * Populate regression country filter dropdown
+ * @param {Array} countries - List of country codes
+ */
+function populateRegressionCountryDropdown(countries) {
+    const dropdown = document.getElementById('regression-country-filter');
+    if (!dropdown) return;
+
+    // Sort countries alphabetically
+    const sortedCountries = [...countries].sort();
+
+    // Clear existing options except "All Countries Combined"
+    dropdown.innerHTML = '<option value="all">All Countries Combined</option>';
+
+    // Add individual country options
+    sortedCountries.forEach(country => {
+        const option = document.createElement('option');
+        option.value = country;
+        option.textContent = country;
+        dropdown.appendChild(option);
+    });
+
+    console.log(`✓ Populated regression country dropdown with ${sortedCountries.length} countries`);
+}
+
+/**
+ * Get current selection from regression country filter dropdown
+ * @returns {String} Selected country code or 'all'
+ */
+function getRegressionCountryFilter() {
+    const dropdown = document.getElementById('regression-country-filter');
+    return dropdown ? dropdown.value : 'all';
 }
 
 /**
@@ -1148,9 +1204,18 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
     const analysisType = getAnalysisType();
     const controls = getSelectedControls();
 
+    // Check if a specific country is selected in the dropdown filter
+    const countryFilter = getRegressionCountryFilter();
+    let filteredData = data;
+
+    if (countryFilter !== 'all') {
+        filteredData = data.filter(d => d.country === countryFilter);
+        console.log(`Filtering to country: ${countryFilter} (${filteredData.length} students)`);
+    }
+
     // Check if separate analysis is selected
     if (analysisType === 'separate') {
-        runSeparateRegressions(data, outcomeVar, predictorVar, weightType, controls);
+        runSeparateRegressions(filteredData, outcomeVar, predictorVar, weightType, controls);
         return;
     }
 
@@ -1158,7 +1223,7 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
     const models = {};
 
     // Determine which models are appropriate for this data
-    const applicable = determineApplicableModels(data);
+    const applicable = determineApplicableModels(filteredData);
 
     // Check which models are selected
     const wantOLS = document.getElementById('ols-model')?.checked !== false; // Default true
@@ -1172,19 +1237,19 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
 
     try {
         if (wantOLS && applicable.canRunOLS) {
-            const ols = runPooledOLS(data, outcomeVar, predictorVar, controls, weightType);
+            const ols = runPooledOLS(filteredData, outcomeVar, predictorVar, controls, weightType);
             if (ols) models.ols = ols;
         }
 
         if (wantFE && applicable.canRunFE) {
-            const fe = runFixedEffects(data, outcomeVar, predictorVar, controls, weightType);
+            const fe = runFixedEffects(filteredData, outcomeVar, predictorVar, controls, weightType);
             if (fe) models.fixedEffects = fe;
         } else if (wantFE && !applicable.canRunFE) {
             console.log('Skipping Fixed Effects: requires multiple countries');
         }
 
         if (wantRE && applicable.canRunRE) {
-            const re = runRandomEffects(data, outcomeVar, predictorVar, controls, weightType);
+            const re = runRandomEffects(filteredData, outcomeVar, predictorVar, controls, weightType);
             if (re) models.randomEffects = re;
         } else if (wantRE && !applicable.canRunRE) {
             console.log('Skipping Random Effects: requires multiple countries');
@@ -1207,7 +1272,7 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
 
         // Always render all regression visualizations
         renderCoefficientPlot(models, predictorVar);
-        renderRegressionScatterPlots(data, outcomeVar, predictorVar, models);
+        renderRegressionScatterPlots(filteredData, outcomeVar, predictorVar, models);
 
         // Hausman test if both FE and RE are available
         if (models.fixedEffects && models.randomEffects) {

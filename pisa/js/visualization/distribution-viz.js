@@ -18,6 +18,7 @@ export function renderDistributionChart(data, outcomeVar = 'math') {
     const countries = [...new Set(data.map(d => d.country))].sort();
     const years = [...new Set(data.map(d => d.year))].sort();
     const traces = [];
+    const legendYears = new Set(); // Track which years have been added to legend
 
     // Create a box plot trace for each country-year combination
     years.forEach(year => {
@@ -26,6 +27,12 @@ export function renderDistributionChart(data, outcomeVar = 'math') {
             const scores = countryYearData.map(d => +d[outcomeVar]).filter(isFinite);
 
             if (scores.length > 0) {
+                // Show legend for this year only if we haven't added it yet
+                const showLegendForYear = !legendYears.has(year);
+                if (showLegendForYear) {
+                    legendYears.add(year);
+                }
+
                 traces.push({
                     y: scores,
                     x: Array(scores.length).fill(`${country}`),
@@ -36,7 +43,7 @@ export function renderDistributionChart(data, outcomeVar = 'math') {
                     line: { width: 2 },
                     offsetgroup: year,
                     legendgroup: year,
-                    showlegend: country === countries[0], // Only show legend for first country
+                    showlegend: showLegendForYear, // Show legend once per year
                     hovertemplate: `<b>${country} (${year})</b><br>` +
                                    `Score: %{y:.1f}<br>` +
                                    `<extra></extra>`
