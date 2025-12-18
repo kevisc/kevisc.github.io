@@ -67,9 +67,14 @@ export function renderDistributionChart(data, outcomeVar = 'math') {
             title: { text: 'Year' },
             x: 1.02,
             xanchor: 'left',
+            y: 1,
+            yanchor: 'top',
             bgcolor: 'rgba(30, 41, 59, 0.8)',
             bordercolor: '#475569',
-            borderwidth: 1
+            borderwidth: 1,
+            itemsizing: 'constant',
+            tracegroupgap: 5,
+            font: { size: 11 }
         },
         hovermode: 'closest',
         margin: { l: 60, r: 150, t: 80, b: 80 }
@@ -139,7 +144,13 @@ export function renderPercentileChart(data, outcomeVar = 'math') {
         paper_bgcolor: '#1e293b',
         plot_bgcolor: '#1e293b',
         font: { color: '#f1f5f9' },
-        showlegend: true
+        showlegend: true,
+        legend: {
+            y: 1,
+            yanchor: 'top',
+            itemsizing: 'constant',
+            font: { size: 11 }
+        }
     };
 
     const config = {
@@ -226,6 +237,13 @@ export function renderLorenzCurve(data, outcomeVar = 'math') {
         plot_bgcolor: '#1e293b',
         font: { color: '#f1f5f9' },
         showlegend: true,
+        legend: {
+            y: 1,
+            yanchor: 'top',
+            itemsizing: 'constant',
+            tracegroupgap: 5,
+            font: { size: 11 }
+        },
         hovermode: 'x unified'
     };
 

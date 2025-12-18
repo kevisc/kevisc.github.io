@@ -55,7 +55,14 @@ export function renderCountryComparison(comparativeResults, years) {
         plot_bgcolor: '#1e293b',
         font: { color: '#f1f5f9' },
         barmode: 'group',
-        showlegend: true
+        showlegend: true,
+        legend: {
+            y: 1,
+            yanchor: 'top',
+            itemsizing: 'constant',
+            tracegroupgap: 5,
+            font: { size: 11 }
+        }
     };
 
     const config = {
@@ -205,7 +212,11 @@ export function renderGapComparison(gapResults) {
         showlegend: true,
         legend: {
             x: 0,
-            y: 1
+            y: 1,
+            yanchor: 'top',
+            itemsizing: 'constant',
+            tracegroupgap: 5,
+            font: { size: 11 }
         }
     };
 
@@ -475,10 +486,14 @@ export function renderTemporalTrends(data, outcomeVar = 'math', predictorVar = '
         legend: {
             x: 1.05,
             y: 1,
+            yanchor: 'top',
             xanchor: 'left',
             bgcolor: 'rgba(30, 41, 59, 0.8)',
             bordercolor: '#475569',
-            borderwidth: 1
+            borderwidth: 1,
+            itemsizing: 'constant',
+            tracegroupgap: 5,
+            font: { size: 11 }
         },
         hovermode: 'closest',
         margin: { t: 80, b: 60, l: 60, r: 200 },

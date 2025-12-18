@@ -130,7 +130,11 @@ export function renderOverviewChart(data, outcomeVar = 'math', predictorVar = 'e
         legend: {
             x: 1,
             xanchor: 'right',
-            y: 1
+            y: 1,
+            yanchor: 'top',
+            itemsizing: 'constant',
+            tracegroupgap: 5,
+            font: { size: 11 }
         }
     };
 
