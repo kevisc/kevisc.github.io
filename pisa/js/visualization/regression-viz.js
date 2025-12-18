@@ -329,8 +329,9 @@ export function renderRegressionScatterPlots(data, outcomeVar, predictorVar, mod
                 const intercept = model.coefficients[interceptIdx];
                 const slope = model.coefficients[slopeIdx];
 
-                const xMin = Math.min(...x);
-                const xMax = Math.max(...x);
+                // Use reduce to avoid stack overflow with large arrays
+                const xMin = x.reduce((min, val) => Math.min(min, val), Infinity);
+                const xMax = x.reduce((max, val) => Math.max(max, val), -Infinity);
                 const xRange = [xMin, xMax];
                 const yRange = xRange.map(xi => intercept + slope * xi);
 
