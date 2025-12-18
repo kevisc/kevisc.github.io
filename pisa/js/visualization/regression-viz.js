@@ -51,7 +51,9 @@ export function createModelTable(model) {
                 i < model.variableNames.length &&
                 !isNaN(coef) && !isNaN(model.standardErrors[i]) && !isNaN(model.pValues[i])) {
 
-                const sig = model.pValues[i] < 0.05;
+                const pVal = Math.min(1, Math.max(0, model.pValues[i]));
+                const sig = pVal < 0.05;
+                const stars = pVal < 0.001 ? '***' : pVal < 0.01 ? '**' : pVal < 0.05 ? '*' : '';
                 const tStat = model.tStatistics ? model.tStatistics[i] : (coef / model.standardErrors[i]);
                 const ci_lower = coef - 1.96 * model.standardErrors[i];
                 const ci_upper = coef + 1.96 * model.standardErrors[i];
@@ -59,10 +61,10 @@ export function createModelTable(model) {
                 html += `
                     <tr>
                         <td>${model.variableNames[i]}</td>
-                        <td class="${sig ? 'significant' : ''}">${coef.toFixed(3)}</td>
+                        <td class="${sig ? 'significant' : ''}">${coef.toFixed(3)}${stars ? '<span style="color:#10b981; font-weight:bold;"> ' + stars + '</span>' : ''}</td>
                         <td>${model.standardErrors[i].toFixed(3)}</td>
                         <td>${tStat.toFixed(2)}</td>
-                        <td>${Math.min(1, Math.max(0, model.pValues[i])).toFixed(4)}</td>
+                        <td>${pVal.toFixed(4)}${stars ? '<span style="color:#888; font-size:0.8em;"> ' + stars + '</span>' : ''}</td>
                         <td>[${ci_lower.toFixed(2)}, ${ci_upper.toFixed(2)}]</td>
                     </tr>
                 `;
@@ -73,6 +75,9 @@ export function createModelTable(model) {
     html += `
                 </tbody>
             </table>
+            <div class="methodology-note" style="margin-top: 0.5rem; font-size: 0.85rem;">
+                <strong>Significance levels:</strong> * p < 0.05, ** p < 0.01, *** p < 0.001
+            </div>
         </div>
     `;
 
