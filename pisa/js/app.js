@@ -1211,6 +1211,7 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
 
         // Hausman test if both FE and RE are available
         if (models.fixedEffects && models.randomEffects) {
+            const predLabel = getPredictorLabel(predictorVar);
             const hausman = hausmanTest(models.fixedEffects, models.randomEffects, predLabel);
             if (hausman) {
                 renderHausmanTest(hausman);
