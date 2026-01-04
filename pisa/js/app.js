@@ -663,10 +663,6 @@ function getSelectedControls() {
         controls.push('gender');
     }
 
-    if (document.getElementById('ctrl-parent-edu')?.checked) {
-        controls.push('parent_edu');
-    }
-
     if (document.getElementById('ctrl-year')?.checked) {
         controls.push('year');
     }

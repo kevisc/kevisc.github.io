@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Educational Inequality Data Explorer - Methodological Article</title>
+    <title>Educational Inequality Data Explorer - ESCS-Focused Methodological Article</title>
     <style>
         * {
             margin: 0;
@@ -179,7 +179,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Educational Inequality Data Explorer: A Web-Based Methodological Article for PISA Microdata</h1>
+        <h1>Educational Inequality Data Explorer: A Web-Based Methodological Article on ESCS-Based Stratification in PISA Outcomes</h1>
 
         <div class="metadata">
             <p><strong>Author:</strong> Kevin Schoenholzer</p>
@@ -188,13 +188,13 @@
         </div>
 
         <div class="abstract">
-            <p><strong>Abstract.</strong> This article introduces the Educational Inequality Data Explorer, a browser-based analytical application for OECD PISA microdata. The tool operationalizes standard inequality metrics, survey-weighted regression models, and variance decomposition techniques in a transparent and reproducible workflow. It is designed to lower barriers for non-specialist researchers, students, and graduate students who need rigorous comparative analysis without writing bespoke statistical code. The application makes it straightforward to test how results change with alternative estimators, weighting choices, and country selections, thereby supporting open science, sensitivity analysis, and replicability. We document all methodological choices, model specifications, weighting conventions, and data-handling procedures, and we provide direct links to technical appendices for audit and replication.</p>
-            <p class="keywords"><strong>Keywords:</strong> educational inequality, PISA, survey weighting, regression, variance decomposition, web-based analytics, reproducibility</p>
+            <p><strong>Abstract.</strong> This article introduces the Educational Inequality Data Explorer, a browser-based analytical application for OECD PISA microdata. The tool is specifically geared to understanding how the ESCS index—capturing parental wealth, occupation, and education—relates to student achievement across countries and PISA cycles. It operationalizes standard inequality metrics, survey-weighted regression models, and variance decomposition techniques in a transparent and reproducible workflow. It is designed to lower barriers for non-specialist researchers, students, and graduate students who need rigorous comparative analysis without writing bespoke statistical code. The application makes it straightforward to test how results change with alternative estimators, weighting choices, and country selections, thereby supporting open science, sensitivity analysis, and replicability. We document all methodological choices, model specifications, weighting conventions, and data-handling procedures, and we provide direct links to technical appendices for audit and replication.</p>
+            <p class="keywords"><strong>Keywords:</strong> educational inequality, ESCS, PISA, survey weighting, regression, variance decomposition, web-based analytics, reproducibility</p>
         </div>
 
         <h2>1. Introduction</h2>
         <p>Large-scale assessment data provide an unparalleled opportunity to study educational inequality within and across countries. However, the technical barrier to entry remains high due to complex survey designs, the need for transparent weighting conventions, and the burden of repeated, customized analysis for different outcomes and sample definitions. The Educational Inequality Data Explorer addresses this gap by providing a validated, browser-based analytical environment that adheres to OECD documentation standards while prioritizing interpretability and reproducibility.</p>
-        <p>This article positions the application as a methodological contribution that democratizes access to comparative analysis. It enables users with limited statistical programming background to explore how estimation choices (OLS vs. fixed or random effects), weighting decisions, and country or year selections influence substantive conclusions. The accompanying exports and documentation are designed to make analytic decisions explicit, supporting open science and replicability.</p>
+        <p>This article positions the application as a methodological contribution that democratizes access to comparative analysis. It enables users with limited statistical programming background to explore how the ESCS index (parental wealth, occupation, and education) relates to student outcomes, and how estimation choices (OLS vs. fixed or random effects), weighting decisions, and country or year selections influence substantive conclusions. The accompanying exports and documentation are designed to make analytic decisions explicit, supporting open science and replicability.</p>
 
         <h3>1.1 Contribution and Audience</h3>
         <p>The application is intended for researchers, instructors, and students who need rigorous comparative analysis without bespoke statistical code. Its contribution is both methodological and infrastructural:</p>
@@ -210,7 +210,7 @@
         </div>
 
         <h2>2. Data and Coverage</h2>
-        <p>The application uses student-level microdata from the OECD PISA program. The current deployment includes all cycles from 2000 to 2022 (eight assessment waves). Data are accessed through the <code>learningtower</code> R package, which harmonizes variable naming conventions and coding across cycles.</p>
+        <p>The application uses student-level microdata from the OECD PISA program. The current deployment includes all cycles from 2000 to 2022 (eight assessment waves), enabling comparisons across countries and over time. Data are accessed through the <code>learningtower</code> R package, which harmonizes variable naming conventions and coding across cycles.</p>
         <ul class="link-list">
             <li><a href="data-sources.html">Detailed data sources and variable documentation</a></li>
             <li><a href="methodology.html">Full methodology and technical documentation</a></li>

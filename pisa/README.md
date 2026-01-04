@@ -1,6 +1,6 @@
 # PISA Educational Inequality Data Explorer
 
-Interactive web application for analyzing educational inequalities using OECD PISA data (2000-2022).
+Interactive web application for analyzing how the ESCS index (parental wealth, occupation, and education) relates to PISA achievement outcomes across countries and over time (2000-2022).
 
 **Live Demo:** [kevinschoenholzer.com/pisa/](https://kevinschoenholzer.com/pisa/) (coming soon)
 
@@ -10,7 +10,7 @@ Interactive web application for analyzing educational inequalities using OECD PI
 
 ## Overview
 
-This application provides researchers and the public with an accessible, browser-based tool for analyzing educational inequality using OECD Programme for International Student Assessment (PISA) data. Built with vanilla JavaScript and ES6 modules, it loads data progressively on-demand and provides comprehensive statistical analysis with publication-ready exports.
+This application provides researchers and the public with an accessible, browser-based tool for analyzing socioeconomic inequality in educational achievement using OECD Programme for International Student Assessment (PISA) data. It is specifically geared to understanding how the ESCS index (parental wealth, occupation, and education) relates to student outcomes across countries and over time. Built with vanilla JavaScript and ES6 modules, it loads data progressively on-demand and provides comprehensive statistical analysis with publication-ready exports.
 
 ### Key Features
 

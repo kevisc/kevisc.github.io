@@ -55,7 +55,7 @@
                     <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 120px; height: 120px; object-fit: contain; margin-bottom: 1.5rem;">
                     <h1 style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--primary-color);">Educational Inequality Data Explorer</h1>
                     <p style="font-size: 1.2rem; color: var(--text-secondary); max-width: 800px; margin: 0 auto 2rem auto;">
-                        Analyze educational stratification and achievement gaps using PISA assessment data from 101 countries (2000-2022)
+                        Examine how ESCS (parental wealth, occupation, and education) relates to PISA achievement across 101 countries and eight cycles (2000-2022)
                     </p>
                 </div>
 
@@ -236,12 +236,8 @@
                             <label style="font-size: 1.05rem; font-weight: 600;">Control Variables (for regression models)</label>
                             <div class="checkbox-group" style="display: flex; gap: 2rem; margin-top: 0.75rem; flex-wrap: wrap;">
                                 <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                    <input type="checkbox" value="gender" id="ctrl-gender">
+                                    <input type="checkbox" value="gender" id="ctrl-gender" checked>
                                     <span>Gender</span>
-                                </label>
-                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                    <input type="checkbox" value="parent_edu" id="ctrl-parent-edu">
-                                    <span>Parental Education</span>
                                 </label>
                                 <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                                     <input type="checkbox" value="year" id="ctrl-year">
@@ -289,7 +285,8 @@
                 <p class="description">
                     This dashboard provides empirical analysis of educational inequalities using standardized assessment data.
                     The analysis framework draws on social stratification theory (Bourdieu & Passeron, 1977; Coleman et al., 1966)
-                    to examine how socioeconomic factors correlate with student achievement outcomes.
+                    to examine how the ESCS index (parental wealth, occupation, and education) correlates with student achievement outcomes
+                    across countries and over time.
                 </p>
 
                 <div class="alert alert-info" style="margin-bottom: 1.5rem;">
