@@ -304,7 +304,9 @@ export function clearAnalysisResults() {
         descriptive: null,
         regression: null,
         decomposition: null,
-        diagnostics: null
+        diagnostics: null,
+        comparative: null,
+        comparativeGap: null
     };
     notifyListeners({ analysisResults: AppState.analysisResults });
 }
@@ -326,8 +328,6 @@ export default {
     getSelectedYears,
     setSelectedCountries,
     setSelectedYears,
-    getAnalysisType,
-    setAnalysisType,
     getCurrentOutcome,
     setCurrentOutcome,
     getCurrentPredictor,
