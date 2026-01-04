@@ -416,8 +416,28 @@ export function renderResidualPlot(model, modelName = 'Model', targetElementId =
         return;
     }
 
-    const fittedValues = model.yhat;
-    const residuals = model.residuals;
+    const pairs = [];
+    for (let i = 0; i < model.yhat.length; i++) {
+        const fitted = model.yhat[i];
+        const residual = model.residuals[i];
+        if (Number.isFinite(fitted) && Number.isFinite(residual)) {
+            pairs.push([fitted, residual]);
+        }
+    }
+
+    if (pairs.length === 0) {
+        console.warn('Cannot render residual plot: no finite points');
+        return;
+    }
+
+    const maxPoints = 4000;
+    const step = Math.ceil(pairs.length / maxPoints);
+    const fittedValues = [];
+    const residuals = [];
+    for (let i = 0; i < pairs.length; i += step) {
+        fittedValues.push(pairs[i][0]);
+        residuals.push(pairs[i][1]);
+    }
 
     const trace = {
         x: fittedValues,
@@ -433,8 +453,13 @@ export function renderResidualPlot(model, modelName = 'Model', targetElementId =
     };
 
     // Add horizontal line at y=0
-    const xMin = Math.min(...fittedValues);
-    const xMax = Math.max(...fittedValues);
+    let xMin = fittedValues[0];
+    let xMax = fittedValues[0];
+    for (let i = 1; i < fittedValues.length; i++) {
+        const value = fittedValues[i];
+        if (value < xMin) xMin = value;
+        if (value > xMax) xMax = value;
+    }
     const zeroLine = {
         x: [xMin, xMax],
         y: [0, 0],
@@ -491,24 +516,37 @@ export function renderQQPlot(model, modelName = 'Model', targetElementId = 'qq-p
         return;
     }
 
+    const residuals = model.residuals.filter(Number.isFinite);
+    if (residuals.length < 3) {
+        console.warn('Cannot render QQ plot: insufficient residuals');
+        return;
+    }
+
     // Sort residuals
-    const residuals = [...model.residuals].sort((a, b) => a - b);
-    const n = residuals.length;
+    const sortedResiduals = [...residuals].sort((a, b) => a - b);
+    const n = sortedResiduals.length;
+    const maxPoints = 1500;
+    const step = Math.ceil(n / maxPoints);
 
     // Calculate theoretical quantiles (assuming standard normal)
     const theoreticalQuantiles = [];
-    for (let i = 0; i < n; i++) {
-        // Use (i + 0.5) / n to get quantile position
+    const sampledResiduals = [];
+    for (let i = 0; i < n; i += step) {
         const p = (i + 0.5) / n;
-        // Approximate inverse normal CDF
         theoreticalQuantiles.push(approximateInverseNormal(p));
+        sampledResiduals.push(sortedResiduals[i]);
     }
 
     // Standardize residuals
-    const mean = residuals.reduce((sum, r) => sum + r, 0) / n;
-    const variance = residuals.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / n;
+    const mean = residuals.reduce((sum, r) => sum + r, 0) / residuals.length;
+    const variance = residuals.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / residuals.length;
     const sd = Math.sqrt(variance);
-    const standardizedResiduals = residuals.map(r => (r - mean) / sd);
+    if (!Number.isFinite(sd) || sd === 0) {
+        console.warn('Cannot render QQ plot: residual standard deviation is zero');
+        return;
+    }
+
+    const standardizedResiduals = sampledResiduals.map(r => (r - mean) / sd);
 
     const trace = {
         x: theoreticalQuantiles,
@@ -524,8 +562,13 @@ export function renderQQPlot(model, modelName = 'Model', targetElementId = 'qq-p
     };
 
     // Add 45-degree reference line
-    const minQ = Math.min(...theoreticalQuantiles);
-    const maxQ = Math.max(...theoreticalQuantiles);
+    let minQ = theoreticalQuantiles[0];
+    let maxQ = theoreticalQuantiles[0];
+    for (let i = 1; i < theoreticalQuantiles.length; i++) {
+        const value = theoreticalQuantiles[i];
+        if (value < minQ) minQ = value;
+        if (value > maxQ) maxQ = value;
+    }
     const refLine = {
         x: [minQ, maxQ],
         y: [minQ, maxQ],
