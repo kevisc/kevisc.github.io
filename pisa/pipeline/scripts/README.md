@@ -16,21 +16,21 @@ Run the scripts in order:
 
 ### 1. Generate Data Chunks
 
-This creates ~320 JSON files (one per country-year combination):
+This creates ~513 JSON files (one per country-year combination):
 
 ```r
 source("01-generate-chunks.R")
 ```
 
 **What it does:**
-- Loads PISA data for years 2012, 2015, 2018, 2022 from learningtower package
+- Loads PISA data for years 2000-2022 from learningtower package
 - Creates separate JSON file for each country-year
 - Includes all available variables from learningtower
 - Saves files to: `../../data/country-year/`
 
 **Expected output:**
-- ~320 JSON files (2-5 MB each)
-- Total size: ~1 GB
+- ~513 JSON files (2-5 MB each)
+- Total size: ~1.25 GB
 - Progress display with file sizes
 - Summary statistics table
 
@@ -118,12 +118,12 @@ pisa/
     ├── metadata.json              # Data catalog
     ├── chunk_summary.csv          # Summary of all chunks
     └── country-year/              # Individual data files
-        ├── USA_2012.json
-        ├── USA_2015.json
+        ├── USA_2000.json
+        ├── USA_2003.json
         ├── USA_2018.json
         ├── USA_2022.json
-        ├── DEU_2012.json
-        └── ... (315 more files)
+        ├── DEU_2000.json
+        └── ... (507 more files)
 ```
 
 ## Next Steps

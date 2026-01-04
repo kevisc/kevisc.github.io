@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Educational Inequality Data Explorer - Publication Paper</title>
+    <title>Educational Inequality Data Explorer - Methodological Article</title>
     <style>
         * {
             margin: 0;
@@ -179,23 +179,30 @@
 </head>
 <body>
     <div class="container">
-        <h1>Educational Inequality Data Explorer: A Web-Based Methodological Application for PISA Microdata</h1>
+        <h1>Educational Inequality Data Explorer: A Web-Based Methodological Article for PISA Microdata</h1>
 
         <div class="metadata">
             <p><strong>Author:</strong> Kevin Schoenholzer</p>
-            <p><strong>Affiliation:</strong> Independent Researcher</p>
             <p><strong>Correspondence:</strong> kevinschoenholzer.com</p>
             <p><strong>Date:</strong> 2026-01-04</p>
         </div>
 
         <div class="abstract">
-            <p><strong>Abstract.</strong> This paper introduces the Educational Inequality Data Explorer, a browser-based analytical application for the OECD Programme for International Student Assessment (PISA) microdata. The tool operationalizes standard inequality metrics, survey-weighted regression models, and variance decomposition techniques in a transparent and reproducible workflow. It is designed for researchers and practitioners who require rigorous, auditable analysis without the overhead of bespoke statistical programming for each project. We document methodological choices, model specifications, weighting conventions, and data-handling procedures, and we provide direct links to technical appendices and documentation to support replication. The application includes structured exports for publication-ready tables and figures, enabling rapid academic dissemination while preserving methodological fidelity.</p>
+            <p><strong>Abstract.</strong> This article introduces the Educational Inequality Data Explorer, a browser-based analytical application for OECD PISA microdata. The tool operationalizes standard inequality metrics, survey-weighted regression models, and variance decomposition techniques in a transparent and reproducible workflow. It is designed to lower barriers for non-specialist researchers, students, and graduate students who need rigorous comparative analysis without writing bespoke statistical code. The application makes it straightforward to test how results change with alternative estimators, weighting choices, and country selections, thereby supporting open science, sensitivity analysis, and replicability. We document all methodological choices, model specifications, weighting conventions, and data-handling procedures, and we provide direct links to technical appendices for audit and replication.</p>
             <p class="keywords"><strong>Keywords:</strong> educational inequality, PISA, survey weighting, regression, variance decomposition, web-based analytics, reproducibility</p>
         </div>
 
         <h2>1. Introduction</h2>
         <p>Large-scale assessment data provide an unparalleled opportunity to study educational inequality within and across countries. However, the technical barrier to entry remains high due to complex survey designs, the need for transparent weighting conventions, and the burden of repeated, customized analysis for different outcomes and sample definitions. The Educational Inequality Data Explorer addresses this gap by providing a validated, browser-based analytical environment that adheres to OECD documentation standards while prioritizing interpretability and reproducibility.</p>
-        <p>This paper positions the application as a methodological contribution. It details the analytic pipeline, statistical procedures, and implementation decisions that shape each output in the interface. The paper also documents design constraints, trade-offs, and limitations to ensure that results are appropriately interpreted and replicated.</p>
+        <p>This article positions the application as a methodological contribution that democratizes access to comparative analysis. It enables users with limited statistical programming background to explore how estimation choices (OLS vs. fixed or random effects), weighting decisions, and country or year selections influence substantive conclusions. The accompanying exports and documentation are designed to make analytic decisions explicit, supporting open science and replicability.</p>
+
+        <h3>1.1 Contribution and Audience</h3>
+        <p>The application is intended for researchers, instructors, and students who need rigorous comparative analysis without bespoke statistical code. Its contribution is both methodological and infrastructural:</p>
+        <ul>
+            <li><strong>Accessibility:</strong> non-specialist users can reproduce core inequality metrics and regression models directly in the browser.</li>
+            <li><strong>Comparative sensitivity:</strong> users can systematically compare estimators and country selections to assess how methodological choices shape conclusions.</li>
+            <li><strong>Open science:</strong> every analysis is exportable with metadata that preserves the analytic context, supporting transparent reporting and replication.</li>
+        </ul>
 
         <div class="figure">
             <img src="images/pisa-app-screenshot.png" alt="Educational Inequality Data Explorer interface screenshot">
@@ -203,7 +210,7 @@
         </div>
 
         <h2>2. Data and Coverage</h2>
-        <p>The application uses student-level microdata from the OECD PISA program. The default deployment includes cycles 2012, 2015, 2018, and 2022. The data pipeline supports earlier cycles (2000-2009) when generated via the included scripts. Data are accessed through the <code>learningtower</code> R package, which harmonizes variable naming conventions and coding across cycles.</p>
+        <p>The application uses student-level microdata from the OECD PISA program. The current deployment includes all cycles from 2000 to 2022 (eight assessment waves). Data are accessed through the <code>learningtower</code> R package, which harmonizes variable naming conventions and coding across cycles.</p>
         <ul class="link-list">
             <li><a href="data-sources.html">Detailed data sources and variable documentation</a></li>
             <li><a href="methodology.html">Full methodology and technical documentation</a></li>
@@ -214,6 +221,7 @@
 
         <h3>2.2 Key Variables</h3>
         <p>The primary outcome variables are PISA achievement scores in mathematics, reading, and science. The primary stratification variable is ESCS (Economic, Social, and Cultural Status). Parental education and gender are supported as optional control variables. The application uses the first plausible value for each achievement domain for tractability; this choice is documented as a limitation and can be extended to multiple plausible values in future releases.</p>
+        <p>The learningtower package includes a large and diverse set of student, family, and school variables, enabling flexible model specification beyond the core variables emphasized in the interface.</p>
 
         <h2>3. Statistical Methods</h2>
         <p>All analyses conform to standard definitions used in educational inequality research. The application exposes these methods through modular tabs that compute summary statistics, inequality measures, regression models, and diagnostic checks.</p>
@@ -310,7 +318,7 @@ Random Effects:
         </ul>
 
         <h2>8. Availability and Citation</h2>
-        <p>The application and data pipeline are open source and available through the project repository. Citation guidance is provided in the linked documentation.</p>
+        <p>The application and data pipeline are open source and available through the project repository. The documentation is structured to enable transparent replication and reuse, with all analytic choices surfaced in the UI and export metadata. Citation guidance is provided in the linked documentation.</p>
         <ul class="link-list">
             <li><a href="../index.html">Educational Inequality Data Explorer</a></li>
             <li><a href="citation.html">Citation guidelines</a></li>
