@@ -9,14 +9,14 @@
 
 ### Phase 1: Data Pipeline Scripts (100% COMPLETE)
 
-**Location**: [PISAapp/scripts/](../PISAapp/scripts/)
+**Location**: [pisa/pipeline/scripts/](pipeline/scripts/)
 
 | File | Status | Lines | Purpose |
 |------|--------|-------|---------|
-| [01-generate-chunks.R](../PISAapp/scripts/01-generate-chunks.R) | ✅ | 179 | Generate 320 country-year JSON files |
-| [02-create-metadata.R](../PISAapp/scripts/02-create-metadata.R) | ✅ | 135 | Create metadata catalog |
-| [03-validate-chunks.R](../PISAapp/scripts/03-validate-chunks.R) | ✅ | 216 | Validate data quality |
-| [README.md](../PISAapp/scripts/README.md) | ✅ | 125 | User instructions |
+| [01-generate-chunks.R](pipeline/scripts/01-generate-chunks.R) | ✅ | 179 | Generate 320 country-year JSON files |
+| [02-create-metadata.R](pipeline/scripts/02-create-metadata.R) | ✅ | 135 | Create metadata catalog |
+| [03-validate-chunks.R](pipeline/scripts/03-validate-chunks.R) | ✅ | 216 | Validate data quality |
+| [README.md](pipeline/scripts/README.md) | ✅ | 125 | User instructions |
 
 **Action Required**: Run these R scripts to generate data files (~1 GB total)
 
@@ -54,7 +54,7 @@
 ### Step 1: Run R Scripts (30-45 minutes)
 
 ```r
-setwd("C:/Users/Kevin/Documents/GitHub/kevisc.github.io/PISAapp/scripts")
+setwd("C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/pipeline/scripts")
 source("01-generate-chunks.R")  # Creates 320 JSON files
 source("02-create-metadata.R")   # Creates metadata.json
 source("03-validate-chunks.R")   # Verifies quality

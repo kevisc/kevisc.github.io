@@ -177,7 +177,7 @@ import('./js/export/figure-export.js').then(m => console.log('Figure export load
 ### To Add All Years:
 
 **Step 1: Update R Script**
-The file `PISAapp/scripts/01-generate-chunks.R` has been updated to include all years:
+The file `pisa/pipeline/scripts/01-generate-chunks.R` has been updated to include all years:
 ```r
 YEARS <- c(2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022)
 ```
@@ -185,7 +185,7 @@ YEARS <- c(2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022)
 **Step 2: Re-run Data Generation**
 ```r
 # In RStudio
-setwd("C:/Users/Kevin/Documents/GitHub/kevisc.github.io/PISAapp/scripts")
+setwd("C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/pipeline/scripts")
 source("01-generate-chunks.R")   # ~30-45 minutes (more years = more time)
 source("02-create-metadata.R")   # ~2-3 minutes
 source("03-validate-chunks.R")   # ~2-3 minutes

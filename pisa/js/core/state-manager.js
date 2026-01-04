@@ -16,7 +16,6 @@ const AppState = {
     // User selections
     selectedCountries: [],
     selectedYears: [],
-    analysisType: 'pooled', // 'pooled' or 'separate'
 
     // Analysis parameters
     currentOutcome: 'math', // 'math', 'reading', or 'science'
@@ -32,7 +31,9 @@ const AppState = {
         descriptive: null,
         regression: null,
         decomposition: null,
-        diagnostics: null
+        diagnostics: null,
+        comparative: null,
+        comparativeGap: null
     },
 
     // UI state
@@ -174,23 +175,6 @@ export function setSelectedYears(years) {
 }
 
 /**
- * Get analysis type (pooled or separate)
- * @returns {String} 'pooled' or 'separate'
- */
-export function getAnalysisType() {
-    return AppState.analysisType;
-}
-
-/**
- * Set analysis type
- * @param {String} type - 'pooled' or 'separate'
- */
-export function setAnalysisType(type) {
-    AppState.analysisType = type;
-    notifyListeners({ analysisType: type });
-}
-
-/**
  * Get current outcome variable
  * @returns {String} 'math', 'reading', or 'science'
  */
@@ -209,7 +193,9 @@ export function setCurrentOutcome(outcome) {
         descriptive: null,
         regression: null,
         decomposition: null,
-        diagnostics: null
+        diagnostics: null,
+        comparative: null,
+        comparativeGap: null
     };
     notifyListeners({ currentOutcome: outcome });
 }
@@ -233,7 +219,9 @@ export function setCurrentPredictor(predictor) {
         descriptive: null,
         regression: null,
         decomposition: null,
-        diagnostics: null
+        diagnostics: null,
+        comparative: null,
+        comparativeGap: null
     };
     notifyListeners({ currentPredictor: predictor });
 }

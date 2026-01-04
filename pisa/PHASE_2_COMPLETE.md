@@ -8,14 +8,14 @@
 ## ✅ What Was Built
 
 ### Phase 1: Data Pipeline (100% COMPLETE)
-**Location**: `PISAapp/scripts/`
+**Location**: `pisa/pipeline/scripts/`
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| [01-generate-chunks.R](../PISAapp/scripts/01-generate-chunks.R) | 179 | Generate 320 country-year JSON files |
-| [02-create-metadata.R](../PISAapp/scripts/02-create-metadata.R) | 135 | Create metadata catalog |
-| [03-validate-chunks.R](../PISAapp/scripts/03-validate-chunks.R) | 216 | Validate data quality |
-| [README.md](../PISAapp/scripts/README.md) | 125 | User instructions |
+| [01-generate-chunks.R](pipeline/scripts/01-generate-chunks.R) | 179 | Generate 320 country-year JSON files |
+| [02-create-metadata.R](pipeline/scripts/02-create-metadata.R) | 135 | Create metadata catalog |
+| [03-validate-chunks.R](pipeline/scripts/03-validate-chunks.R) | 216 | Validate data quality |
+| [README.md](pipeline/scripts/README.md) | 125 | User instructions |
 
 **Total**: 655 lines
 
@@ -76,7 +76,7 @@ Open RStudio and run:
 install.packages(c("learningtower", "dplyr", "jsonlite", "tidyr"))
 
 # Navigate to scripts
-setwd("C:/Users/Kevin/Documents/GitHub/kevisc.github.io/PISAapp/scripts")
+setwd("C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/pipeline/scripts")
 
 # Run data generation (will take 30-45 minutes)
 source("01-generate-chunks.R")  # Creates 320 JSON files

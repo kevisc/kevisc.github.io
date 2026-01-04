@@ -584,11 +584,11 @@ function buildGapAnalysis(results, state) {
                                 </tr>
                                 <tr>
                                     <td>Within-Country Variance</td>
-                                    <td>${decomp.varianceWithin.toFixed(2)} (${decomp.percentWithin.toFixed(1)}%)</td>
+                                    <td>${decomp.withinVariance.toFixed(2)} (${decomp.percentWithin.toFixed(1)}%)</td>
                                 </tr>
                                 <tr>
                                     <td>Between-Country Variance</td>
-                                    <td>${decomp.varianceBetween.toFixed(2)} (${decomp.percentBetween.toFixed(1)}%)</td>
+                                    <td>${decomp.betweenVariance.toFixed(2)} (${decomp.percentBetween.toFixed(1)}%)</td>
                                 </tr>
                                 <tr>
                                     <td>Intraclass Correlation (ICC)</td>
@@ -652,14 +652,14 @@ function buildRegressionResults(state) {
                                     <td>Intercept</td>
                                     <td>${ols.coefficients[0].toFixed(3)}</td>
                                     <td>${ols.standardErrors[0].toFixed(3)}</td>
-                                    <td>${ols.tStats[0].toFixed(3)}</td>
+                                    <td>${ols.tStatistics[0].toFixed(3)}</td>
                                     <td>${ols.pValues[0] < 0.001 ? '<0.001' : ols.pValues[0].toFixed(3)}</td>
                                 </tr>
                                 <tr>
                                     <td><strong>${predLabel}</strong></td>
                                     <td><strong>${ols.coefficients[1].toFixed(3)}</strong></td>
                                     <td>${ols.standardErrors[1].toFixed(3)}</td>
-                                    <td><strong>${ols.tStats[1].toFixed(3)}</strong></td>
+                                    <td><strong>${ols.tStatistics[1].toFixed(3)}</strong></td>
                                     <td><strong>${ols.pValues[1] < 0.001 ? '<0.001' : ols.pValues[1].toFixed(3)}</strong></td>
                                 </tr>
                             </tbody>

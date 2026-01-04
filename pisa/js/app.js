@@ -6,7 +6,7 @@
 
 // Import modules
 import { getState, setState, setLoading, getCurrentOutcome, setCurrentOutcome,
-         getCurrentPredictor, setCurrentPredictor, setAnalysisType, getAnalysisType } from './core/state-manager.js';
+         getCurrentPredictor, setCurrentPredictor } from './core/state-manager.js';
 import { loadMetadata, loadSelectedData, getCacheStats } from './core/data-loader.js';
 import { initLoadingIndicator, updateProgress, showDataStatus, hideLoading,
          showButtonSpinner, hideButtonSpinner, resetProgress } from './ui/loading-indicator.js';
@@ -168,7 +168,7 @@ function clearInactivePlotlyCharts(activeTab) {
         'overview': ['overview-chart'],
         'distribution': ['distribution-chart', 'percentile-chart', 'lorenz-curve'],
         'gap-decomposition': ['gap-plot'],
-        'regression': ['coefficient-plot', 'regression-scatter-plots'],
+        'regression': ['coefficient-plot', 'regression-scatter'],
         'diagnostics': ['residual-plot-ols', 'residual-plot-fe', 'residual-plot-re',
                        'qq-plot-ols', 'qq-plot-fe', 'qq-plot-re', 'decomposition-chart'],
         'comparative': ['country-comparison', 'world-map', 'temporal-trends', 'gap-comparison']
@@ -238,12 +238,14 @@ function onTabSwitch(tabName) {
                     runRegressionAnalyses(data, outcomeVar, predictorVar, weightType);
                     break;
 
-                case 'comparative':
+                case 'comparative': {
                     const comparativeResults = state.analysisResults?.comparative;
+                    const gapResults = state.analysisResults?.comparativeGap?.byCountry;
                     if (comparativeResults) {
-                        renderAllComparativeCharts(data, comparativeResults, outcomeVar);
+                        renderAllComparativeCharts(data, comparativeResults, gapResults, outcomeVar);
                     }
                     break;
+                }
 
                 case 'diagnostics':
                     renderDiagnostics(data, outcomeVar);
@@ -329,15 +331,6 @@ function initEventListeners() {
             }
         });
     }
-
-    // Analysis type radio buttons
-    const analysisTypeRadios = document.querySelectorAll('input[name="analysis-type"]');
-    analysisTypeRadios.forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            setAnalysisType(e.target.value);
-            console.log('Analysis type changed to:', e.target.value);
-        });
-    });
 
     // Gap granularity selector
     const gapGranularitySelect = document.getElementById('gap-granularity');
@@ -538,6 +531,7 @@ function runInitialAnalyses(data) {
 
         // 3. Calculate comparative statistics by country-year
         const comparativeResults = calculateComparativeStats(data, outcomeVar, predictorVar, weightType);
+        const comparativeGap = calculateComparativeDecomposition(data, outcomeVar, predictorVar, weightType);
 
         // 4. Store results in state
         setState({
@@ -545,7 +539,8 @@ function runInitialAnalyses(data) {
                 descriptive,
                 inequality,
                 gradient,
-                comparative: comparativeResults
+                comparative: comparativeResults,
+                comparativeGap
             }
         });
 
@@ -1038,159 +1033,6 @@ function determineApplicableModels(data) {
  * @param {String} weightType - Weight type
  * @param {Array} controls - Control variables
  */
-function runSeparateRegressions(data, outcomeVar, predictorVar, weightType, controls) {
-    console.log('Running separate country-year regressions...');
-
-    // Group data by country-year
-    const byCountryYear = {};
-    data.forEach(d => {
-        const key = `${d.country}_${d.year}`;
-        if (!byCountryYear[key]) {
-            byCountryYear[key] = {
-                country: d.country,
-                year: d.year,
-                data: []
-            };
-        }
-        byCountryYear[key].data.push(d);
-    });
-
-    // Run OLS for each country-year
-    const results = [];
-    Object.values(byCountryYear).forEach(entry => {
-        const { country, year, data: groupData } = entry;
-
-        if (groupData.length < 50) {
-            console.warn(`Skipping ${country} ${year}: insufficient sample size (N=${groupData.length})`);
-            return;
-        }
-
-        try {
-            const ols = runPooledOLS(groupData, outcomeVar, predictorVar, controls, weightType);
-            if (ols && ols.coefficients && ols.coefficients.length > 1) {
-                results.push({
-                    country,
-                    year,
-                    gradient: ols.coefficients[1], // Coefficient on predictor
-                    se: ols.standardErrors[1],
-                    tStat: ols.tStatistics[1], // Note: property is tStatistics not tStats
-                    pValue: ols.pValues[1],
-                    r2: ols.r2,
-                    adjR2: ols.adjR2,
-                    aic: ols.aic,
-                    bic: ols.bic,
-                    n: ols.nobs
-                });
-            } else {
-                console.warn(`Skipping ${country} ${year}: invalid model (${ols ? `${ols.coefficients?.length || 0} coefficients` : 'no model'})`);
-            }
-        } catch (error) {
-            console.warn(`Error running regression for ${country} ${year}:`, error.message);
-        }
-    });
-
-    // Sort by country then year
-    results.sort((a, b) => {
-        if (a.country !== b.country) return a.country.localeCompare(b.country);
-        return a.year - b.year;
-    });
-
-    console.log(`✓ Completed ${results.length} separate regressions`);
-
-    // Render results table
-    renderSeparateRegressionTable(results, predictorVar);
-
-    // Clear other visualizations since they don't apply to separate analysis
-    const elements = [
-        'coefficient-plot', 'hausman-test', 'regression-scatter-plots',
-        'residual-plot-ols', 'residual-plot-fe', 'residual-plot-re',
-        'qq-plot-ols', 'qq-plot-fe', 'qq-plot-re'
-    ];
-    elements.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = '';
-    });
-
-    // Add info message
-    const resultsDiv = document.getElementById('regression-results');
-    if (resultsDiv) {
-        const infoBox = document.createElement('div');
-        infoBox.className = 'alert alert-info';
-        infoBox.style.marginTop = '1rem';
-        infoBox.innerHTML = `<strong>ℹ️ Separate Analysis Mode:</strong> Running OLS regression for each country-year combination independently. Showing ${results.length} regressions.`;
-        resultsDiv.insertBefore(infoBox, resultsDiv.firstChild);
-    }
-}
-
-/**
- * Render table of separate regression results
- * @param {Array} results - Array of regression results for each country-year
- * @param {String} predictorVar - Name of predictor variable
- */
-function renderSeparateRegressionTable(results, predictorVar) {
-    const resultsDiv = document.getElementById('regression-results');
-    if (!resultsDiv) return;
-
-    const predLabel = getPredictorLabel(predictorVar);
-
-    let html = `
-        <div class="stat-card">
-            <h3 style="margin-bottom: 1rem;">Separate Regression Results by Country-Year</h3>
-            <p style="color: #888; margin-bottom: 1rem; font-size: 0.9rem;">
-                OLS regression of achievement on ${predLabel}, estimated separately for each country-year combination.
-            </p>
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <thead>
-                        <tr style="background: #1e293b; border-bottom: 2px solid #475569;">
-                            <th style="padding: 0.75rem; text-align: left;">Country</th>
-                            <th style="padding: 0.75rem; text-align: center;">Year</th>
-                            <th style="padding: 0.75rem; text-align: right;">Gradient</th>
-                            <th style="padding: 0.75rem; text-align: right;">Std. Error</th>
-                            <th style="padding: 0.75rem; text-align: right;">t-stat</th>
-                            <th style="padding: 0.75rem; text-align: right;">p-value</th>
-                            <th style="padding: 0.75rem; text-align: right;">R²</th>
-                            <th style="padding: 0.75rem; text-align: right;">Adj. R²</th>
-                            <th style="padding: 0.75rem; text-align: right;">N</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-    `;
-
-    results.forEach((r, idx) => {
-        const bgColor = idx % 2 === 0 ? '#0f172a' : '#1e293b';
-        const significant = r.pValue < 0.05;
-        const gradientStyle = significant ? 'font-weight: 600; color: #3b82f6;' : '';
-
-        html += `
-            <tr style="background: ${bgColor}; border-bottom: 1px solid #334155;">
-                <td style="padding: 0.75rem;">${r.country}</td>
-                <td style="padding: 0.75rem; text-align: center;">${r.year}</td>
-                <td style="padding: 0.75rem; text-align: right; ${gradientStyle}">${r.gradient.toFixed(3)}</td>
-                <td style="padding: 0.75rem; text-align: right;">${r.se.toFixed(3)}</td>
-                <td style="padding: 0.75rem; text-align: right;">${r.tStat.toFixed(2)}</td>
-                <td style="padding: 0.75rem; text-align: right;">${r.pValue < 0.001 ? '<0.001' : r.pValue.toFixed(3)}</td>
-                <td style="padding: 0.75rem; text-align: right;">${(r.r2 * 100).toFixed(1)}%</td>
-                <td style="padding: 0.75rem; text-align: right;">${(r.adjR2 * 100).toFixed(1)}%</td>
-                <td style="padding: 0.75rem; text-align: right;">${r.n.toLocaleString()}</td>
-            </tr>
-        `;
-    });
-
-    html += `
-                    </tbody>
-                </table>
-            </div>
-            <p style="margin-top: 1rem; font-size: 0.85rem; color: #888;">
-                <strong>Note:</strong> Gradients shown in blue are statistically significant at p < 0.05.
-                Gradient represents the change in achievement score per 1 SD increase in ${predLabel}.
-            </p>
-        </div>
-    `;
-
-    resultsDiv.innerHTML = html;
-}
-
 /**
  * Run and render regression analyses
  * @param {Array} data - Student data
@@ -1201,7 +1043,6 @@ function renderSeparateRegressionTable(results, predictorVar) {
 function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
     console.log('Running regression analyses...');
 
-    const analysisType = getAnalysisType();
     const controls = getSelectedControls();
 
     // Check if a specific country is selected in the dropdown filter
@@ -1211,12 +1052,6 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
     if (countryFilter !== 'all') {
         filteredData = data.filter(d => d.country === countryFilter);
         console.log(`Filtering to country: ${countryFilter} (${filteredData.length} students)`);
-    }
-
-    // Check if separate analysis is selected
-    if (analysisType === 'separate') {
-        runSeparateRegressions(filteredData, outcomeVar, predictorVar, weightType, controls);
-        return;
     }
 
     // Pooled analysis (default)
@@ -1395,7 +1230,7 @@ function handleExportData() {
     exportCurrentDataset(state.mergedData, state);
 }
 
-function handleExportCharts() {
+async function handleExportCharts() {
     const state = getState();
 
     if (!state.mergedData || state.mergedData.length === 0) {
@@ -1403,7 +1238,16 @@ function handleExportCharts() {
         return;
     }
 
-    exportAllAnalysisCharts('png');
+    alert('Rendering all charts before export...\n\nThis may take a few seconds.');
+
+    try {
+        await renderAllVisualizationsForReport();
+        await new Promise(resolve => setTimeout(resolve, 750));
+        exportAllAnalysisCharts('png');
+    } catch (error) {
+        console.error('Error exporting charts:', error);
+        alert(`Error exporting charts: ${error.message}`);
+    }
 }
 
 async function handleExportReport() {
@@ -1469,8 +1313,9 @@ async function renderAllVisualizationsForReport() {
 
     // 6. Comparative tab
     const comparativeResults = state.analysisResults?.comparative;
+    const gapResults = state.analysisResults?.comparativeGap?.byCountry;
     if (comparativeResults) {
-        renderAllComparativeCharts(data, comparativeResults, outcomeVar);
+        renderAllComparativeCharts(data, comparativeResults, gapResults, outcomeVar);
     }
 
     // Restore original gap granularity

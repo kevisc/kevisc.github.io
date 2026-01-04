@@ -1,4 +1,4 @@
-# Generate metadata.json for PISAapp
+# Generate metadata.json for the PISA data pipeline
 # Creates catalog of available countries, years, and variable descriptions
 # Author: Kevin Schoenholzer
 # Date: 2025-12-15
@@ -9,8 +9,9 @@ library(jsonlite)
 library(tidyr)
 
 # Configuration
-OUTPUT_FILE <- "C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/data/metadata.json"
-CHUNK_DIR <- "C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/data/country-year"
+# Expected working directory: .../pisa/pipeline/scripts
+OUTPUT_FILE <- file.path("..", "..", "data", "metadata.json")
+CHUNK_DIR <- file.path("..", "..", "data", "country-year")
 YEARS <- c(2012, 2015, 2018, 2022)
 
 cat("==================================================\n")

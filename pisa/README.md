@@ -58,7 +58,7 @@ The data generation process creates 320 country-year JSON files (~1 GB total) fr
 install.packages(c("learningtower", "dplyr", "jsonlite", "tidyr"))
 
 # Navigate to scripts directory
-setwd("path/to/kevisc.github.io/PISAapp/scripts")
+setwd("path/to/kevisc.github.io/pisa/pipeline/scripts")
 
 # Run data generation pipeline
 source("01-generate-chunks.R")   # ~15-30 minutes - generates 320 JSON files
@@ -74,7 +74,7 @@ source("03-validate-chunks.R")   # ~1-2 minutes - validates data quality
 - ✅ Total size: ~1 GB
 - ✅ Validation report in console
 
-See [PISAapp/scripts/README.md](../PISAapp/scripts/README.md) for detailed instructions.
+See [pisa/pipeline/scripts/README.md](pipeline/scripts/README.md) for detailed instructions.
 
 ### 2. Test Locally
 
@@ -111,7 +111,7 @@ Once everything works locally:
 
 ```bash
 cd path/to/kevisc.github.io
-git add pisa/ PISAapp/scripts/
+git add pisa/
 git commit -m "feat: add PISA educational inequality explorer (Phase 1-5 complete)"
 git push origin main
 ```
@@ -182,16 +182,16 @@ pisa/
 │       ├── USA_2022.json
 │       ├── DEU_2012.json
 │       └── ... (315 more files)
-└── docs/
-    ├── methodology.html            # Statistical methods & formulas
-    ├── citation.html               # How to cite this tool
-    └── data-sources.html           # PISA data overview
-
-PISAapp/scripts/                    # Data generation (run once)
-├── 01-generate-chunks.R            # Generate 320 JSON files (179 lines)
-├── 02-create-metadata.R            # Generate metadata catalog (135 lines)
-├── 03-validate-chunks.R            # Validate data quality (216 lines)
-└── README.md                       # R script documentation (125 lines)
+├── docs/
+│   ├── methodology.html            # Statistical methods & formulas
+│   ├── citation.html               # How to cite this tool
+│   └── data-sources.html           # PISA data overview
+└── pipeline/                       # Data generation (run once)
+    └── scripts/
+        ├── 01-generate-chunks.R    # Generate 320 JSON files (179 lines)
+        ├── 02-create-metadata.R    # Generate metadata catalog (135 lines)
+        ├── 03-validate-chunks.R    # Validate data quality (216 lines)
+        └── README.md               # R script documentation (125 lines)
 ```
 
 ### Data Flow
@@ -744,7 +744,7 @@ weighted.mean(data_2018$math, data_2018$w_fstuwt, na.rm = TRUE)
 
 ### R Scripts Overview
 
-Located in `PISAapp/scripts/`:
+Located in `pisa/pipeline/scripts/`:
 
 #### 1. `01-generate-chunks.R` (179 lines)
 
@@ -816,7 +816,7 @@ install.packages(c("learningtower", "dplyr", "jsonlite", "tidyr", "purrr"))
 
 ```r
 # Set working directory
-setwd("path/to/kevisc.github.io/PISAapp/scripts")
+setwd("path/to/kevisc.github.io/pisa/pipeline/scripts")
 
 # Run full pipeline
 source("01-generate-chunks.R")
@@ -901,7 +901,7 @@ Data documentation covering:
 - Development instructions
 - Troubleshooting
 
-#### R Scripts Documentation ([PISAapp/scripts/README.md](../PISAapp/scripts/README.md))
+#### R Scripts Documentation ([pisa/pipeline/scripts/README.md](pipeline/scripts/README.md))
 - Data generation pipeline
 - Script descriptions
 - Runtime expectations
@@ -1142,5 +1142,5 @@ This project is released as open source. You are free to:
 - [Methodology Documentation](docs/methodology.html)
 - [Citation Guide](docs/citation.html)
 - [Data Sources](docs/data-sources.html)
-- [R Scripts Documentation](../PISAapp/scripts/README.md)
+- [R Scripts Documentation](pipeline/scripts/README.md)
 - [Implementation Plan](../../.claude/plans/sequential-frolicking-octopus.md)

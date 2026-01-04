@@ -118,9 +118,64 @@ export function buildDesignMatrix(data, outcomeVar, predictorVar, options = {}, 
     const yearFE = options.yearFE || false;
     const controls = options.controls || [];
 
-    // Get unique levels for FEs
-    const countries = countryFE ? [...new Set(data.map(r => r.country))] : [];
-    const years = yearFE ? [...new Set(data.map(r => r.year))].sort() : [];
+    const filtered = [];
+
+    for (const record of data) {
+        const yi = Number(record[outcomeVar]);
+        const xi = Number(record[predictorVar]);
+
+        if (!Number.isFinite(yi) || !Number.isFinite(xi)) {
+            continue;
+        }
+
+        if (!record.country) {
+            continue;
+        }
+
+        if (yearFE && (record.year === undefined || record.year === null)) {
+            continue;
+        }
+
+        let genderValue = null;
+        let parentEduValue = null;
+        let skipRow = false;
+
+        for (const ctrl of controls) {
+            if (ctrl === 'gender') {
+                genderValue = parseGender(record);
+                if (genderValue === null) {
+                    skipRow = true;
+                    break;
+                }
+            } else if (ctrl === 'parent_edu') {
+                parentEduValue = parseParentEducation(record);
+                if (parentEduValue === null) {
+                    skipRow = true;
+                    break;
+                }
+            }
+        }
+
+        if (skipRow) {
+            continue;
+        }
+
+        filtered.push({
+            record,
+            yi,
+            xi,
+            genderValue,
+            parentEduValue
+        });
+    }
+
+    // Get unique levels for FEs from filtered data
+    const countries = countryFE
+        ? [...new Set(filtered.map(d => d.record.country).filter(Boolean))].sort()
+        : [];
+    const years = yearFE
+        ? [...new Set(filtered.map(d => d.record.year).filter(v => v !== undefined && v !== null))].sort((a, b) => a - b)
+        : [];
 
     // Build variable names
     const varNames = ['Intercept', predictorVar];
@@ -153,50 +208,37 @@ export function buildDesignMatrix(data, outcomeVar, predictorVar, options = {}, 
     const w = [];
     const groupIndex = []; // For multilevel models
 
-    data.forEach(d => {
-        const yi = +d[outcomeVar];
-        const xi = +d[predictorVar];
-
-        if (!isFinite(yi) || !isFinite(xi)) return;
-
-        const rowX = [1, xi]; // Intercept and main predictor
+    for (const row of filtered) {
+        const rowX = [1, row.xi]; // Intercept and main predictor
 
         // Country FEs
         if (countryFE && countries.length > 1) {
             for (let i = 1; i < countries.length; i++) {
-                rowX.push(d.country === countries[i] ? 1 : 0);
+                rowX.push(row.record.country === countries[i] ? 1 : 0);
             }
         }
 
         // Year FEs
         if (yearFE && years.length > 1) {
             for (let i = 1; i < years.length; i++) {
-                rowX.push(d.year === years[i] ? 1 : 0);
+                rowX.push(row.record.year === years[i] ? 1 : 0);
             }
         }
 
         // Control variables
-        controls.forEach(ctrl => {
+        for (const ctrl of controls) {
             if (ctrl === 'gender') {
-                // Convert gender to 0/1 (0=male, 1=female)
-                const gender = parseGender(d);
-                if (gender !== null) {
-                    rowX.push(gender);
-                } else {
-                    return; // Skip row if gender is missing
-                }
+                rowX.push(row.genderValue);
             } else if (ctrl === 'parent_edu') {
-                // Use mother education or composite
-                const parentEdu = +d.mother_educ || +d.parent_edu || 0;
-                rowX.push(parentEdu);
+                rowX.push(row.parentEduValue);
             }
-        });
+        }
 
         X.push(rowX);
-        y.push(yi);
-        w.push(getWeight(d, weightType));
-        groupIndex.push(d.country); // For multilevel models
-    });
+        y.push(row.yi);
+        w.push(getWeight(row.record, weightType));
+        groupIndex.push(row.record.country); // For multilevel models
+    }
 
     return {
         X,
@@ -228,6 +270,10 @@ export function runPooledOLS(data, outcomeVar, predictorVar, controls = [], weig
     }
 
     const fit = weightedOLS(dm.y, dm.X, dm.w);
+    if (!fit?.beta || fit.beta.some(b => !Number.isFinite(b))) {
+        console.warn('Pooled OLS failed: non-finite coefficients');
+        return null;
+    }
 
     return {
         modelName: 'OLS (Pooled)',
@@ -269,6 +315,10 @@ export function runFixedEffects(data, outcomeVar, predictorVar, controls = [], w
     }
 
     const fit = weightedOLS(dm.y, dm.X, dm.w);
+    if (!fit?.beta || fit.beta.some(b => !Number.isFinite(b))) {
+        console.warn('Fixed effects regression failed: non-finite coefficients');
+        return null;
+    }
 
     // Calculate within and between R²
     const { r2Within, r2Between } = calculateRsquaredComponents(data, fit.residuals, fit.yhat, dm.groupIndex);
@@ -322,6 +372,10 @@ export function runRandomEffects(data, outcomeVar, predictorVar, controls = [], 
     const { yStar, XStar } = quasiDemeanRE(dm.y, dm.X, groups, dm.groupIndex, icc, totalVar);
 
     const fit = weightedOLS(yStar, XStar, dm.w);
+    if (!fit?.beta || fit.beta.some(b => !Number.isFinite(b))) {
+        console.warn('Random effects regression failed: non-finite coefficients');
+        return null;
+    }
 
     return {
         modelName: `Random Effects (Country-intercept${includeYearFE ? ' + Year FE' : ''})`,
@@ -517,6 +571,24 @@ function parseGender(record) {
         const s = String(v).toLowerCase();
         if (s.startsWith('f')) return 1;
         if (s.startsWith('m')) return 0;
+    }
+
+    return null;
+}
+
+/**
+ * Parse parental education as a numeric value
+ * @param {Object} record - Student record
+ * @returns {Number|null} Numeric education value or null if missing
+ */
+function parseParentEducation(record) {
+    const candidates = ['mother_educ', 'parent_edu', 'father_educ', 'PARED'];
+
+    for (const field of candidates) {
+        const value = Number(record[field]);
+        if (Number.isFinite(value)) {
+            return value;
+        }
     }
 
     return null;

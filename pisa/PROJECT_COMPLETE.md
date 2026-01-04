@@ -401,7 +401,7 @@ Ready for GitHub Pages deployment:
 1. **Commit All Files:**
 ```bash
 cd C:\Users\Kevin\Documents\GitHub\kevisc.github.io
-git add pisa/ PISAapp/scripts/
+git add pisa/
 git commit -m "feat: add PISA educational inequality explorer (Phase 1-5 complete)
 
 Phase 1: Data Pipeline

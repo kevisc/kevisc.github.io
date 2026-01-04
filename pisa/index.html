@@ -200,21 +200,6 @@
                 <div class="stat-card" style="margin-bottom: 2rem;">
                     <h3 style="font-size: 1.3rem; margin-bottom: 1.5rem; color: var(--primary-color);">⚙️ Analysis Parameters</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
-                        <!-- Analysis Type -->
-                        <div class="control-group">
-                            <label style="font-size: 1.05rem; font-weight: 600;">Analysis Type</label>
-                            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem;">
-                                <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--background); transition: background 0.2s;">
-                                    <input type="radio" name="analysis-type" value="pooled" id="analysis-pooled" checked>
-                                    <span>Pooled (combine all data)</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer; padding: 0.5rem; border-radius: 6px; background: var(--background); transition: background 0.2s;">
-                                    <input type="radio" name="analysis-type" value="separate" id="analysis-separate">
-                                    <span>Separate (by country-year)</span>
-                                </label>
-                            </div>
-                        </div>
-
                         <!-- Outcome Variable -->
                         <div class="control-group">
                             <label for="outcome" style="font-size: 1.05rem; font-weight: 600;">Outcome Variable</label>
@@ -583,6 +568,16 @@
                         <strong>Calculation:</strong> Survey-weighted mean achievement for each country-year combination.
                     </p>
                     <div id="country-comparison"></div>
+                </div>
+
+                <div style="margin-bottom: 3rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">SES Achievement Gap Comparison</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this shows:</strong> Combined bar/line chart comparing Q4–Q1 SES achievement gaps across countries.
+                        Bars show raw score gaps; the line overlays standardized effect sizes (Cohen's d).<br>
+                        <strong>Interpretation:</strong> Larger gaps and higher effect sizes indicate stronger socioeconomic stratification in achievement.
+                    </p>
+                    <div id="gap-comparison"></div>
                 </div>
 
                 <div style="margin-bottom: 2rem;">

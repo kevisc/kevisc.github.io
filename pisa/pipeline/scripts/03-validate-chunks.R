@@ -7,8 +7,9 @@ library(jsonlite)
 library(dplyr)
 
 # Configuration
-CHUNK_DIR <- "C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/data/country-year"
-METADATA_FILE <- "C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/data/metadata.json"
+# Expected working directory: .../pisa/pipeline/scripts
+CHUNK_DIR <- file.path("..", "..", "data", "country-year")
+METADATA_FILE <- file.path("..", "..", "data", "metadata.json")
 YEARS <- c(2012, 2015, 2018, 2022)
 
 # Validation results

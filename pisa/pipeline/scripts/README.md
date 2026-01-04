@@ -26,7 +26,7 @@ source("01-generate-chunks.R")
 - Loads PISA data for years 2012, 2015, 2018, 2022 from learningtower package
 - Creates separate JSON file for each country-year
 - Includes all available variables from learningtower
-- Saves files to: `../pisa/data/country-year/`
+- Saves files to: `../../data/country-year/`
 
 **Expected output:**
 - ~320 JSON files (2-5 MB each)
@@ -51,7 +51,7 @@ source("02-create-metadata.R")
 - Creates metadata.json with data catalog
 
 **Expected output:**
-- `../pisa/data/metadata.json` (~20-50 KB)
+- `../../data/metadata.json` (~20-50 KB)
 - Summary of countries, years, variables
 
 **Time to complete:** ~1-2 minutes

@@ -87,9 +87,14 @@ export function exportAllVisibleCharts(format = 'png') {
         return;
     }
 
-    // Find all divs that contain Plotly charts
-    const allDivs = tabContent.querySelectorAll('[id*="chart"], [id*="-plot"], [id*="-curve"]');
-    const chartDivs = Array.from(allDivs).filter(div => div.data && div.data.length > 0);
+    // Find all Plotly chart containers
+    let chartDivs = Array.from(tabContent.querySelectorAll('.js-plotly-plot'))
+        .filter(div => div.data && div.data.length > 0);
+
+    if (chartDivs.length === 0) {
+        const fallbackDivs = tabContent.querySelectorAll('[id*="chart"], [id*="-plot"], [id*="-curve"], [id*="-map"]');
+        chartDivs = Array.from(fallbackDivs).filter(div => div.data && div.data.length > 0);
+    }
 
     if (chartDivs.length === 0) {
         console.warn('No charts found in active tab');
@@ -152,9 +157,20 @@ export function exportAllAnalysisCharts(format = 'png') {
         'distribution-chart',
         'percentile-chart',
         'lorenz-curve',
-        'regression-plot',
+        'gap-plot',
+        'regression-scatter',
+        'coefficient-plot',
+        'residual-plot-ols',
+        'residual-plot-fe',
+        'residual-plot-re',
+        'qq-plot-ols',
+        'qq-plot-fe',
+        'qq-plot-re',
+        'decomposition-chart',
+        'world-map',
+        'temporal-trends',
         'country-comparison',
-        'decomposition-chart'
+        'gap-comparison'
     ];
 
     // Filter to only charts that exist and have data
@@ -209,7 +225,10 @@ export async function getChartAsBase64PNG(chartDivId, width = 800, height = 600)
  * Add download buttons to all chart containers
  */
 export function addDownloadButtonsToCharts() {
-    const chartDivs = document.querySelectorAll('[id*="chart"], [id*="-plot"], [id*="-curve"]');
+    let chartDivs = Array.from(document.querySelectorAll('.js-plotly-plot'));
+    if (chartDivs.length === 0) {
+        chartDivs = Array.from(document.querySelectorAll('[id*="chart"], [id*="-plot"], [id*="-curve"], [id*="-map"]'));
+    }
 
     chartDivs.forEach(chartDiv => {
         // Check if chart has Plotly data

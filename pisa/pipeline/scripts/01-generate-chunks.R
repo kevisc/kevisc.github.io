@@ -1,4 +1,4 @@
-# Generate Country-Year Data Chunks for PISAapp
+# Generate Country-Year Data Chunks for the PISA data pipeline
 # Creates individual JSON files for each country-year combination
 # Author: Kevin Schoenholzer
 # Date: 2025-12-15
@@ -9,7 +9,8 @@ library(jsonlite)
 library(tidyr)
 
 # Configuration
-OUTPUT_DIR <- "C:/Users/Kevin/Documents/GitHub/kevisc.github.io/pisa/data/country-year"
+# Expected working directory: .../pisa/pipeline/scripts
+OUTPUT_DIR <- file.path("..", "..", "data", "country-year")
 # Include all PISA assessment cycles from 2000-present
 YEARS <- c(2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022)
 
