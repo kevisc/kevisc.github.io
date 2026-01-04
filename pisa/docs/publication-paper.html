@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Educational Inequality Data Explorer - Publication Paper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.8;
+            color: #1e293b;
+            background: #f8fafc;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 980px;
+            margin: 0 auto;
+            background: white;
+            padding: 3rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            color: #0f172a;
+            font-size: 2.35rem;
+            margin-bottom: 1rem;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 0.75rem;
+        }
+        h2 {
+            color: #1e293b;
+            font-size: 1.75rem;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        h3 {
+            color: #334155;
+            font-size: 1.35rem;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+        }
+        h4 {
+            color: #334155;
+            font-size: 1.1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            margin-bottom: 1rem;
+            color: #475569;
+            text-align: justify;
+        }
+        ul, ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+            color: #475569;
+        }
+        li {
+            margin-bottom: 0.5rem;
+        }
+        .metadata {
+            background: #f1f5f9;
+            border-radius: 6px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+            color: #475569;
+        }
+        .abstract {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            border-radius: 6px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .abstract strong {
+            color: #1e40af;
+        }
+        .keywords {
+            font-size: 0.95rem;
+            color: #475569;
+            margin-top: 0.75rem;
+        }
+        .figure {
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .figure img {
+            max-width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+        }
+        .figure-caption {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 0.75rem;
+        }
+        .callout {
+            background: #f8fafc;
+            border-left: 4px solid #64748b;
+            border-radius: 6px;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+            color: #475569;
+        }
+        .formula {
+            background: #f1f5f9;
+            padding: 1.25rem;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+            border-left: 4px solid #3b82f6;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 0.75rem 1.5rem;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .back-link:hover {
+            background: #2563eb;
+        }
+        a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .reference {
+            font-size: 0.92rem;
+            color: #64748b;
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+            text-indent: -1.5rem;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .link-list {
+            margin-top: 0.75rem;
+        }
+        .link-list li {
+            margin-bottom: 0.4rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Educational Inequality Data Explorer: A Web-Based Methodological Application for PISA Microdata</h1>
+
+        <div class="metadata">
+            <p><strong>Author:</strong> Kevin Schoenholzer</p>
+            <p><strong>Affiliation:</strong> Independent Researcher</p>
+            <p><strong>Correspondence:</strong> kevinschoenholzer.com</p>
+            <p><strong>Date:</strong> 2026-01-04</p>
+        </div>
+
+        <div class="abstract">
+            <p><strong>Abstract.</strong> This paper introduces the Educational Inequality Data Explorer, a browser-based analytical application for the OECD Programme for International Student Assessment (PISA) microdata. The tool operationalizes standard inequality metrics, survey-weighted regression models, and variance decomposition techniques in a transparent and reproducible workflow. It is designed for researchers and practitioners who require rigorous, auditable analysis without the overhead of bespoke statistical programming for each project. We document methodological choices, model specifications, weighting conventions, and data-handling procedures, and we provide direct links to technical appendices and documentation to support replication. The application includes structured exports for publication-ready tables and figures, enabling rapid academic dissemination while preserving methodological fidelity.</p>
+            <p class="keywords"><strong>Keywords:</strong> educational inequality, PISA, survey weighting, regression, variance decomposition, web-based analytics, reproducibility</p>
+        </div>
+
+        <h2>1. Introduction</h2>
+        <p>Large-scale assessment data provide an unparalleled opportunity to study educational inequality within and across countries. However, the technical barrier to entry remains high due to complex survey designs, the need for transparent weighting conventions, and the burden of repeated, customized analysis for different outcomes and sample definitions. The Educational Inequality Data Explorer addresses this gap by providing a validated, browser-based analytical environment that adheres to OECD documentation standards while prioritizing interpretability and reproducibility.</p>
+        <p>This paper positions the application as a methodological contribution. It details the analytic pipeline, statistical procedures, and implementation decisions that shape each output in the interface. The paper also documents design constraints, trade-offs, and limitations to ensure that results are appropriately interpreted and replicated.</p>
+
+        <div class="figure">
+            <img src="images/pisa-app-screenshot.png" alt="Educational Inequality Data Explorer interface screenshot">
+            <div class="figure-caption">Figure 1. The Educational Inequality Data Explorer interface. The application provides modular analysis tabs and export tools for publication-quality outputs.</div>
+        </div>
+
+        <h2>2. Data and Coverage</h2>
+        <p>The application uses student-level microdata from the OECD PISA program. The default deployment includes cycles 2012, 2015, 2018, and 2022. The data pipeline supports earlier cycles (2000-2009) when generated via the included scripts. Data are accessed through the <code>learningtower</code> R package, which harmonizes variable naming conventions and coding across cycles.</p>
+        <ul class="link-list">
+            <li><a href="data-sources.html">Detailed data sources and variable documentation</a></li>
+            <li><a href="methodology.html">Full methodology and technical documentation</a></li>
+        </ul>
+
+        <h3>2.1 Sample Construction</h3>
+        <p>Data are stored in country-year JSON chunks. When users select a set of countries and years, only the corresponding subsets are loaded, reducing memory use and preserving interactivity. Students are retained if they have finite values for the selected outcome and predictor variables, as well as any selected controls. Records with missing values in required fields are excluded via listwise deletion to preserve consistent sample definitions across models.</p>
+
+        <h3>2.2 Key Variables</h3>
+        <p>The primary outcome variables are PISA achievement scores in mathematics, reading, and science. The primary stratification variable is ESCS (Economic, Social, and Cultural Status). Parental education and gender are supported as optional control variables. The application uses the first plausible value for each achievement domain for tractability; this choice is documented as a limitation and can be extended to multiple plausible values in future releases.</p>
+
+        <h2>3. Statistical Methods</h2>
+        <p>All analyses conform to standard definitions used in educational inequality research. The application exposes these methods through modular tabs that compute summary statistics, inequality measures, regression models, and diagnostic checks.</p>
+
+        <h3>3.1 Survey Weighting</h3>
+        <p>By default, all descriptive and regression statistics use the student sampling weight (W_FSTUWT). Users may optionally select the senate weight (W_FSENWT) for alternative estimands. Results are computed as weighted quantities, with safeguards against non-positive or non-finite weights.</p>
+
+        <div class="formula">
+Weighted mean:
+  mu = sum(w_i * y_i) / sum(w_i)
+
+Weighted variance:
+  var = sum(w_i * (y_i - mu)^2) / sum(w_i)
+        </div>
+
+        <h3>3.2 Inequality Metrics</h3>
+        <p>Within-sample inequality is summarized using the Gini coefficient, coefficient of variation, and percentile ratios. These measures are calculated on achievement scores using weighted estimates where appropriate. The Lorenz curve is plotted to contextualize Gini values.</p>
+
+        <h3>3.3 SES Gradient</h3>
+        <p>The SES gradient is computed as the slope of a weighted bivariate regression of achievement on ESCS. This coefficient is interpreted as the change in achievement (score points) associated with a one-unit increase in the ESCS index.</p>
+
+        <h3>3.4 Achievement Gap Decomposition</h3>
+        <p>The application calculates Q4-Q1 gaps by constructing SES quartiles using weighted ranks. It reports mean differences, pooled standard deviations, and Cohen's d for effect size interpretation.</p>
+
+        <h3>3.5 Regression Models</h3>
+        <p>Three model families are implemented:</p>
+        <ul>
+            <li><strong>Pooled OLS:</strong> Baseline weighted regression ignoring country clustering.</li>
+            <li><strong>Fixed Effects:</strong> Country fixed effects (and optional year fixed effects) controlling for time-invariant country heterogeneity.</li>
+            <li><strong>Random Effects:</strong> Country-level random intercepts with quasi-demeaning transformation.</li>
+        </ul>
+        <div class="formula">
+Pooled OLS:
+  y_i = beta_0 + beta_1 x_i + gamma' c_i + e_i
+
+Fixed Effects:
+  y_it = alpha_i + beta_1 x_it + gamma' c_it + e_it
+
+Random Effects:
+  y_it = beta_0 + beta_1 x_it + gamma' c_it + u_i + e_it
+        </div>
+        <p>Estimation uses weighted least squares with positive survey weights, ridge stabilization for near-singular designs, and conventional (model-based) standard errors. Fit statistics include R-squared, adjusted R-squared, AIC, and BIC. Confidence intervals are reported as coefficient plus or minus 1.96 standard errors.</p>
+        <p>Model diagnostics include residual plots, Q-Q plots, and Hausman tests when both FE and RE models are available. A small ridge term stabilizes near-singular designs arising from many fixed effects.</p>
+
+        <h3>3.6 Variance Decomposition</h3>
+        <p>Variance is partitioned into within- and between-country components using one-way ANOVA. The intraclass correlation coefficient (ICC) reports the proportion of variance attributable to country-level clustering.</p>
+
+        <h2>4. Implementation Architecture</h2>
+        <p>The application is implemented as a modular ES6 JavaScript codebase and a set of R scripts that generate data chunks and metadata. The pipeline produces a metadata catalog listing countries, years, and variables, which drives the user interface and data loading flow. All statistical computations are performed in the browser, preserving user control and data privacy once the files are loaded locally.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>Purpose</th>
+                    <th>Reference</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Data generation scripts</td>
+                    <td>Extract and chunk country-year microdata</td>
+                    <td><a href="../pipeline/scripts/README.md">Pipeline scripts</a></td>
+                </tr>
+                <tr>
+                    <td>Methodology appendix</td>
+                    <td>Formal statistical definitions and formulas</td>
+                    <td><a href="methodology.html">Methodology document</a></td>
+                </tr>
+                <tr>
+                    <td>Data sources</td>
+                    <td>Variable provenance and coverage</td>
+                    <td><a href="data-sources.html">Data sources document</a></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>5. Validation and Quality Assurance</h2>
+        <p>Data integrity is verified via automated validation scripts that check for missing files, inconsistent record counts, and malformed JSON. Model outputs are bounded and checked for non-finite values to prevent erroneous reporting. Diagnostic plots are sampled to limit performance bottlenecks while preserving distributional structure.</p>
+
+        <div class="callout">
+            <strong>Reproducibility note:</strong> The application exports all intermediate outputs (CSV tables, PNG/SVG figures, and HTML reports). These exports encode the selected countries, years, outcome variables, predictor variables, control choices, and weighting schemes at the time of analysis.
+        </div>
+
+        <h2>6. Interpretation and Use Cases</h2>
+        <p>The tool is designed for academic briefs, policy reports, and exploratory research. Users can benchmark achievement gaps across countries, compare model specifications, or evaluate how SES gradients evolve across cycles. All results should be interpreted as descriptive associations rather than causal effects.</p>
+
+        <h2>7. Limitations</h2>
+        <ul>
+            <li>Only the first plausible value is used in the current implementation.</li>
+            <li>Replicate weights are not yet implemented; inference should be treated as approximate.</li>
+            <li>Listwise deletion may bias results if missingness is not random.</li>
+            <li>Cross-sectional PISA data do not support causal inference.</li>
+        </ul>
+
+        <h2>8. Availability and Citation</h2>
+        <p>The application and data pipeline are open source and available through the project repository. Citation guidance is provided in the linked documentation.</p>
+        <ul class="link-list">
+            <li><a href="../index.html">Educational Inequality Data Explorer</a></li>
+            <li><a href="citation.html">Citation guidelines</a></li>
+            <li><a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank">Source code repository</a></li>
+        </ul>
+
+        <h2>9. References</h2>
+        <p class="reference">OECD (2009). PISA 2009 Technical Report. Organisation for Economic Co-operation and Development.</p>
+        <p class="reference">OECD (2017). PISA 2015 Technical Report. Organisation for Economic Co-operation and Development.</p>
+        <p class="reference">OECD (2019). PISA 2018 Technical Report. Organisation for Economic Co-operation and Development.</p>
+        <p class="reference">OECD (2023). PISA 2022 Technical Report. Organisation for Economic Co-operation and Development.</p>
+        <p class="reference">Rubin, D. B. (1987). Multiple Imputation for Nonresponse in Surveys. Wiley.</p>
+        <p class="reference">Vaughan, E., Fung, K., Cook, D., & Wickham, H. (2021). learningtower: OECD PISA Datasets from 2000-2022 in an Easy-to-Use Format. R package.</p>
+
+        <a class="back-link" href="../index.html">Back to Application</a>
+    </div>
+</body>
+</html>
