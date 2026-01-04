@@ -685,98 +685,112 @@
                     Comprehensive documentation on methodology, data sources, citation guidelines, and source code.
                 </p>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; margin-top: 2rem;">
+                <div class="doc-grid">
                     <!-- Data Source Card -->
-                    <div class="stat-card">
-                        <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📊 Data Sources</h3>
-                        <div style="margin-bottom: 1.5rem;">
-                            <p style="margin-bottom: 1rem;"><strong>Primary Source:</strong></p>
-                            <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    <div class="stat-card doc-card">
+                        <h3>📊 Data Sources</h3>
+                        <div class="doc-card-body">
+                            <p><strong>Primary Source:</strong></p>
+                            <p>
                                 OECD (2023). PISA Database<br>
                                 <small>Programme for International Student Assessment</small>
                             </p>
-                            <p style="margin-top: 1rem;"><strong>R Package:</strong></p>
-                            <p style="color: var(--text-secondary);">
+                            <p><strong>R Package:</strong></p>
+                            <p>
                                 Vaughan, E., Fung, K., Cook, D., & Wickham, H. (2021).<br>
                                 <em>learningtower</em>: OECD PISA Datasets from 2000-2018 in an Easy-to-Use Format
                             </p>
                         </div>
-                        <a href="docs/data-sources.html" class="btn btn-secondary" style="width: 100%; text-align: center; text-decoration: none;">
-                            📖 View Full Data Documentation
-                        </a>
+                        <div class="doc-card-footer">
+                            <a href="docs/data-sources.html" class="btn btn-secondary">
+                                📖 View Full Data Documentation
+                            </a>
+                        </div>
                     </div>
 
                     <!-- Methodology Card -->
-                    <div class="stat-card">
-                        <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📐 Methodology</h3>
-                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                            Comprehensive documentation of statistical methods, including:
-                        </p>
-                        <ul style="color: var(--text-secondary); margin-bottom: 1.5rem; padding-left: 1.5rem;">
-                            <li>Survey-weighted regression (OLS, FE, RE)</li>
-                            <li>Variance decomposition analysis</li>
-                            <li>Achievement gap calculations</li>
-                            <li>Inequality measures (Gini coefficient)</li>
-                            <li>Diagnostic procedures and assumptions</li>
-                        </ul>
-                        <a href="docs/methodology.html" class="btn btn-secondary" style="width: 100%; text-align: center; text-decoration: none;">
-                            📖 View Methodology Guide
-                        </a>
+                    <div class="stat-card doc-card">
+                        <h3>📐 Methodology</h3>
+                        <div class="doc-card-body">
+                            <p>Comprehensive documentation of statistical methods, including:</p>
+                            <ul class="doc-list">
+                                <li>Survey-weighted regression (OLS, FE, RE)</li>
+                                <li>Variance decomposition analysis</li>
+                                <li>Achievement gap calculations</li>
+                                <li>Inequality measures (Gini coefficient)</li>
+                                <li>Diagnostic procedures and assumptions</li>
+                            </ul>
+                        </div>
+                        <div class="doc-card-footer">
+                            <a href="docs/methodology.html" class="btn btn-secondary">
+                                📖 View Methodology Guide
+                            </a>
+                        </div>
                     </div>
 
                     <!-- Citation Card -->
-                    <div class="stat-card">
-                        <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📝 How to Cite</h3>
-                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                            Citation guidelines for academic publications, presentations, and reports.
-                        </p>
-                        <div style="background: var(--code-bg); padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; font-family: monospace; font-size: 0.85rem; color: var(--text-secondary);">
+                    <div class="stat-card doc-card">
+                        <h3>📝 How to Cite</h3>
+                        <div class="doc-card-body">
+                            <p>Citation guidelines for academic publications, presentations, and reports.</p>
+                            <div class="doc-callout">
                             Schoenholzer, K. (2025).<br>
                             Educational Inequality Data Explorer.<br>
                             GitHub: kevisc/kevisc.github.io
+                            </div>
                         </div>
-                        <a href="docs/citation.html" class="btn btn-secondary" style="width: 100%; text-align: center; text-decoration: none;">
-                            📖 View Citation Guidelines
-                        </a>
+                        <div class="doc-card-footer">
+                            <a href="docs/citation.html" class="btn btn-secondary">
+                                📖 View Citation Guidelines
+                            </a>
+                        </div>
                     </div>
 
                     <!-- Source Code Card -->
-                    <div class="stat-card">
-                        <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">💻 Source Code</h3>
-                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                            Full source code is available on GitHub under an open-source license.
-                        </p>
-                        <ul style="color: var(--text-secondary); margin-bottom: 1.5rem; padding-left: 1.5rem;">
-                            <li>JavaScript ES6 modules</li>
-                            <li>R data processing scripts</li>
-                            <li>Plotly.js visualizations</li>
-                            <li>Survey-weighted statistical functions</li>
-                        </ul>
-                        <a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank" class="btn btn-secondary" style="width: 100%; text-align: center; text-decoration: none;">
-                            🔗 View on GitHub
-                        </a>
+                    <div class="stat-card doc-card">
+                        <h3>💻 Source Code</h3>
+                        <div class="doc-card-body">
+                            <p>Full source code is available on GitHub under an open-source license.</p>
+                            <ul class="doc-list">
+                                <li>JavaScript ES6 modules</li>
+                                <li>R data processing scripts</li>
+                                <li>Plotly.js visualizations</li>
+                                <li>Survey-weighted statistical functions</li>
+                            </ul>
+                        </div>
+                        <div class="doc-card-footer">
+                            <a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank" class="btn btn-secondary">
+                                🔗 View on GitHub
+                            </a>
+                        </div>
                     </div>
 
                     <!-- Key References Card -->
-                    <div class="stat-card" style="grid-column: span 2;">
-                        <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📚 Key References</h3>
-                        <div style="color: var(--text-secondary); line-height: 1.8;">
-                            <p><strong>Social Stratification Theory:</strong></p>
-                            <p style="margin-left: 1rem; margin-bottom: 1rem;">
-                                • Bourdieu, P., & Passeron, J. C. (1977). <em>Reproduction in Education, Society and Culture</em>.<br>
-                                • Coleman, J. S., et al. (1966). <em>Equality of Educational Opportunity</em>.
-                            </p>
+                    <div class="stat-card doc-card doc-card-wide">
+                        <h3>📚 Key References</h3>
+                        <div class="doc-card-body">
+                            <div class="doc-card-section">
+                                <div class="doc-card-subtitle">Social Stratification Theory</div>
+                                <ul class="doc-list">
+                                    <li>Bourdieu, P., & Passeron, J. C. (1977). <em>Reproduction in Education, Society and Culture</em>.</li>
+                                    <li>Coleman, J. S., et al. (1966). <em>Equality of Educational Opportunity</em>.</li>
+                                </ul>
+                            </div>
 
-                            <p><strong>Achievement Gap Analysis:</strong></p>
-                            <p style="margin-left: 1rem; margin-bottom: 1rem;">
-                                • Reardon, S. F. (2011). The widening academic achievement gap between the rich and the poor. <em>Community Investments, 23</em>(2), 19-39.<br>
-                                • Chmielewski, A. K. (2019). The global increase in the socioeconomic achievement gap, 1964 to 2015. <em>American Sociological Review, 84</em>(3), 517-544.
-                            </p>
+                            <div class="doc-card-section">
+                                <div class="doc-card-subtitle">Achievement Gap Analysis</div>
+                                <ul class="doc-list">
+                                    <li>Reardon, S. F. (2011). The widening academic achievement gap between the rich and the poor. <em>Community Investments, 23</em>(2), 19-39.</li>
+                                    <li>Chmielewski, A. K. (2019). The global increase in the socioeconomic achievement gap, 1964 to 2015. <em>American Sociological Review, 84</em>(3), 517-544.</li>
+                                </ul>
+                            </div>
 
-                            <p><strong>Technical Standards:</strong></p>
-                            <p style="margin-left: 1rem;">
-                                • OECD (2023). <em>PISA 2022 Technical Report</em>. Paris: OECD Publishing.
-                            </p>
+                            <div class="doc-card-section">
+                                <div class="doc-card-subtitle">Technical Standards</div>
+                                <ul class="doc-list">
+                                    <li>OECD (2023). <em>PISA 2022 Technical Report</em>. Paris: OECD Publishing.</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
