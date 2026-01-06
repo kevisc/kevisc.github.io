@@ -286,6 +286,12 @@ function onTabSwitch(tabName) {
 function initEventListeners() {
     // Load data button
     const loadDataBtn = document.getElementById('load-data-btn');
+    const loadCompleteMessage = document.getElementById('loading-complete-message');
+
+    if (loadCompleteMessage) {
+        loadCompleteMessage.style.display = 'none';
+        loadCompleteMessage.textContent = '';
+    }
     if (loadDataBtn) {
         loadDataBtn.addEventListener('click', handleLoadData);
     }
@@ -419,6 +425,12 @@ async function handleLoadData() {
     }
 
     const loadDataBtn = document.getElementById('load-data-btn');
+    const loadCompleteMessage = document.getElementById('loading-complete-message');
+
+    if (loadCompleteMessage) {
+        loadCompleteMessage.style.display = 'none';
+        loadCompleteMessage.textContent = '';
+    }
 
     try {
         console.log('===========================================');
@@ -463,6 +475,11 @@ async function handleLoadData() {
              Ready to analyze! Switch to different tabs to explore the data.`,
             'success'
         );
+
+        if (loadCompleteMessage) {
+            loadCompleteMessage.textContent = 'Done loading. You can now explore the analysis tabs above.';
+            loadCompleteMessage.style.display = 'block';
+        }
 
         // Run initial analyses
         // TODO: Phase 3 - Run descriptive statistics and populate overview tab
