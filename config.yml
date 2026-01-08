@@ -18,15 +18,6 @@ menu:
         - name: Home
           url: /
           weight: 1
-        - name: Research
-          url: papers/
-          weight: 2
-        - name: Educational Statistical Apps
-          url: eduapps/
-          weight: 3
-        - name: My music
-          url: shawnholzer/
-          weight: 4
 
 params:
     description: "I am Kevin. My research interest lies in education and socioeconomic stratification using quantitative data analysis."
@@ -67,8 +58,6 @@ My research examines social stratification through quantitative analysis, modeli
               url: papers/
             - name: Educational Statistical Apps
               url: eduapps/
-            - name: My music
-              url: shawnholzer/
             # - name: Courses
             #   url: courses/
             # - name: Data
