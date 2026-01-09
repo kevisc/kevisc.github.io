@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Methodology - PISA Educational Inequality Explorer</title>
+    <title>Methodology - Educational Inequality Data Explorer (EIDE)</title>
     <style>
         * {
             margin: 0;
@@ -133,9 +133,9 @@
 <body>
     <div class="container">
         <h1>Methodology</h1>
-        <p><strong>Educational Inequality Data Explorer</strong><br>
+        <p><strong>Educational Inequality Data Explorer (EIDE)</strong><br>
         Statistical Methods and Technical Documentation</p>
-        <p>This documentation is focused on how the ESCS index (parental wealth, occupation, and education) relates to student achievement in PISA, emphasizing cross-country and over-time comparisons.</p>
+        <p>This documentation describes the statistical methods used in EIDE to study the intergenerational transmission of educational achievement—specifically, how parental characteristics (education, occupational status, and household wealth, captured through the ESCS index) relate to children's academic performance at age 15 in mathematics, reading, and science across more than 100 countries worldwide.</p>
 
         <h2>1. Data Sources</h2>
 
@@ -145,7 +145,7 @@
         <p>PISA employs a two-stage stratified sampling design. In the first stage, schools are sampled with probability proportional to size. In the second stage, students within schools are randomly selected. This design ensures representative samples of the target population in each participating country while maintaining statistical efficiency (OECD, 2017).</p>
 
         <h3>1.2 learningtower R Package</h3>
-        <p>Data are accessed via the <code>learningtower</code> R package (Vaughan et al., 2021), which provides cleaned and harmonized PISA data from 2000-2022 in an easy-to-use format. The package standardizes variable names across assessment cycles and handles missing data codes according to OECD specifications.</p>
+        <p>Data are accessed via the <code>learningtower</code> R package (Wang et al., 2024), which provides cleaned and harmonized PISA data from 2000-2022 in an easy-to-use format. The package standardizes variable names across assessment cycles and handles missing data codes according to OECD specifications.</p>
 
         <h3>1.3 Assessment Cycles</h3>
         <p>The current implementation includes data from eight PISA cycles:</p>
@@ -171,15 +171,15 @@
 
         <p>Achievement scores are scaled to have an international mean of 500 and standard deviation of 100 in the first assessment cycle when a domain was the major focus.</p>
 
-        <h3>2.2 Economic, Social and Cultural Status (ESCS)</h3>
-        <p>The ESCS index is PISA's composite measure of socioeconomic status. It is derived from three components:</p>
+        <h3>2.2 Economic, Social and Cultural Status (ESCS): Measuring Family Background</h3>
+        <p>The ESCS index is PISA's composite measure of family socioeconomic status—the primary variable for studying intergenerational transmission of educational achievement. It captures how parental characteristics relate to children's outcomes through three components:</p>
         <ol>
-            <li><strong>Highest parental occupation (HISEI):</strong> International Socio-Economic Index of Occupational Status</li>
-            <li><strong>Highest parental education (PARED):</strong> Number of years of schooling</li>
-            <li><strong>Home possessions (HOMEPOS):</strong> Wealth, cultural possessions, and home educational resources</li>
+            <li><strong>Highest parental occupation (HISEI):</strong> International Socio-Economic Index of Occupational Status, measuring the occupational prestige and economic rewards associated with parents' jobs. Based on the International Standard Classification of Occupations (ISCO).</li>
+            <li><strong>Highest parental education (PARED):</strong> Years of schooling completed by the most educated parent, coded using ISCED (International Standard Classification of Education) levels.</li>
+            <li><strong>Home possessions (HOMEPOS):</strong> An index of household wealth, cultural possessions (books, art), and home educational resources (desk, computer, internet access). This captures both material resources and cultural capital available to the student.</li>
         </ol>
 
-        <p>These components are combined using principal components analysis and standardized to have an OECD mean of 0 and standard deviation of 1 (OECD, 2017).</p>
+        <p>These components are combined using principal components analysis and standardized to have an OECD mean of 0 and standard deviation of 1 (OECD, 2017). When analyzing ESCS gradients or quartile gaps, researchers are directly measuring the strength of intergenerational transmission—how strongly these parental characteristics predict their children's academic performance at age 15.</p>
 
         <div class="formula">
 ESCS<sub>i</sub> = PCA(HISEI<sub>i</sub>, PARED<sub>i</sub>, HOMEPOS<sub>i</sub>)
@@ -244,10 +244,11 @@ where:
 
         <p>Weighted quantiles are computed by sorting observations by achievement score and finding the value at which the cumulative sum of weights reaches the target percentile times the total weight.</p>
 
-        <h3>3.2 Inequality Measures</h3>
+        <h3>3.2 Distributional Measures</h3>
+        <p>These measures summarize the spread of achievement distributions within countries. While not direct measures of intergenerational transmission, they provide context for understanding achievement variation and can be compared across countries and over time.</p>
 
         <h4>Gini Coefficient</h4>
-        <p>The Gini coefficient measures inequality in achievement distribution, ranging from 0 (perfect equality) to 1 (maximum inequality). For a sorted vector of achievement scores:</p>
+        <p>The Gini coefficient measures dispersion in achievement distribution, ranging from 0 (all students have identical scores) to 1 (maximum dispersion). For a sorted vector of achievement scores:</p>
 
         <div class="formula">
 G = [2 · Σ(i · y<sub>i</sub>)] / (n · Σ y<sub>i</sub>) - (n + 1) / n
@@ -271,17 +272,20 @@ where σ is standard deviation and μ is mean
 P90/P10 = Q<sub>0.90</sub> / Q<sub>0.10</sub>
         </div>
 
-        <h3>3.3 SES Gradient</h3>
-        <p>The SES gradient (β) measures how much achievement increases per unit increase in socioeconomic status. It is the slope from a simple bivariate regression:</p>
+        <h3>3.3 ESCS Gradient: The Core Measure of Intergenerational Transmission</h3>
+        <p>The ESCS gradient (β) is the central statistic for quantifying intergenerational transmission of educational achievement. It measures how many score points of achievement are associated with a one-unit increase in family socioeconomic status—directly capturing how strongly parental education, occupation, and wealth predict children's academic outcomes. It is the slope from a weighted bivariate regression:</p>
 
         <div class="formula">
 Y<sub>i</sub> = α + β · ESCS<sub>i</sub> + ε<sub>i</sub>
 
 where:
-  Y<sub>i</sub> = achievement score
-  ESCS<sub>i</sub> = socioeconomic status index
-  β = SES gradient (score points per 1-unit increase in ESCS)
+  Y<sub>i</sub> = achievement score (math, reading, or science)
+  ESCS<sub>i</sub> = family socioeconomic status index
+  β = ESCS gradient (intergenerational transmission coefficient)
   ε<sub>i</sub> = residual error
+
+A larger β indicates stronger intergenerational transmission—children's
+achievement is more strongly predicted by their parents' characteristics.
         </div>
 
         <p>The weighted least squares estimator is:</p>
@@ -401,8 +405,8 @@ where:
 
         <p>The ICC represents the proportion of total variance in achievement that is due to differences between countries. An ICC of 0.15 means 15% of variance is between countries and 85% is within countries.</p>
 
-        <h3>3.7 Achievement Gap Decomposition</h3>
-        <p>Achievement gaps are calculated by comparing students in different SES quartiles:</p>
+        <h3>3.7 ESCS Quartile Gaps: Family Background Differences in Achievement</h3>
+        <p>Quartile gaps provide an intuitive measure of intergenerational transmission by comparing achievement between students from different family backgrounds. The Q4–Q1 gap shows the score-point difference between children from the most advantaged (top ESCS quartile) versus least advantaged (bottom ESCS quartile) families:</p>
 
         <div class="formula">
 Gap (Q4-Q1) = Ȳ<sub>Q4</sub> - Ȳ<sub>Q1</sub>
@@ -433,7 +437,7 @@ where:
 
         <h3>4.1 Causal Inference</h3>
         <div class="warning">
-            <strong>Important:</strong> PISA is a cross-sectional observational study. All analyses report <em>associations</em>, not causal effects. The SES gradient shows correlation between socioeconomic status and achievement, but does not prove that SES causes differences in achievement. Unmeasured confounders (e.g., genetic factors, peer effects, school quality) may explain observed associations.
+            <strong>Important:</strong> PISA is a cross-sectional observational study. All analyses report <em>associations</em>, not causal effects. The ESCS gradient measures how strongly parental characteristics (education, occupation, wealth) predict children's achievement at age 15, but does not prove that family background causes differences in achievement. Unmeasured confounders (e.g., genetic factors, peer effects, school quality, neighborhood characteristics) may explain observed associations. ESCS gradients should be interpreted as descriptive measures of intergenerational transmission patterns, not as causal estimates of the effect of changing family socioeconomic status.
         </div>
 
         <h3>4.2 Missing Data</h3>
@@ -495,6 +499,10 @@ Cohen, J. (1988). <em>Statistical Power Analysis for the Behavioral Sciences</em
         </div>
 
         <div class="reference">
+Mislevy, R. J., Beaton, A. E., Kaplan, B., & Sheehan, K. M. (1992). Estimating population characteristics from sparse matrix samples of item responses. <em>Journal of Educational Measurement, 29</em>(2), 133–161. https://doi.org/10.1111/j.1745-3984.1992.tb00371.x
+        </div>
+
+        <div class="reference">
 OECD (2009). <em>PISA Data Analysis Manual: SPSS, Second Edition</em>. OECD Publishing, Paris. https://doi.org/10.1787/9789264056275-en
         </div>
 
@@ -519,11 +527,19 @@ Rubin, D. B. (1987). <em>Multiple Imputation for Nonresponse in Surveys</em>. Jo
         </div>
 
         <div class="reference">
-Vaughan, B., Stanke, L., Teng, T., Hyndman, R., & O'Hara-Wild, E. (2021). <em>learningtower: OECD PISA Datasets from 2000-2018 in an Easy-to-Use Format</em> [R package version 1.0.1]. https://CRAN.R-project.org/package=learningtower
+Wang, K., Yacobellis, P., Siregar, E., Romanes, S., Fitter, K., Dalla Riva, G. V., Cook, D., Tierney, N., Dingorkar, P., Sai Subramanian, S., & Chen, G. (2024). <em>learningtower: OECD PISA datasets from 2000–2022 in an easy-to-use format</em> (R package, Version 1.1.0). https://doi.org/10.32614/CRAN.package.learningtower
         </div>
 
         <div class="reference">
 Wooldridge, J. M. (2010). <em>Econometric Analysis of Cross Section and Panel Data</em> (2nd ed.). MIT Press.
+        </div>
+
+        <div class="reference">
+Wu, M. (2005). The role of plausible values in large-scale surveys. <em>Studies in Educational Evaluation, 31</em>(2–3), 114–128. https://doi.org/10.1016/j.stueduc.2005.05.005
+        </div>
+
+        <div class="reference">
+Wuyts, C. (2024). The measurement of socio-economic status in PISA. OECD.
         </div>
 
         <a href="../index.html" class="back-link">← Back to Application</a>

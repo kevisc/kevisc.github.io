@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exploring Global Educational Inequality using PISA Data</title>
+    <title>Educational Inequality Data Explorer (EIDE) - PISA Analysis Tool</title>
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="pisa-app-icon.png">
@@ -25,8 +25,8 @@
             <div class="header-content" style="gap: 1rem;">
                 <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 60px; height: 60px; object-fit: contain;">
                 <div class="header-text">
-                    <h1>Exploring Global Educational Inequality using PISA Data</h1>
-                    <p class="subtitle">Open, reproducible analysis of PISA achievement and ESCS-based inequality across countries and cycles</p>
+                    <h1>Educational Inequality Data Explorer (EIDE)</h1>
+                    <p class="subtitle">Studying intergenerational transmission: how parental education, occupation, and wealth relate to children's achievement at age 15</p>
                 </div>
             </div>
         </div>
@@ -52,10 +52,10 @@
             <!-- Tab Content: Home (Landing Page) -->
             <div id="home" class="tab-content active">
                 <div style="text-align: center; padding: 3rem 0 2rem 0;">
-                    <h1 style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--primary-color);">Exploring Global Educational Inequality using PISA Data</h1>
+                    <h1 style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--primary-color);">Educational Inequality Data Explorer (EIDE)</h1>
                     <p style="font-size: 1.2rem; color: var(--text-secondary); max-width: 900px; margin: 0 auto 2rem auto;">
-                        Explore how socioeconomic background (ESCS) relates to student achievement in the OECD Programme for International Student Assessment (PISA).
-                        We analyze math, reading, and science performance for 15-year-old students across 101 countries and eight cycles (2000-2022) using survey-weighted methods.
+                        Explore the intergenerational transmission of educational achievement—how parental education, occupation, and wealth (captured through the ESCS index) relate to children's academic performance at age 15.
+                        Analyze math, reading, and science outcomes across 101 countries and eight PISA cycles (2000-2022) using survey-weighted methods.
                     </p>
                 </div>
 
@@ -72,7 +72,7 @@
                         <div style="font-size: 3rem; margin-bottom: 1rem;">📈</div>
                         <h3 style="color: var(--primary-color); margin-bottom: 0.75rem;">Advanced Analytics</h3>
                         <p style="color: var(--text-secondary); line-height: 1.6;">
-                            Survey-weighted regression, ESCS gradients, inequality measures, and variance decomposition aligned with OECD guidance
+                            Survey-weighted regression, ESCS gradients, distributional measures, and variance decomposition aligned with OECD guidance
                         </p>
                     </div>
                     <div class="stat-card" style="text-align: center;">
@@ -131,7 +131,7 @@
                     <h2 style="font-size: 1.8rem; margin-bottom: 1rem; color: var(--primary-color); text-align: center;">Who This Tool Is For</h2>
                     <p style="color: var(--text-secondary); line-height: 1.7; max-width: 980px; margin: 0 auto 2rem auto; text-align: center;">
                         Designed for researchers, students, educators, policy analysts, and journalists who need transparent access to PISA-based
-                        educational inequality analysis without writing bespoke code. It supports open, reproducible workflows by making the data pipeline,
+                        analysis of intergenerational transmission without writing bespoke code. It supports open, reproducible workflows by making the data pipeline,
                         methods, and exports auditable.
                     </p>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2rem;">
@@ -139,7 +139,7 @@
                             <h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">What You Can Do</h4>
                             <ul style="color: var(--text-secondary); line-height: 1.6; padding-left: 1.25rem; margin: 0;">
                                 <li>Compare ESCS achievement gradients across countries and years.</li>
-                                <li>Replicate inequality analyses and inspect modeling choices.</li>
+                                <li>Replicate intergenerational transmission analyses and inspect modeling choices.</li>
                                 <li>Generate charts, tables, and reports for publications or teaching.</li>
                             </ul>
                         </div>
@@ -357,19 +357,18 @@
 
             <!-- Tab Content: Overview -->
             <div id="overview" class="tab-content">
-                <div class="section-title">Educational Inequality Overview</div>
+                <div class="section-title">Intergenerational Transmission Overview</div>
                 <p class="description">
-                    This dashboard provides empirical analysis of educational inequalities using standardized assessment data.
+                    This dashboard examines the intergenerational transmission of educational achievement—how parental characteristics (education, occupational status, and household wealth, captured through the ESCS index) relate to children's academic performance at age 15.
                     The analysis framework draws on social stratification theory (Bourdieu & Passeron, 1977; Coleman et al., 1966)
-                    to examine how the ESCS index (parental wealth, occupation, and education) correlates with student achievement outcomes
-                    across countries and over time.
+                    to quantify how strongly family background predicts student outcomes across countries and over time.
                 </p>
 
                 <div class="alert alert-info" style="margin-bottom: 1.5rem;">
                     <strong>Key Metrics Explained:</strong><br>
                     <strong>Mean Achievement:</strong> Survey-weighted average of test scores using OECD-recommended student weights (W_FSTUWT). Calculated as: μ = Σ(w_i × score_i) / Σ(w_i)<br>
-                    <strong>Inequality Index (Gini):</strong> Measures dispersion of achievement scores from 0 (perfect equality) to 1 (maximum inequality). Higher values indicate greater achievement inequality within the selected sample.<br>
-                    <strong>SES Gradient (β):</strong> Regression coefficient showing how much achievement increases (in score points) for each one-unit increase in socioeconomic status. Estimated via bivariate weighted regression.
+                    <strong>Dispersion Index (Gini):</strong> Measures spread of achievement scores from 0 (all students identical) to 1 (maximum dispersion). Higher values indicate greater variation in outcomes.<br>
+                    <strong>ESCS Gradient (β):</strong> The intergenerational transmission coefficient—shows how many score points of achievement are associated with a one-unit increase in family socioeconomic status. Larger values indicate stronger intergenerational transmission.
                 </div>
 
                 <div class="grid-3">
@@ -380,25 +379,24 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="inequality-index">--</div>
-                        <div class="stat-label">Inequality Index (Gini)</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">0 = equality, 1 = max inequality</div>
+                        <div class="stat-label">Dispersion Index (Gini)</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">0 = identical, 1 = max spread</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="predictor-gradient">--</div>
-                        <div class="stat-label" id="gradient-label">SES Gradient (β)</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Score points per unit of SES</div>
+                        <div class="stat-label" id="gradient-label">ESCS Gradient (β)</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Intergenerational transmission strength</div>
                     </div>
                 </div>
 
                 <div style="margin-top: 3rem;">
-                    <h3 style="margin-bottom: 0.75rem;">Stratification of Achievement by Country and Year</h3>
+                    <h3 style="margin-bottom: 0.75rem;">Intergenerational Transmission by Country and Year</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> Scatter plot of mean achievement scores versus SES gradients for each country-year combination.
+                        <strong>What this shows:</strong> Scatter plot of mean achievement scores versus ESCS gradients for each country-year combination.
                         Each point represents one country in one year, with country labels displayed.<br>
-                        <strong>Interpretation:</strong> Points in the upper-right show high achievement and high stratification (strong SES effects).
-                        Points in the lower-left show lower achievement with weaker SES effects. This visualization helps identify patterns of
-                        educational equity across nations.<br>
-                        <strong>Calculation:</strong> X-axis = survey-weighted mean score; Y-axis = bivariate regression coefficient (SES → achievement)
+                        <strong>Interpretation:</strong> Points in the upper-right show high achievement and strong intergenerational transmission (family background strongly predicts outcomes).
+                        Points in the lower-left show lower achievement with weaker intergenerational transmission. This visualization helps identify which education systems show more or less mobility in educational outcomes.<br>
+                        <strong>Calculation:</strong> X-axis = survey-weighted mean score; Y-axis = ESCS gradient (how many score points per unit of family SES)
                     </p>
                     <div id="overview-chart"></div>
                 </div>
@@ -420,7 +418,7 @@
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                         <strong>What this shows:</strong> Grouped box plots displaying the distribution of achievement scores for each country-year combination.
                         Each box shows the interquartile range (IQR, 25th-75th percentiles), with the median marked inside the box. Whiskers extend to 1.5×IQR.<br>
-                        <strong>Interpretation:</strong> Wider boxes indicate greater within-country inequality. Compare box heights (medians) across countries to see performance differences.
+                        <strong>Interpretation:</strong> Wider boxes indicate greater within-country variation in achievement. Compare box heights (medians) across countries to see performance differences.
                         Boxes for the same country across different years reveal temporal trends.<br>
                         <strong>Calculation:</strong> Box plot quartiles computed from raw student-level scores, grouped by country and year.
                     </p>
@@ -432,18 +430,18 @@
                         <h3 style="margin-bottom: 0.75rem;">Achievement Percentiles by Country</h3>
                         <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                             <strong>What this shows:</strong> Line chart of score values at the 10th, 25th, 50th (median), 75th, and 90th percentiles for each country.<br>
-                            <strong>Interpretation:</strong> Steeper lines indicate greater within-country inequality. Countries with higher lines across all percentiles have higher overall achievement.
+                            <strong>Interpretation:</strong> Steeper lines indicate greater within-country variation. Countries with higher lines across all percentiles have higher overall achievement.
                             The gap between P90 and P10 shows the achievement range.<br>
                             <strong>Calculation:</strong> Percentiles calculated using quantile function on sorted score distributions.
                         </p>
                         <div id="percentile-chart"></div>
                     </div>
                     <div>
-                        <h3 style="margin-bottom: 0.75rem;">Lorenz Curve: Achievement Inequality</h3>
+                        <h3 style="margin-bottom: 0.75rem;">Lorenz Curve: Achievement Distribution</h3>
                         <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                             <strong>What this shows:</strong> Lorenz curves plot cumulative proportion of achievement against cumulative proportion of students (ranked from lowest to highest).
-                            The diagonal dashed line represents perfect equality.<br>
-                            <strong>Interpretation:</strong> Curves further from the diagonal indicate greater inequality. The area between a country's curve and the diagonal relates to the Gini coefficient.<br>
+                            The diagonal dashed line represents perfect equality (all students with identical scores).<br>
+                            <strong>Interpretation:</strong> Curves further from the diagonal indicate greater dispersion in achievement. The area between a country's curve and the diagonal relates to the Gini coefficient.<br>
                             <strong>Calculation:</strong> Students sorted by score; cumulative sums computed for population and achievement shares.
                         </p>
                         <div id="lorenz-curve"></div>
@@ -464,7 +462,7 @@
                     <strong>Achievement Gap (Q4-Q1):</strong> Difference in mean achievement between students in the top SES quartile (Q4) and bottom SES quartile (Q1).
                     Calculated as: Gap = μ_Q4 - μ_Q1, using survey-weighted means for each quartile.<br>
                     <strong>Variance Decomposition:</strong> Partitions total achievement variance into within-country and between-country components using ANOVA:
-                    σ²_total = σ²_within + σ²_between. Shows how much inequality exists within vs. across nations.<br>
+                    σ²_total = σ²_within + σ²_between. Shows how much variation exists within vs. across nations.<br>
                     <strong>Effect Size (Cohen's d):</strong> Standardized gap measure calculated as: d = (μ_Q4 - μ_Q1) / σ_pooled, where σ_pooled is the pooled standard deviation.
                     Effect sizes: small (d ≈ 0.2), medium (d ≈ 0.5), large (d ≈ 0.8 or higher).
                 </div>
@@ -533,7 +531,7 @@
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                         <strong>What this shows:</strong> Raw data scatter plot overlaid with fitted regression lines from OLS, FE, and RE models.
                         Each point represents one student's SES (X-axis) and achievement score (Y-axis).<br>
-                        <strong>Interpretation:</strong> Line slopes show the SES gradient. Steeper slopes indicate stronger stratification (higher SES → higher achievement).
+                        <strong>Interpretation:</strong> Line slopes show the ESCS gradient (intergenerational transmission strength). Steeper slopes indicate stronger transmission (higher family SES → higher achievement).
                         Compare line slopes across models to see how controlling for country effects changes the estimated relationship.
                     </p>
                     <div id="regression-scatter"></div>
@@ -603,15 +601,15 @@
             <div id="comparative" class="tab-content">
                 <div class="section-title">Comparative Analysis</div>
                 <p class="description">
-                    Cross-country and cross-year comparison of inequality metrics, achievement gaps, and intergenerational effects.
+                    Cross-country and cross-year comparison of intergenerational transmission metrics, achievement gaps, and distributional measures.
                 </p>
 
                 <div style="margin-bottom: 3rem;">
                     <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Intergenerational Educational Stratification Map</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> Choropleth world map displaying the SES gradient (points per standard deviation of SES) for each country.
-                        Colors range from blue (low gradients, high mobility) to red (high gradients, low mobility).<br>
-                        <strong>Interpretation:</strong> Darker red countries have stronger intergenerational persistence—children's achievement is more tightly linked to parental SES.
+                        <strong>What this shows:</strong> Choropleth world map displaying the ESCS gradient (intergenerational transmission strength) for each country.
+                        Colors range from blue (low gradients, higher educational mobility) to red (high gradients, stronger intergenerational transmission).<br>
+                        <strong>Interpretation:</strong> Darker red countries have stronger intergenerational transmission—children's achievement is more tightly linked to family background.
                         Blue countries show higher educational mobility. Hover over countries to see exact gradient values, R², and sample size.<br>
                         <strong>Calculation:</strong> For each country, run bivariate OLS: achievement = β₀ + β₁(ESCS) + ε. Map displays β₁ coefficient.
                     </p>
@@ -619,14 +617,14 @@
                 </div>
 
                 <div style="margin-bottom: 3rem;">
-                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Temporal Trends: SES Gradient Over Time</h3>
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Temporal Trends: ESCS Gradient Over Time</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> Line chart tracking how SES gradients change over PISA cycles for each country.
+                        <strong>What this shows:</strong> Line chart tracking how ESCS gradients (intergenerational transmission strength) change over PISA cycles for each country.
                         Each line represents one country's trajectory across available years (2000-2022).<br>
-                        <strong>Interpretation:</strong> Rising lines indicate increasing stratification (SES effects growing stronger).
-                        Falling lines show decreasing stratification (improving mobility). Parallel lines suggest stable patterns.
+                        <strong>Interpretation:</strong> Rising lines indicate increasing intergenerational transmission (family background effects growing stronger).
+                        Falling lines show weakening transmission (improving educational mobility). Parallel lines suggest stable patterns.
                         Countries with at least 2 time points are shown.<br>
-                        <strong>Calculation:</strong> Separate regression for each country-year combination. Plot β₁ (SES coefficient) over time.
+                        <strong>Calculation:</strong> Separate regression for each country-year combination. Plot β₁ (ESCS coefficient) over time.
                     </p>
                     <div id="temporal-trends"></div>
                 </div>
@@ -644,11 +642,11 @@
                 </div>
 
                 <div style="margin-bottom: 3rem;">
-                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">SES Achievement Gap Comparison</h3>
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">ESCS Achievement Gap Comparison</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> Combined bar/line chart comparing Q4–Q1 SES achievement gaps across countries.
-                        Bars show raw score gaps; the line overlays standardized effect sizes (Cohen's d).<br>
-                        <strong>Interpretation:</strong> Larger gaps and higher effect sizes indicate stronger socioeconomic stratification in achievement.
+                        <strong>What this shows:</strong> Combined bar/line chart comparing Q4–Q1 ESCS achievement gaps across countries.
+                        Bars show raw score gaps (difference between highest and lowest family background quartiles); the line overlays standardized effect sizes (Cohen's d).<br>
+                        <strong>Interpretation:</strong> Larger gaps and higher effect sizes indicate stronger intergenerational transmission of educational achievement.
                     </p>
                     <div id="gap-comparison"></div>
                 </div>
@@ -658,7 +656,7 @@
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                         <strong>What this shows:</strong> Bar chart partitioning total achievement variance into within-country and between-country components.
                         Displays percentages and the intraclass correlation coefficient (ICC = ρ).<br>
-                        <strong>Interpretation:</strong> High within-country variance suggests more inequality exists within nations than across them.
+                        <strong>Interpretation:</strong> High within-country variance suggests more variation in achievement exists within nations than across them.
                         High between-country variance indicates large cross-national differences in achievement levels.
                         ICC = σ²_between / (σ²_between + σ²_within) measures the proportion of variance attributable to country differences.<br>
                         <strong>Calculation:</strong> One-way ANOVA decomposition: σ²_total = σ²_within + σ²_between. Uses country as grouping variable.
@@ -679,7 +677,7 @@
                     <div class="stat-card">
                         <h3 style="font-size: 1.2rem; margin-bottom: 1rem; color: var(--primary-color);">📊 Summary Statistics</h3>
                         <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem;">
-                            Export descriptive statistics, inequality measures, and achievement gaps in CSV format.
+                            Export descriptive statistics, distributional measures, and achievement gaps in CSV format.
                         </p>
                         <button id="export-summary-btn" class="btn" style="width: 100%;">
                             Export Summary (CSV)
@@ -791,7 +789,7 @@
                                 <li>Survey-weighted regression (OLS, FE, RE)</li>
                                 <li>Variance decomposition analysis</li>
                                 <li>Achievement gap calculations</li>
-                                <li>Inequality measures (Gini coefficient)</li>
+                                <li>Distributional measures (Gini coefficient)</li>
                                 <li>Diagnostic procedures and assumptions</li>
                             </ul>
                         </div>
@@ -826,9 +824,9 @@
                         <div class="doc-card-body">
                             <p>Citation guidelines for academic publications, presentations, and reports.</p>
                             <div class="doc-callout">
-                            Schoenholzer, K. (2025).<br>
-                            Exploring Global Educational Inequality using PISA Data.<br>
-                            GitHub: kevisc/kevisc.github.io
+                            Schoenholzer, K. (2026).<br>
+                            Educational Inequality Data Explorer (EIDE).<br>
+                            https://kevinschoenholzer.com/edustrat/
                             </div>
                         </div>
                         <div class="doc-card-footer">
@@ -851,7 +849,7 @@
                             </ul>
                         </div>
                         <div class="doc-card-footer">
-                            <a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank" class="btn btn-secondary">
+                            <a href="https://github.com/kevisc/kevisc.github.io/tree/main/edustrat" target="_blank" class="btn btn-secondary">
                                 🔗 View on GitHub
                             </a>
                         </div>
@@ -912,8 +910,8 @@
     <!-- Footer -->
     <footer style="background: var(--surface); border-top: 1px solid var(--border); margin-top: 4rem; padding: 2rem 0;">
         <div class="container" style="text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
-            <p>Exploring Global Educational Inequality using PISA Data</p>
-            <p style="margin-top: 0.5rem;">Open Source Science. Schoenholzer, 2025.</p>
+            <p>Educational Inequality Data Explorer (EIDE) - Studying Intergenerational Transmission of Educational Achievement</p>
+            <p style="margin-top: 0.5rem;">Open Source Science. Schoenholzer, 2026.</p>
         </div>
     </footer>
 

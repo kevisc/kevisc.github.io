@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Educational Inequality Data Explorer - ESCS-Focused Methodological Article</title>
+    <title>Educational Inequality Data Explorer (EIDE) - Methodological Article</title>
     <style>
         * {
             margin: 0;
@@ -175,102 +175,133 @@
         .link-list li {
             margin-bottom: 0.4rem;
         }
+        .software-availability {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            border-radius: 6px;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+        }
+        .software-availability h4 {
+            color: #166534;
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Educational Inequality Data Explorer: A Web-Based Methodological Article on ESCS-Based Stratification in PISA Outcomes</h1>
+        <h1>Educational Inequality Data Explorer (EIDE): A Browser-Based Statistical Tool for Exploratory Analysis of PISA Microdata, 2000–2022</h1>
 
         <div class="metadata">
             <p><strong>Author:</strong> Kevin Schoenholzer</p>
             <p><strong>Correspondence:</strong> kevinschoenholzer.com</p>
-            <p><strong>Date:</strong> 2026-01-04</p>
+            <p><strong>Date:</strong> 2026</p>
         </div>
 
         <div class="abstract">
-            <p><strong>Abstract.</strong> This article introduces the Educational Inequality Data Explorer, a browser-based analytical application for OECD PISA microdata. The tool is specifically geared to understanding how the ESCS index—capturing parental wealth, occupation, and education—relates to student achievement across countries and PISA cycles. It operationalizes standard inequality metrics, survey-weighted regression models, and variance decomposition techniques in a transparent and reproducible workflow. It is designed to lower barriers for non-specialist researchers, students, and graduate students who need rigorous comparative analysis without writing bespoke statistical code. The application makes it straightforward to test how results change with alternative estimators, weighting choices, and country selections, thereby supporting open science, sensitivity analysis, and replicability. We document all methodological choices, model specifications, weighting conventions, and data-handling procedures, and we provide direct links to technical appendices for audit and replication.</p>
-            <p class="keywords"><strong>Keywords:</strong> educational inequality, ESCS, PISA, survey weighting, regression, variance decomposition, web-based analytics, reproducibility</p>
+            <p><strong>Abstract.</strong> This article documents the Educational Inequality Data Explorer (EIDE), a browser-based tool for exploratory secondary analysis of OECD PISA student microdata across eight cycles (2000–2022). EIDE is designed to study the intergenerational transmission of educational achievement—specifically, how parental characteristics (education, occupational status, and household wealth, captured through the ESCS index) relate to children's academic performance at age 15 in mathematics, reading, and science across more than 100 countries worldwide. The application serves as a practical "analysis workbench" for recurring first-pass tasks in large-scale assessment work: computing survey-weighted descriptive statistics, summarizing achievement distributions, estimating ESCS gradients and quartile gaps that quantify how strongly family background predicts student outcomes, comparing pooled and country-panel regression specifications, and decomposing variance into within- and between-country components. To remain usable as a static web application, EIDE relies on pre-generated country–year subsets that are loaded on demand, and performs statistical computations client-side. This paper describes the data coverage, implementation architecture, statistical functionality, export formats, and typical use cases (exploration, teaching, and preparatory specification screening prior to code-based replication). The documentation also clarifies current limitations for inferential use, notably the use of a single plausible value per domain and the absence of replicate-weight variance estimation in the interactive layer.</p>
+            <p class="keywords"><strong>Keywords:</strong> intergenerational transmission, educational achievement, ESCS, parental education, parental occupation, family wealth, PISA, survey weighting, regression, variance decomposition, web-based analytics, reproducibility</p>
         </div>
 
         <h2>1. Introduction</h2>
-        <p>Large-scale assessment data provide an unparalleled opportunity to study educational inequality within and across countries. However, the technical barrier to entry remains high due to complex survey designs, the need for transparent weighting conventions, and the burden of repeated, customized analysis for different outcomes and sample definitions. The Educational Inequality Data Explorer addresses this gap by providing a validated, browser-based analytical environment that adheres to OECD documentation standards while prioritizing interpretability and reproducibility.</p>
-        <p>This article positions the application as a methodological contribution that democratizes access to comparative analysis. It enables users with limited statistical programming background to explore how the ESCS index (parental wealth, occupation, and education) relates to student outcomes, and how estimation choices (OLS vs. fixed or random effects), weighting decisions, and country or year selections influence substantive conclusions. The accompanying exports and documentation are designed to make analytic decisions explicit, supporting open science and replicability.</p>
+        <p>OECD PISA is widely used in secondary analyses because it combines cross-nationally comparable achievement measures with extensive student background information, repeated in a regular cycle since 2000 (OECD, 2009, 2024). At the same time, routine empirical tasks with PISA microdata remain implementation-heavy for many users: the data arise from complex sampling; achievement is released as plausible values rather than single test scores; and results can be sensitive to choices such as which weights are used, which cycles and countries are included, and which regression specification is treated as the descriptive model of interest (Mislevy et al., 1992; Wu, 2005; OECD, 2009).</p>
+
+        <p>EIDE was developed as a technical and educational tool to make these common analytic operations easier to run, easier to iterate, and easier to export in a structured form, without requiring local installation or bespoke scripts for each exploratory question. The central research question the tool supports is: <strong>how do parental characteristics—specifically education, occupational status, and household resources—predict children's educational achievement at age 15?</strong> This is the core question of intergenerational transmission of educational achievement, and EIDE operationalizes it through the PISA ESCS index and related family background measures.</p>
 
         <h3>1.1 Contribution and Audience</h3>
         <p>The application is intended for researchers, instructors, and students who need rigorous comparative analysis without bespoke statistical code. Its contribution is both methodological and infrastructural:</p>
         <ul>
-            <li><strong>Accessibility:</strong> non-specialist users can reproduce core inequality metrics and regression models directly in the browser.</li>
-            <li><strong>Comparative sensitivity:</strong> users can systematically compare estimators and country selections to assess how methodological choices shape conclusions.</li>
-            <li><strong>Open science:</strong> every analysis is exportable with metadata that preserves the analytic context, supporting transparent reporting and replication.</li>
+            <li><strong>Accessibility:</strong> Non-specialist users can reproduce core metrics and regression models directly in the browser, examining how parental background relates to student outcomes across countries and time.</li>
+            <li><strong>Comparative sensitivity:</strong> Users can systematically compare estimators and country selections to assess how methodological choices shape conclusions about intergenerational transmission patterns.</li>
+            <li><strong>Open science:</strong> Every analysis is exportable with metadata that preserves the analytic context, supporting transparent reporting and replication.</li>
         </ul>
 
         <div class="figure">
             <img src="images/pisa-app-screenshot.png" alt="Educational Inequality Data Explorer interface screenshot">
-            <div class="figure-caption">Figure 1. The Educational Inequality Data Explorer interface. The application provides modular analysis tabs and export tools for publication-quality outputs.</div>
+            <div class="figure-caption">Figure 1. The Educational Inequality Data Explorer interface. The application provides modular analysis tabs and export tools for publication-quality outputs examining how family background relates to student achievement.</div>
         </div>
 
-        <h2>2. Data and Coverage</h2>
-        <p>The application uses student-level microdata from the OECD PISA program. The current deployment includes all cycles from 2000 to 2022 (eight assessment waves), enabling comparisons across countries and over time. Data are accessed through the <code>learningtower</code> R package, which harmonizes variable naming conventions and coding across cycles.</p>
+        <h2>2. Data Coverage, Provenance, and Processing</h2>
+        <p>EIDE currently covers eight PISA cycles (2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022), encompassing over 100 participating countries and economies and approximately 3.5 million student observations. Data access and harmonization are supported through the <code>learningtower</code> R package, which provides cleaned and harmonized PISA extracts with standardized variable naming across cycles; the CRAN release for learningtower (version 1.1.0) documents coverage for 2000–2022 and provides the recommended package citation (Wang et al., 2024).</p>
+
         <ul class="link-list">
             <li><a href="data-sources.html">Detailed data sources and variable documentation</a></li>
             <li><a href="methodology.html">Full methodology and technical documentation</a></li>
         </ul>
 
-        <h3>2.1 Sample Construction</h3>
-        <p>Data are stored in country-year JSON chunks. When users select a set of countries and years, only the corresponding subsets are loaded, reducing memory use and preserving interactivity. Students are retained if they have finite values for the selected outcome and predictor variables, as well as any selected controls. Records with missing values in required fields are excluded via listwise deletion to preserve consistent sample definitions across models.</p>
+        <h3>2.1 Static Data Architecture</h3>
+        <p>A central implementation choice is a static, browser-friendly data layout. Instead of loading a full cross-cycle microdata file into memory, EIDE stores data as country–year JSON "chunks" and loads only the requested subsets when a user selects countries and years. This reduces memory load (typically 30–40 MB for a working selection versus 1.25 GB for the full dataset) and supports interactive use in standard browsers. The chunking strategy and sample-construction rules (including current listwise deletion for required fields) are documented in the project's data and methodology pages.</p>
 
-        <h3>2.2 Key Variables</h3>
-        <p>The primary outcome variables are PISA achievement scores in mathematics, reading, and science. The primary stratification variable is ESCS (Economic, Social, and Cultural Status). Parental education and gender are supported as optional control variables. The application uses the first plausible value for each achievement domain for tractability; this choice is documented as a limitation and can be extended to multiple plausible values in future releases.</p>
-        <p>The learningtower package includes a large and diverse set of student, family, and school variables, enabling flexible model specification beyond the core variables emphasized in the interface.</p>
+        <h3>2.2 Key Variables: ESCS and the Measurement of Family Background</h3>
+        <p>The primary outcome variables are PISA achievement scores in mathematics, reading, and science—measuring what 15-year-olds know and can do in these domains. The primary stratification variable is ESCS (Economic, Social, and Cultural Status), which operationalizes family background through three components:</p>
+        <ul>
+            <li><strong>Parental education:</strong> Highest educational attainment of either parent, coded using ISCED classifications.</li>
+            <li><strong>Parental occupational status:</strong> Highest occupational status of either parent, measured using the ISEI (International Socio-Economic Index of Occupational Status) or HISEI (Highest parental ISEI) family of indices.</li>
+            <li><strong>Home possessions:</strong> An index of household wealth and educational resources, including books at home, educational possessions, and material resources.</li>
+        </ul>
+        <p>ESCS is standardized to an OECD-referenced scale (mean 0, SD 1 for OECD countries), making it interpretable as a composite measure of family socioeconomic advantage. Recent OECD technical documentation summarizes the construction and intended use for cross-country and trend analyses (Wuyts, 2024). When users examine ESCS gradients or quartile gaps in EIDE, they are directly measuring the strength of intergenerational transmission—how strongly these parental characteristics predict their children's academic performance at age 15.</p>
 
-        <h2>3. Statistical Methods</h2>
-        <p>All analyses conform to standard definitions used in educational inequality research. The application exposes these methods through modular tabs that compute summary statistics, inequality measures, regression models, and diagnostic checks.</p>
+        <h2>3. Outcomes, Weights, and the Interpretation of Achievement</h2>
 
         <h3>3.1 Survey Weighting</h3>
-        <p>By default, all descriptive and regression statistics use the student sampling weight (W_FSTUWT). Users may optionally select the senate weight (W_FSENWT) for alternative estimands. Results are computed as weighted quantities, with safeguards against non-positive or non-finite weights.</p>
+        <p>Because PISA is a complex sample, EIDE's descriptive and regression outputs are computed using sampling weights. The tool defaults to the final student weight (W_FSTUWT) and optionally supports senate weights (W_FSENWT) for alternative estimands; replicate weights are described in the documentation but are not currently used in the interactive variance estimation (OECD, 2009).</p>
 
         <div class="formula">
 Weighted mean:
-  mu = sum(w_i * y_i) / sum(w_i)
+  μ = Σ(w_i × y_i) / Σ(w_i)
 
 Weighted variance:
-  var = sum(w_i * (y_i - mu)^2) / sum(w_i)
+  σ² = Σ(w_i × (y_i - μ)²) / Σ(w_i)
         </div>
 
-        <h3>3.2 Inequality Metrics</h3>
-        <p>Within-sample inequality is summarized using the Gini coefficient, coefficient of variation, and percentile ratios. These measures are calculated on achievement scores using weighted estimates where appropriate. The Lorenz curve is plotted to contextualize Gini values.</p>
+        <h3>3.2 Plausible Values</h3>
+        <p>Achievement in PISA is released as plausible values, which are designed to support valid population inference under matrix sampling and latent proficiency estimation. Standard practice treats plausible values analogously to multiple imputations: analysts repeat computations across plausible values and combine estimates and variances accordingly (Mislevy et al., 1992; Rubin, 1987; Wu, 2005). For interactivity, EIDE currently uses the first plausible value per domain in the web interface and flags this explicitly; users aiming for publication-grade inference are expected to replicate selected specifications using all plausible values and appropriate variance procedures.</p>
 
-        <h3>3.3 SES Gradient</h3>
-        <p>The SES gradient is computed as the slope of a weighted bivariate regression of achievement on ESCS. This coefficient is interpreted as the change in achievement (score points) associated with a one-unit increase in the ESCS index.</p>
+        <h2>4. Statistical Functionality</h2>
+        <p>EIDE implements a set of recurring "building blocks" that users typically assemble when producing descriptive briefs, teaching demonstrations, or preliminary robustness checks focused on intergenerational transmission of educational achievement.</p>
 
-        <h3>3.4 Achievement Gap Decomposition</h3>
-        <p>The application calculates Q4-Q1 gaps by constructing SES quartiles using weighted ranks. It reports mean differences, pooled standard deviations, and Cohen's d for effect size interpretation.</p>
+        <h3>4.1 Descriptive Statistics</h3>
+        <p>The tool computes survey-weighted descriptive statistics, including weighted means, variances, and weighted quantiles. These quantities are used both for direct reporting and as inputs to distributional summaries.</p>
 
-        <h3>3.5 Regression Models</h3>
-        <p>Three model families are implemented:</p>
+        <h3>4.2 Distributional Summaries</h3>
+        <p>EIDE summarizes achievement distributions using indices such as the Gini coefficient (with Lorenz curve display), the coefficient of variation, and percentile ratios. These measures characterize the spread and shape of achievement distributions within and across countries.</p>
+
+        <h3>4.3 ESCS Gradients: Measuring Intergenerational Transmission</h3>
+        <p>The ESCS gradient is the central measure for quantifying intergenerational transmission. It is computed as the slope from a survey-weighted regression of achievement on ESCS (optionally including simple controls such as gender and parental education). This coefficient represents <strong>how many score points of achievement are associated with a one-unit increase in family socioeconomic status</strong>—directly measuring how strongly parental characteristics predict children's outcomes.</p>
+        <div class="formula">
+Achievement_i = β₀ + β₁ × ESCS_i + ε_i
+
+β₁ = ESCS gradient (intergenerational transmission coefficient)
+        </div>
+        <p>A larger ESCS gradient indicates stronger intergenerational transmission—children's achievement is more strongly predicted by their parents' education, occupation, and wealth. Cross-country comparisons of ESCS gradients reveal which education systems show more or less mobility in educational outcomes.</p>
+
+        <h3>4.4 Quartile Gaps: Family Background Differences in Achievement</h3>
+        <p>EIDE computes quartile-based ESCS gaps by constructing ESCS quartiles using weighted ranks and reporting Q4–Q1 differences (the gap between children from the most and least advantaged family backgrounds) along with standardized effect sizes (Cohen's d). This provides an intuitive measure of how much family background matters: the score-point difference between students from high-ESCS versus low-ESCS families.</p>
+
+        <h3>4.5 Regression Models</h3>
+        <p>EIDE provides a small family of regression specifications intended for quick comparison rather than definitive modeling:</p>
         <ul>
-            <li><strong>Pooled OLS:</strong> Baseline weighted regression ignoring country clustering.</li>
-            <li><strong>Fixed Effects:</strong> Country fixed effects (and optional year fixed effects) controlling for time-invariant country heterogeneity.</li>
-            <li><strong>Random Effects:</strong> Country-level random intercepts with quasi-demeaning transformation.</li>
+            <li><strong>Pooled OLS:</strong> Baseline weighted regression pooling all observations, showing the overall relationship between family background and achievement.</li>
+            <li><strong>Fixed Effects:</strong> Country fixed effects (with optional year fixed effects) controlling for time-invariant country heterogeneity, isolating within-country variation in how family background relates to outcomes.</li>
+            <li><strong>Random Effects:</strong> Country-level random intercepts with quasi-demeaning transformation, modeling country differences as draws from a common distribution.</li>
         </ul>
         <div class="formula">
 Pooled OLS:
-  y_i = beta_0 + beta_1 x_i + gamma' c_i + e_i
+  y_i = β₀ + β₁x_i + γ'c_i + ε_i
 
 Fixed Effects:
-  y_it = alpha_i + beta_1 x_it + gamma' c_it + e_it
+  y_it = α_i + β₁x_it + γ'c_it + ε_it
 
 Random Effects:
-  y_it = beta_0 + beta_1 x_it + gamma' c_it + u_i + e_it
+  y_it = β₀ + β₁x_it + γ'c_it + u_i + ε_it
         </div>
-        <p>Estimation uses weighted least squares with positive survey weights, ridge stabilization for near-singular designs, and conventional (model-based) standard errors. Fit statistics include R-squared, adjusted R-squared, AIC, and BIC. Confidence intervals are reported as coefficient plus or minus 1.96 standard errors.</p>
-        <p>Model diagnostics include residual plots, Q-Q plots, and Hausman tests when both FE and RE models are available. A small ridge term stabilizes near-singular designs arising from many fixed effects.</p>
+        <p>The interface reports coefficient tables and conventional fit metrics (including AIC/BIC) and offers standard diagnostic plots (residuals, Q-Q plots). Model diagnostics include Hausman tests when both FE and RE models are available.</p>
 
-        <h3>3.6 Variance Decomposition</h3>
-        <p>Variance is partitioned into within- and between-country components using one-way ANOVA. The intraclass correlation coefficient (ICC) reports the proportion of variance attributable to country-level clustering.</p>
+        <h3>4.6 Variance Decomposition</h3>
+        <p>EIDE includes a variance decomposition module that partitions variance into within- and between-country components and reports an ICC-style summary of clustering at the country level. This reveals how much variation in the relationship between family background and achievement occurs within versus between countries.</p>
 
-        <h2>4. Implementation Architecture</h2>
-        <p>The application is implemented as a modular ES6 JavaScript codebase and a set of R scripts that generate data chunks and metadata. The pipeline produces a metadata catalog listing countries, years, and variables, which drives the user interface and data loading flow. All statistical computations are performed in the browser, preserving user control and data privacy once the files are loaded locally.</p>
+        <h2>5. Implementation Architecture, Exports, and Reproducibility</h2>
+        <p>EIDE is implemented as a modular ES6 JavaScript application with an R-based preprocessing pipeline that generates country–year data chunks and a metadata catalog used to drive the interface and loading logic. All computations in the interactive application are performed client-side after data are loaded, which keeps deployment simple (static hosting) and makes the computational steps inspectable in the project materials.</p>
 
         <table>
             <thead>
@@ -299,39 +330,75 @@ Random Effects:
             </tbody>
         </table>
 
-        <h2>5. Validation and Quality Assurance</h2>
-        <p>Data integrity is verified via automated validation scripts that check for missing files, inconsistent record counts, and malformed JSON. Model outputs are bounded and checked for non-finite values to prevent erroneous reporting. Diagnostic plots are sampled to limit performance bottlenecks while preserving distributional structure.</p>
+        <h3>5.1 Exportability</h3>
+        <p>A practical design priority is exportability. EIDE is intended to support workflows where users explore specifications interactively and then export outputs for inclusion in briefs, appendices, slides, or follow-up coding. The tool exports:</p>
+        <ul>
+            <li>Tabular outputs (summary statistics, regression tables, comparative analyses) as CSV</li>
+            <li>Graphics as high-resolution PNG or SVG</li>
+            <li>Self-contained HTML reports with embedded visualizations</li>
+            <li>Analysis metadata recording all selections (countries, years, domain, weight choice, estimator family, and optional controls)</li>
+        </ul>
+        <p>This is not a substitute for a full scripted pipeline, but it aligns with standard expectations for computational reproducibility in exploratory work, where the key requirement is that the analytic choices are recorded and can be re-executed in a more formal environment (Peng, 2011).</p>
 
         <div class="callout">
-            <strong>Reproducibility note:</strong> The application exports all intermediate outputs (CSV tables, PNG/SVG figures, and HTML reports). These exports encode the selected countries, years, outcome variables, predictor variables, control choices, and weighting schemes at the time of analysis.
+            <strong>Reproducibility note:</strong> All exports encode the selected countries, years, outcome variables, predictor variables, control choices, and weighting schemes at the time of analysis, so that results can be traced back to specific specifications.
         </div>
 
-        <h2>6. Interpretation and Use Cases</h2>
-        <p>The tool is designed for academic briefs, policy reports, and exploratory research. Users can benchmark achievement gaps across countries, compare model specifications, or evaluate how SES gradients evolve across cycles. All results should be interpreted as descriptive associations rather than causal effects.</p>
+        <h2>6. Typical Use Cases</h2>
+        <p>EIDE is most useful when the goal is to move quickly from a question about intergenerational transmission to a defensible descriptive answer, while keeping specification choices visible.</p>
 
-        <h2>7. Limitations</h2>
+        <h3>6.1 Cross-Country Profiling</h3>
+        <p>Select a year and a set of countries to compare weighted distributional summaries and ESCS gradients, then export a compact table and figures for briefing or teaching. This reveals which countries show stronger or weaker intergenerational transmission of educational achievement.</p>
+
+        <h3>6.2 Sensitivity Screening</h3>
+        <p>Compare pooled and country-panel specifications, toggle weight conventions (where appropriate to the estimand), and assess whether headline patterns about family background effects are stable to common alternatives before deciding which models deserve full PV-complete, replicate-weight inference in a code-based workflow.</p>
+
+        <h3>6.3 Trend Exploration</h3>
+        <p>Inspect how ESCS gaps and gradients evolve across cycles for selected countries, treating the outputs as descriptive signals about whether intergenerational transmission is strengthening or weakening over time.</p>
+
+        <h3>6.4 Classroom Instruction</h3>
+        <p>EIDE can be used to demonstrate why weights matter, what plausible values are, and how different regression specifications change descriptive associations between family background and achievement, without requiring students to install specialized software or manage large microdata files (OECD, 2009; Wu, 2005).</p>
+
+        <h2>7. Limitations and Appropriate Interpretation</h2>
+        <p>EIDE's outputs should be interpreted as descriptive associations produced by a transparent, interactive implementation, not as definitive inferential results.</p>
         <ul>
-            <li>Only the first plausible value is used in the current implementation.</li>
-            <li>Replicate weights are not yet implemented; inference should be treated as approximate.</li>
-            <li>Listwise deletion may bias results if missingness is not random.</li>
-            <li>Cross-sectional PISA data do not support causal inference.</li>
+            <li><strong>Plausible values:</strong> The web interface currently uses a single plausible value per domain; estimates can differ from PV-combined results, especially for subgroup analyses and regression relationships (Mislevy et al., 1992; Rubin, 1987; Wu, 2005).</li>
+            <li><strong>Variance estimation:</strong> The interactive layer does not implement replicate-weight variance procedures, which are a central element of design-consistent standard errors in PISA analyses (OECD, 2009).</li>
+            <li><strong>Missing data:</strong> EIDE currently relies on listwise deletion for required fields, which changes the effective sample and can bias results when missingness is systematic.</li>
+            <li><strong>Cross-sectional design:</strong> PISA is cross-sectional within cycles, and the tool is designed for exploration and descriptive reporting rather than causal identification strategies. ESCS gradients measure association, not causation.</li>
         </ul>
 
-        <h2>8. Availability and Citation</h2>
-        <p>The application and data pipeline are open source and available through the project repository. The documentation is structured to enable transparent replication and reuse, with all analytic choices surfaced in the UI and export metadata. Citation guidance is provided in the linked documentation.</p>
-        <ul class="link-list">
-            <li><a href="../index.html">Educational Inequality Data Explorer</a></li>
-            <li><a href="citation.html">Citation guidelines</a></li>
-            <li><a href="https://github.com/kevisc/kevisc.github.io/tree/main/pisa" target="_blank">Source code repository</a></li>
-        </ul>
+        <h2>8. Conclusion</h2>
+        <p>EIDE is a browser-based statistical tool that packages common first-pass operations used in large-scale assessment work—weighted descriptives, distributional summaries, ESCS gradients and quartile gaps measuring intergenerational transmission, specification comparisons, and variance decomposition—into a static, export-oriented interface for PISA cycles 2000–2022. Its value is primarily practical: it shortens the path from question to documented descriptive output about how parental education, occupation, and wealth relate to children's educational achievement at age 15 worldwide. It supports teaching and methods demonstrations, and helps users define and screen specifications before re-estimating selected models with full plausible-value combination and replicate-weight inference in a dedicated statistical environment.</p>
 
-        <h2>9. References</h2>
-        <p class="reference">OECD (2009). PISA 2009 Technical Report. Organisation for Economic Co-operation and Development.</p>
-        <p class="reference">OECD (2017). PISA 2015 Technical Report. Organisation for Economic Co-operation and Development.</p>
-        <p class="reference">OECD (2019). PISA 2018 Technical Report. Organisation for Economic Co-operation and Development.</p>
-        <p class="reference">OECD (2023). PISA 2022 Technical Report. Organisation for Economic Co-operation and Development.</p>
-        <p class="reference">Rubin, D. B. (1987). Multiple Imputation for Nonresponse in Surveys. Wiley.</p>
-        <p class="reference">Vaughan, E., Fung, K., Cook, D., & Wickham, H. (2021). learningtower: OECD PISA Datasets from 2000-2022 in an Easy-to-Use Format. R package.</p>
+        <div class="software-availability">
+            <h4>Software Availability and Documentation</h4>
+            <ul class="link-list">
+                <li><strong>Application:</strong> <a href="../index.html">Educational Inequality Data Explorer</a></li>
+                <li><strong>Documentation (usage/paper):</strong> <a href="publication-paper.html">This document</a></li>
+                <li><strong>Documentation (methods):</strong> <a href="methodology.html">Methodology</a></li>
+                <li><strong>Documentation (data sources):</strong> <a href="data-sources.html">Data sources</a></li>
+                <li><strong>Citation guidelines:</strong> <a href="citation.html">How to cite</a></li>
+                <li><strong>learningtower (CRAN):</strong> <a href="https://cran.r-project.org/package=learningtower" target="_blank">https://cran.r-project.org/package=learningtower</a></li>
+            </ul>
+        </div>
+
+        <h2>References</h2>
+        <p class="reference">Mislevy, R. J., Beaton, A. E., Kaplan, B., & Sheehan, K. M. (1992). Estimating population characteristics from sparse matrix samples of item responses. <em>Journal of Educational Measurement, 29</em>(2), 133–161. <a href="https://doi.org/10.1111/j.1745-3984.1992.tb00371.x">https://doi.org/10.1111/j.1745-3984.1992.tb00371.x</a></p>
+
+        <p class="reference">OECD. (2009). <em>PISA data analysis manual: SPSS</em> (2nd ed.). OECD Publishing. <a href="https://doi.org/10.1787/9789264056275-en">https://doi.org/10.1787/9789264056275-en</a></p>
+
+        <p class="reference">OECD. (2024). <em>PISA 2022 Technical Report</em>. OECD Publishing. <a href="https://doi.org/10.1787/01820d6d-en">https://doi.org/10.1787/01820d6d-en</a></p>
+
+        <p class="reference">Peng, R. D. (2011). Reproducible research in computational science. <em>Science, 334</em>(6060), 1226–1227. <a href="https://doi.org/10.1126/science.1213847">https://doi.org/10.1126/science.1213847</a></p>
+
+        <p class="reference">Rubin, D. B. (1987). <em>Multiple imputation for nonresponse in surveys</em>. John Wiley & Sons. <a href="https://doi.org/10.1002/9780470316696">https://doi.org/10.1002/9780470316696</a></p>
+
+        <p class="reference">Wang, K., Yacobellis, P., Siregar, E., Romanes, S., Fitter, K., Dalla Riva, G. V., Cook, D., Tierney, N., Dingorkar, P., Sai Subramanian, S., & Chen, G. (2024). <em>learningtower: OECD PISA datasets from 2000–2022 in an easy-to-use format</em> (R package, Version 1.1.0). <a href="https://doi.org/10.32614/CRAN.package.learningtower">https://doi.org/10.32614/CRAN.package.learningtower</a></p>
+
+        <p class="reference">Wu, M. (2005). The role of plausible values in large-scale surveys. <em>Studies in Educational Evaluation, 31</em>(2–3), 114–128. <a href="https://doi.org/10.1016/j.stueduc.2005.05.005">https://doi.org/10.1016/j.stueduc.2005.05.005</a></p>
+
+        <p class="reference">Wuyts, C. (2024). The measurement of socio-economic status in PISA. OECD.</p>
 
         <a class="back-link" href="../index.html">Back to Application</a>
     </div>
