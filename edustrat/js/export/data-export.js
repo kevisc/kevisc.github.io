@@ -19,7 +19,7 @@ export function exportCurrentDataset(data, state, filename = 'pisa_data_export.c
     }
 
     // Build provenance header
-    let csv = '# Educational Inequality Data Explorer - Data Export\n';
+    let csv = '# Educational Stratification in PISA Explorer - Data Export\n';
     csv += `# Generated: ${new Date().toISOString()}\n`;
     csv += `# Data Source: OECD PISA via learningtower R package\n`;
     csv += `# Citation: OECD (2023). PISA Database. https://www.oecd.org/pisa/data/\n`;
@@ -86,7 +86,7 @@ export function exportAggregatedData(comparativeResults, filename = 'pisa_aggreg
         return;
     }
 
-    let csv = '# Educational Inequality Data Explorer - Aggregated Statistics\n';
+    let csv = '# Educational Stratification in PISA Explorer - Aggregated Statistics\n';
     csv += `# Generated: ${new Date().toISOString()}\n`;
     csv += '# Aggregated by Country-Year\n';
     csv += '#\n';

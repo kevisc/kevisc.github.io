@@ -71,7 +71,7 @@ export function exportAllRegressionModels(models, filename = 'regression_models_
         return;
     }
 
-    let csv = 'Educational Inequality Analysis - Regression Models Comparison\n';
+    let csv = 'Educational Stratification Analysis - Regression Models Comparison\n';
     csv += `Generated: ${new Date().toISOString()}\n\n`;
 
     Object.values(models).forEach(model => {
@@ -279,7 +279,7 @@ export function exportComprehensiveSummary(state, filename = 'analysis_summary.c
     }
 
     const results = state.analysisResults;
-    let csv = 'Educational Inequality Analysis - Comprehensive Summary\n';
+    let csv = 'Educational Stratification Analysis - Comprehensive Summary\n';
     csv += `Generated: ${new Date().toISOString()}\n`;
     csv += `Countries: ${state.selectedCountries?.join(', ') || 'N/A'}\n`;
     csv += `Years: ${state.selectedYears?.join(', ') || 'N/A'}\n`;

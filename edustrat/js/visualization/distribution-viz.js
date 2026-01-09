@@ -229,7 +229,7 @@ export function renderLorenzCurve(data, outcomeVar = 'math') {
     });
 
     const layout = {
-        title: 'Lorenz Curve: Achievement Inequality',
+        title: 'Lorenz Curve: Achievement Distribution',
         xaxis: {
             title: 'Cumulative Population Proportion',
             range: [0, 1],

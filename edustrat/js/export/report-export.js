@@ -107,7 +107,7 @@ async function buildReportHTML(state, charts) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PISA Educational Inequality Analysis Report</title>
+    <title>PISA Educational Stratification Analysis Report</title>
     <style>
         ${getReportStyles()}
     </style>
@@ -322,8 +322,8 @@ function buildReportHeader(state) {
     return `
         <div class="header">
             <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 1rem;">
-            <h1>Educational Inequality Analysis Report</h1>
-            <p class="subtitle">PISA Assessment Data Explorer</p>
+            <h1>Educational Stratification Analysis Report</h1>
+            <p class="subtitle">Educational Stratification in PISA Explorer</p>
             <div class="metadata">
                 <strong>Generated:</strong> ${date}<br>
                 <strong>Countries:</strong> ${state.selectedCountries?.join(', ') || 'N/A'}<br>
@@ -354,7 +354,7 @@ function buildDataOverview(state, data) {
 
     return `
         <h2>1. Data Overview & Summary Statistics</h2>
-        <p>This report presents an analysis of educational inequality using data from the Programme for International Student Assessment (PISA). The analysis examines <strong>${countries.length} ${countries.length === 1 ? 'country' : 'countries'}</strong> across <strong>${years.length} ${years.length === 1 ? 'year' : 'years'}</strong>, totaling <strong>${data.length.toLocaleString()} student observations</strong>.</p>
+        <p>This report presents an analysis of educational stratification and intergenerational transmission using data from the Programme for International Student Assessment (PISA). The analysis examines <strong>${countries.length} ${countries.length === 1 ? 'country' : 'countries'}</strong> across <strong>${years.length} ${years.length === 1 ? 'year' : 'years'}</strong>, totaling <strong>${data.length.toLocaleString()} student observations</strong>.</p>
 
         <h3>Analysis Parameters</h3>
         <ul>
@@ -462,15 +462,15 @@ function buildDescriptiveStatistics(results) {
 }
 
 /**
- * Build inequality measures section
+ * Build distributional measures section
  */
 function buildInequalityMeasures(results) {
     const ineq = results.inequality;
     if (!ineq) return '';
 
     return `
-        <h2>3. Inequality Measures</h2>
-        <p>Measures of dispersion and inequality in achievement scores.</p>
+        <h2>3. Distributional Measures</h2>
+        <p>Measures of dispersion in achievement scores.</p>
 
         <table>
             <thead>
@@ -484,7 +484,7 @@ function buildInequalityMeasures(results) {
                 <tr>
                     <td>Gini Coefficient</td>
                     <td>${ineq.gini?.toFixed(4) || 'N/A'}</td>
-                    <td>0 = perfect equality, 1 = maximum inequality</td>
+                    <td>0 = all identical, 1 = maximum dispersion</td>
                 </tr>
                 <tr>
                     <td>Coefficient of Variation</td>
@@ -715,7 +715,7 @@ function buildComparativeAnalysis(results, state) {
     let html = `
         <div class="page-break"></div>
         <h2>7. Comparative Analysis</h2>
-        <p><strong>Purpose:</strong> This section compares educational achievement and inequality patterns across countries, revealing which nations have high performance combined with equity, and which face trade-offs between excellence and equality.</p>
+        <p><strong>Purpose:</strong> This section compares educational achievement and stratification patterns across countries, revealing which nations have high performance combined with equity, and which face trade-offs between excellence and equality.</p>
     `;
 
     // Try to generate comparative statistics from data
@@ -767,8 +767,8 @@ function buildComparativeAnalysis(results, state) {
 
             if (countryStats.length > 0) {
                 html += `
-                    <h3>Country-Level Achievement and Inequality Summary</h3>
-                    <p><strong>How to Read This Table:</strong> Each row shows a country's achievement level (Mean), dispersion (SD, P10-P90 range), SES-based inequality (Gap, Effect Size), and the strength of the SES-achievement relationship (Gradient, R²).</p>
+                    <h3>Country-Level Achievement and Stratification Summary</h3>
+                    <p><strong>How to Read This Table:</strong> Each row shows a country's achievement level (Mean), dispersion (SD, P10-P90 range), ESCS-based stratification (Gap, Effect Size), and the strength of the SES-achievement relationship (Gradient, R²).</p>
 
                     <div class="results-table-container">
                         <table class="results-table">
@@ -810,10 +810,10 @@ function buildComparativeAnalysis(results, state) {
                         <ul>
                             <li><strong>Mean:</strong> Average achievement score (higher is better)</li>
                             <li><strong>SD:</strong> Standard deviation (higher = more dispersion)</li>
-                            <li><strong>P10/P90:</strong> 10th and 90th percentile scores (range shows inequality)</li>
+                            <li><strong>P10/P90:</strong> 10th and 90th percentile scores (range shows dispersion)</li>
                             <li><strong>Gap (Q4-Q1):</strong> Achievement difference between top and bottom SES quartiles in score points</li>
                             <li><strong>Effect Size:</strong> Standardized gap (Cohen's d); >0.8 is large</li>
-                            <li><strong>SES Gradient:</strong> Score point increase per 1-unit increase in ESCS (steeper = more inequality)</li>
+                            <li><strong>SES Gradient:</strong> Score point increase per 1-unit increase in ESCS (steeper = more variation)</li>
                             <li><strong>R²:</strong> Percent of variance explained by SES (higher = SES more determinative)</li>
                         </ul>
                     </div>
@@ -836,22 +836,22 @@ function buildComparativeAnalysis(results, state) {
                         <div class="grid-2" style="gap: 1rem; margin-top: 1rem;">
                             <div class="stat-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
                                 <h4 style="color: white;">High Excellence, High Equity ✓✓</h4>
-                                <p style="color: white; font-size: 0.9em;">Above average achievement, below average inequality</p>
+                                <p style="color: white; font-size: 0.9em;">Above average achievement, weaker intergenerational transmission</p>
                                 <p style="color: white;"><strong>${highExcellenceHighEquity.length > 0 ? highExcellenceHighEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
                             </div>
                             <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
                                 <h4 style="color: white;">High Excellence, Low Equity ✓✗</h4>
-                                <p style="color: white; font-size: 0.9em;">Above average achievement, above average inequality</p>
+                                <p style="color: white; font-size: 0.9em;">Above average achievement, stronger intergenerational transmission</p>
                                 <p style="color: white;"><strong>${highExcellenceLowEquity.length > 0 ? highExcellenceLowEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
                             </div>
                             <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
                                 <h4 style="color: white;">Low Excellence, High Equity ✗✓</h4>
-                                <p style="color: white; font-size: 0.9em;">Below average achievement, below average inequality</p>
+                                <p style="color: white; font-size: 0.9em;">Below average achievement, weaker intergenerational transmission</p>
                                 <p style="color: white;"><strong>${lowExcellenceHighEquity.length > 0 ? lowExcellenceHighEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
                             </div>
                             <div class="stat-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
                                 <h4 style="color: white;">Low Excellence, Low Equity ✗✗</h4>
-                                <p style="color: white; font-size: 0.9em;">Below average achievement, above average inequality</p>
+                                <p style="color: white; font-size: 0.9em;">Below average achievement, stronger intergenerational transmission</p>
                                 <p style="color: white;"><strong>${lowExcellenceLowEquity.length > 0 ? lowExcellenceLowEquity.map(s => s.country).join(', ') : 'None'}</strong></p>
                             </div>
                         </div>
@@ -886,27 +886,27 @@ function buildChartsSection(charts) {
         'overview-chart': {
             title: 'Achievement and Stratification Overview',
             purpose: 'Shows the relationship between mean achievement scores and SES gradients across countries and years.',
-            interpretation: 'Each point represents a country-year combination. Countries in the upper-right have both high achievement and strong SES gradients (high inequality). Countries in the lower-left have lower achievement and weaker SES gradients. This chart reveals the trade-off (or lack thereof) between excellence and equity in education systems.'
+            interpretation: 'Each point represents a country-year combination. Countries in the upper-right have both high achievement and strong SES gradients (strong intergenerational transmission). Countries in the lower-left have lower achievement and weaker SES gradients. This chart reveals the trade-off (or lack thereof) between excellence and equity in education systems.'
         },
         'distribution-chart': {
             title: 'Score Distribution by Country and Year',
             purpose: 'Displays the distribution of achievement scores using box plots grouped by country and year.',
-            interpretation: 'Each box shows the interquartile range (25th to 75th percentile), with the median line in the middle. Whiskers extend to 1.5 times the IQR. Wider boxes indicate greater dispersion within countries. Compare boxes across years to see temporal changes in achievement distributions. This reveals both central tendency and inequality within each country-year.'
+            interpretation: 'Each box shows the interquartile range (25th to 75th percentile), with the median line in the middle. Whiskers extend to 1.5 times the IQR. Wider boxes indicate greater dispersion within countries. Compare boxes across years to see temporal changes in achievement distributions. This reveals both central tendency and variation within each country-year.'
         },
         'percentile-chart': {
             title: 'Achievement Percentiles by Country',
             purpose: 'Compares achievement levels at key percentile points (P10, P25, P50, P75, P90) across countries.',
-            interpretation: 'Steeper lines indicate greater within-country inequality. Compare the vertical distance between P90 and P10 to see the achievement gap between top and bottom performers. Countries with parallel lines have similar inequality patterns, while crossing lines suggest different inequality structures.'
+            interpretation: 'Steeper lines indicate greater within-country dispersion. Compare the vertical distance between P90 and P10 to see the achievement gap between top and bottom performers. Countries with parallel lines have similar stratification patterns, while crossing lines suggest different distributional structures.'
         },
         'lorenz-curve': {
-            title: 'Lorenz Curve (Cumulative Achievement Inequality)',
-            purpose: 'Visualizes achievement inequality using the Lorenz curve framework, adapted from economics.',
-            interpretation: 'The diagonal line represents perfect equality. Curves further from this line indicate greater inequality. The area between the curve and the diagonal is related to the Gini coefficient. This shows what proportion of total achievement is held by the bottom X% of students.'
+            title: 'Lorenz Curve (Achievement Distribution)',
+            purpose: 'Visualizes achievement distribution using the Lorenz curve framework, adapted from economics.',
+            interpretation: 'The diagonal line represents perfect equality. Curves further from this line indicate greater dispersion. The area between the curve and the diagonal is related to the Gini coefficient. This shows what proportion of total achievement is held by the bottom X% of students.'
         },
         'gap-plot': {
             title: 'Achievement Gap by SES Quartiles',
             purpose: 'Shows the achievement gap between the top (Q4) and bottom (Q1) SES quartiles, broken down by country or year as selected.',
-            interpretation: 'Larger bars indicate greater inequality between high and low SES students. Effect sizes (Cohen\'s d) above 0.8 are considered large. This gap represents the achievement difference attributable to socioeconomic background differences.'
+            interpretation: 'Larger bars indicate greater dispersion between high and low SES students. Effect sizes (Cohen\'s d) above 0.8 are considered large. This gap represents the achievement difference attributable to socioeconomic background differences.'
         },
         'regression-scatter': {
             title: 'Scatter Plot with Fitted Regression Lines',
@@ -951,27 +951,27 @@ function buildChartsSection(charts) {
         'decomposition-chart': {
             title: 'Variance Decomposition (Within vs. Between Countries)',
             purpose: 'Partitions total achievement variance into within-country and between-country components using multilevel modeling.',
-            interpretation: 'The bar heights show what percentage of total variance occurs within versus between countries. High between-country variance (large blue bar) means countries differ substantially in average achievement. High within-country variance (large green bar) means more inequality exists within than between countries. The ICC (ρ) quantifies the proportion of variance at the country level.'
+            interpretation: 'The bar heights show what percentage of total variance occurs within versus between countries. High between-country variance (large blue bar) means countries differ substantially in average achievement. High within-country variance (large green bar) means more variation exists within than between countries. The ICC (ρ) quantifies the proportion of variance at the country level.'
         },
         'world-map': {
             title: 'Global Map of Intergenerational Educational Stratification',
-            purpose: 'Visualizes the strength of the SES → achievement relationship (intergenerational inequality) across countries using a choropleth map.',
-            interpretation: 'Darker/warmer colors indicate stronger SES gradients, meaning greater intergenerational persistence of inequality. Lighter/cooler colors show weaker gradients and more educational mobility. Hover over countries to see exact gradient values, R², and sample sizes. This reveals geographic patterns in educational opportunity structures.'
+            purpose: 'Visualizes the strength of the SES → achievement relationship (intergenerational transmission) across countries using a choropleth map.',
+            interpretation: 'Darker/warmer colors indicate stronger SES gradients, meaning stronger intergenerational transmission of educational achievement. Lighter/cooler colors show weaker gradients and more educational mobility. Hover over countries to see exact gradient values, R², and sample sizes. This reveals geographic patterns in educational opportunity structures.'
         },
         'temporal-trends': {
             title: 'Temporal Trends in SES Gradients Over Time',
-            purpose: 'Tracks changes in the SES → achievement gradient over multiple PISA waves to detect trends in educational inequality.',
-            interpretation: 'Rising lines indicate increasing inequality (growing SES effects). Falling lines show decreasing inequality (shrinking SES effects). Flat lines suggest stable inequality. Compare slopes across countries to see which education systems are becoming more or less equitable over time. This addresses the key question: is educational inequality increasing or decreasing?'
+            purpose: 'Tracks changes in the SES → achievement gradient over multiple PISA waves to detect trends in educational stratification.',
+            interpretation: 'Rising lines indicate increasing stratification (growing SES effects). Falling lines show decreasing stratification (shrinking SES effects). Flat lines suggest stable stratification. Compare slopes across countries to see which education systems are becoming more or less equitable over time. This addresses the key question: is educational stratification increasing or decreasing?'
         },
         'country-comparison': {
             title: 'Cross-National Achievement Comparison',
             purpose: 'Compares mean achievement scores across countries, grouped by year to show temporal changes.',
-            interpretation: 'Bar heights show average achievement levels. Countries are ranked from lowest to highest within each year. Compare bar heights across years to see whether countries improved or declined. This provides context on overall achievement levels before examining inequality patterns.'
+            interpretation: 'Bar heights show average achievement levels. Countries are ranked from lowest to highest within each year. Compare bar heights across years to see whether countries improved or declined. This provides context on overall achievement levels before examining stratification patterns.'
         },
         'gap-comparison': {
             title: 'Cross-National Gap Comparison (Q4-Q1 Quartiles)',
             purpose: 'Compares achievement gaps between top and bottom SES quartiles across countries, with both raw gaps and standardized effect sizes.',
-            interpretation: 'Blue bars show the raw score gap (points). Red line shows effect sizes (Cohen\'s d). Larger values indicate greater SES-based inequality. Compare gaps across countries to identify which have the most and least equitable outcomes. Effect sizes above 0.8 are considered large in educational research.'
+            interpretation: 'Blue bars show the raw score gap (points). Red line shows effect sizes (Cohen\'s d). Larger values indicate greater ESCS-based stratification. Compare gaps across countries to identify which have the most and least equitable outcomes. Effect sizes above 0.8 are considered large in educational research.'
         }
     };
 
@@ -1022,7 +1022,7 @@ function buildMethodologySection() {
             <h3>Statistical Methods</h3>
             <ul>
                 <li><strong>Weighted Statistics:</strong> All analyses use student sampling weights (W_FSTUWT) following OECD (2023) technical standards.</li>
-                <li><strong>Gini Coefficient:</strong> Measures inequality in achievement distribution (0 = perfect equality, 1 = maximum inequality).</li>
+                <li><strong>Gini Coefficient:</strong> Measures dispersion in achievement distribution (0 = all identical, 1 = maximum dispersion).</li>
                 <li><strong>SES Gradient:</strong> Regression slope of achievement on ESCS index, indicating score points gained per unit increase in socioeconomic status.</li>
                 <li><strong>Variance Decomposition:</strong> Partitioning of total variance into within-country and between-country components using intraclass correlation (ICC).</li>
             </ul>
@@ -1046,7 +1046,7 @@ function buildCitationSection() {
         <h2>10. How to Cite</h2>
         <div class="citation">
             <h3>This Tool</h3>
-            <p>Schoenholzer, K. (2025). <em>Educational Inequality Data Explorer</em> [Web application]. https://kevinschoenholzer.com/pisa/</p>
+            <p>Schoenholzer, K. (2026). <em>Educational Stratification in PISA Explorer</em> [Web application]. https://kevinschoenholzer.com/edustrat/</p>
 
             <h3>Data Source</h3>
             <p>OECD (2023). <em>PISA Database</em>. Organisation for Economic Co-operation and Development. https://www.oecd.org/pisa/data/</p>
@@ -1070,11 +1070,11 @@ function buildFooter() {
     return `
         <div class="footer">
             <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 40px; height: 40px; object-fit: contain; margin-bottom: 0.5rem;">
-            <p>Educational Inequality Data Explorer | Generated with Claude Code</p>
-            <p>Kevin Schoenholzer © 2025</p>
+            <p>Educational Stratification in PISA Explorer | Generated with Claude Code</p>
+            <p>Kevin Schoenholzer © 2026</p>
             <p style="margin-top: 1rem; font-size: 0.75rem;">
-                This report was generated automatically from the PISA Educational Inequality Data Explorer.<br>
-                For interactive analysis, visit: https://kevinschoenholzer.com/pisa/
+                This report was generated automatically from the Educational Stratification in PISA Explorer.<br>
+                For interactive analysis, visit: https://kevinschoenholzer.com/edustrat/
             </p>
         </div>
     `;

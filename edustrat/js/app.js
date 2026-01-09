@@ -1,7 +1,7 @@
 /**
- * PISA Educational Inequality Explorer - Main Application
+ * Educational Stratification in PISA Explorer - Main Application
  * Author: Kevin Schoenholzer
- * Date: 2025-12-15
+ * Date: 2026
  */
 
 // Import modules
@@ -41,7 +41,7 @@ import { generateFullReport } from './export/report-export.js';
 // Application initialization
 async function initApp() {
     console.log('==================================================');
-    console.log('PISA Educational Inequality Data Explorer');
+    console.log('Educational Stratification in PISA Explorer');
     console.log('Initializing...');
     console.log('==================================================');
 
