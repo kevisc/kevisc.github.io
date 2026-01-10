@@ -1,6 +1,7 @@
 /**
  * Diagnostics Visualization Module
- * Renders model diagnostics, assumption checks, and statistical tests
+ * Renders model diagnostics tables and a single residual plot
+ * Optimized for computational efficiency
  * Author: Kevin Schoenholzer
  * Date: 2026-01-10
  */
@@ -19,9 +20,51 @@ export function createDiagnosticsComparisonTable(models) {
     const fe = models.fixedEffects;
     const re = models.randomEffects;
 
+    // Calculate AIC/BIC for each model
+    const getAIC = (model) => {
+        if (!model?.residuals) return null;
+        const n = model.nobs;
+        const k = model.variableNames?.length || 2;
+        const sse = model.residuals.reduce((sum, r) => sum + r * r, 0);
+        const sigma2 = sse / n;
+        const logLik = -0.5 * n * (Math.log(2 * Math.PI) + Math.log(sigma2) + 1);
+        return -2 * logLik + 2 * k;
+    };
+
+    const getBIC = (model) => {
+        if (!model?.residuals) return null;
+        const n = model.nobs;
+        const k = model.variableNames?.length || 2;
+        const sse = model.residuals.reduce((sum, r) => sum + r * r, 0);
+        const sigma2 = sse / n;
+        const logLik = -0.5 * n * (Math.log(2 * Math.PI) + Math.log(sigma2) + 1);
+        return -2 * logLik + k * Math.log(n);
+    };
+
+    // Find best model by AIC
+    const aicValues = {
+        'OLS': getAIC(ols),
+        'FE': getAIC(fe),
+        'RE': getAIC(re)
+    };
+    const validAIC = Object.entries(aicValues).filter(([_, v]) => v !== null);
+    const bestAIC = validAIC.length > 0 ? validAIC.reduce((a, b) => a[1] < b[1] ? a : b)[0] : null;
+
+    const formatValue = (val, decimals = 4) => {
+        if (val === undefined || val === null || isNaN(val)) return '—';
+        return val.toFixed(decimals);
+    };
+
+    const highlightBest = (model, metric, lower = true) => {
+        const vals = [ols?.[metric], fe?.[metric], re?.[metric]].filter(v => v !== undefined && !isNaN(v));
+        if (vals.length === 0) return '';
+        const best = lower ? Math.min(...vals) : Math.max(...vals);
+        return model?.[metric] === best ? 'style="color: #10b981; font-weight: 600;"' : '';
+    };
+
     let html = `
         <div class="model-box">
-            <div class="model-header">Model Comparison Summary</div>
+            <div class="model-header">Model Fit Comparison</div>
             <table class="coef-table">
                 <thead>
                     <tr>
@@ -46,51 +89,51 @@ export function createDiagnosticsComparisonTable(models) {
                     </tr>
                     <tr>
                         <td><strong>R² (Overall)</strong></td>
-                        <td>${ols?.r2 !== undefined ? ols.r2.toFixed(4) : '—'}</td>
-                        <td>${fe?.r2 !== undefined ? fe.r2.toFixed(4) : '—'}</td>
-                        <td>${re?.r2 !== undefined ? re.r2.toFixed(4) : '—'}</td>
+                        <td ${highlightBest(ols, 'r2', false)}>${formatValue(ols?.r2)}</td>
+                        <td ${highlightBest(fe, 'r2', false)}>${formatValue(fe?.r2)}</td>
+                        <td ${highlightBest(re, 'r2', false)}>${formatValue(re?.r2)}</td>
                     </tr>
                     <tr>
                         <td><strong>R² (Within)</strong></td>
                         <td>—</td>
-                        <td>${fe?.r2Within !== undefined ? fe.r2Within.toFixed(4) : '—'}</td>
-                        <td>${re?.r2Within !== undefined ? re.r2Within.toFixed(4) : '—'}</td>
+                        <td>${formatValue(fe?.r2Within)}</td>
+                        <td>${formatValue(re?.r2Within)}</td>
                     </tr>
                     <tr>
                         <td><strong>R² (Between)</strong></td>
                         <td>—</td>
-                        <td>${fe?.r2Between !== undefined ? fe.r2Between.toFixed(4) : '—'}</td>
-                        <td>${re?.r2Between !== undefined ? re.r2Between.toFixed(4) : '—'}</td>
+                        <td>${formatValue(fe?.r2Between)}</td>
+                        <td>${formatValue(re?.r2Between)}</td>
                     </tr>
                     <tr>
                         <td><strong>Adjusted R²</strong></td>
-                        <td>${ols?.adjR2 !== undefined ? ols.adjR2.toFixed(4) : '—'}</td>
-                        <td>${fe?.adjR2 !== undefined ? fe.adjR2.toFixed(4) : '—'}</td>
-                        <td>${re?.adjR2 !== undefined ? re.adjR2.toFixed(4) : '—'}</td>
+                        <td>${formatValue(ols?.adjR2)}</td>
+                        <td>${formatValue(fe?.adjR2)}</td>
+                        <td>${formatValue(re?.adjR2)}</td>
                     </tr>
                     <tr>
                         <td><strong>AIC</strong></td>
-                        <td>${ols?.aic !== undefined ? ols.aic.toFixed(1) : '—'}</td>
-                        <td>${fe?.aic !== undefined ? fe.aic.toFixed(1) : '—'}</td>
-                        <td>${re?.aic !== undefined ? re.aic.toFixed(1) : '—'}</td>
+                        <td ${bestAIC === 'OLS' ? 'style="color: #10b981; font-weight: 600;"' : ''}>${formatValue(getAIC(ols), 1)}</td>
+                        <td ${bestAIC === 'FE' ? 'style="color: #10b981; font-weight: 600;"' : ''}>${formatValue(getAIC(fe), 1)}</td>
+                        <td ${bestAIC === 'RE' ? 'style="color: #10b981; font-weight: 600;"' : ''}>${formatValue(getAIC(re), 1)}</td>
                     </tr>
                     <tr>
                         <td><strong>BIC</strong></td>
-                        <td>${ols?.bic !== undefined ? ols.bic.toFixed(1) : '—'}</td>
-                        <td>${fe?.bic !== undefined ? fe.bic.toFixed(1) : '—'}</td>
-                        <td>${re?.bic !== undefined ? re.bic.toFixed(1) : '—'}</td>
+                        <td>${formatValue(getBIC(ols), 1)}</td>
+                        <td>${formatValue(getBIC(fe), 1)}</td>
+                        <td>${formatValue(getBIC(re), 1)}</td>
                     </tr>
                     <tr>
                         <td><strong>ICC (ρ)</strong></td>
                         <td>—</td>
-                        <td>${fe?.rho !== undefined ? fe.rho.toFixed(4) : '—'}</td>
-                        <td>${re?.rho !== undefined ? re.rho.toFixed(4) : '—'}</td>
+                        <td>${formatValue(fe?.rho)}</td>
+                        <td>${formatValue(re?.rho)}</td>
                     </tr>
                 </tbody>
             </table>
-            <div class="methodology-note" style="margin-top: 1rem;">
-                <strong>Interpretation:</strong> Lower AIC/BIC = better fit. Higher R² = more variance explained.
-                ICC (ρ) shows proportion of variance at group level. R² within measures explanatory power for within-group variation.
+            <div class="methodology-note" style="margin-top: 1rem; font-size: 0.9rem;">
+                <span style="color: #10b981;">●</span> Green = best value for that metric.
+                Lower AIC/BIC = better fit. Higher R² = more variance explained.
             </div>
         </div>
     `;
@@ -108,62 +151,59 @@ export function createHausmanTestPanel(hausmanResult) {
         return `
             <div class="model-box">
                 <div class="model-header">Hausman Specification Test</div>
-                <p class="text-secondary">Hausman test not available. Both Fixed Effects and Random Effects models are required.</p>
+                <p class="text-secondary">Hausman test requires both Fixed Effects and Random Effects models to be estimated.</p>
             </div>
         `;
     }
 
     const isSignificant = hausmanResult.pValue < 0.05;
     const statusColor = isSignificant ? '#ef4444' : '#10b981';
-    const statusIcon = isSignificant ? '⚠️' : '✓';
     const recommendation = isSignificant ? 'Fixed Effects' : 'Random Effects';
 
     return `
         <div class="model-box">
             <div class="model-header">Hausman Specification Test</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1rem;">
-                <div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Chi-squared (df=1)</div>
-                    <div style="font-size: 1.5rem; font-weight: 600;">${hausmanResult.chiSquared.toFixed(3)}</div>
-                </div>
-                <div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">P-value</div>
-                    <div style="font-size: 1.5rem; font-weight: 600; color: ${statusColor};">${hausmanResult.pValue.toFixed(4)}</div>
-                </div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1rem;">
-                <div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">FE Coefficient</div>
-                    <div style="font-size: 1.2rem;">${hausmanResult.bFE?.toFixed(3) || '—'}</div>
-                </div>
-                <div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">RE Coefficient</div>
-                    <div style="font-size: 1.2rem;">${hausmanResult.bRE?.toFixed(3) || '—'}</div>
-                </div>
-            </div>
-            <div style="background: ${statusColor}22; border-left: 4px solid ${statusColor}; padding: 1rem; border-radius: 0 4px 4px 0;">
-                <div style="font-weight: 600; margin-bottom: 0.5rem;">${statusIcon} Recommendation: Use ${recommendation}</div>
-                <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                    ${isSignificant
-                        ? 'The test rejects the null hypothesis (p < 0.05). Systematic differences exist between FE and RE coefficients, suggesting correlation between group effects and predictors. Fixed Effects is preferred.'
-                        : 'The test fails to reject the null hypothesis (p ≥ 0.05). No systematic differences detected between FE and RE coefficients. Random Effects is more efficient and acceptable.'}
-                </div>
-            </div>
+            <table class="coef-table">
+                <tbody>
+                    <tr>
+                        <td><strong>Chi-squared (df=1)</strong></td>
+                        <td>${hausmanResult.chiSquared.toFixed(3)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>P-value</strong></td>
+                        <td style="color: ${statusColor}; font-weight: 600;">${hausmanResult.pValue.toFixed(4)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>FE Coefficient (ESCS)</strong></td>
+                        <td>${hausmanResult.bFE?.toFixed(4) || '—'}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>RE Coefficient (ESCS)</strong></td>
+                        <td>${hausmanResult.bRE?.toFixed(4) || '—'}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Coefficient Difference</strong></td>
+                        <td>${hausmanResult.difference?.toFixed(4) || '—'}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Recommendation</strong></td>
+                        <td style="color: ${statusColor}; font-weight: 600;">${recommendation}</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     `;
 }
 
 /**
- * Create residual summary statistics cards
+ * Create residual diagnostics table for all models
  * @param {Object} models - Object containing models with residuals
- * @returns {String} HTML cards
+ * @returns {String} HTML table
  */
-export function createResidualSummaryCards(models) {
+export function createResidualDiagnosticsTable(models) {
     if (!models || Object.keys(models).length === 0) {
-        return '';
+        return '<p class="text-secondary">No models available.</p>';
     }
-
-    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">';
 
     const modelList = [
         { key: 'ols', name: 'OLS (Pooled)' },
@@ -171,73 +211,293 @@ export function createResidualSummaryCards(models) {
         { key: 'randomEffects', name: 'Random Effects' }
     ];
 
-    modelList.forEach(({ key, name }) => {
-        const model = models[key];
-        if (!model || !model.residuals) return;
+    const getStats = (model) => {
+        if (!model?.residuals) return null;
 
         const residuals = model.residuals.filter(Number.isFinite);
-        if (residuals.length === 0) return;
+        if (residuals.length === 0) return null;
 
         const n = residuals.length;
         const mean = residuals.reduce((a, b) => a + b, 0) / n;
         const variance = residuals.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / n;
         const sd = Math.sqrt(variance);
-        const min = Math.min(...residuals);
-        const max = Math.max(...residuals);
 
-        // Count outliers (|residual| > 3 SD)
-        const outliers = residuals.filter(r => Math.abs(r - mean) > 3 * sd);
-        const outlierPct = (outliers.length / n * 100).toFixed(2);
-
-        // Assess normality qualitatively
+        // Skewness and Kurtosis
         const skewness = residuals.reduce((sum, r) => sum + Math.pow((r - mean) / sd, 3), 0) / n;
         const kurtosis = residuals.reduce((sum, r) => sum + Math.pow((r - mean) / sd, 4), 0) / n - 3;
 
-        let normalityStatus = 'Good';
-        let normalityColor = '#10b981';
-        if (Math.abs(skewness) > 1 || Math.abs(kurtosis) > 2) {
-            normalityStatus = 'Moderate concern';
-            normalityColor = '#f59e0b';
-        }
-        if (Math.abs(skewness) > 2 || Math.abs(kurtosis) > 7) {
-            normalityStatus = 'Significant departure';
-            normalityColor = '#ef4444';
+        // Outliers (|residual| > 3 SD)
+        const outliers = residuals.filter(r => Math.abs(r - mean) > 3 * sd).length;
+
+        // Jarque-Bera test statistic (normality test)
+        const jb = (n / 6) * (Math.pow(skewness, 2) + Math.pow(kurtosis, 2) / 4);
+        // JB follows chi-squared with df=2 under null of normality
+        // p-value approximation
+        const jbPValue = 1 - jStat.chisquare.cdf(jb, 2);
+
+        // Heteroscedasticity check (variance ratio upper/lower half)
+        let heteroRatio = null;
+        if (model.yhat) {
+            const pairs = model.yhat.map((y, i) => ({ yhat: y, resid: model.residuals[i] }))
+                .filter(p => Number.isFinite(p.yhat) && Number.isFinite(p.resid))
+                .sort((a, b) => a.yhat - b.yhat);
+
+            if (pairs.length > 10) {
+                const mid = Math.floor(pairs.length / 2);
+                const lowerHalf = pairs.slice(0, mid).map(p => p.resid);
+                const upperHalf = pairs.slice(mid).map(p => p.resid);
+                const sdLower = Math.sqrt(lowerHalf.reduce((s, r) => s + r * r, 0) / lowerHalf.length);
+                const sdUpper = Math.sqrt(upperHalf.reduce((s, r) => s + r * r, 0) / upperHalf.length);
+                heteroRatio = Math.max(sdLower, sdUpper) / Math.min(sdLower, sdUpper);
+            }
         }
 
-        html += `
-            <div class="model-box" style="padding: 1rem;">
-                <div style="font-weight: 600; margin-bottom: 0.75rem; color: var(--primary-color);">${name}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.9rem;">
-                    <div>Mean:</div><div style="text-align: right;">${mean.toFixed(3)}</div>
-                    <div>Std. Dev:</div><div style="text-align: right;">${sd.toFixed(3)}</div>
-                    <div>Min:</div><div style="text-align: right;">${min.toFixed(1)}</div>
-                    <div>Max:</div><div style="text-align: right;">${max.toFixed(1)}</div>
-                    <div>Skewness:</div><div style="text-align: right;">${skewness.toFixed(3)}</div>
-                    <div>Excess Kurtosis:</div><div style="text-align: right;">${kurtosis.toFixed(3)}</div>
-                    <div>Outliers (>3σ):</div><div style="text-align: right;">${outliers.length} (${outlierPct}%)</div>
-                </div>
-                <div style="margin-top: 0.75rem; padding: 0.5rem; background: ${normalityColor}22; border-radius: 4px; font-size: 0.85rem;">
-                    <span style="color: ${normalityColor};">●</span> Normality: ${normalityStatus}
-                </div>
-            </div>
-        `;
+        return {
+            n,
+            mean,
+            sd,
+            min: Math.min(...residuals),
+            max: Math.max(...residuals),
+            skewness,
+            kurtosis,
+            outliers,
+            outlierPct: (outliers / n * 100),
+            jb,
+            jbPValue,
+            heteroRatio
+        };
+    };
+
+    let html = `
+        <div class="model-box">
+            <div class="model-header">Residual Diagnostics</div>
+            <table class="coef-table">
+                <thead>
+                    <tr>
+                        <th>Diagnostic</th>
+    `;
+
+    const stats = {};
+    modelList.forEach(({ key, name }) => {
+        const s = getStats(models[key]);
+        if (s) {
+            stats[key] = s;
+            html += `<th>${name}</th>`;
+        }
     });
 
-    html += '</div>';
+    html += `</tr></thead><tbody>`;
+
+    if (Object.keys(stats).length === 0) {
+        return '<p class="text-secondary">No residual data available.</p>';
+    }
+
+    // Residual Mean (should be ≈ 0)
+    html += `<tr><td><strong>Residual Mean</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const val = stats[key].mean;
+            const ok = Math.abs(val) < 1;
+            html += `<td style="color: ${ok ? '#10b981' : '#f59e0b'};">${val.toFixed(4)}</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    // Residual SD
+    html += `<tr><td><strong>Residual Std. Dev.</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) html += `<td>${stats[key].sd.toFixed(2)}</td>`;
+    });
+    html += `</tr>`;
+
+    // Skewness (should be ≈ 0)
+    html += `<tr><td><strong>Skewness</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const val = stats[key].skewness;
+            const ok = Math.abs(val) < 1;
+            html += `<td style="color: ${ok ? '#10b981' : Math.abs(val) < 2 ? '#f59e0b' : '#ef4444'};">${val.toFixed(3)}</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    // Kurtosis (should be ≈ 0 for normal)
+    html += `<tr><td><strong>Excess Kurtosis</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const val = stats[key].kurtosis;
+            const ok = Math.abs(val) < 2;
+            html += `<td style="color: ${ok ? '#10b981' : Math.abs(val) < 7 ? '#f59e0b' : '#ef4444'};">${val.toFixed(3)}</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    // Jarque-Bera Test
+    html += `<tr><td><strong>Jarque-Bera Statistic</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) html += `<td>${stats[key].jb.toFixed(2)}</td>`;
+    });
+    html += `</tr>`;
+
+    html += `<tr><td><strong>JB p-value (Normality)</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const p = stats[key].jbPValue;
+            const ok = p >= 0.05;
+            html += `<td style="color: ${ok ? '#10b981' : '#ef4444'};">${p < 0.001 ? '< 0.001' : p.toFixed(4)}</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    // Heteroscedasticity (variance ratio)
+    html += `<tr><td><strong>Variance Ratio (Hetero. Check)</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const val = stats[key].heteroRatio;
+            if (val) {
+                const ok = val < 1.5;
+                html += `<td style="color: ${ok ? '#10b981' : val < 2 ? '#f59e0b' : '#ef4444'};">${val.toFixed(2)}</td>`;
+            } else {
+                html += `<td>—</td>`;
+            }
+        }
+    });
+    html += `</tr>`;
+
+    // Outliers
+    html += `<tr><td><strong>Outliers (> 3σ)</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const pct = stats[key].outlierPct;
+            const ok = pct < 1;
+            html += `<td style="color: ${ok ? '#10b981' : pct < 3 ? '#f59e0b' : '#ef4444'};">${stats[key].outliers} (${pct.toFixed(2)}%)</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    html += `</tbody></table></div>`;
+
     return html;
 }
 
 /**
- * Create assumption check dashboard
+ * Create Cook's Distance summary table
+ * @param {Object} models - Models object
+ * @returns {String} HTML table
+ */
+export function createCooksDistanceSummary(models) {
+    if (!models || Object.keys(models).length === 0) {
+        return '';
+    }
+
+    const modelList = [
+        { key: 'ols', name: 'OLS (Pooled)' },
+        { key: 'fixedEffects', name: 'Fixed Effects' },
+        { key: 'randomEffects', name: 'Random Effects' }
+    ];
+
+    const getCooksStats = (model) => {
+        if (!model?.residuals) return null;
+
+        const residuals = model.residuals.filter(Number.isFinite);
+        const n = residuals.length;
+        const k = model.variableNames?.length || 2;
+        const mse = residuals.reduce((sum, r) => sum + r * r, 0) / (n - k);
+        const avgLeverage = k / n;
+
+        // Calculate Cook's Distance (simplified)
+        const cooksD = residuals.map(r => {
+            const h = avgLeverage;
+            return (r * r / (k * mse)) * (h / Math.pow(1 - h, 2));
+        });
+
+        const threshold = 4 / n;
+        const influential = cooksD.filter(d => d > threshold).length;
+        const maxCooks = Math.max(...cooksD);
+        const meanCooks = cooksD.reduce((a, b) => a + b, 0) / n;
+
+        return {
+            n,
+            threshold,
+            influential,
+            influentialPct: (influential / n * 100),
+            maxCooks,
+            meanCooks
+        };
+    };
+
+    let html = `
+        <div class="model-box">
+            <div class="model-header">Influential Observations (Cook's Distance)</div>
+            <table class="coef-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+    `;
+
+    const stats = {};
+    modelList.forEach(({ key, name }) => {
+        const s = getCooksStats(models[key]);
+        if (s) {
+            stats[key] = s;
+            html += `<th>${name}</th>`;
+        }
+    });
+
+    if (Object.keys(stats).length === 0) {
+        return '';
+    }
+
+    html += `</tr></thead><tbody>`;
+
+    html += `<tr><td><strong>Threshold (4/n)</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) html += `<td>${stats[key].threshold.toFixed(6)}</td>`;
+    });
+    html += `</tr>`;
+
+    html += `<tr><td><strong>Influential Points</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const pct = stats[key].influentialPct;
+            const ok = pct < 5;
+            html += `<td style="color: ${ok ? '#10b981' : pct < 10 ? '#f59e0b' : '#ef4444'};">${stats[key].influential} (${pct.toFixed(1)}%)</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    html += `<tr><td><strong>Max Cook's D</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) {
+            const val = stats[key].maxCooks;
+            const ok = val < 1;
+            html += `<td style="color: ${ok ? '#10b981' : '#ef4444'};">${val.toFixed(4)}</td>`;
+        }
+    });
+    html += `</tr>`;
+
+    html += `<tr><td><strong>Mean Cook's D</strong></td>`;
+    modelList.forEach(({ key }) => {
+        if (stats[key]) html += `<td>${stats[key].meanCooks.toFixed(6)}</td>`;
+    });
+    html += `</tr>`;
+
+    html += `</tbody></table></div>`;
+
+    return html;
+}
+
+/**
+ * Create assumption check summary
  * @param {Object} models - Models object
  * @param {Object} hausmanResult - Hausman test result
- * @returns {String} HTML dashboard
+ * @returns {String} HTML
  */
-export function createAssumptionCheckDashboard(models, hausmanResult) {
+export function createAssumptionCheckSummary(models, hausmanResult) {
     const checks = [];
-
-    // 1. Linearity check (based on residual mean near zero)
     const ols = models?.ols;
+
+    // 1. Linearity
     if (ols?.residuals) {
         const residuals = ols.residuals.filter(Number.isFinite);
         const mean = residuals.reduce((a, b) => a + b, 0) / residuals.length;
@@ -245,11 +505,12 @@ export function createAssumptionCheckDashboard(models, hausmanResult) {
         checks.push({
             name: 'Linearity',
             status,
-            detail: `Residual mean: ${mean.toFixed(3)} (should be ≈ 0)`
+            value: `Mean residual: ${mean.toFixed(3)}`,
+            expected: 'Should be ≈ 0'
         });
     }
 
-    // 2. Normality check (based on skewness/kurtosis)
+    // 2. Normality
     if (ols?.residuals) {
         const residuals = ols.residuals.filter(Number.isFinite);
         const n = residuals.length;
@@ -263,46 +524,47 @@ export function createAssumptionCheckDashboard(models, hausmanResult) {
         checks.push({
             name: 'Normality',
             status,
-            detail: `Skew: ${skewness.toFixed(2)}, Kurtosis: ${kurtosis.toFixed(2)}`
+            value: `Skew: ${skewness.toFixed(2)}, Kurt: ${kurtosis.toFixed(2)}`,
+            expected: 'Skew ≈ 0, Kurtosis ≈ 0'
         });
     }
 
-    // 3. Homoscedasticity (qualitative - based on residual spread)
+    // 3. Homoscedasticity
     if (ols?.residuals && ols?.yhat) {
-        // Simple check: compare SD of residuals in lower vs upper half of fitted values
         const pairs = ols.yhat.map((y, i) => ({ yhat: y, resid: ols.residuals[i] }))
             .filter(p => Number.isFinite(p.yhat) && Number.isFinite(p.resid))
             .sort((a, b) => a.yhat - b.yhat);
 
-        const mid = Math.floor(pairs.length / 2);
-        const lowerHalf = pairs.slice(0, mid).map(p => p.resid);
-        const upperHalf = pairs.slice(mid).map(p => p.resid);
+        if (pairs.length > 10) {
+            const mid = Math.floor(pairs.length / 2);
+            const lowerHalf = pairs.slice(0, mid).map(p => p.resid);
+            const upperHalf = pairs.slice(mid).map(p => p.resid);
+            const sdLower = Math.sqrt(lowerHalf.reduce((s, r) => s + r * r, 0) / lowerHalf.length);
+            const sdUpper = Math.sqrt(upperHalf.reduce((s, r) => s + r * r, 0) / upperHalf.length);
+            const ratio = Math.max(sdLower, sdUpper) / Math.min(sdLower, sdUpper);
 
-        const sdLower = Math.sqrt(lowerHalf.reduce((s, r) => s + r * r, 0) / lowerHalf.length);
-        const sdUpper = Math.sqrt(upperHalf.reduce((s, r) => s + r * r, 0) / upperHalf.length);
-        const ratio = Math.max(sdLower, sdUpper) / Math.min(sdLower, sdUpper);
-
-        const status = ratio < 1.5 ? 'pass' : ratio < 2 ? 'warning' : 'fail';
-        checks.push({
-            name: 'Homoscedasticity',
-            status,
-            detail: `Variance ratio (upper/lower): ${ratio.toFixed(2)}`
-        });
+            const status = ratio < 1.5 ? 'pass' : ratio < 2 ? 'warning' : 'fail';
+            checks.push({
+                name: 'Homoscedasticity',
+                status,
+                value: `Variance ratio: ${ratio.toFixed(2)}`,
+                expected: 'Ratio < 1.5'
+            });
+        }
     }
 
-    // 4. Model specification (Hausman test)
+    // 4. Model Specification
     if (hausmanResult) {
         const status = hausmanResult.pValue >= 0.05 ? 'pass' : 'warning';
         checks.push({
             name: 'Model Specification',
             status,
-            detail: hausmanResult.pValue < 0.05
-                ? 'FE preferred (p < 0.05)'
-                : 'RE acceptable (p ≥ 0.05)'
+            value: `Hausman p: ${hausmanResult.pValue.toFixed(4)}`,
+            expected: hausmanResult.pValue < 0.05 ? 'Use Fixed Effects' : 'Random Effects OK'
         });
     }
 
-    // 5. Sample size adequacy
+    // 5. Sample Size
     if (ols?.nobs) {
         const k = ols.variableNames?.length || 2;
         const ratio = ols.nobs / k;
@@ -310,354 +572,126 @@ export function createAssumptionCheckDashboard(models, hausmanResult) {
         checks.push({
             name: 'Sample Size',
             status,
-            detail: `N/k ratio: ${ratio.toFixed(0)} (N=${ols.nobs.toLocaleString()}, k=${k})`
+            value: `N/k = ${ratio.toFixed(0)}`,
+            expected: 'N/k > 50 preferred'
         });
     }
 
-    const statusColors = {
-        pass: '#10b981',
-        warning: '#f59e0b',
-        fail: '#ef4444'
-    };
-
-    const statusIcons = {
-        pass: '✓',
-        warning: '⚠',
-        fail: '✗'
-    };
+    const statusColors = { pass: '#10b981', warning: '#f59e0b', fail: '#ef4444' };
+    const statusLabels = { pass: 'Pass', warning: 'Caution', fail: 'Concern' };
 
     let html = `
         <div class="model-box">
             <div class="model-header">Assumption Check Summary</div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <table class="coef-table">
+                <thead>
+                    <tr>
+                        <th>Assumption</th>
+                        <th>Status</th>
+                        <th>Result</th>
+                        <th>Interpretation</th>
+                    </tr>
+                </thead>
+                <tbody>
     `;
 
     checks.forEach(check => {
         html += `
-            <div style="padding: 1rem; background: ${statusColors[check.status]}15; border-radius: 8px; border: 1px solid ${statusColors[check.status]}40;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                    <span style="color: ${statusColors[check.status]}; font-size: 1.2rem;">${statusIcons[check.status]}</span>
-                    <span style="font-weight: 600;">${check.name}</span>
-                </div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary);">${check.detail}</div>
-            </div>
+            <tr>
+                <td><strong>${check.name}</strong></td>
+                <td style="color: ${statusColors[check.status]}; font-weight: 600;">${statusLabels[check.status]}</td>
+                <td>${check.value}</td>
+                <td style="color: var(--text-secondary);">${check.expected}</td>
+            </tr>
         `;
     });
 
-    html += `
-            </div>
-            <div class="methodology-note" style="margin-top: 1rem;">
-                <strong>Legend:</strong>
-                <span style="color: #10b981;">✓ Pass</span> — assumption met;
-                <span style="color: #f59e0b;">⚠ Warning</span> — minor concerns;
-                <span style="color: #ef4444;">✗ Fail</span> — significant violation
-            </div>
-        </div>
-    `;
+    html += `</tbody></table></div>`;
 
     return html;
 }
 
 /**
- * Render residuals histogram
- * @param {Object} model - Model with residuals
- * @param {String} modelName - Display name
- * @param {String} targetElementId - Target div ID
- */
-export function renderResidualsHistogram(model, modelName, targetElementId) {
-    if (!model || !model.residuals) {
-        console.warn('Cannot render histogram: missing residuals');
-        return;
-    }
-
-    const residuals = model.residuals.filter(Number.isFinite);
-    if (residuals.length < 10) {
-        console.warn('Cannot render histogram: insufficient residuals');
-        return;
-    }
-
-    // Calculate statistics for overlay
-    const n = residuals.length;
-    const mean = residuals.reduce((a, b) => a + b, 0) / n;
-    const sd = Math.sqrt(residuals.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / n);
-
-    const trace = {
-        x: residuals,
-        type: 'histogram',
-        name: 'Residuals',
-        marker: {
-            color: '#3b82f6',
-            opacity: 0.7,
-            line: {
-                color: '#1e40af',
-                width: 1
-            }
-        },
-        nbinsx: 50
-    };
-
-    // Generate normal curve overlay
-    const xMin = Math.min(...residuals);
-    const xMax = Math.max(...residuals);
-    const xRange = [];
-    const yNormal = [];
-    const step = (xMax - xMin) / 100;
-    const binWidth = (xMax - xMin) / 50;
-
-    for (let x = xMin; x <= xMax; x += step) {
-        xRange.push(x);
-        const z = (x - mean) / sd;
-        const density = Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
-        yNormal.push(density * n * binWidth);
-    }
-
-    const normalCurve = {
-        x: xRange,
-        y: yNormal,
-        type: 'scatter',
-        mode: 'lines',
-        name: 'Normal',
-        line: {
-            color: '#ef4444',
-            width: 2
-        }
-    };
-
-    const layout = {
-        title: {
-            text: `Residual Distribution: ${modelName}`,
-            font: { color: '#f1f5f9', size: 14 }
-        },
-        xaxis: {
-            title: 'Residuals',
-            gridcolor: '#334155'
-        },
-        yaxis: {
-            title: 'Frequency',
-            gridcolor: '#334155'
-        },
-        paper_bgcolor: '#1e293b',
-        plot_bgcolor: '#1e293b',
-        font: { color: '#f1f5f9' },
-        showlegend: true,
-        legend: {
-            x: 0.02,
-            y: 0.98,
-            bgcolor: 'rgba(30, 41, 59, 0.8)'
-        },
-        bargap: 0.05,
-        margin: { t: 50, b: 60, l: 60, r: 30 }
-    };
-
-    const config = {
-        responsive: true,
-        displayModeBar: true,
-        displaylogo: false
-    };
-
-    const chartDiv = document.getElementById(targetElementId);
-    if (chartDiv) {
-        Plotly.newPlot(chartDiv, [trace, normalCurve], layout, config);
-    }
-}
-
-/**
- * Render Cook's Distance plot
- * @param {Object} model - Model with residuals
- * @param {String} modelName - Display name
- * @param {String} targetElementId - Target div ID
- */
-export function renderCooksDistancePlot(model, modelName, targetElementId) {
-    if (!model || !model.residuals) {
-        console.warn('Cannot render Cook\'s distance: missing residuals');
-        return;
-    }
-
-    const residuals = model.residuals.filter(Number.isFinite);
-    const n = residuals.length;
-    const k = model.variableNames?.length || 2;
-
-    // Calculate Cook's Distance (simplified approximation)
-    const mean = residuals.reduce((a, b) => a + b, 0) / n;
-    const mse = residuals.reduce((sum, r) => sum + r * r, 0) / (n - k);
-    const avgLeverage = k / n;
-
-    const cooksD = residuals.map(r => {
-        const h = avgLeverage; // Simplified: using average leverage
-        return (r * r / (k * mse)) * (h / Math.pow(1 - h, 2));
-    });
-
-    const threshold = 4 / n;
-    const influential = cooksD.filter(d => d > threshold).length;
-
-    // Create indices for x-axis
-    const indices = cooksD.map((_, i) => i + 1);
-
-    // Color points by whether they exceed threshold
-    const colors = cooksD.map(d => d > threshold ? '#ef4444' : '#3b82f6');
-
-    const trace = {
-        x: indices,
-        y: cooksD,
-        type: 'scatter',
-        mode: 'markers',
-        name: "Cook's D",
-        marker: {
-            size: 4,
-            color: colors,
-            opacity: 0.6
-        }
-    };
-
-    // Threshold line
-    const thresholdLine = {
-        x: [1, n],
-        y: [threshold, threshold],
-        type: 'scatter',
-        mode: 'lines',
-        name: `Threshold (4/n = ${threshold.toFixed(4)})`,
-        line: {
-            color: '#f59e0b',
-            width: 2,
-            dash: 'dash'
-        }
-    };
-
-    const layout = {
-        title: {
-            text: `Cook's Distance: ${modelName} (${influential} influential points)`,
-            font: { color: '#f1f5f9', size: 14 }
-        },
-        xaxis: {
-            title: 'Observation Index',
-            gridcolor: '#334155'
-        },
-        yaxis: {
-            title: "Cook's Distance",
-            gridcolor: '#334155'
-        },
-        paper_bgcolor: '#1e293b',
-        plot_bgcolor: '#1e293b',
-        font: { color: '#f1f5f9' },
-        showlegend: true,
-        legend: {
-            x: 0.02,
-            y: 0.98,
-            bgcolor: 'rgba(30, 41, 59, 0.8)'
-        },
-        margin: { t: 50, b: 60, l: 60, r: 30 }
-    };
-
-    const config = {
-        responsive: true,
-        displayModeBar: true,
-        displaylogo: false
-    };
-
-    const chartDiv = document.getElementById(targetElementId);
-    if (chartDiv) {
-        Plotly.newPlot(chartDiv, [trace, thresholdLine], layout, config);
-    }
-}
-
-/**
- * Render Scale-Location plot (sqrt of standardized residuals vs fitted)
+ * Render a single residual vs fitted plot (optimized, max 3000 points)
  * @param {Object} model - Model with residuals and fitted values
  * @param {String} modelName - Display name
  * @param {String} targetElementId - Target div ID
  */
-export function renderScaleLocationPlot(model, modelName, targetElementId) {
+export function renderResidualPlotOptimized(model, modelName, targetElementId) {
     if (!model || !model.residuals || !model.yhat) {
-        console.warn('Cannot render scale-location plot: missing data');
+        const div = document.getElementById(targetElementId);
+        if (div) div.innerHTML = '<p class="text-secondary">No residual data available for this model.</p>';
         return;
     }
 
     const pairs = [];
-    const residuals = model.residuals;
-    const n = residuals.length;
-    const mean = residuals.reduce((a, b) => a + b, 0) / n;
-    const sd = Math.sqrt(residuals.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / n);
-
     for (let i = 0; i < model.yhat.length; i++) {
         const fitted = model.yhat[i];
         const residual = model.residuals[i];
         if (Number.isFinite(fitted) && Number.isFinite(residual)) {
-            const standardized = (residual - mean) / sd;
-            pairs.push([fitted, Math.sqrt(Math.abs(standardized))]);
+            pairs.push([fitted, residual]);
         }
     }
 
-    if (pairs.length === 0) return;
-
-    // Sample if too many points
-    const maxPoints = 3000;
-    const step = Math.ceil(pairs.length / maxPoints);
-    const fitted = [];
-    const sqrtAbsResid = [];
-    for (let i = 0; i < pairs.length; i += step) {
-        fitted.push(pairs[i][0]);
-        sqrtAbsResid.push(pairs[i][1]);
+    if (pairs.length === 0) {
+        const div = document.getElementById(targetElementId);
+        if (div) div.innerHTML = '<p class="text-secondary">No valid residual data.</p>';
+        return;
     }
+
+    // Sample down to max 3000 points
+    const maxPoints = 3000;
+    let sampledPairs = pairs;
+    if (pairs.length > maxPoints) {
+        const step = Math.ceil(pairs.length / maxPoints);
+        sampledPairs = [];
+        for (let i = 0; i < pairs.length; i += step) {
+            sampledPairs.push(pairs[i]);
+        }
+    }
+
+    const fittedValues = sampledPairs.map(p => p[0]);
+    const residuals = sampledPairs.map(p => p[1]);
 
     const trace = {
-        x: fitted,
-        y: sqrtAbsResid,
-        type: 'scatter',
+        x: fittedValues,
+        y: residuals,
         mode: 'markers',
-        name: 'Observations',
+        type: 'scatter',
+        name: 'Residuals',
         marker: {
-            size: 4,
+            size: 3,
             color: '#3b82f6',
-            opacity: 0.5
-        }
+            opacity: 0.4
+        },
+        hovertemplate: 'Fitted: %{x:.1f}<br>Residual: %{y:.1f}<extra></extra>'
     };
 
-    // Add smoothed line (simple moving average)
-    const sorted = fitted.map((f, i) => ({ x: f, y: sqrtAbsResid[i] })).sort((a, b) => a.x - b.x);
-    const windowSize = Math.max(10, Math.floor(sorted.length / 20));
-    const smoothX = [];
-    const smoothY = [];
-    for (let i = windowSize; i < sorted.length - windowSize; i += Math.floor(windowSize / 2)) {
-        const window = sorted.slice(i - windowSize, i + windowSize);
-        smoothX.push(window.reduce((s, p) => s + p.x, 0) / window.length);
-        smoothY.push(window.reduce((s, p) => s + p.y, 0) / window.length);
-    }
-
-    const smoothLine = {
-        x: smoothX,
-        y: smoothY,
-        type: 'scatter',
+    // Zero line
+    const xMin = Math.min(...fittedValues);
+    const xMax = Math.max(...fittedValues);
+    const zeroLine = {
+        x: [xMin, xMax],
+        y: [0, 0],
         mode: 'lines',
-        name: 'Trend',
-        line: {
-            color: '#ef4444',
-            width: 2
-        }
+        type: 'scatter',
+        name: 'Zero',
+        line: { color: '#ef4444', width: 2, dash: 'dash' }
     };
 
     const layout = {
         title: {
-            text: `Scale-Location: ${modelName}`,
+            text: `Residual vs Fitted: ${modelName} (n=${pairs.length.toLocaleString()}, showing ${sampledPairs.length.toLocaleString()})`,
             font: { color: '#f1f5f9', size: 14 }
         },
-        xaxis: {
-            title: 'Fitted Values',
-            gridcolor: '#334155'
-        },
-        yaxis: {
-            title: '√|Standardized Residuals|',
-            gridcolor: '#334155'
-        },
+        xaxis: { title: 'Fitted Values', gridcolor: '#334155' },
+        yaxis: { title: 'Residuals', gridcolor: '#334155' },
         paper_bgcolor: '#1e293b',
         plot_bgcolor: '#1e293b',
         font: { color: '#f1f5f9' },
-        showlegend: true,
-        legend: {
-            x: 0.02,
-            y: 0.98,
-            bgcolor: 'rgba(30, 41, 59, 0.8)'
-        },
-        margin: { t: 50, b: 60, l: 60, r: 30 }
+        showlegend: false,
+        hovermode: 'closest',
+        margin: { t: 50, b: 50, l: 60, r: 30 }
     };
 
     const config = {
@@ -668,16 +702,15 @@ export function renderScaleLocationPlot(model, modelName, targetElementId) {
 
     const chartDiv = document.getElementById(targetElementId);
     if (chartDiv) {
-        Plotly.newPlot(chartDiv, [trace, smoothLine], layout, config);
+        Plotly.newPlot(chartDiv, [trace, zeroLine], layout, config);
     }
 }
 
 export default {
     createDiagnosticsComparisonTable,
     createHausmanTestPanel,
-    createResidualSummaryCards,
-    createAssumptionCheckDashboard,
-    renderResidualsHistogram,
-    renderCooksDistancePlot,
-    renderScaleLocationPlot
+    createResidualDiagnosticsTable,
+    createCooksDistanceSummary,
+    createAssumptionCheckSummary,
+    renderResidualPlotOptimized
 };
