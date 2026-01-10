@@ -31,6 +31,15 @@ import {
     renderQQPlot
 } from './visualization/regression-viz.js';
 import { renderAllComparativeCharts } from './visualization/comparative-viz.js';
+import {
+    createDiagnosticsComparisonTable,
+    createHausmanTestPanel,
+    createResidualSummaryCards,
+    createAssumptionCheckDashboard,
+    renderResidualsHistogram,
+    renderCooksDistancePlot,
+    renderScaleLocationPlot
+} from './visualization/diagnostics-viz.js';
 
 // Import export modules
 import { exportComprehensiveSummary, exportDescriptiveStats, exportAllRegressionModels } from './export/csv-export.js';
@@ -1126,9 +1135,13 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
         if (models.fixedEffects && models.randomEffects) {
             const predLabel = getPredictorLabel(predictorVar);
             const hausman = hausmanTest(models.fixedEffects, models.randomEffects, predLabel);
+            // Store globally for diagnostics tab
+            window.lastHausmanTest = hausman;
             if (hausman) {
                 renderHausmanTest(hausman);
             }
+        } else {
+            window.lastHausmanTest = null;
         }
 
         // Store models globally for diagnostics tab to access
@@ -1151,19 +1164,85 @@ function renderDiagnostics(data, outcomeVar) {
 
     // Get the stored regression models from the last regression run
     const models = window.lastRegressionModels || {};
+    const hausmanResult = window.lastHausmanTest || null;
 
-    // Always render residual and QQ plots for all available models
+    // 1. Render Assumption Check Dashboard
+    const assumptionDiv = document.getElementById('assumption-dashboard');
+    if (assumptionDiv) {
+        assumptionDiv.innerHTML = createAssumptionCheckDashboard(models, hausmanResult);
+    }
+
+    // 2. Render Model Comparison Table
+    const comparisonDiv = document.getElementById('model-comparison-table');
+    if (comparisonDiv) {
+        comparisonDiv.innerHTML = createDiagnosticsComparisonTable(models);
+    }
+
+    // 3. Render Hausman Test Panel
+    const hausmanDiv = document.getElementById('hausman-panel');
+    if (hausmanDiv) {
+        hausmanDiv.innerHTML = createHausmanTestPanel(hausmanResult);
+    }
+
+    // 4. Render Residual Summary Statistics Cards
+    const residualSummaryDiv = document.getElementById('residual-summary-cards');
+    if (residualSummaryDiv) {
+        residualSummaryDiv.innerHTML = createResidualSummaryCards(models);
+    }
+
+    // 5. Render Residual Histograms
+    if (models.ols) {
+        renderResidualsHistogram(models.ols, 'OLS (Pooled)', 'histogram-ols');
+    }
+    if (models.fixedEffects) {
+        renderResidualsHistogram(models.fixedEffects, 'Fixed Effects', 'histogram-fe');
+    }
+    if (models.randomEffects) {
+        renderResidualsHistogram(models.randomEffects, 'Random Effects', 'histogram-re');
+    }
+
+    // 6. Render Residual vs Fitted plots
     if (models.ols) {
         renderResidualPlot(models.ols, 'OLS (Pooled)', 'residual-plot-ols');
-        renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
     }
     if (models.fixedEffects) {
         renderResidualPlot(models.fixedEffects, 'Fixed Effects', 'residual-plot-fe');
-        renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
     }
     if (models.randomEffects) {
         renderResidualPlot(models.randomEffects, 'Random Effects', 'residual-plot-re');
+    }
+
+    // 7. Render Scale-Location plots
+    if (models.ols) {
+        renderScaleLocationPlot(models.ols, 'OLS (Pooled)', 'scale-location-ols');
+    }
+    if (models.fixedEffects) {
+        renderScaleLocationPlot(models.fixedEffects, 'Fixed Effects', 'scale-location-fe');
+    }
+    if (models.randomEffects) {
+        renderScaleLocationPlot(models.randomEffects, 'Random Effects', 'scale-location-re');
+    }
+
+    // 8. Render Q-Q plots
+    if (models.ols) {
+        renderQQPlot(models.ols, 'OLS (Pooled)', 'qq-plot-ols');
+    }
+    if (models.fixedEffects) {
+        renderQQPlot(models.fixedEffects, 'Fixed Effects', 'qq-plot-fe');
+    }
+    if (models.randomEffects) {
         renderQQPlot(models.randomEffects, 'Random Effects', 'qq-plot-re');
+    }
+
+    // 9. Render Cook's Distance plots
+    if (models.ols) {
+        renderCooksDistancePlot(models.ols, 'OLS (Pooled)', 'cooks-distance-ols');
+    }
+    if (models.fixedEffects) {
+        renderCooksDistancePlot(models.fixedEffects, 'Fixed Effects', 'cooks-distance-fe');
+    }
+    if (models.randomEffects) {
+        renderCooksDistancePlot(models.randomEffects, 'Random Effects', 'cooks-distance-re');
     }
 
     console.log('✓ Diagnostics rendered');

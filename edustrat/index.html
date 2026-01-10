@@ -553,47 +553,115 @@
             <div id="diagnostics" class="tab-content">
                 <div class="section-title">Model Diagnostics</div>
                 <p class="description">
-                    Model fit diagnostics including residual analysis and normality tests for all regression models.
-                    Diagnostic plots check key regression assumptions: linearity, homoscedasticity, and normality of residuals.
+                    Comprehensive model diagnostics including assumption checks, specification tests, and residual analysis.
+                    Use these tools to validate regression assumptions and choose the appropriate model specification.
                 </p>
 
-                <div class="alert alert-info" style="margin-bottom: 1.5rem;">
-                    <strong>Diagnostic Tests Explained:</strong><br>
-                    <strong>Residual Plots:</strong> Plot residuals (observed - predicted) against fitted values. Should show random scatter around zero with constant spread.
-                    Patterns indicate violations: fan shape = heteroscedasticity (non-constant variance), curves = nonlinearity, clusters = omitted variables.<br>
-                    <strong>Q-Q Plots:</strong> Plot residual quantiles against theoretical normal quantiles. Points should follow the diagonal reference line if residuals are normally distributed.
-                    Deviations indicate: S-shape = heavy tails, curves = skewness. Normality important for valid inference (p-values, confidence intervals).<br>
-                    <strong>Interpretation:</strong> Perfect adherence to assumptions is rare with real data. Focus on severe violations that could bias estimates or invalidate inference.
+                <!-- Assumption Check Dashboard -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Assumption Check Summary</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        Quick overview of key regression assumptions. Green indicates assumptions are met, yellow suggests minor concerns, and red indicates significant violations that may affect inference.
+                    </p>
+                    <div id="assumption-dashboard"></div>
                 </div>
 
-                <div id="diagnostics-results"></div>
+                <!-- Model Comparison Table -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Model Comparison</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this shows:</strong> Side-by-side comparison of OLS, Fixed Effects, and Random Effects models.<br>
+                        <strong>Key metrics:</strong> R² measures variance explained; AIC/BIC for model selection (lower = better); ICC shows proportion of variance at group level.
+                    </p>
+                    <div id="model-comparison-table"></div>
+                </div>
 
-                <div id="residual-plots-container" style="margin-top: 2rem;">
+                <!-- Hausman Test -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Hausman Specification Test</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this tests:</strong> Whether Fixed Effects or Random Effects is more appropriate.<br>
+                        <strong>Null hypothesis:</strong> Random effects estimator is consistent (no correlation between group effects and predictors).<br>
+                        <strong>Interpretation:</strong> If p < 0.05, reject null → use Fixed Effects. If p ≥ 0.05, Random Effects is acceptable and more efficient.
+                    </p>
+                    <div id="hausman-panel"></div>
+                </div>
+
+                <!-- Residual Summary Statistics -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Residual Summary Statistics</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this shows:</strong> Descriptive statistics for model residuals including measures of central tendency, spread, and normality indicators.
+                        Skewness near 0 and kurtosis near 0 (excess) indicate normality.
+                    </p>
+                    <div id="residual-summary-cards"></div>
+                </div>
+
+                <!-- Residual Histogram -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Residual Distribution</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this shows:</strong> Histogram of residuals with normal distribution overlay (red curve).<br>
+                        <strong>What to look for:</strong> Residuals should roughly follow the bell curve. Heavy tails, skewness, or multiple peaks indicate non-normality.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem;">
+                        <div id="histogram-ols"></div>
+                        <div id="histogram-fe"></div>
+                        <div id="histogram-re"></div>
+                    </div>
+                </div>
+
+                <!-- Residual vs Fitted Plots -->
+                <div id="residual-plots-container" style="margin-bottom: 2rem;">
                     <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Residual vs Fitted Values</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> Scatter plot of model residuals (Y-axis) against fitted/predicted values (X-axis) for each regression model.
-                        The horizontal line at zero shows where residuals should cluster.<br>
-                        <strong>What to look for:</strong> Random scatter with no patterns. Fan shapes indicate heteroscedasticity (variance increases with fitted values).
-                        Curved patterns suggest nonlinear relationships not captured by the model.<br>
-                        <strong>Calculation:</strong> Residual = observed score - predicted score from regression model.
+                        <strong>What this shows:</strong> Scatter plot of model residuals (Y-axis) against fitted/predicted values (X-axis).<br>
+                        <strong>What to look for:</strong> Random scatter with no patterns. Fan shapes = heteroscedasticity; curves = nonlinearity; clusters = omitted variables.
                     </p>
                     <div id="residual-plot-ols"></div>
                     <div id="residual-plot-fe" style="margin-top: 1rem;"></div>
                     <div id="residual-plot-re" style="margin-top: 1rem;"></div>
                 </div>
 
-                <div id="qq-plots-container" style="margin-top: 2rem;">
+                <!-- Scale-Location Plots -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Scale-Location Plot (Homoscedasticity Check)</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this shows:</strong> Square root of absolute standardized residuals vs fitted values.<br>
+                        <strong>What to look for:</strong> Horizontal trend line indicates constant variance (homoscedasticity). Upward/downward slopes suggest variance changes with fitted values.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem;">
+                        <div id="scale-location-ols"></div>
+                        <div id="scale-location-fe"></div>
+                        <div id="scale-location-re"></div>
+                    </div>
+                </div>
+
+                <!-- Q-Q Plots -->
+                <div id="qq-plots-container" style="margin-bottom: 2rem;">
                     <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Q-Q Plot (Normality Test)</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> Quantile-Quantile plot comparing the distribution of residuals to a theoretical normal distribution.
-                        The diagonal reference line shows perfect normality.<br>
-                        <strong>What to look for:</strong> Points should cluster tightly around the diagonal. Systematic deviations indicate non-normality:
-                        S-curves suggest heavy or light tails, systematic curves indicate skewness.<br>
-                        <strong>Calculation:</strong> Residuals sorted and compared to quantiles from standard normal distribution N(0,1).
+                        <strong>What this shows:</strong> Quantile-Quantile plot comparing residual distribution to theoretical normal.<br>
+                        <strong>What to look for:</strong> Points should follow the diagonal. S-curves = heavy/light tails; systematic curves = skewness.
                     </p>
                     <div id="qq-plot-ols"></div>
                     <div id="qq-plot-fe" style="margin-top: 1rem;"></div>
                     <div id="qq-plot-re" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Cook's Distance -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Influential Observations (Cook's Distance)</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <strong>What this shows:</strong> Cook's Distance measures each observation's influence on regression coefficients.<br>
+                        <strong>Threshold:</strong> Points exceeding 4/n (dashed line) are considered influential. Red points exceed the threshold.<br>
+                        <strong>Interpretation:</strong> High-influence points may disproportionately affect results. Investigate these observations for data quality issues.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem;">
+                        <div id="cooks-distance-ols"></div>
+                        <div id="cooks-distance-fe"></div>
+                        <div id="cooks-distance-re"></div>
+                    </div>
                 </div>
             </div>
 
