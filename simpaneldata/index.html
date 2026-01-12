@@ -95,91 +95,142 @@
   <section class="mt-4">
     <div class="row">
       <div>
+        <!-- Actions at top for easy access -->
         <div class="panel">
-          <h2>Data Generation Parameters</h2>
-          <p class="muted help-text">These parameters control how simulated panel data is generated. Hover over labels for explanations.</p>
+          <h2>Actions</h2>
+          <div class="grid-2">
+            <button class="btn btn-primary" id="btn-newsample">New Sample</button>
+            <button class="btn" id="btn-download">Download CSV</button>
+          </div>
+          <p class="help-text muted mt-2">Generate a new random sample with current parameters, or download the simulated data for external analysis.</p>
+        </div>
 
-          <div class="param-group mt-3">
-            <div class="param-group-title">Sample Structure</div>
+        <!-- Quick Presets -->
+        <div class="panel mt-3">
+          <div class="collapsible open" id="coll-presets">Scenario Presets</div>
+          <div class="collapse-content show" id="content-presets">
+            <p class="help-text muted">Click a preset to load parameter values demonstrating specific phenomena.</p>
+            <div class="mt-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <button class="btn" id="preset-baseline" title="No selection bias, no confounding - all estimators should work">
+                <strong>Baseline</strong>
+                <span class="muted" style="display:block;font-size:10px">No bias</span>
+              </button>
+              <button class="btn" id="preset-selection" title="Strong selection into treatment based on unobserved heterogeneity">
+                <strong>Selection Bias</strong>
+                <span class="muted" style="display:block;font-size:10px">FE corrects</span>
+              </button>
+              <button class="btn" id="preset-rct" title="Randomized treatment assignment - gold standard">
+                <strong>RCT-like</strong>
+                <span class="muted" style="display:block;font-size:10px">Random assign</span>
+              </button>
+              <button class="btn" id="preset-noisy" title="High measurement error and noise">
+                <strong>Noisy Data</strong>
+                <span class="muted" style="display:block;font-size:10px">Wide CIs</span>
+              </button>
+              <button class="btn" id="preset-trend" title="Secular time trend in outcomes">
+                <strong>Time Trend</strong>
+                <span class="muted" style="display:block;font-size:10px">Confounding</span>
+              </button>
+              <button class="btn" id="preset-lowvar" title="Little within-person variation in treatment">
+                <strong>Low Variation</strong>
+                <span class="muted" style="display:block;font-size:10px">FE loses power</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Core Parameters (collapsed by default except key ones) -->
+        <div class="panel mt-3">
+          <h2>Data Generation Parameters</h2>
+          <p class="muted help-text" style="margin-bottom:12px">Adjust parameters to control the simulated panel data. Click headers to expand/collapse sections.</p>
+
+          <!-- Sample Structure - Open by default -->
+          <div class="collapsible open" id="coll-sample">Sample Structure</div>
+          <div class="collapse-content show" id="content-sample">
             <label title="Number of individuals/units in the panel">Individuals (N): <span id="lblN"></span></label>
             <input type="range" min="50" max="2000" step="50" id="N">
-            <div class="help-text">More individuals → more precise estimates, better asymptotic properties</div>
+            <div class="help-text">More individuals → more precise estimates</div>
 
             <label title="Number of time periods observed for each individual">Time Periods (T): <span id="lblT"></span></label>
             <input type="range" min="2" max="15" step="1" id="T">
-            <div class="help-text">More periods → better within-person variation for FE; enables trend detection</div>
+            <div class="help-text">More periods → better within-person variation for FE</div>
           </div>
 
-          <div class="param-group">
-            <div class="param-group-title">True Causal Effect</div>
+          <!-- True Effect - Open by default -->
+          <div class="collapsible open mt-3" id="coll-effect">True Causal Effect</div>
+          <div class="collapse-content show" id="content-effect">
             <label title="The true causal effect of treatment D on outcome Y">True β (causal effect): <span id="lblB"></span></label>
             <input type="range" min="-2" max="2" step="0.05" id="betaTrue">
-            <div class="help-text">This is the "ground truth" we're trying to estimate. Compare estimator β̂ to this value.</div>
+            <div class="help-text">The "ground truth" we're trying to estimate. Compare β̂ to this.</div>
           </div>
 
-          <div class="param-group">
-            <div class="param-group-title">Heterogeneity & Groups</div>
-            <label title="Standard deviation of individual-specific treatment effects (random slopes)">Random slope SD (σ<sub>β</sub>): <span id="lblSb"></span></label>
-            <input type="range" min="0" max="2" step="0.05" id="sigmaB">
-            <div class="help-text">If σ<sub>β</sub> &gt; 0, each person has their own β<sub>i</sub> around the mean β. This increases dispersion and can change which estimand each model targets.</div>
-
-            <label title="Number of subgroups for split regressions">Groups (G): <span id="lblG"></span></label>
-            <input type="range" min="1" max="5" step="1" id="nGroups">
-            <div class="help-text">Assign individuals to 1..G groups so you can run and visualize split regressions by subgroup.</div>
-
-            <label title="How much the mean treatment effect differs across groups">Group β spread (Δβ): <span id="lblGdb"></span></label>
-            <input type="range" min="0" max="2" step="0.05" id="groupDeltaBeta">
-            <div class="help-text">Adds systematic heterogeneity: groups have different average effects. Δβ = 0 means all groups share the same mean effect.</div>
-          </div>
-
-          <div class="param-group">
-            <div class="param-group-title">Variance Components</div>
-            <label title="Standard deviation of time-invariant individual effects (unobserved heterogeneity)">Between-person SD (σ<sub>u</sub>): <span id="lblSu"></span></label>
-            <input type="range" min="0" max="3" step="0.05" id="sigmaU">
-            <div class="help-text">Individual-level unobserved factors (e.g., ability, motivation). FE removes these; RE assumes uncorrelated with D.</div>
-
-            <label title="Standard deviation of time-varying idiosyncratic errors">Within-person SD (σ<sub>ε</sub>): <span id="lblSe"></span></label>
-            <input type="range" min="0.1" max="3" step="0.05" id="sigmaE">
-            <div class="help-text">Random shocks that vary across time for each person (transitory variation).</div>
-
-            <label title="Standard deviation of measurement error in the outcome">Measurement Error SD (σ<sub>me</sub>): <span id="lblSme"></span></label>
-            <input type="range" min="0" max="2" step="0.05" id="sigmaME">
-            <div class="help-text">Classical measurement error in Y. Increases noise but doesn't bias β̂ (unlike X measurement error).</div>
-          </div>
-
-          <div class="param-group">
-            <div class="param-group-title">Selection into Treatment</div>
+          <!-- Selection - Open by default (key for demonstrating bias) -->
+          <div class="collapsible open mt-3" id="coll-selection">Selection into Treatment</div>
+          <div class="collapse-content show" id="content-selection">
             <label title="Base probability of receiving treatment">Base P(D=1): <span id="lblP"></span></label>
             <input type="range" min="0.1" max="0.9" step="0.05" id="pBase">
             <div class="help-text">Overall treatment prevalence when there's no selection.</div>
 
             <label title="How strongly individual effects predict treatment selection">Selection Strength (ρ): <span id="lblRho"></span></label>
             <input type="range" min="0" max="2" step="0.05" id="rhoSel">
-            <div class="help-text"><strong>Key parameter!</strong> ρ > 0 means individuals with higher u<sub>i</sub> are more likely to be treated → omitted variable bias in OLS.</div>
+            <div class="help-text"><strong>Key!</strong> ρ > 0 → selection bias in OLS; FE corrects this.</div>
 
-            <label title="Probability of switching treatment status between waves">Treatment Switching Rate: <span id="lblSw"></span></label>
+            <label title="Probability of switching treatment status between waves">Switching Rate: <span id="lblSw"></span></label>
             <input type="range" min="0" max="0.8" step="0.05" id="switchRate">
-            <div class="help-text">Higher switching → more within-person variation in D → more power for FE.</div>
+            <div class="help-text">Higher → more within-person variation → more FE power.</div>
           </div>
 
-          <div class="param-group">
-            <div class="param-group-title">Time Dynamics</div>
+          <!-- Variance - Collapsed by default -->
+          <div class="collapsible mt-3" id="coll-variance">Variance Components</div>
+          <div class="collapse-content" id="content-variance">
+            <label title="Standard deviation of time-invariant individual effects (unobserved heterogeneity)">Between-person SD (σ<sub>u</sub>): <span id="lblSu"></span></label>
+            <input type="range" min="0" max="3" step="0.05" id="sigmaU">
+            <div class="help-text">Unobserved individual factors. FE removes these; RE assumes uncorrelated with D.</div>
+
+            <label title="Standard deviation of time-varying idiosyncratic errors">Within-person SD (σ<sub>ε</sub>): <span id="lblSe"></span></label>
+            <input type="range" min="0.1" max="3" step="0.05" id="sigmaE">
+            <div class="help-text">Random shocks varying across time (transitory variation).</div>
+
+            <label title="Standard deviation of measurement error in the outcome">Measurement Error (σ<sub>me</sub>): <span id="lblSme"></span></label>
+            <input type="range" min="0" max="2" step="0.05" id="sigmaME">
+            <div class="help-text">Classical measurement error in Y. Adds noise, no bias.</div>
+          </div>
+
+          <!-- Heterogeneity - Collapsed by default -->
+          <div class="collapsible mt-3" id="coll-hetero">Heterogeneity &amp; Groups</div>
+          <div class="collapse-content" id="content-hetero">
+            <label title="Standard deviation of individual-specific treatment effects (random slopes)">Random slope SD (σ<sub>β</sub>): <span id="lblSb"></span></label>
+            <input type="range" min="0" max="2" step="0.05" id="sigmaB">
+            <div class="help-text">σ<sub>β</sub> > 0 means each person has their own effect around the mean.</div>
+
+            <label title="Number of subgroups for split regressions">Groups (G): <span id="lblG"></span></label>
+            <input type="range" min="1" max="5" step="1" id="nGroups">
+            <div class="help-text">Split sample into G groups for subgroup analysis.</div>
+
+            <label title="How much the mean treatment effect differs across groups">Group β spread (Δβ): <span id="lblGdb"></span></label>
+            <input type="range" min="0" max="2" step="0.05" id="groupDeltaBeta">
+            <div class="help-text">Systematic heterogeneity: groups have different average effects.</div>
+          </div>
+
+          <!-- Time Dynamics - Collapsed by default -->
+          <div class="collapsible mt-3" id="coll-time">Time Dynamics</div>
+          <div class="collapse-content" id="content-time">
             <label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="timeTrendOn"> Enable time trend</label>
             <label title="Slope of linear time trend">Trend Slope (γ): <span id="lblTrend"></span></label>
             <input type="range" min="0" max="0.3" step="0.01" id="timeTrendSlope">
-            <div class="help-text">Common time trend affecting all units. Can bias estimates if correlated with treatment timing.</div>
+            <div class="help-text">Common time trend. Can bias estimates if correlated with D timing.</div>
           </div>
         </div>
 
+        <!-- Visualization & Estimation - Separate panel, collapsed sections -->
         <div class="panel mt-3">
-          <h2>Visualization &amp; Estimation Options</h2>
-          <p class="help-text muted">Customize what you see (waves, trajectories, subgroups) and how uncertainty is computed (classical vs robust vs clustered SEs).</p>
+          <h2>Visualization &amp; Estimation</h2>
 
-          <div class="param-group mt-3">
-            <div class="param-group-title">Visualization</div>
+          <div class="collapsible" id="coll-viz">Visualization Options</div>
+          <div class="collapse-content" id="content-viz">
             <label title="Which wave is used for the cross-sectional scatter plot">Scatter wave: <span id="lblScatterWave"></span></label>
             <input type="range" min="1" max="15" step="1" id="scatterWave">
-            <div class="help-text">View any wave as a cross-section, not just wave 1.</div>
+            <div class="help-text">View any wave as a cross-section.</div>
 
             <label title="How many individual trajectories to draw in the panel plot">Spaghetti lines: <span id="lblSpaghetti"></span></label>
             <input type="range" min="5" max="80" step="5" id="spaghettiN">
@@ -188,67 +239,27 @@
             <label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="colorByGroup"> Color points/lines by group</label>
           </div>
 
-          <div class="param-group">
-            <div class="param-group-title">Estimation</div>
+          <div class="collapsible mt-3" id="coll-estimation">Estimation Options</div>
+          <div class="collapse-content" id="content-estimation">
             <label title="How standard errors are computed">Standard errors:</label>
             <select id="seType" aria-label="Standard error type">
               <option value="classical">Classical (i.i.d.)</option>
               <option value="robust">Robust (HC1)</option>
               <option value="cluster">Clustered by person (CR1)</option>
             </select>
-            <div class="help-text">Clustered SEs are usually appropriate for panel data because errors are correlated within person over time.</div>
+            <div class="help-text">Clustered SEs appropriate for panel data.</div>
 
-            <label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="specTrend"> Include linear time term (t)</label>
+            <label style="justify-content:flex-start;gap:8px;margin-top:8px"><input type="checkbox" id="specTrend"> Include linear time term (t)</label>
             <label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="specQuad"> Include quadratic time term (t²)</label>
-            <label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="specGroupFE"> Include group fixed effects (pooled/RE)</label>
+            <label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="specGroupFE"> Include group fixed effects</label>
 
-            <label title="Which model to use when splitting regressions by group">Group split model:</label>
+            <label title="Which model to use when splitting regressions by group" class="mt-2">Group split model:</label>
             <select id="groupEstimator" aria-label="Estimator for split regressions">
               <option value="pooled">Pooled OLS</option>
               <option value="fe">Fixed Effects</option>
               <option value="re">Random Effects</option>
             </select>
           </div>
-        </div>
-
-        <div class="panel mt-3">
-          <h2>Scenario Presets</h2>
-          <p class="help-text muted">Click a preset to load parameter values demonstrating specific phenomena.</p>
-          <div class="mt-3" style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn" id="preset-baseline" title="No selection bias, no confounding - all estimators should work">
-              <strong>Baseline (No Bias)</strong>
-              <span class="muted" style="display:block;font-size:11px">All estimators recover true β</span>
-            </button>
-            <button class="btn" id="preset-selection" title="Strong selection into treatment based on unobserved heterogeneity">
-              <strong>Selection Bias</strong>
-              <span class="muted" style="display:block;font-size:11px">OLS biased, FE corrects</span>
-            </button>
-            <button class="btn" id="preset-rct" title="Randomized treatment assignment - gold standard">
-              <strong>RCT-like (Random Assignment)</strong>
-              <span class="muted" style="display:block;font-size:11px">No confounding by design</span>
-            </button>
-            <button class="btn" id="preset-noisy" title="High measurement error and noise">
-              <strong>Noisy Survey Data</strong>
-              <span class="muted" style="display:block;font-size:11px">Wide confidence intervals</span>
-            </button>
-            <button class="btn" id="preset-trend" title="Secular time trend in outcomes">
-              <strong>Time Trend</strong>
-              <span class="muted" style="display:block;font-size:11px">Trend confounds if correlated with D</span>
-            </button>
-            <button class="btn" id="preset-lowvar" title="Little within-person variation in treatment">
-              <strong>Low Within Variation</strong>
-              <span class="muted" style="display:block;font-size:11px">FE loses power</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="panel mt-3">
-          <h2>Actions</h2>
-          <div class="grid-2">
-            <button class="btn btn-primary" id="btn-newsample">New Sample</button>
-            <button class="btn" id="btn-download">Download CSV</button>
-          </div>
-          <p class="help-text muted mt-2">Generate a new random sample with current parameters, or download the simulated data for external analysis.</p>
         </div>
       </div>
 
