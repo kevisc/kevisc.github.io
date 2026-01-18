@@ -138,6 +138,7 @@ export function renderPercentileChart(data, outcomeVar = 'math') {
 
     const layout = {
         title: `Achievement Percentiles by Country`,
+        height: 420,
         xaxis: {
             title: 'Percentile',
             tickvals: [0, 1, 2, 3, 4],
@@ -230,6 +231,7 @@ export function renderLorenzCurve(data, outcomeVar = 'math') {
 
     const layout = {
         title: 'Lorenz Curve: Achievement Distribution',
+        height: 420,
         xaxis: {
             title: 'Cumulative Population Proportion',
             range: [0, 1],

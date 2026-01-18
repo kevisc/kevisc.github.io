@@ -1,5 +1,5 @@
 /**
- * Educational Stratification in PISA Explorer - Main Application
+ * Educational Stratification in PISA - Main Application
  * Author: Kevin Schoenholzer
  * Date: 2026
  */
@@ -49,7 +49,7 @@ import { generateFullReport } from './export/report-export.js';
 // Application initialization
 async function initApp() {
     console.log('==================================================');
-    console.log('Educational Stratification in PISA Explorer');
+    console.log('Educational Stratification in PISA');
     console.log('Initializing...');
     console.log('==================================================');
 
@@ -250,7 +250,7 @@ function onTabSwitch(tabName) {
                     const comparativeResults = state.analysisResults?.comparative;
                     const gapResults = state.analysisResults?.comparativeGap?.byCountry;
                     if (comparativeResults) {
-                        renderAllComparativeCharts(data, comparativeResults, gapResults, outcomeVar);
+                        renderAllComparativeCharts(data, comparativeResults, gapResults, outcomeVar, predictorVar);
                     }
                     break;
                 }
@@ -405,6 +405,21 @@ function initEventListeners() {
 
                 // Re-run regression analyses which will respect the dropdown selection
                 runRegressionAnalyses(state.mergedData, outcomeVar, predictorVar, weightType);
+            }
+        });
+    }
+
+    // Diagnostics country selector dropdown
+    const diagnosticsCountrySelect = document.getElementById('diagnostics-country-select');
+    if (diagnosticsCountrySelect) {
+        diagnosticsCountrySelect.addEventListener('change', (e) => {
+            console.log('Diagnostics country changed to:', e.target.value);
+
+            // Re-render diagnostics for the selected country
+            const state = getState();
+            if (state.mergedData && state.mergedData.length > 0) {
+                const outcomeVar = getCurrentOutcome();
+                renderDiagnostics(state.mergedData, outcomeVar);
             }
         });
     }
@@ -572,6 +587,9 @@ function runInitialAnalyses(data) {
         // 5. Populate regression country dropdown
         populateRegressionCountryDropdown(countries);
 
+        // 6. Populate diagnostics country dropdown
+        populateDiagnosticsCountryDropdown(countries);
+
         console.log('✓ Initial analyses complete');
 
     } catch (error) {
@@ -642,6 +660,45 @@ function populateRegressionCountryDropdown(countries) {
 }
 
 /**
+ * Populate the diagnostics country dropdown with available countries
+ * @param {Array} countries - Array of country codes
+ */
+function populateDiagnosticsCountryDropdown(countries) {
+    const dropdown = document.getElementById('diagnostics-country-select');
+    if (!dropdown) return;
+
+    // Sort countries alphabetically
+    const sortedCountries = [...countries].sort();
+
+    // Clear existing options and add placeholder
+    dropdown.innerHTML = '<option value="">-- Select a country --</option>';
+
+    // Add individual country options
+    sortedCountries.forEach(country => {
+        const option = document.createElement('option');
+        option.value = country;
+        option.textContent = country;
+        dropdown.appendChild(option);
+    });
+
+    // Auto-select first country if available
+    if (sortedCountries.length > 0) {
+        dropdown.value = sortedCountries[0];
+    }
+
+    console.log(`✓ Populated diagnostics country dropdown with ${sortedCountries.length} countries`);
+}
+
+/**
+ * Get current selection from diagnostics country dropdown
+ * @returns {String} Selected country code or empty string
+ */
+function getDiagnosticsCountry() {
+    const dropdown = document.getElementById('diagnostics-country-select');
+    return dropdown ? dropdown.value : '';
+}
+
+/**
  * Get current selection from regression country filter dropdown
  * @returns {String} Selected country code or 'all'
  */
@@ -682,11 +739,8 @@ function getPredictorFieldName() {
  * @returns {Array} Array of control variable names
  */
 function getSelectedControls() {
-    const controls = [];
-
-    if (document.getElementById('ctrl-gender')?.checked) {
-        controls.push('gender');
-    }
+    // Gender is always included as a control variable
+    const controls = ['gender'];
 
     if (document.getElementById('ctrl-year')?.checked) {
         controls.push('year');
@@ -1155,16 +1209,86 @@ function runRegressionAnalyses(data, outcomeVar, predictorVar, weightType) {
 
 /**
  * Render diagnostics tab with tables and one optimized plot
- * Simplified for computational efficiency
+ * Analyzes a single country at a time for more meaningful diagnostics
  * @param {Array} data - Student data
  * @param {String} outcomeVar - Outcome variable
  */
 function renderDiagnostics(data, outcomeVar) {
     console.log('Rendering diagnostics...');
 
-    // Get the stored regression models from the last regression run
-    const models = window.lastRegressionModels || {};
-    const hausmanResult = window.lastHausmanTest || null;
+    // Get selected country from dropdown
+    const selectedCountry = getDiagnosticsCountry();
+    const infoDiv = document.getElementById('diagnostics-country-info');
+
+    // Check if a country is selected
+    if (!selectedCountry) {
+        // Show placeholder message in all diagnostic sections
+        const placeholderMsg = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a country above to view diagnostics</div>';
+
+        ['assumption-dashboard', 'model-comparison-table', 'hausman-panel',
+         'residual-diagnostics-table', 'cooks-distance-summary', 'residual-plot-main'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = placeholderMsg;
+        });
+
+        if (infoDiv) {
+            infoDiv.textContent = 'Select a country to view its regression diagnostics';
+        }
+        return;
+    }
+
+    // Filter data to selected country only
+    const countryData = data.filter(d => d.country === selectedCountry);
+
+    if (countryData.length === 0) {
+        const noDataMsg = `<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No data available for ${selectedCountry}</div>`;
+
+        ['assumption-dashboard', 'model-comparison-table', 'hausman-panel',
+         'residual-diagnostics-table', 'cooks-distance-summary', 'residual-plot-main'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = noDataMsg;
+        });
+
+        if (infoDiv) {
+            infoDiv.textContent = `No data available for ${selectedCountry}`;
+        }
+        return;
+    }
+
+    // Update info display
+    const years = [...new Set(countryData.map(d => d.year))].sort();
+    if (infoDiv) {
+        infoDiv.innerHTML = `<strong>${selectedCountry}</strong>: ${countryData.length.toLocaleString()} students across ${years.length} year(s): ${years.join(', ')}`;
+    }
+
+    // Get current predictor and weight type
+    const predictorVar = getCurrentPredictor();
+    const weightType = getWeightType();
+
+    // Run regression models for this single country
+    console.log(`Running diagnostics regressions for ${selectedCountry}...`);
+
+    const models = {};
+    let hausmanResult = null;
+
+    try {
+        // Run OLS on country data
+        models.ols = runPooledOLS(countryData, outcomeVar, predictorVar, ['gender'], weightType);
+
+        // For single-country diagnostics, FE/RE would be by year (if multiple years)
+        if (years.length > 1) {
+            models.fixedEffects = runFixedEffects(countryData, outcomeVar, predictorVar, ['gender'], weightType);
+            models.randomEffects = runRandomEffects(countryData, outcomeVar, predictorVar, ['gender'], weightType);
+
+            // Hausman test
+            if (models.fixedEffects && models.randomEffects) {
+                const predLabel = getPredictorLabel(predictorVar);
+                hausmanResult = hausmanTest(models.fixedEffects, models.randomEffects, predLabel);
+            }
+        }
+    } catch (error) {
+        console.error(`Error running regressions for ${selectedCountry}:`, error);
+    }
 
     // 1. Render Assumption Check Summary (table)
     const assumptionDiv = document.getElementById('assumption-dashboard');
@@ -1181,7 +1305,11 @@ function renderDiagnostics(data, outcomeVar) {
     // 3. Render Hausman Test Panel (table)
     const hausmanDiv = document.getElementById('hausman-panel');
     if (hausmanDiv) {
-        hausmanDiv.innerHTML = createHausmanTestPanel(hausmanResult);
+        if (years.length > 1) {
+            hausmanDiv.innerHTML = createHausmanTestPanel(hausmanResult);
+        } else {
+            hausmanDiv.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Hausman test requires multiple years of data (panel structure). This country has data from only one year.</div>';
+        }
     }
 
     // 4. Render Residual Diagnostics Table
@@ -1363,7 +1491,7 @@ async function renderAllVisualizationsForReport() {
     const comparativeResults = state.analysisResults?.comparative;
     const gapResults = state.analysisResults?.comparativeGap?.byCountry;
     if (comparativeResults) {
-        renderAllComparativeCharts(data, comparativeResults, gapResults, outcomeVar);
+        renderAllComparativeCharts(data, comparativeResults, gapResults, outcomeVar, predictorVar);
     }
 
     // Restore original gap granularity

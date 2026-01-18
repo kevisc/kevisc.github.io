@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Educational Stratification in PISA Explorer - PISA Analysis Tool</title>
+    <title>Educational Stratification in PISA</title>
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="pisa-app-icon.png">
+
+    <!-- Google Fonts - Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- External Libraries -->
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
@@ -20,13 +25,12 @@
 </head>
 <body>
     <!-- Header -->
-    <header class="header" style="position: sticky; top: 0; z-index: 50;">
+    <header class="header">
         <div class="container">
-            <div class="header-content" style="gap: 1rem;">
-                <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 60px; height: 60px; object-fit: contain;">
+            <div class="header-content">
+                <img src="pisa-app-icon.png" alt="Educational Stratification in PISA">
                 <div class="header-text">
-                    <h1>Educational Stratification in PISA Explorer</h1>
-                    <p class="subtitle">Studying intergenerational transmission: how parental education, occupation, and wealth relate to children's achievement at age 15</p>
+                    <h1>Educational Stratification in PISA</h1>
                 </div>
             </div>
         </div>
@@ -34,28 +38,28 @@
 
     <div class="container">
         <!-- Full Width Content Area -->
-        <main class="content-area" style="margin-left: 0; width: 100%;">
+        <main class="content-area">
             <!-- Tabs Navigation -->
             <div class="tabs">
                 <button class="tab active" data-tab="home">Home</button>
-                <button class="tab" data-tab="data-config">Data Configuration</button>
+                <button class="tab" data-tab="data-config">Data</button>
                 <button class="tab" data-tab="overview">Overview</button>
                 <button class="tab" data-tab="distribution">Distribution</button>
-                <button class="tab" data-tab="gap-decomposition">Achievement Gap</button>
+                <button class="tab" data-tab="gap-decomposition">Gap Analysis</button>
                 <button class="tab" data-tab="regression">Regression</button>
                 <button class="tab" data-tab="diagnostics">Diagnostics</button>
                 <button class="tab" data-tab="comparative">Comparative</button>
                 <button class="tab" data-tab="export">Export</button>
-                <button class="tab" data-tab="documentation">Documentation</button>
+                <button class="tab" data-tab="documentation">Docs</button>
             </div>
 
             <!-- Tab Content: Home (Landing Page) -->
             <div id="home" class="tab-content active">
-                <div style="text-align: center; padding: 3rem 0 2rem 0;">
-                    <h1 style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--primary-color);">Educational Stratification in PISA Explorer</h1>
-                    <p style="font-size: 1.2rem; color: var(--text-secondary); max-width: 900px; margin: 0 auto 2rem auto;">
-                        Explore the intergenerational transmission of educational achievement—how parental education, occupation, and wealth (captured through the ESCS index) relate to children's academic performance at age 15.
-                        Analyze math, reading, and science outcomes across 101 countries and eight PISA cycles (2000-2022) using survey-weighted methods.
+                <div style="text-align: center; padding: 2rem 0;">
+                    <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-400); margin-bottom: 1rem;">OECD PISA Data Analysis</p>
+                    <h1 style="font-size: 2.75rem; font-weight: 700; margin-bottom: 1.5rem; background: linear-gradient(135deg, var(--text-primary), var(--primary-300)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1.2;">Educational Stratification in PISA</h1>
+                    <p style="font-size: 1.125rem; color: var(--text-secondary); max-width: 720px; margin: 0 auto; line-height: 1.7;">
+                        Explore how parental education, occupation, and wealth relate to student achievement at age 15. Analyze outcomes across 101 countries and 8 PISA cycles using survey-weighted methods.
                     </p>
                 </div>
 
@@ -137,15 +141,13 @@
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2rem;">
                         <div>
                             <h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">What You Can Do</h4>
-                            <ul style="color: var(--text-secondary); line-height: 1.6; padding-left: 1.25rem; margin: 0;">
-                                <li>Compare ESCS achievement gradients across countries and years.</li>
-                                <li>Replicate intergenerational transmission analyses and inspect modeling choices.</li>
-                                <li>Generate charts, tables, and reports for publications or teaching.</li>
-                            </ul>
+                            <p style="color: var(--text-secondary); line-height: 1.7;">
+                                Compare ESCS achievement gradients across countries and years. Replicate intergenerational transmission analyses and inspect modeling choices. Generate charts, tables, and reports for publications or teaching.
+                            </p>
                         </div>
                         <div>
                             <h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">Open Science Focus</h4>
-                            <p style="color: var(--text-secondary); line-height: 1.6;">
+                            <p style="color: var(--text-secondary); line-height: 1.7;">
                                 All analyses are based on transparent, open-source code and a documented data pipeline so results can be replicated,
                                 extended, or adapted for specific cases.
                             </p>
@@ -236,16 +238,16 @@
 
                 <!-- Data Selection Section -->
                 <div class="stat-card" style="margin-bottom: 2rem;">
-                    <h3 style="font-size: 1.3rem; margin-bottom: 1.5rem; color: var(--primary-color);">📍 Data Selection</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem;">
+                    <h3 style="font-size: 1.3rem; margin-bottom: 1.5rem; color: var(--primary-color);">Data Selection</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
                         <!-- Years Selection -->
                         <div class="control-group">
                             <label style="font-size: 1.1rem; font-weight: 600;">Years</label>
-                            <div style="margin-bottom: 0.5rem; display: flex; gap: 0.5rem;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                                 <button id="select-all-years-btn" class="btn btn-secondary" style="flex: 1;">Select All</button>
-                                <button id="deselect-all-years-btn" class="btn btn-secondary" style="flex: 1;">Deselect All</button>
+                                <button id="deselect-all-years-btn" class="btn btn-secondary" style="flex: 1;">Clear</button>
                             </div>
-                            <div id="year-checkboxes" class="year-selector">
+                            <div id="year-checkboxes">
                                 <!-- Year checkboxes will be populated dynamically -->
                             </div>
                             <div class="weight-info" id="years-selected-count">Loading available years...</div>
@@ -254,9 +256,6 @@
                         <!-- Countries Selection -->
                         <div class="control-group">
                             <label for="countries" style="font-size: 1.1rem; font-weight: 600;">Countries</label>
-                            <input id="country-filter-input" type="text" placeholder="🔍 Filter countries..."
-                                   style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px;
-                                          background:var(--surface); color:var(--text-primary); margin-bottom: 0.75rem;" />
                             <div style="display:flex; gap:8px; margin-bottom: 8px;">
                                 <button id="select-all-countries-btn" class="btn btn-secondary" style="flex: 1;">Select All</button>
                                 <button id="clear-all-countries-btn" class="btn btn-secondary" style="flex: 1;">Clear</button>
@@ -308,10 +307,7 @@
                         <div class="control-group" style="grid-column: span 2;">
                             <label style="font-size: 1.05rem; font-weight: 600;">Control Variables (for regression models)</label>
                             <div class="checkbox-group" style="display: flex; gap: 2rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                    <input type="checkbox" value="gender" id="ctrl-gender" checked>
-                                    <span>Gender</span>
-                                </label>
+                                <span style="color: var(--text-secondary); font-size: 0.9rem;">Gender (always included)</span>
                                 <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                                     <input type="checkbox" value="year" id="ctrl-year">
                                     <span>Year</span>
@@ -338,13 +334,14 @@
 
                         <!-- Loading Progress -->
                         <div id="loading-progress" class="loading" style="margin-top: 1.5rem;">
-                            <div class="progress-container">
-                                <div class="progress-bar" id="progress-bar" style="width: 0%;">
-                                    <span id="progress-percentage">0%</span>
-                                </div>
-                                <div class="progress-text" id="progress-text">Initializing...</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <span class="progress-text" id="progress-text">Initializing...</span>
+                                <span id="progress-percentage" style="font-weight: 600; color: var(--primary-600);">0%</span>
                             </div>
-                            <div style="margin-top: 1rem; color: var(--text-secondary);" id="progress-details">
+                            <div class="progress-container">
+                                <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
+                            </div>
+                            <div style="margin-top: 0.75rem; color: var(--text-secondary); font-size: 0.875rem;" id="progress-details">
                                 Loading data...
                             </div>
                         </div>
@@ -428,23 +425,23 @@
                 <div class="grid-2" style="margin-top: 3rem;">
                     <div>
                         <h3 style="margin-bottom: 0.75rem;">Achievement Percentiles by Country</h3>
-                        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <div id="percentile-chart"></div>
+                        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 1rem; line-height: 1.6;">
                             <strong>What this shows:</strong> Line chart of score values at the 10th, 25th, 50th (median), 75th, and 90th percentiles for each country.<br>
                             <strong>Interpretation:</strong> Steeper lines indicate greater within-country variation. Countries with higher lines across all percentiles have higher overall achievement.
                             The gap between P90 and P10 shows the achievement range.<br>
                             <strong>Calculation:</strong> Percentiles calculated using quantile function on sorted score distributions.
                         </p>
-                        <div id="percentile-chart"></div>
                     </div>
                     <div>
                         <h3 style="margin-bottom: 0.75rem;">Lorenz Curve: Achievement Distribution</h3>
-                        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        <div id="lorenz-curve"></div>
+                        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 1rem; line-height: 1.6;">
                             <strong>What this shows:</strong> Lorenz curves plot cumulative proportion of achievement against cumulative proportion of students (ranked from lowest to highest).
                             The diagonal dashed line represents perfect equality (all students with identical scores).<br>
                             <strong>Interpretation:</strong> Curves further from the diagonal indicate greater dispersion in achievement. The area between a country's curve and the diagonal relates to the Gini coefficient.<br>
                             <strong>Calculation:</strong> Students sorted by score; cumulative sums computed for population and achievement shares.
                         </p>
-                        <div id="lorenz-curve"></div>
                     </div>
                 </div>
             </div>
@@ -554,8 +551,23 @@
                 <div class="section-title">Model Diagnostics</div>
                 <p class="description">
                     Statistical tests and metrics to validate regression assumptions and choose the appropriate model specification.
-                    Results are presented in tables for computational efficiency.
+                    Select a country below to analyze its data independently.
                 </p>
+
+                <!-- Country Selector for Diagnostics -->
+                <div class="stat-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="diagnostics-country-select" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Select Country</label>
+                            <select id="diagnostics-country-select" style="width: 100%; padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); font-size: 1rem;">
+                                <option value="">-- Select a country --</option>
+                            </select>
+                        </div>
+                        <div id="diagnostics-country-info" style="color: var(--text-secondary); font-size: 0.9rem;">
+                            Select a country to view its regression diagnostics
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Assumption Check Summary -->
                 <div style="margin-bottom: 2.5rem;">
@@ -873,7 +885,7 @@
                             <p>Citation guidelines for academic publications, presentations, and reports.</p>
                             <div class="doc-callout">
                             Schoenholzer, K. (2026).<br>
-                            Educational Stratification in PISA Explorer.<br>
+                            Educational Stratification in PISA.<br>
                             https://kevinschoenholzer.com/edustrat/
                             </div>
                         </div>
@@ -958,7 +970,7 @@
     <!-- Footer -->
     <footer style="background: var(--surface); border-top: 1px solid var(--border); margin-top: 4rem; padding: 2rem 0;">
         <div class="container" style="text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
-            <p>Educational Stratification in PISA Explorer - Studying Intergenerational Transmission of Educational Achievement</p>
+            <p>Educational Stratification in PISA</p>
             <p style="margin-top: 0.5rem;">Open Source Science. Schoenholzer, 2026.</p>
         </div>
     </footer>

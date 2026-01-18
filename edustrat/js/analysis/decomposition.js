@@ -8,6 +8,49 @@
 import { weightedMean } from '../core/utils.js';
 
 /**
+ * Get predictor value from a record, handling parent_edu ISCED codes
+ * @param {Object} record - Student record
+ * @param {String} predictorVar - Predictor variable name
+ * @returns {Number|null} Numeric predictor value or null if missing
+ */
+function getPredictorValue(record, predictorVar) {
+    if (predictorVar === 'parent_edu') {
+        return parseParentEducation(record);
+    }
+    const value = +record[predictorVar];
+    return isFinite(value) ? value : null;
+}
+
+/**
+ * Parse parental education from ISCED codes
+ * @param {Object} record - Student record
+ * @returns {Number|null} Numeric education level
+ */
+function parseParentEducation(record) {
+    const parseISCED = (val) => {
+        if (typeof val === 'number' && isFinite(val)) return val;
+        const numVal = Number(val);
+        if (isFinite(numVal)) return numVal;
+
+        if (typeof val === 'string') {
+            const upper = val.toUpperCase().trim();
+            if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
+            const match = upper.match(/ISCED\s*(\d)/i);
+            if (match) return parseInt(match[1], 10);
+        }
+        return null;
+    };
+
+    const motherEduc = parseISCED(record.mother_educ);
+    const fatherEduc = parseISCED(record.father_educ);
+
+    if (motherEduc !== null && fatherEduc !== null) {
+        return Math.max(motherEduc, fatherEduc);
+    }
+    return motherEduc !== null ? motherEduc : fatherEduc;
+}
+
+/**
  * Calculate variance decomposition (within/between countries)
  * @param {Array} data - Array of student records
  * @param {String} outcomeVar - Name of outcome variable
@@ -78,7 +121,7 @@ export function calculateVarianceDecomposition(data, outcomeVar = 'math', countr
  * Decompose achievement gap by SES quartiles
  * @param {Array} data - Array of student records
  * @param {String} outcomeVar - Name of outcome variable
- * @param {String} sesVar - Name of SES variable
+ * @param {String} sesVar - Name of SES variable (e.g., 'escs' or 'parent_edu')
  * @param {String} weightType - Type of weights to use
  * @returns {Object} Gap decomposition results
  */
@@ -87,27 +130,30 @@ export function decomposeAchievementGap(data, outcomeVar = 'math', sesVar = 'esc
         return null;
     }
 
-    // Filter valid data
-    const validData = data.filter(d => {
+    // Filter valid data and extract predictor values
+    const validRecords = [];
+    for (const d of data) {
         const y = +d[outcomeVar];
-        const x = +d[sesVar];
-        return isFinite(y) && isFinite(x);
-    });
+        const x = getPredictorValue(d, sesVar);
+        if (isFinite(y) && x !== null) {
+            validRecords.push({ record: d, score: y, ses: x });
+        }
+    }
 
-    if (validData.length < 4) {
+    if (validRecords.length < 4) {
         return null;
     }
 
     // Get weights
-    const weights = validData.map(d => getWeight(d, weightType));
-    const sesValues = validData.map(d => +d[sesVar]);
-    const scoreValues = validData.map(d => +d[outcomeVar]);
+    const weights = validRecords.map(d => getWeight(d.record, weightType));
+    const sesValues = validRecords.map(d => d.ses);
+    const scoreValues = validRecords.map(d => d.score);
 
     // Calculate SES quartiles
-    const sortedData = validData.map((d, i) => ({
-        record: d,
-        ses: sesValues[i],
-        score: scoreValues[i],
+    const sortedData = validRecords.map((d, i) => ({
+        record: d.record,
+        ses: d.ses,
+        score: d.score,
         weight: weights[i]
     })).sort((a, b) => a.ses - b.ses);
 

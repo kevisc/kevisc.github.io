@@ -5,7 +5,7 @@
  * Date: 2025-12-15
  */
 
-import { getMetadata, setSelectedCountries, setSelectedYears } from '../core/state-manager.js';
+import { getMetadata, setSelectedCountries, setSelectedYears, getSelectedYears as getYearsFromState } from '../core/state-manager.js';
 
 // DOM elements
 let countryCheckboxes;
@@ -90,15 +90,12 @@ function populateYears(years) {
     // Sort years descending
     const sortedYears = [...years].sort((a, b) => b - a);
 
-    // Create checkbox HTML
-    const html = sortedYears.map((year, index) => {
-        // Auto-select first 2 years
-        const checked = index < 2 ? 'checked' : '';
-
+    // Create checkbox HTML - all years selected by default
+    const html = sortedYears.map(year => {
         return `
-            <label class="year-option">
-                <input type="checkbox" value="${year}" ${checked}>
+            <label>
                 <span>${year}</span>
+                <input type="checkbox" value="${year}" checked data-year="${year}">
             </label>
         `;
     }).join('');
@@ -111,7 +108,7 @@ function populateYears(years) {
         cb.addEventListener('change', updateYearSelection);
     });
 
-    // Initial count update
+    // Initial selection update
     updateYearSelection();
 }
 
@@ -131,7 +128,12 @@ function setupEventListeners() {
         clearAllCountriesBtn.addEventListener('click', clearAllCountries);
     }
 
-    // Select all/deselect buttons for years
+    // Country filter
+    if (countryFilterInput) {
+        countryFilterInput.addEventListener('input', filterCountries);
+    }
+
+    // Select all/deselect all buttons for years
     const selectAllYearsBtn = document.getElementById('select-all-years-btn');
     const deselectAllYearsBtn = document.getElementById('deselect-all-years-btn');
 
@@ -142,11 +144,54 @@ function setupEventListeners() {
     if (deselectAllYearsBtn) {
         deselectAllYearsBtn.addEventListener('click', deselectAllYears);
     }
+}
 
-    // Country filter
-    if (countryFilterInput) {
-        countryFilterInput.addEventListener('input', filterCountries);
+/**
+ * Update year selection in state
+ */
+function updateYearSelection() {
+    if (!yearCheckboxes) return;
+
+    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
+    const selected = Array.from(checkboxes).map(cb => parseInt(cb.value, 10));
+
+    // Update state
+    setSelectedYears(selected);
+
+    // Update count display
+    if (yearsSelectedCount) {
+        if (selected.length === 0) {
+            yearsSelectedCount.textContent = 'No years selected';
+            yearsSelectedCount.style.color = '#ef4444';
+        } else {
+            yearsSelectedCount.textContent = `${selected.length} ${selected.length === 1 ? 'year' : 'years'} selected`;
+            yearsSelectedCount.style.color = 'var(--text-secondary)';
+        }
     }
+}
+
+/**
+ * Select all years
+ */
+function selectAllYears() {
+    if (!yearCheckboxes) return;
+
+    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = true);
+
+    updateYearSelection();
+}
+
+/**
+ * Deselect all years
+ */
+function deselectAllYears() {
+    if (!yearCheckboxes) return;
+
+    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+
+    updateYearSelection();
 }
 
 /**
@@ -169,30 +214,6 @@ function updateCountrySelection() {
         } else {
             countriesSelectedCount.textContent = `${selected.length} ${selected.length === 1 ? 'country' : 'countries'} selected`;
             countriesSelectedCount.style.color = 'var(--text-secondary)';
-        }
-    }
-}
-
-/**
- * Update year selection in state
- */
-function updateYearSelection() {
-    if (!yearCheckboxes) return;
-
-    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
-    const selected = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-    // Update state
-    setSelectedYears(selected);
-
-    // Update count display
-    if (yearsSelectedCount) {
-        if (selected.length === 0) {
-            yearsSelectedCount.textContent = 'No years selected';
-            yearsSelectedCount.style.color = '#ef4444';
-        } else {
-            yearsSelectedCount.textContent = `${selected.length} ${selected.length === 1 ? 'year' : 'years'} selected: ${selected.sort().join(', ')}`;
-            yearsSelectedCount.style.color = 'var(--text-secondary)';
         }
     }
 }
@@ -227,30 +248,6 @@ function clearAllCountries() {
 }
 
 /**
- * Select all years
- */
-function selectAllYears() {
-    if (!yearCheckboxes) return;
-
-    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach(cb => cb.checked = true);
-
-    updateYearSelection();
-}
-
-/**
- * Deselect all years
- */
-function deselectAllYears() {
-    if (!yearCheckboxes) return;
-
-    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach(cb => cb.checked = false);
-
-    updateYearSelection();
-}
-
-/**
  * Filter countries by search text
  */
 function filterCountries() {
@@ -282,14 +279,11 @@ export function getSelectedCountries() {
 }
 
 /**
- * Get currently selected years
+ * Get currently selected years (all years are auto-selected)
  * @returns {Array} Array of years
  */
 export function getSelectedYears() {
-    if (!yearCheckboxes) return [];
-
-    const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
-    return Array.from(checkboxes).map(cb => parseInt(cb.value));
+    return getYearsFromState();
 }
 
 /**
@@ -311,12 +305,10 @@ export function resetSelectors() {
         updateCountrySelection();
     }
 
-    // Select first 2 years
+    // Select all years
     if (yearCheckboxes) {
-        const checkboxes = yearCheckboxes.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach((cb, index) => {
-            cb.checked = index < 2;
-        });
+        const yearCbs = yearCheckboxes.querySelectorAll('input[type="checkbox"]');
+        yearCbs.forEach(cb => cb.checked = true);
         updateYearSelection();
     }
 }

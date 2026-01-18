@@ -1,6 +1,6 @@
-# PISA Educational Inequality Data Explorer
+# Educational Stratification in PISA
 
-Interactive web application for analyzing how the ESCS index (parental wealth, occupation, and education) relates to PISA achievement outcomes across countries and over time (2000-2022).
+A data analysis tool and explorer for analyzing how the ESCS index (parental wealth, occupation, and education) relates to PISA achievement outcomes across countries and over time (2000-2022).
 
 **Live Demo:** [kevinschoenholzer.com/pisa/](https://kevinschoenholzer.com/pisa/) (coming soon)
 

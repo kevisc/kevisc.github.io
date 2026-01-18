@@ -6,6 +6,49 @@
  */
 
 /**
+ * Get predictor value from a record, handling parent_edu ISCED codes
+ * @param {Object} record - Student record
+ * @param {String} predictorVar - Predictor variable name
+ * @returns {Number|null} Numeric predictor value or null if missing
+ */
+function getPredictorValue(record, predictorVar) {
+    if (predictorVar === 'parent_edu') {
+        return parseParentEducation(record);
+    }
+    const value = +record[predictorVar];
+    return isFinite(value) ? value : null;
+}
+
+/**
+ * Parse parental education from ISCED codes
+ * @param {Object} record - Student record
+ * @returns {Number|null} Numeric education level
+ */
+function parseParentEducation(record) {
+    const parseISCED = (val) => {
+        if (typeof val === 'number' && isFinite(val)) return val;
+        const numVal = Number(val);
+        if (isFinite(numVal)) return numVal;
+
+        if (typeof val === 'string') {
+            const upper = val.toUpperCase().trim();
+            if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
+            const match = upper.match(/ISCED\s*(\d)/i);
+            if (match) return parseInt(match[1], 10);
+        }
+        return null;
+    };
+
+    const motherEduc = parseISCED(record.mother_educ);
+    const fatherEduc = parseISCED(record.father_educ);
+
+    if (motherEduc !== null && fatherEduc !== null) {
+        return Math.max(motherEduc, fatherEduc);
+    }
+    return motherEduc !== null ? motherEduc : fatherEduc;
+}
+
+/**
  * Render regression results table
  * @param {Object} model - Regression model results
  * @returns {String} HTML table
@@ -284,20 +327,23 @@ export function renderRegressionScatterPlots(data, outcomeVar, predictorVar, mod
         return;
     }
 
-    // Extract X and Y values
-    const validData = data.filter(d => {
-        const x = +d[predictorVar];
+    // Extract X and Y values using helper for parent_edu support
+    const validRecords = [];
+    for (const d of data) {
+        const x = getPredictorValue(d, predictorVar);
         const y = +d[outcomeVar];
-        return isFinite(x) && isFinite(y);
-    });
+        if (x !== null && isFinite(y)) {
+            validRecords.push({ record: d, x, y });
+        }
+    }
 
-    if (validData.length === 0) {
+    if (validRecords.length === 0) {
         console.warn('No valid data for regression scatter plot');
         return;
     }
 
-    const x = validData.map(d => +d[predictorVar]);
-    const y = validData.map(d => +d[outcomeVar]);
+    const x = validRecords.map(d => d.x);
+    const y = validRecords.map(d => d.y);
 
     // Sample data points to prevent graph overload
     const MAX_POINTS = 3000;

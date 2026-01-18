@@ -517,13 +517,15 @@ export function renderTemporalTrends(data, outcomeVar = 'math', predictorVar = '
  * Render all comparative charts
  * @param {Array} data - Array of student records
  * @param {Object} comparativeResults - Comparative analysis results
+ * @param {Object} gapResults - Gap analysis results
  * @param {String} outcomeVar - Name of outcome variable
+ * @param {String} predictorVar - Name of predictor variable (escs or parent_edu)
  */
-export function renderAllComparativeCharts(data, comparativeResults, gapResults = null, outcomeVar = 'math') {
+export function renderAllComparativeCharts(data, comparativeResults, gapResults = null, outcomeVar = 'math', predictorVar = 'escs') {
     const years = [...new Set(data.map(d => d.year))].sort();
     renderCountryComparison(comparativeResults, years);
-    renderWorldMap(data, outcomeVar, 'escs');
-    renderTemporalTrends(data, outcomeVar, 'escs');
+    renderWorldMap(data, outcomeVar, predictorVar);
+    renderTemporalTrends(data, outcomeVar, predictorVar);
     renderDecompositionChart(data, outcomeVar);
     if (gapResults) {
         renderGapComparison(gapResults);

@@ -6,6 +6,49 @@
  */
 
 /**
+ * Get predictor value from a record, handling parent_edu ISCED codes
+ * @param {Object} record - Student record
+ * @param {String} predictorVar - Predictor variable name
+ * @returns {Number|null} Numeric predictor value or null if missing
+ */
+function getPredictorValue(record, predictorVar) {
+    if (predictorVar === 'parent_edu') {
+        return parseParentEducation(record);
+    }
+    const value = +record[predictorVar];
+    return isFinite(value) ? value : null;
+}
+
+/**
+ * Parse parental education from ISCED codes
+ * @param {Object} record - Student record
+ * @returns {Number|null} Numeric education level
+ */
+function parseParentEducation(record) {
+    const parseISCED = (val) => {
+        if (typeof val === 'number' && isFinite(val)) return val;
+        const numVal = Number(val);
+        if (isFinite(numVal)) return numVal;
+
+        if (typeof val === 'string') {
+            const upper = val.toUpperCase().trim();
+            if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
+            const match = upper.match(/ISCED\s*(\d)/i);
+            if (match) return parseInt(match[1], 10);
+        }
+        return null;
+    };
+
+    const motherEduc = parseISCED(record.mother_educ);
+    const fatherEduc = parseISCED(record.father_educ);
+
+    if (motherEduc !== null && fatherEduc !== null) {
+        return Math.max(motherEduc, fatherEduc);
+    }
+    return motherEduc !== null ? motherEduc : fatherEduc;
+}
+
+/**
  * Export current dataset to CSV with provenance header
  * @param {Array} data - Student data array
  * @param {Object} state - Application state
@@ -19,7 +62,7 @@ export function exportCurrentDataset(data, state, filename = 'pisa_data_export.c
     }
 
     // Build provenance header
-    let csv = '# Educational Stratification in PISA Explorer - Data Export\n';
+    let csv = '# Educational Stratification in PISA - Data Export\n';
     csv += `# Generated: ${new Date().toISOString()}\n`;
     csv += `# Data Source: OECD PISA via learningtower R package\n`;
     csv += `# Citation: OECD (2023). PISA Database. https://www.oecd.org/pisa/data/\n`;
@@ -86,7 +129,7 @@ export function exportAggregatedData(comparativeResults, filename = 'pisa_aggreg
         return;
     }
 
-    let csv = '# Educational Stratification in PISA Explorer - Aggregated Statistics\n';
+    let csv = '# Educational Stratification in PISA - Aggregated Statistics\n';
     csv += `# Generated: ${new Date().toISOString()}\n`;
     csv += '# Aggregated by Country-Year\n';
     csv += '#\n';
@@ -190,15 +233,15 @@ export function exportEnrichedDataset(data, state, filename = 'pisa_data_enriche
         newRecord.outcome_variable = outcomeVar;
         newRecord.outcome_value = record[outcomeVar];
 
-        // Add predictor variable
+        // Add predictor variable (using helper to handle parent_edu ISCED codes)
         const predictorVar = state.currentPredictor || 'escs';
         newRecord.predictor_variable = predictorVar;
-        newRecord.predictor_value = record[predictorVar];
+        newRecord.predictor_value = getPredictorValue(record, predictorVar);
 
         // Calculate SES quartile
         // This is simplified - full implementation would need proper weighted quartiles
-        const sesValue = record[predictorVar];
-        if (sesValue !== null && sesValue !== undefined && isFinite(+sesValue)) {
+        const sesValue = newRecord.predictor_value;
+        if (sesValue !== null && isFinite(sesValue)) {
             // Placeholder quartile assignment
             newRecord.ses_quartile = 'Q2'; // Would need proper calculation
         }

@@ -8,6 +8,59 @@
 import { weightedMean } from '../core/utils.js';
 
 /**
+ * Get predictor value from a record
+ * Handles both numeric fields (escs) and parent_edu (needs ISCED parsing)
+ * @param {Object} record - Student record
+ * @param {String} predictorVar - Predictor variable name
+ * @returns {Number|null} Numeric predictor value or null if missing
+ */
+function getPredictorValue(record, predictorVar) {
+    if (predictorVar === 'parent_edu') {
+        // Parse parental education from ISCED codes
+        return parseParentEducationPredictor(record);
+    }
+
+    // For other predictors (escs, etc.), try direct access
+    const value = Number(record[predictorVar]);
+    return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Parse parental education for use as main predictor
+ * Uses maximum of mother/father education
+ * @param {Object} record - Student record
+ * @returns {Number|null} Numeric education value
+ */
+function parseParentEducationPredictor(record) {
+    const parseISCED = (val) => {
+        if (typeof val === 'number' && Number.isFinite(val)) return val;
+        const numVal = Number(val);
+        if (Number.isFinite(numVal)) return numVal;
+
+        if (typeof val === 'string') {
+            const upper = val.toUpperCase().trim();
+            if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
+            const match = upper.match(/ISCED\s*(\d)/i);
+            if (match) return parseInt(match[1], 10);
+        }
+        return null;
+    };
+
+    const motherEduc = parseISCED(record.mother_educ);
+    const fatherEduc = parseISCED(record.father_educ);
+
+    if (motherEduc !== null && fatherEduc !== null) {
+        return Math.max(motherEduc, fatherEduc);
+    }
+    if (motherEduc !== null) return motherEduc;
+    if (fatherEduc !== null) return fatherEduc;
+
+    // Try alternative field names
+    const altValue = parseISCED(record.parent_edu) || parseISCED(record.PARED);
+    return altValue;
+}
+
+/**
  * Calculate Akaike Information Criterion (AIC)
  * AIC = n * log(RSS/n) + 2k
  * Lower values indicate better model fit
@@ -122,9 +175,9 @@ export function buildDesignMatrix(data, outcomeVar, predictorVar, options = {}, 
 
     for (const record of data) {
         const yi = Number(record[outcomeVar]);
-        const xi = Number(record[predictorVar]);
+        const xi = getPredictorValue(record, predictorVar);
 
-        if (!Number.isFinite(yi) || !Number.isFinite(xi)) {
+        if (!Number.isFinite(yi) || xi === null) {
             continue;
         }
 
@@ -577,18 +630,73 @@ function parseGender(record) {
 }
 
 /**
+ * Parse ISCED code to numeric value
+ * @param {String|Number} value - ISCED code or numeric value
+ * @returns {Number|null} Numeric education level or null if invalid
+ */
+function parseISCEDCode(value) {
+    // If already numeric, return it
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+
+    const numValue = Number(value);
+    if (Number.isFinite(numValue)) {
+        return numValue;
+    }
+
+    // Parse ISCED text codes (e.g., "ISCED 3A", "ISCED 2", "None")
+    if (typeof value === 'string') {
+        const upper = value.toUpperCase().trim();
+
+        // Handle "None" or missing
+        if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') {
+            return null;
+        }
+
+        // Extract ISCED level number
+        const match = upper.match(/ISCED\s*(\d)/i);
+        if (match) {
+            return parseInt(match[1], 10);
+        }
+
+        // Handle other common education level strings
+        if (upper.includes('PRIMARY') || upper.includes('ELEMENTARY')) return 1;
+        if (upper.includes('LOWER SECONDARY') || upper.includes('MIDDLE')) return 2;
+        if (upper.includes('UPPER SECONDARY') || upper.includes('HIGH SCHOOL')) return 3;
+        if (upper.includes('POST-SECONDARY') || upper.includes('VOCATIONAL')) return 4;
+        if (upper.includes('BACHELOR') || upper.includes('UNDERGRADUATE')) return 6;
+        if (upper.includes('MASTER')) return 7;
+        if (upper.includes('DOCTOR') || upper.includes('PHD')) return 8;
+    }
+
+    return null;
+}
+
+/**
  * Parse parental education as a numeric value
+ * Uses the higher of mother/father education if both available
  * @param {Object} record - Student record
  * @returns {Number|null} Numeric education value or null if missing
  */
 function parseParentEducation(record) {
-    const candidates = ['mother_educ', 'parent_edu', 'father_educ', 'PARED'];
+    const motherEduc = parseISCEDCode(record.mother_educ);
+    const fatherEduc = parseISCEDCode(record.father_educ);
 
-    for (const field of candidates) {
-        const value = Number(record[field]);
-        if (Number.isFinite(value)) {
-            return value;
-        }
+    // If both available, use the higher value (common in PISA analyses)
+    if (motherEduc !== null && fatherEduc !== null) {
+        return Math.max(motherEduc, fatherEduc);
+    }
+
+    // Return whichever is available
+    if (motherEduc !== null) return motherEduc;
+    if (fatherEduc !== null) return fatherEduc;
+
+    // Try other field names
+    const alternatives = ['parent_edu', 'PARED', 'pared', 'hisei'];
+    for (const field of alternatives) {
+        const val = parseISCEDCode(record[field]);
+        if (val !== null) return val;
     }
 
     return null;

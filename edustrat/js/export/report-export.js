@@ -323,7 +323,7 @@ function buildReportHeader(state) {
         <div class="header">
             <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 1rem;">
             <h1>Educational Stratification Analysis Report</h1>
-            <p class="subtitle">Educational Stratification in PISA Explorer</p>
+            <p class="subtitle">Educational Stratification in PISA</p>
             <div class="metadata">
                 <strong>Generated:</strong> ${date}<br>
                 <strong>Countries:</strong> ${state.selectedCountries?.join(', ') || 'N/A'}<br>
@@ -1046,7 +1046,7 @@ function buildCitationSection() {
         <h2>10. How to Cite</h2>
         <div class="citation">
             <h3>This Tool</h3>
-            <p>Schoenholzer, K. (2026). <em>Educational Stratification in PISA Explorer</em> [Web application]. https://kevinschoenholzer.com/edustrat/</p>
+            <p>Schoenholzer, K. (2026). <em>Educational Stratification in PISA</em> [Web application]. https://kevinschoenholzer.com/edustrat/</p>
 
             <h3>Data Source</h3>
             <p>OECD (2023). <em>PISA Database</em>. Organisation for Economic Co-operation and Development. https://www.oecd.org/pisa/data/</p>
@@ -1070,10 +1070,10 @@ function buildFooter() {
     return `
         <div class="footer">
             <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 40px; height: 40px; object-fit: contain; margin-bottom: 0.5rem;">
-            <p>Educational Stratification in PISA Explorer | Generated with Claude Code</p>
+            <p>Educational Stratification in PISA | Generated with Claude Code</p>
             <p>Kevin Schoenholzer © 2026</p>
             <p style="margin-top: 1rem; font-size: 0.75rem;">
-                This report was generated automatically from the Educational Stratification in PISA Explorer.<br>
+                This report was generated automatically from Educational Stratification in PISA.<br>
                 For interactive analysis, visit: https://kevinschoenholzer.com/edustrat/
             </p>
         </div>
