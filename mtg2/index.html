@@ -170,9 +170,16 @@
             </section>
 
             <!-- Deck Panel -->
-            <section class="deck-panel">
+            <section class="deck-panel" id="deck-panel">
                 <div class="deck-header">
-                    <input type="text" id="deck-name" placeholder="Deck Name" value="Untitled Deck">
+                    <div class="deck-header-left">
+                        <button type="button" class="collapse-btn" id="collapse-deck" title="Collapse deck">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                            </svg>
+                        </button>
+                        <input type="text" id="deck-name" placeholder="Deck Name" value="Untitled Deck">
+                    </div>
                     <div class="deck-count">
                         <span id="deck-count">0</span> / <span id="deck-target">100</span>
                     </div>
@@ -207,100 +214,88 @@
             </section>
 
             <!-- Stats Panel -->
-            <section class="stats-panel">
+            <section class="stats-panel" id="stats-panel">
                 <div class="stats-header">
                     <h2>Deck Statistics</h2>
+                    <button type="button" class="collapse-btn" id="collapse-stats" title="Collapse stats">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="stats-content">
-                    <!-- Mana Curve -->
-                    <div class="stat-card">
-                        <h3>Mana Curve</h3>
-                        <div class="mana-curve" id="mana-curve">
-                            <div class="curve-bar" data-cmc="0"><div class="bar"></div><span>0</span></div>
-                            <div class="curve-bar" data-cmc="1"><div class="bar"></div><span>1</span></div>
-                            <div class="curve-bar" data-cmc="2"><div class="bar"></div><span>2</span></div>
-                            <div class="curve-bar" data-cmc="3"><div class="bar"></div><span>3</span></div>
-                            <div class="curve-bar" data-cmc="4"><div class="bar"></div><span>4</span></div>
-                            <div class="curve-bar" data-cmc="5"><div class="bar"></div><span>5</span></div>
-                            <div class="curve-bar" data-cmc="6"><div class="bar"></div><span>6</span></div>
-                            <div class="curve-bar" data-cmc="7+"><div class="bar"></div><span>7+</span></div>
+                    <!-- Mana Curve & Colors Combined -->
+                    <div class="stat-card compact">
+                        <div class="stat-row">
+                            <div class="stat-half">
+                                <h3>Mana Curve</h3>
+                                <div class="mana-curve" id="mana-curve">
+                                    <div class="curve-bar" data-cmc="0"><div class="bar"></div><span>0</span></div>
+                                    <div class="curve-bar" data-cmc="1"><div class="bar"></div><span>1</span></div>
+                                    <div class="curve-bar" data-cmc="2"><div class="bar"></div><span>2</span></div>
+                                    <div class="curve-bar" data-cmc="3"><div class="bar"></div><span>3</span></div>
+                                    <div class="curve-bar" data-cmc="4"><div class="bar"></div><span>4</span></div>
+                                    <div class="curve-bar" data-cmc="5"><div class="bar"></div><span>5</span></div>
+                                    <div class="curve-bar" data-cmc="6"><div class="bar"></div><span>6</span></div>
+                                    <div class="curve-bar" data-cmc="7+"><div class="bar"></div><span>7+</span></div>
+                                </div>
+                            </div>
+                            <div class="stat-half">
+                                <h3>Colors</h3>
+                                <div class="color-distribution" id="color-distribution">
+                                    <div class="color-bar color-w"><span class="count">0</span></div>
+                                    <div class="color-bar color-u"><span class="count">0</span></div>
+                                    <div class="color-bar color-b"><span class="count">0</span></div>
+                                    <div class="color-bar color-r"><span class="count">0</span></div>
+                                    <div class="color-bar color-g"><span class="count">0</span></div>
+                                    <div class="color-bar color-c"><span class="count">0</span></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Color Distribution -->
-                    <div class="stat-card">
-                        <h3>Color Distribution</h3>
-                        <div class="color-distribution" id="color-distribution">
-                            <div class="color-bar color-w"><span class="count">0</span></div>
-                            <div class="color-bar color-u"><span class="count">0</span></div>
-                            <div class="color-bar color-b"><span class="count">0</span></div>
-                            <div class="color-bar color-r"><span class="count">0</span></div>
-                            <div class="color-bar color-g"><span class="count">0</span></div>
-                            <div class="color-bar color-c"><span class="count">0</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Type Breakdown -->
-                    <div class="stat-card">
-                        <h3>Card Types</h3>
-                        <div class="type-breakdown" id="type-breakdown">
-                            <div class="type-row"><span>Creatures</span><span class="type-count" data-type="creature">0</span></div>
-                            <div class="type-row"><span>Instants</span><span class="type-count" data-type="instant">0</span></div>
-                            <div class="type-row"><span>Sorceries</span><span class="type-count" data-type="sorcery">0</span></div>
-                            <div class="type-row"><span>Artifacts</span><span class="type-count" data-type="artifact">0</span></div>
-                            <div class="type-row"><span>Enchantments</span><span class="type-count" data-type="enchantment">0</span></div>
-                            <div class="type-row"><span>Planeswalkers</span><span class="type-count" data-type="planeswalker">0</span></div>
-                            <div class="type-row"><span>Lands</span><span class="type-count" data-type="land">0</span></div>
+                    <!-- Types & Progress Combined -->
+                    <div class="stat-card compact">
+                        <div class="stat-row">
+                            <div class="stat-half">
+                                <h3>Types</h3>
+                                <div class="type-breakdown compact" id="type-breakdown">
+                                    <span class="type-chip"><span class="type-count" data-type="creature">0</span> Crea</span>
+                                    <span class="type-chip"><span class="type-count" data-type="instant">0</span> Inst</span>
+                                    <span class="type-chip"><span class="type-count" data-type="sorcery">0</span> Sorc</span>
+                                    <span class="type-chip"><span class="type-count" data-type="artifact">0</span> Artf</span>
+                                    <span class="type-chip"><span class="type-count" data-type="enchantment">0</span> Ench</span>
+                                    <span class="type-chip"><span class="type-count" data-type="planeswalker">0</span> PW</span>
+                                    <span class="type-chip"><span class="type-count" data-type="land">0</span> Land</span>
+                                </div>
+                            </div>
+                            <div class="stat-half">
+                                <h3>Progress</h3>
+                                <div class="progress-container compact">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="deck-progress"></div>
+                                    </div>
+                                    <span class="progress-text" id="progress-text">0%</span>
+                                </div>
+                                <div class="progress-details compact" id="progress-details">
+                                    <span><span id="land-count">0</span> lands</span>
+                                    <span><span id="ramp-count">0</span> ramp</span>
+                                    <span><span id="draw-count">0</span> draw</span>
+                                    <span><span id="removal-count">0</span> removal</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Price Summary -->
-                    <div class="stat-card price-card">
-                        <h3>Price Estimate</h3>
-                        <div class="price-summary" id="price-summary">
-                            <div class="price-row">
-                                <span>USD (TCGPlayer)</span>
-                                <span class="price" id="price-usd">$0.00</span>
-                            </div>
-                            <div class="price-row">
-                                <span>EUR (Cardmarket)</span>
-                                <span class="price" id="price-eur">€0.00</span>
-                            </div>
-                            <div class="price-row">
-                                <span>TIX (MTGO)</span>
-                                <span class="price" id="price-tix">0.00</span>
-                            </div>
-                        </div>
-                        <button id="show-price-breakdown" class="btn btn-small btn-full">View Price Breakdown</button>
-                    </div>
-
-                    <!-- Progress -->
-                    <div class="stat-card">
-                        <h3>Deck Progress</h3>
-                        <div class="progress-container">
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="deck-progress"></div>
-                            </div>
-                            <span class="progress-text" id="progress-text">0%</span>
-                        </div>
-                        <div class="progress-details" id="progress-details">
-                            <div class="detail-row">
-                                <span>Lands</span>
-                                <span id="land-count">0 / 37</span>
-                            </div>
-                            <div class="detail-row">
-                                <span>Ramp</span>
-                                <span id="ramp-count">0 / 10</span>
-                            </div>
-                            <div class="detail-row">
-                                <span>Card Draw</span>
-                                <span id="draw-count">0 / 10</span>
-                            </div>
-                            <div class="detail-row">
-                                <span>Removal</span>
-                                <span id="removal-count">0 / 10</span>
-                            </div>
+                    <div class="stat-card compact price-card">
+                        <h3>Prices</h3>
+                        <div class="price-summary compact" id="price-summary">
+                            <span class="price-chip"><span class="price" id="price-usd">$0.00</span> USD</span>
+                            <span class="price-chip"><span class="price" id="price-eur">€0.00</span> EUR</span>
+                            <span class="price-chip"><span class="price" id="price-tix">0.00</span> TIX</span>
+                            <button type="button" id="show-price-breakdown" class="btn btn-small">Details</button>
                         </div>
                     </div>
                 </div>

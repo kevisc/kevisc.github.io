@@ -16,7 +16,6 @@ class MTGDeckBuilder {
         this.currentTab = 'main';
         this.searchCache = new Map();
         this.cardCache = new Map();
-        this.searchTimeout = null;
         this.selectedCard = null;
 
         // Search state for infinite scroll
@@ -51,6 +50,7 @@ class MTGDeckBuilder {
         this.bindEvents();
         this.updateFormatUI();
         this.loadFromStorage();
+        this.updateStats(); // Initialize stats even with empty deck
     }
 
     bindElements() {
@@ -124,14 +124,20 @@ class MTGDeckBuilder {
         // Context menu
         this.contextMenu = document.getElementById('card-context-menu');
         this.contextMenuCardId = null;
+
+        // Collapsible panels
+        this.mainContent = document.querySelector('.main-content');
+        this.deckPanel = document.getElementById('deck-panel');
+        this.statsPanel = document.getElementById('stats-panel');
+        this.collapseDeckBtn = document.getElementById('collapse-deck');
+        this.collapseStatsBtn = document.getElementById('collapse-stats');
     }
 
     bindEvents() {
         // Format change
         this.formatSelect.addEventListener('change', () => this.changeFormat());
 
-        // Search
-        this.searchInput.addEventListener('input', () => this.handleSearchInput());
+        // Search - only on Enter key or button click
         this.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') this.performSearch();
         });
@@ -252,6 +258,20 @@ class MTGDeckBuilder {
         this.searchResults.addEventListener('scroll', () => {
             this.hideContextMenu();
         });
+
+        // Panel collapse toggles
+        this.collapseDeckBtn.addEventListener('click', () => this.toggleDeckPanel());
+        this.collapseStatsBtn.addEventListener('click', () => this.toggleStatsPanel());
+    }
+
+    toggleDeckPanel() {
+        this.deckPanel.classList.toggle('collapsed');
+        this.mainContent.classList.toggle('deck-collapsed');
+    }
+
+    toggleStatsPanel() {
+        this.statsPanel.classList.toggle('collapsed');
+        this.mainContent.classList.toggle('stats-collapsed');
     }
 
     showContextMenu(cardId, x, y) {
@@ -349,17 +369,6 @@ class MTGDeckBuilder {
     }
 
     // Search functionality
-    async handleSearchInput() {
-        clearTimeout(this.searchTimeout);
-        const query = this.searchInput.value.trim();
-
-        if (query.length < 2) {
-            return;
-        }
-
-        this.searchTimeout = setTimeout(() => this.performSearch(), 300);
-    }
-
     async performSearch() {
         const query = this.searchInput.value.trim();
 
@@ -392,9 +401,9 @@ class MTGDeckBuilder {
                 });
             }
 
-            // Keyword dropdown
+            // Keyword dropdown (quote keywords with spaces like "double strike")
             if (this.keywordFilter.value) {
-                parts.push(`keyword:${this.keywordFilter.value}`);
+                parts.push(`keyword:"${this.keywordFilter.value}"`);
             }
 
             // Power filter
@@ -755,6 +764,15 @@ class MTGDeckBuilder {
             setCommanderBtn.classList.remove('hidden');
         } else {
             setCommanderBtn.classList.add('hidden');
+        }
+
+        // Show/hide sideboard button based on format
+        const modalSideboardBtn = document.getElementById('modal-add-sideboard');
+        const config = this.formatConfigs[this.deck.format];
+        if (config.hasSideboard) {
+            modalSideboardBtn.classList.remove('hidden');
+        } else {
+            modalSideboardBtn.classList.add('hidden');
         }
 
         this.cardModal.classList.add('active');
@@ -1475,13 +1493,11 @@ class MTGDeckBuilder {
         this.deckProgress.style.width = `${progress}%`;
         this.progressText.textContent = `${Math.round(progress)}%`;
 
-        // Update detail counts
+        // Update detail counts (compact format)
         const landCount = this.deck.main
             .filter(c => c.type_line?.toLowerCase().includes('land'))
             .reduce((sum, c) => sum + c.quantity, 0);
-
-        document.getElementById('land-count').textContent =
-            `${landCount} / ${this.deck.format === 'commander' ? 37 : 24}`;
+        document.getElementById('land-count').textContent = landCount;
 
         // Ramp count (rough estimate based on card text)
         const rampCount = this.deck.main
@@ -1492,7 +1508,7 @@ class MTGDeckBuilder {
                        text.includes('mana ability');
             })
             .reduce((sum, c) => sum + c.quantity, 0);
-        document.getElementById('ramp-count').textContent = `${rampCount} / 10`;
+        document.getElementById('ramp-count').textContent = rampCount;
 
         // Draw count
         const drawCount = this.deck.main
@@ -1501,7 +1517,7 @@ class MTGDeckBuilder {
                 return text.includes('draw a card') || text.includes('draw cards');
             })
             .reduce((sum, c) => sum + c.quantity, 0);
-        document.getElementById('draw-count').textContent = `${drawCount} / 10`;
+        document.getElementById('draw-count').textContent = drawCount;
 
         // Removal count
         const removalCount = this.deck.main
@@ -1512,7 +1528,7 @@ class MTGDeckBuilder {
                        text.includes('deals') && text.includes('damage');
             })
             .reduce((sum, c) => sum + c.quantity, 0);
-        document.getElementById('removal-count').textContent = `${removalCount} / 10`;
+        document.getElementById('removal-count').textContent = removalCount;
     }
 
     showPriceBreakdown() {
