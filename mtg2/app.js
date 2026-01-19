@@ -91,6 +91,7 @@ class MTGDeckBuilder {
         this.deckTarget = document.getElementById('deck-target');
         this.deckTabs = document.querySelectorAll('.tab-btn');
         this.deckDropZone = document.getElementById('deck-drop-zone');
+        this.deckContent = document.getElementById('deck-content');
         this.deckList = document.getElementById('deck-list');
 
         // Validation
@@ -347,6 +348,7 @@ class MTGDeckBuilder {
     }
 
     setupDragAndDrop() {
+        // Drop zone (when deck is empty)
         this.deckDropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             this.deckDropZone.classList.add('drag-over');
@@ -359,6 +361,30 @@ class MTGDeckBuilder {
         this.deckDropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             this.deckDropZone.classList.remove('drag-over');
+
+            const cardData = e.dataTransfer.getData('application/json');
+            if (cardData) {
+                const card = JSON.parse(cardData);
+                this.addCardToDeck(card, this.currentTab);
+            }
+        });
+
+        // Deck content area (always available for drops)
+        this.deckContent.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            this.deckContent.classList.add('drag-over');
+        });
+
+        this.deckContent.addEventListener('dragleave', (e) => {
+            // Only remove if leaving the deck content entirely
+            if (!this.deckContent.contains(e.relatedTarget)) {
+                this.deckContent.classList.remove('drag-over');
+            }
+        });
+
+        this.deckContent.addEventListener('drop', (e) => {
+            e.preventDefault();
+            this.deckContent.classList.remove('drag-over');
 
             const cardData = e.dataTransfer.getData('application/json');
             if (cardData) {

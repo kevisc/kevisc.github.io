@@ -721,6 +721,14 @@ body {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    border: 2px solid transparent;
+    border-radius: var(--border-radius);
+    transition: var(--transition);
+}
+
+.deck-content.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
 }
 
 .deck-drop-zone {
