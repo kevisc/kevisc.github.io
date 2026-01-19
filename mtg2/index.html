@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Deck Builder</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                <h1>MTG Deck Builder</h1>
+            </div>
+            <div class="format-selector">
+                <label for="format">Format:</label>
+                <select id="format">
+                    <option value="commander">Commander (100 cards)</option>
+                    <option value="standard">Standard (60 cards)</option>
+                    <option value="modern">Modern (60 cards)</option>
+                    <option value="legacy">Legacy (60 cards)</option>
+                    <option value="vintage">Vintage (60 cards)</option>
+                    <option value="pauper">Pauper (60 cards)</option>
+                </select>
+            </div>
+            <div class="deck-actions">
+                <button id="new-deck" class="btn btn-secondary">New Deck</button>
+                <button id="export-deck" class="btn btn-primary">Export</button>
+                <button id="import-deck" class="btn btn-secondary">Import</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Commander Selection (shown only for Commander format) -->
+            <section id="commander-section" class="commander-section">
+                <div class="section-header">
+                    <h2>Commander</h2>
+                    <span class="color-identity" id="color-identity-display"></span>
+                </div>
+                <div class="commander-slot" id="commander-slot">
+                    <div class="commander-placeholder">
+                        <span>Search and select a Commander</span>
+                    </div>
+                </div>
+                <div id="partner-section" class="partner-section hidden">
+                    <h3>Partner Commander</h3>
+                    <div class="commander-slot" id="partner-slot">
+                        <div class="commander-placeholder">
+                            <span>Select a Partner</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Search Panel -->
+            <section class="search-panel">
+                <div class="search-header">
+                    <h2>Card Search</h2>
+                    <button id="toggle-advanced" class="btn btn-small">Advanced</button>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="card-search" placeholder="Search cards... (e.g., 'lightning bolt', 'set:m21', 'cn:123')" autocomplete="off">
+                    <button id="search-btn" class="btn btn-primary">Search</button>
+                </div>
+                <div id="advanced-search" class="advanced-search hidden">
+                    <div class="search-row">
+                        <div class="search-field">
+                            <label for="set-filter">Set</label>
+                            <input type="text" id="set-filter" placeholder="e.g., m21, neo">
+                        </div>
+                        <div class="search-field">
+                            <label for="type-filter">Type</label>
+                            <input type="text" id="type-filter" placeholder="e.g., creature, instant">
+                        </div>
+                        <div class="search-field">
+                            <label for="cmc-filter">CMC</label>
+                            <input type="text" id="cmc-filter" placeholder="e.g., 3, <=2, 4-6">
+                        </div>
+                    </div>
+                    <div class="search-row">
+                        <div class="search-field">
+                            <label>Colors</label>
+                            <div class="color-filter">
+                                <label class="color-checkbox"><input type="checkbox" value="W"><span class="mana mana-w">W</span></label>
+                                <label class="color-checkbox"><input type="checkbox" value="U"><span class="mana mana-u">U</span></label>
+                                <label class="color-checkbox"><input type="checkbox" value="B"><span class="mana mana-b">B</span></label>
+                                <label class="color-checkbox"><input type="checkbox" value="R"><span class="mana mana-r">R</span></label>
+                                <label class="color-checkbox"><input type="checkbox" value="G"><span class="mana mana-g">G</span></label>
+                                <label class="color-checkbox"><input type="checkbox" value="C"><span class="mana mana-c">C</span></label>
+                            </div>
+                        </div>
+                        <div class="search-field">
+                            <label for="rarity-filter">Rarity</label>
+                            <select id="rarity-filter">
+                                <option value="">Any</option>
+                                <option value="common">Common</option>
+                                <option value="uncommon">Uncommon</option>
+                                <option value="rare">Rare</option>
+                                <option value="mythic">Mythic</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="search-results" id="search-results">
+                    <div class="results-placeholder">
+                        <p>Search for cards to add to your deck</p>
+                        <p class="hint">Tip: Use Scryfall syntax like "t:creature c:green cmc:3"</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Deck Panel -->
+            <section class="deck-panel">
+                <div class="deck-header">
+                    <input type="text" id="deck-name" placeholder="Deck Name" value="Untitled Deck">
+                    <div class="deck-count">
+                        <span id="deck-count">0</span> / <span id="deck-target">100</span>
+                    </div>
+                </div>
+
+                <div class="deck-tabs">
+                    <button class="tab-btn active" data-tab="main">Main Deck</button>
+                    <button class="tab-btn" data-tab="sideboard">Sideboard</button>
+                    <button class="tab-btn" data-tab="maybeboard">Maybe</button>
+                </div>
+
+                <div class="deck-content" id="deck-content">
+                    <div class="deck-drop-zone" id="deck-drop-zone">
+                        <div class="drop-placeholder">
+                            <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" opacity="0.3">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            <p>Drag cards here or double-click to add</p>
+                        </div>
+                    </div>
+                    <div class="deck-list" id="deck-list"></div>
+                </div>
+
+                <!-- Validation Messages -->
+                <div class="validation-panel" id="validation-panel">
+                    <div class="validation-header">
+                        <h3>Deck Validation</h3>
+                        <span class="validation-status" id="validation-status">Checking...</span>
+                    </div>
+                    <ul class="validation-messages" id="validation-messages"></ul>
+                </div>
+            </section>
+
+            <!-- Stats Panel -->
+            <section class="stats-panel">
+                <div class="stats-header">
+                    <h2>Deck Statistics</h2>
+                </div>
+
+                <div class="stats-content">
+                    <!-- Mana Curve -->
+                    <div class="stat-card">
+                        <h3>Mana Curve</h3>
+                        <div class="mana-curve" id="mana-curve">
+                            <div class="curve-bar" data-cmc="0"><div class="bar"></div><span>0</span></div>
+                            <div class="curve-bar" data-cmc="1"><div class="bar"></div><span>1</span></div>
+                            <div class="curve-bar" data-cmc="2"><div class="bar"></div><span>2</span></div>
+                            <div class="curve-bar" data-cmc="3"><div class="bar"></div><span>3</span></div>
+                            <div class="curve-bar" data-cmc="4"><div class="bar"></div><span>4</span></div>
+                            <div class="curve-bar" data-cmc="5"><div class="bar"></div><span>5</span></div>
+                            <div class="curve-bar" data-cmc="6"><div class="bar"></div><span>6</span></div>
+                            <div class="curve-bar" data-cmc="7+"><div class="bar"></div><span>7+</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Color Distribution -->
+                    <div class="stat-card">
+                        <h3>Color Distribution</h3>
+                        <div class="color-distribution" id="color-distribution">
+                            <div class="color-bar color-w"><span class="count">0</span></div>
+                            <div class="color-bar color-u"><span class="count">0</span></div>
+                            <div class="color-bar color-b"><span class="count">0</span></div>
+                            <div class="color-bar color-r"><span class="count">0</span></div>
+                            <div class="color-bar color-g"><span class="count">0</span></div>
+                            <div class="color-bar color-c"><span class="count">0</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Type Breakdown -->
+                    <div class="stat-card">
+                        <h3>Card Types</h3>
+                        <div class="type-breakdown" id="type-breakdown">
+                            <div class="type-row"><span>Creatures</span><span class="type-count" data-type="creature">0</span></div>
+                            <div class="type-row"><span>Instants</span><span class="type-count" data-type="instant">0</span></div>
+                            <div class="type-row"><span>Sorceries</span><span class="type-count" data-type="sorcery">0</span></div>
+                            <div class="type-row"><span>Artifacts</span><span class="type-count" data-type="artifact">0</span></div>
+                            <div class="type-row"><span>Enchantments</span><span class="type-count" data-type="enchantment">0</span></div>
+                            <div class="type-row"><span>Planeswalkers</span><span class="type-count" data-type="planeswalker">0</span></div>
+                            <div class="type-row"><span>Lands</span><span class="type-count" data-type="land">0</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Price Summary -->
+                    <div class="stat-card price-card">
+                        <h3>Price Estimate</h3>
+                        <div class="price-summary" id="price-summary">
+                            <div class="price-row">
+                                <span>USD (TCGPlayer)</span>
+                                <span class="price" id="price-usd">$0.00</span>
+                            </div>
+                            <div class="price-row">
+                                <span>EUR (Cardmarket)</span>
+                                <span class="price" id="price-eur">€0.00</span>
+                            </div>
+                            <div class="price-row">
+                                <span>TIX (MTGO)</span>
+                                <span class="price" id="price-tix">0.00</span>
+                            </div>
+                        </div>
+                        <button id="show-price-breakdown" class="btn btn-small btn-full">View Price Breakdown</button>
+                    </div>
+
+                    <!-- Progress -->
+                    <div class="stat-card">
+                        <h3>Deck Progress</h3>
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="deck-progress"></div>
+                            </div>
+                            <span class="progress-text" id="progress-text">0%</span>
+                        </div>
+                        <div class="progress-details" id="progress-details">
+                            <div class="detail-row">
+                                <span>Lands</span>
+                                <span id="land-count">0 / 37</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Ramp</span>
+                                <span id="ramp-count">0 / 10</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Card Draw</span>
+                                <span id="draw-count">0 / 10</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Removal</span>
+                                <span id="removal-count">0 / 10</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Card Preview Modal -->
+        <div class="modal" id="card-modal">
+            <div class="modal-content">
+                <button class="modal-close" id="modal-close">&times;</button>
+                <div class="modal-body">
+                    <div class="modal-card-images" id="modal-card-images">
+                        <img id="modal-card-image" src="" alt="Card Image">
+                        <img id="modal-card-image-back" src="" alt="Card Back" class="hidden">
+                    </div>
+                    <div class="modal-details">
+                        <h2 id="modal-card-name"></h2>
+                        <p id="modal-card-type"></p>
+                        <div id="modal-card-stats"></div>
+                        <p id="modal-card-text"></p>
+                        <div class="modal-set-info" id="modal-set-info"></div>
+                        <div class="modal-prices" id="modal-prices">
+                            <div class="price-item">
+                                <span class="price-label">TCGPlayer</span>
+                                <span class="price-value" id="modal-price-usd">N/A</span>
+                            </div>
+                            <div class="price-item">
+                                <span class="price-label">Cardmarket</span>
+                                <span class="price-value" id="modal-price-eur">N/A</span>
+                            </div>
+                            <div class="price-item">
+                                <span class="price-label">MTGO</span>
+                                <span class="price-value" id="modal-price-tix">N/A</span>
+                            </div>
+                        </div>
+                        <div class="modal-legality" id="modal-legality"></div>
+                        <div class="modal-actions">
+                            <button id="modal-add-deck" class="btn btn-primary">Add to Deck</button>
+                            <button id="modal-add-sideboard" class="btn btn-secondary">Add to Sideboard</button>
+                            <button id="modal-add-maybe" class="btn btn-secondary">Add to Maybe</button>
+                            <button id="modal-set-commander" class="btn btn-accent">Set as Commander</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Hover Preview -->
+        <div class="card-hover-preview" id="card-hover-preview">
+            <img id="hover-preview-image" src="" alt="">
+            <img id="hover-preview-image-back" src="" alt="" class="hidden">
+        </div>
+
+        <!-- Card Context Menu -->
+        <div class="context-menu" id="card-context-menu">
+            <button data-action="add-main">Add to Main Deck</button>
+            <button data-action="add-sideboard">Add to Sideboard</button>
+            <button data-action="add-maybe">Add to Maybe</button>
+            <div class="context-menu-divider"></div>
+            <button data-action="set-commander">Set as Commander</button>
+            <button data-action="view-details">View Details</button>
+        </div>
+
+        <!-- Price Breakdown Modal -->
+        <div class="modal" id="price-modal">
+            <div class="modal-content modal-large">
+                <button class="modal-close" id="price-modal-close">&times;</button>
+                <div class="modal-body">
+                    <h2>Price Breakdown</h2>
+                    <div class="price-breakdown-table" id="price-breakdown-table"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Modal -->
+        <div class="modal" id="import-modal">
+            <div class="modal-content">
+                <button class="modal-close" id="import-modal-close">&times;</button>
+                <div class="modal-body">
+                    <h2>Import Deck</h2>
+                    <p>Paste your deck list below (one card per line, quantity optional):</p>
+                    <textarea id="import-textarea" placeholder="4 Lightning Bolt&#10;2 Mountain&#10;1 Sol Ring"></textarea>
+                    <button id="import-confirm" class="btn btn-primary">Import</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Modal -->
+        <div class="modal" id="export-modal">
+            <div class="modal-content">
+                <button class="modal-close" id="export-modal-close">&times;</button>
+                <div class="modal-body">
+                    <h2>Export Deck</h2>
+                    <div class="export-options">
+                        <button class="btn btn-secondary" data-format="text">Plain Text</button>
+                        <button class="btn btn-secondary" data-format="mtgo">MTGO</button>
+                        <button class="btn btn-secondary" data-format="arena">Arena</button>
+                        <button class="btn btn-secondary" data-format="json">JSON</button>
+                    </div>
+                    <textarea id="export-textarea" readonly></textarea>
+                    <button id="copy-export" class="btn btn-primary">Copy to Clipboard</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loading-overlay">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+
+        <!-- Toast Container -->
+        <div class="toast-container" id="toast-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
