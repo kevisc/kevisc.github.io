@@ -67,7 +67,7 @@
                     <button id="toggle-advanced" class="btn btn-small">Advanced</button>
                 </div>
                 <div class="search-box">
-                    <input type="text" id="card-search" placeholder="Search cards... (e.g., 'lightning bolt', 'set:m21', 'cn:123')" autocomplete="off">
+                    <input type="text" id="card-search" placeholder="Search cards... (e.g., 'lightning bolt', 'o:haste', 'set:m21')" autocomplete="off">
                     <button id="search-btn" class="btn btn-primary">Search</button>
                 </div>
                 <div id="advanced-search" class="advanced-search hidden">
@@ -83,6 +83,49 @@
                         <div class="search-field">
                             <label for="cmc-filter">CMC</label>
                             <input type="text" id="cmc-filter" placeholder="e.g., 3, <=2, 4-6">
+                        </div>
+                    </div>
+                    <div class="search-row">
+                        <div class="search-field search-field-wide">
+                            <label for="oracle-filter">Card Text / Abilities</label>
+                            <input type="text" id="oracle-filter" placeholder="e.g., haste, draw a card, destroy target">
+                        </div>
+                        <div class="search-field">
+                            <label for="keyword-filter">Keyword</label>
+                            <select id="keyword-filter">
+                                <option value="">Any</option>
+                                <optgroup label="Evergreen">
+                                    <option value="deathtouch">Deathtouch</option>
+                                    <option value="defender">Defender</option>
+                                    <option value="double strike">Double Strike</option>
+                                    <option value="first strike">First Strike</option>
+                                    <option value="flash">Flash</option>
+                                    <option value="flying">Flying</option>
+                                    <option value="haste">Haste</option>
+                                    <option value="hexproof">Hexproof</option>
+                                    <option value="indestructible">Indestructible</option>
+                                    <option value="lifelink">Lifelink</option>
+                                    <option value="menace">Menace</option>
+                                    <option value="reach">Reach</option>
+                                    <option value="trample">Trample</option>
+                                    <option value="vigilance">Vigilance</option>
+                                    <option value="ward">Ward</option>
+                                </optgroup>
+                                <optgroup label="Popular">
+                                    <option value="annihilator">Annihilator</option>
+                                    <option value="cascade">Cascade</option>
+                                    <option value="cycling">Cycling</option>
+                                    <option value="equip">Equip</option>
+                                    <option value="exile">Exile</option>
+                                    <option value="kicker">Kicker</option>
+                                    <option value="landfall">Landfall</option>
+                                    <option value="mill">Mill</option>
+                                    <option value="proliferate">Proliferate</option>
+                                    <option value="scry">Scry</option>
+                                    <option value="token">Token</option>
+                                    <option value="treasure">Treasure</option>
+                                </optgroup>
+                            </select>
                         </div>
                     </div>
                     <div class="search-row">
@@ -107,12 +150,21 @@
                                 <option value="mythic">Mythic</option>
                             </select>
                         </div>
+                        <div class="search-field">
+                            <label for="power-filter">Power</label>
+                            <input type="text" id="power-filter" placeholder="e.g., 4, >=3">
+                        </div>
+                        <div class="search-field">
+                            <label for="toughness-filter">Toughness</label>
+                            <input type="text" id="toughness-filter" placeholder="e.g., 5, <=2">
+                        </div>
                     </div>
                 </div>
                 <div class="search-results" id="search-results">
                     <div class="results-placeholder">
                         <p>Search for cards to add to your deck</p>
-                        <p class="hint">Tip: Use Scryfall syntax like "t:creature c:green cmc:3"</p>
+                        <p class="hint">Tip: Use Scryfall syntax like "o:haste t:creature" or "o:draw a card"</p>
+                        <p class="hint">Examples: o:trample, o:"destroy target", keyword:flying, pow>=4</p>
                     </div>
                 </div>
             </section>

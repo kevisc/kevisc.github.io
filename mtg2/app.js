@@ -80,6 +80,10 @@ class MTGDeckBuilder {
         this.cmcFilter = document.getElementById('cmc-filter');
         this.rarityFilter = document.getElementById('rarity-filter');
         this.colorFilters = document.querySelectorAll('.color-filter input');
+        this.oracleFilter = document.getElementById('oracle-filter');
+        this.keywordFilter = document.getElementById('keyword-filter');
+        this.powerFilter = document.getElementById('power-filter');
+        this.toughnessFilter = document.getElementById('toughness-filter');
 
         // Deck
         this.deckNameInput = document.getElementById('deck-name');
@@ -358,13 +362,13 @@ class MTGDeckBuilder {
 
     async performSearch() {
         const query = this.searchInput.value.trim();
-        if (!query) return;
 
+        // Allow search with just advanced filters (no main query required)
         let searchQuery = query;
 
         // Build advanced search query
         if (!this.advancedSearch.classList.contains('hidden')) {
-            const parts = [query];
+            const parts = query ? [query] : [];
 
             if (this.setFilter.value) {
                 parts.push(`set:${this.setFilter.value}`);
@@ -379,6 +383,30 @@ class MTGDeckBuilder {
                 parts.push(`rarity:${this.rarityFilter.value}`);
             }
 
+            // Oracle text / card abilities
+            if (this.oracleFilter.value) {
+                // Support multiple terms separated by commas
+                const oracleTerms = this.oracleFilter.value.split(',').map(t => t.trim()).filter(t => t);
+                oracleTerms.forEach(term => {
+                    parts.push(`o:"${term}"`);
+                });
+            }
+
+            // Keyword dropdown
+            if (this.keywordFilter.value) {
+                parts.push(`keyword:${this.keywordFilter.value}`);
+            }
+
+            // Power filter
+            if (this.powerFilter.value) {
+                parts.push(`power${this.powerFilter.value.match(/^[<>=]/) ? '' : '='}${this.powerFilter.value}`);
+            }
+
+            // Toughness filter
+            if (this.toughnessFilter.value) {
+                parts.push(`toughness${this.toughnessFilter.value.match(/^[<>=]/) ? '' : '='}${this.toughnessFilter.value}`);
+            }
+
             const colors = Array.from(this.colorFilters)
                 .filter(cb => cb.checked)
                 .map(cb => cb.value);
@@ -388,6 +416,9 @@ class MTGDeckBuilder {
 
             searchQuery = parts.join(' ');
         }
+
+        // Don't search if query is empty
+        if (!searchQuery.trim()) return;
 
         // Add color identity filter for Commander format
         if (this.deck.format === 'commander' && this.deck.commander) {

@@ -398,6 +398,10 @@ body {
     flex: 1;
 }
 
+.search-field.search-field-wide {
+    flex: 2;
+}
+
 .search-field label {
     display: block;
     font-size: 0.75rem;
