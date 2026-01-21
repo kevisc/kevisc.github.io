@@ -18,7 +18,13 @@ a:hover{color:#93c5fd!important}
 .profile_inner{gap:18px}
 .profile_inner img{border-radius:18px!important;box-shadow:0 18px 55px rgba(0,0,0,.45);border:1px solid var(--ks-border)}
 .profile_inner h1{letter-spacing:-.02em}
-.profile_inner span{color:var(--ks-muted)!important}
+.profile_inner span{
+  color:var(--ks-muted)!important;
+  text-align:justify;
+  line-height:1.7;
+  max-width:540px;
+  display:block;
+}
 
 .button{border-radius:12px!important;border:1px solid var(--ks-border)!important;background:rgba(255,255,255,.03)!important}
 .button:hover{background:rgba(96,165,250,.12)!important;border-color:rgba(96,165,250,.35)!important}
