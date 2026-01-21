@@ -474,6 +474,7 @@ class MTGDeckBuilder {
 
     async searchCards(query) {
         this.showLoading();
+        console.log('Search query:', query);
 
         // Reset search state for new search
         this.currentSearchQuery = query;
