@@ -50,6 +50,16 @@ pre{background:rgba(255,255,255,.03)!important}
   background:rgba(255,255,255,.02);
   font-size:0!important; /* hide site title text */
 }
+.logo a.back-arrow{
+  font-size:1.2em!important;
+  width:auto;
+  height:auto;
+  padding:6px 10px;
+  background:transparent;
+  border:none;
+  color:var(--ks-text)!important;
+}
+.logo a.back-arrow::before{display:none!important}
 .logo a:hover{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.35)}
 .logo a img{margin:0!important;transform:none!important}
 
