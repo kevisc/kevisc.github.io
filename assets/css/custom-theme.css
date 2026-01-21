@@ -37,6 +37,7 @@ pre{background:rgba(255,255,255,.03)!important}
 
 /* Minimal header on sub-pages (PaperMod header is disabled on home) */
 .header,.nav{background:transparent!important;border-bottom:0!important;box-shadow:none!important}
+.header{padding-top:24px!important}
 #menu,.logo-switches{display:none!important}
 .logo{margin:auto var(--gap)!important}
 .logo{display:flex!important;gap:8px;align-items:center}

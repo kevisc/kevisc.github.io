@@ -428,8 +428,14 @@ class MTGDeckBuilder {
             }
 
             // Keyword dropdown (quote keywords with spaces like "double strike")
+            // Note: "exile" and "token" are not valid Scryfall keywords, use oracle text instead
             if (this.keywordFilter.value) {
-                parts.push(`keyword:"${this.keywordFilter.value}"`);
+                const keywordVal = this.keywordFilter.value;
+                if (keywordVal === 'exile' || keywordVal === 'token') {
+                    parts.push(`o:"${keywordVal}"`);
+                } else {
+                    parts.push(`keyword:"${keywordVal}"`);
+                }
             }
 
             // Power filter
