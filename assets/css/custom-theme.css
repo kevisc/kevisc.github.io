@@ -39,6 +39,7 @@ pre{background:rgba(255,255,255,.03)!important}
 .header,.nav{background:transparent!important;border-bottom:0!important;box-shadow:none!important}
 #menu,.logo-switches{display:none!important}
 .logo{margin:auto var(--gap)!important}
+.logo{display:flex!important;gap:8px;align-items:center}
 .logo a{
   display:inline-flex!important;
   align-items:center;
@@ -51,15 +52,23 @@ pre{background:rgba(255,255,255,.03)!important}
   font-size:0!important; /* hide site title text */
 }
 .logo a.back-arrow{
-  font-size:1.2em!important;
-  width:auto;
-  height:auto;
-  padding:6px 10px;
-  background:transparent;
-  border:none;
+  font-size:0!important;
+  width:38px;
+  height:38px;
+  padding:0;
+  background:rgba(255,255,255,.02);
+  border:1px solid var(--ks-border);
+  border-radius:12px;
   color:var(--ks-text)!important;
 }
-.logo a.back-arrow::before{display:none!important}
+.logo a.back-arrow::before{
+  content:"";
+  width:18px;
+  height:18px;
+  background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5'/%3E%3Cpath d='M12 19l-7-7 7-7'/%3E%3C/svg%3E") no-repeat 50% 50%/contain;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5'/%3E%3Cpath d='M12 19l-7-7 7-7'/%3E%3C/svg%3E") no-repeat 50% 50%/contain;
+}
 .logo a:hover{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.35)}
 .logo a img{margin:0!important;transform:none!important}
 
