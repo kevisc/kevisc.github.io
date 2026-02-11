@@ -1,18 +1,18 @@
-# Methodological Documentation: Educational Inequality Data Explorer
+# Methodological Documentation: EduStrat (Educational Stratification in PISA)
 
 ## Abstract
 
-This document provides comprehensive methodological documentation for the Educational Inequality Data Explorer, a web-based analytical tool for examining socioeconomic stratification in educational achievement using Programme for International Student Assessment (PISA) data. We detail data preparation procedures, statistical methods, visualization techniques, and analytical frameworks implemented in the application.
+This document provides comprehensive methodological documentation for EduStrat (Educational Stratification in PISA), a browser-based statistical tool for exploratory analysis of socioeconomic stratification in educational achievement using Programme for International Student Assessment (PISA) microdata. We detail data preparation procedures, statistical methods, visualization techniques, and analytical frameworks implemented in the application. EduStrat covers eight PISA assessment cycles (2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022), more than 100 participating countries, and approximately 3.5 million student observations.
 
 ## 1. Introduction
 
 ### 1.1 Purpose
 
-The Educational Inequality Data Explorer enables researchers to conduct cross-national comparative analyses of educational inequality using standardized assessment data. The tool implements established methods from educational sociology and stratification research to quantify and visualize the relationship between socioeconomic background and academic achievement.
+EduStrat enables researchers, instructors, and students to conduct cross-national comparative analyses of educational inequality using standardized assessment data. The tool implements established methods from educational sociology and stratification research to quantify and visualize the relationship between parental socioeconomic characteristics---education, occupational status, and household wealth, as captured by the PISA ESCS (Economic, Social and Cultural Status) index---and children's academic achievement at age 15.
 
 ### 1.2 Data Source
 
-Data derive from PISA assessments administered by the Organisation for Economic Co-operation and Development (OECD). PISA assesses 15-year-old students' competencies in mathematics, reading, and science across participating countries (OECD, 2019). We utilize data from assessment cycles 2012, 2015, 2018, and 2022, accessed via the learningtower R package (Vaughan et al., 2021).
+Data derive from PISA assessments administered by the Organisation for Economic Co-operation and Development (OECD). PISA assesses 15-year-old students' competencies in mathematics, reading, and science across participating countries (OECD, 2024). We utilize data from all eight assessment cycles (2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022), accessed via the learningtower R package (Wang et al., 2024).
 
 ## 2. Data Preparation
 
@@ -429,11 +429,25 @@ Automated checks verify:
 
 ## 12. References
 
-OECD (2019). *PISA 2018 Technical Report*. OECD Publishing.
+Blinder, A. S. (1973). Wage discrimination: Reduced form and structural estimates. *Journal of Human Resources*, 8(4), 436--455. https://doi.org/10.2307/144855
 
-von Davier, M., Gonzalez, E., & Mislevy, R. (2009). What are plausible values and why are they useful? *IERI Monograph Series: Issues and Methodologies in Large-Scale Assessments*, 2, 9-36.
+Ganzeboom, H. B. G., De Graaf, P. M., & Treiman, D. J. (1992). A standard international socio-economic index of occupational status. *Social Science Research*, 21(1), 1--56. https://doi.org/10.1016/0049-089X(92)90017-B
 
-Vaughan, K., Karevalo, E., Sulz, L., Gao, K., & Horst, A. (2021). learningtower: OECD PISA datasets from 2000-2018 in an easy-to-use format. R package version 1.0.0.
+Mislevy, R. J., Beaton, A. E., Kaplan, B., & Sheehan, K. M. (1992). Estimating population characteristics from sparse matrix samples of item responses. *Journal of Educational Measurement*, 29(2), 133--161. https://doi.org/10.1111/j.1745-3984.1992.tb00371.x
+
+Oaxaca, R. (1973). Male-female wage differentials in urban labor markets. *International Economic Review*, 14(3), 693--709. https://doi.org/10.2307/2525981
+
+OECD (2009). *PISA data analysis manual: SPSS* (2nd ed.). OECD Publishing. https://doi.org/10.1787/9789264056275-en
+
+OECD (2024). *PISA 2022 Technical Report*. OECD Publishing. https://doi.org/10.1787/01820d6d-en
+
+von Davier, M., Gonzalez, E., & Mislevy, R. (2009). What are plausible values and why are they useful? *IERI Monograph Series: Issues and Methodologies in Large-Scale Assessments*, 2, 9--36.
+
+Wang, K., Yacobellis, P., Siregar, E., Romanes, S., Fitter, K., Dalla Riva, G. V., Cook, D., Tierney, N., Dingorkar, P., Sai Subramanian, S., & Chen, G. (2024). *learningtower: OECD PISA datasets from 2000--2022 in an easy-to-use format* (R package version 1.1.0). https://doi.org/10.32614/CRAN.package.learningtower
+
+Wu, M. (2005). The role of plausible values in large-scale surveys. *Studies in Educational Evaluation*, 31(2--3), 114--128. https://doi.org/10.1016/j.stueduc.2005.05.005
+
+Wuyts, C. (2024). The measurement of socio-economic status in PISA. OECD.
 
 ## 13. Appendix: Variable Codebook
 
@@ -442,7 +456,7 @@ Vaughan, K., Karevalo, E., Sulz, L., Gao, K., & Horst, A. (2021). learningtower:
 | Variable | Description | Scale | Range |
 |----------|-------------|-------|-------|
 | country | Country code | Nominal | 3-letter ISO codes |
-| year | Assessment year | Discrete | 2012, 2015, 2018, 2022 |
+| year | Assessment year | Discrete | 2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022 |
 | achievement | Mathematics score | Continuous | 0-1000 |
 | ses | ESCS index | Continuous | Approximately -4 to +4 |
 | studentWeight | Survey weight | Continuous | > 0 |
@@ -464,19 +478,19 @@ Vaughan, K., Karevalo, E., Sulz, L., Gao, K., & Horst, A. (2021). learningtower:
 
 When using this tool in research, please cite as:
 
-[Author]. (2025). Educational Inequality Data Explorer: Methodological Documentation. [Version]. [URL if applicable].
+Schoenholzer, K. (2026). EduStrat: A browser-based tool for teaching quantitative analysis of educational inequality with PISA microdata. *Journal of Open Source Education*. https://github.com/kevisc/edustrat
 
 ### 14.2 Data Citation
 
-OECD Programme for International Student Assessment (PISA) data should be cited according to OECD guidelines. Access via learningtower package should acknowledge Vaughan et al. (2021).
+OECD Programme for International Student Assessment (PISA) data should be cited according to OECD guidelines. Access via the learningtower package should acknowledge Wang et al. (2024).
 
 ### 14.3 Contact
 
-For methodological questions or technical support, consult the documentation files included with the application.
+For methodological questions, bug reports, or feature requests, please open an issue on the project's GitHub repository: https://github.com/kevisc/edustrat
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025  
-**Author**: [To be specified]  
-**License**: [To be specified]
+**Document Version**: 2.0
+**Last Updated**: February 2026
+**Author**: Kevin Schoenholzer, Università della Svizzera italiana (USI)
+**License**: MIT License
