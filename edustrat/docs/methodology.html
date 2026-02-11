@@ -248,15 +248,15 @@ where:
         <p>These measures summarize the spread of achievement distributions within countries. While not direct measures of intergenerational transmission, they provide context for understanding achievement variation and can be compared across countries and over time.</p>
 
         <h4>Gini Coefficient</h4>
-        <p>The Gini coefficient measures dispersion in achievement distribution, ranging from 0 (all students have identical scores) to 1 (maximum dispersion). For a sorted vector of achievement scores:</p>
+        <p>The Gini coefficient measures dispersion in achievement distribution, ranging from 0 (all students have identical scores) to 1 (maximum dispersion). When sampling weights are available, EduStrat computes the weighted Gini coefficient. Observations are sorted in ascending order by score, and cumulative weight shares are used in place of ranks:</p>
 
         <div class="formula">
-G = [2 · Σ(i · y<sub>i</sub>)] / (n · Σ y<sub>i</sub>) - (n + 1) / n
+G = 1 - Σ<sub>i</sub> w<sub>i</sub> · (S<sub>i-1</sub> + S<sub>i</sub>) / S<sub>n</sub>
 
 where:
-  y<sub>i</sub> = achievement scores sorted in ascending order
-  i = rank of observation (1, 2, ..., n)
-  n = sample size
+  w<sub>i</sub> = normalized sampling weight for observation i (w<sub>i</sub> = stu_wgt<sub>i</sub> / Σ stu_wgt)
+  S<sub>i</sub> = cumulative weighted sum of scores up to observation i
+  S<sub>n</sub> = total weighted sum of all scores
         </div>
 
         <h4>Coefficient of Variation</h4>
@@ -393,14 +393,19 @@ H<sub>1</sub>: E(u<sub>j</sub> | X) ≠ 0 (only FE is consistent)
         <p>If p < 0.05, reject random effects in favor of fixed effects.</p>
 
         <h3>3.6 Variance Decomposition</h3>
-        <p>The intraclass correlation coefficient (ICC) partitions total variance into within-country and between-country components:</p>
+        <p>The intraclass correlation coefficient (ICC) partitions total variance into within-country and between-country components. All means and variances in the decomposition are computed using the final student sampling weights (<code>stu_wgt</code>), so that each country's contribution is population-representative:</p>
 
         <div class="formula">
 ICC (ρ) = τ² / (τ² + σ²)
 
 where:
-  τ² = between-country variance
-  σ² = within-country variance
+  τ² = between-country variance = Σ<sub>c</sub> (W<sub>c</sub> / W) · (Ȳ<sub>c</sub> - Ȳ)²
+  σ² = within-country variance = Var<sub>w</sub>(Y) - τ²
+  W<sub>c</sub> = sum of sampling weights in country c
+  W = total sum of sampling weights across all countries
+  Ȳ<sub>c</sub> = weighted mean of scores in country c
+  Ȳ = overall weighted mean
+  Var<sub>w</sub>(Y) = overall weighted variance
         </div>
 
         <p>The ICC represents the proportion of total variance in achievement that is due to differences between countries. An ICC of 0.15 means 15% of variance is between countries and 85% is within countries.</p>
@@ -500,6 +505,10 @@ where λ = 10⁻¹⁰ · trace(X'WX)
 
         <div class="reference">
 Avvisati, F. &amp; Wuyts, C. (2024). The measurement of socio-economic status in PISA. <em>OECD Education Working Papers</em>, No. 321. OECD Publishing. https://doi.org/10.1787/0c5b793c-en
+        </div>
+
+        <div class="reference">
+Burnham, K. P. &amp; Anderson, D. R. (2004). Multimodel inference: Understanding AIC and BIC in model selection. <em>Sociological Methods &amp; Research, 33</em>(2), 261–304. https://doi.org/10.1177/0049124104268644
         </div>
 
         <div class="reference">
