@@ -1049,7 +1049,7 @@ function buildCitationSection() {
             <p>Schoenholzer, K. (2026). EduStrat: A browser-based tool for teaching quantitative analysis of educational inequality with PISA microdata [Working paper]. https://github.com/kevisc/edustrat</p>
 
             <h3>Data Source</h3>
-            <p>OECD (2024). <em>PISA 2022 Technical Report</em>. OECD Publishing. https://doi.org/10.1787/01820d6d-en</p>
+            <p>OECD (2024). <em>Programme for International Student Assessment (PISA) Database</em>. Paris: OECD. Available at: https://www.oecd.org/pisa/</p>
 
             <h3>R Package</h3>
             <p>Wang, K., Yacobellis, P., Siregar, E., Romanes, S., Fitter, K., Dalla Riva, G. V., Cook, D., Tierney, N., Dingorkar, P., Sai Subramanian, S., & Chen, G. (2024). <em>learningtower: OECD PISA datasets from 2000–2022 in an easy-to-use format</em>. R package version 1.1.0. https://doi.org/10.32614/CRAN.package.learningtower</p>
