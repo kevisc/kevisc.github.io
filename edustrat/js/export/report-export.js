@@ -1030,9 +1030,12 @@ function buildMethodologySection() {
             <h3>Assumptions & Limitations</h3>
             <ul>
                 <li>Cross-sectional design precludes causal inference</li>
+                <li>Single plausible value (PV1) per domain used (a constraint of the <em>learningtower</em> R package); full analyses should use all PVs and Rubin's rules</li>
+                <li>Replicate-weight variance estimation (BRR) not implemented; standard errors may understate uncertainty</li>
                 <li>Missing data handled via listwise deletion</li>
                 <li>Sampling weights account for complex survey design</li>
                 <li>Results represent participating countries only</li>
+                <li>Per OECD Terms of Use, micro-level student data are not redistributed</li>
             </ul>
         </div>
     `;
@@ -1064,7 +1067,7 @@ function buildFooter() {
     return `
         <div class="footer">
             <img src="pisa-app-icon.png" alt="PISA App Icon" style="width: 40px; height: 40px; object-fit: contain; margin-bottom: 0.5rem;">
-            <p>Educational Stratification in PISA | Generated with Claude Code</p>
+            <p>Educational Stratification in PISA | Generated with EduStrat</p>
             <p>Kevin Schoenholzer © 2026</p>
             <p style="margin-top: 1rem; font-size: 0.75rem;">
                 This report was generated automatically from Educational Stratification in PISA.<br>
