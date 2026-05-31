@@ -1,0 +1,4283 @@
+<!DOCTYPE html>
+<!-- saved from url=(0034)https://kevinschoenholzer.com/mtg/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Galdur</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
+      color: #f3f4f6; 
+      margin: 0; 
+      padding: 0; 
+      overflow-x: hidden;
+    }
+    button { cursor: pointer; font-family: inherit; border: none; }
+    input, select, textarea { font-family: inherit; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .btn { padding: 12px 24px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
+    .btn-secondary { background: #1f2937; color: #f3f4f6; border: 1px solid #374151; }
+    .btn-secondary:hover { background: #374151; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-blue { background: #1e40af; color: white; }
+    .btn-blue:hover { background: #1e3a8a; }
+    .btn-red { background: #dc2626; color: white; }
+    .btn-red:hover { background: #b91c1c; }
+    .input { width: 100%; padding: 10px 15px; background: #374151; color: #f3f4f6; border: 1px solid #4b5563; border-radius: 6px; }
+    .input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .grid { display: grid; gap: 20px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-4 { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .text-center { text-align: center; }
+    .mb-4 { margin-bottom: 16px; }
+    .mb-8 { margin-bottom: 32px; }
+    .mt-4 { margin-top: 16px; }
+    .p-4 { padding: 16px; }
+    .hidden { display: none; }
+    .card-preview { background: #374151; border-radius: 8px; padding: 12px; border: 1px solid #4b5563; transition: all 0.2s; }
+    .card-preview:hover { border-color: #3b82f6; }
+    .card-img { width: 100%; aspect-ratio: 5/7; background: #4b5563; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
+    .game-field { background: rgba(220, 38, 38, 0.1); border-radius: 8px; padding: 8px; min-height: 90px; border: 2px solid #4b5563; transition: all 0.2s; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; }
+    .game-field.player { background: rgba(34, 197, 94, 0.1); }
+    
+    /* Turn notification */
+    .turn-notification {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      color: white;
+      padding: 30px 60px;
+      border-radius: 16px;
+      font-size: 36px;
+      font-weight: bold;
+      box-shadow: 0 10px 40px rgba(59, 130, 246, 0.5);
+      z-index: 10000;
+      animation: fadeInOut 2s ease-in-out;
+      pointer-events: none;
+    }
+    
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+    }
+    .hand-card { 
+      display: inline-block; 
+      margin: 4px; 
+      transition: transform 0.2s; 
+      cursor: pointer; 
+      position: relative;
+      background: #374151;
+      border-radius: 6px;
+      padding: 2px;
+    }
+    .hand-card:hover { transform: translateY(-8px); background: #4b5563; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+    .hand-card img { width: 80px; height: 112px; border-radius: 4px; border: 2px solid #4b5563; object-fit: cover; pointer-events: none; display: block; }
+    .hand-card.selected { border: 3px solid #fbbf24; background: #fbbf24; box-shadow: 0 0 20px #fbbf24; }
+    .field-card { display: inline-block; margin: 4px; transition: all 0.2s; cursor: pointer; position: relative; border-radius: 8px; padding: 2px; }
+    .field-card:hover { transform: scale(1.1); z-index: 10; background: rgba(59, 130, 246, 0.2); }
+    .field-card img { width: 72px; height: 100px; border-radius: 4px; border: 2px solid #3b82f6; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s; pointer-events: none; display: block; }
+    .field-card.tapped img { transform: rotate(90deg); opacity: 0.7; }
+    .field-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    .zone-card { display: inline-block; margin: 4px; cursor: pointer; transition: all 0.2s; border-radius: 6px; padding: 2px; }
+    .zone-card img { width: 60px; height: 84px; border-radius: 4px; border: 2px solid #6b7280; object-fit: cover; pointer-events: none; }
+    .zone-card:hover { transform: translateY(-4px); background: rgba(59, 130, 246, 0.2); }
+    .zone-card:hover img { border-color: #3b82f6; }
+    .zone-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    
+    /* Responsive field card sizing */
+    .field-card { 
+      display: inline-block; 
+      margin: 4px; 
+      transition: all 0.2s; 
+      cursor: pointer; 
+      position: relative; 
+      border-radius: 8px; 
+      padding: 2px;
+    }
+    .field-card:hover { transform: scale(1.05); z-index: 10; background: rgba(59, 130, 246, 0.2); }
+    
+    /* Dynamic sizing based on number of cards */
+    .field-card img { 
+      width: 90px; 
+      height: 126px; 
+      border-radius: 4px; 
+      border: 2px solid #3b82f6; 
+      object-fit: cover; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); 
+      transition: all 0.3s; 
+      pointer-events: none; 
+      display: block; 
+    }
+    
+    /* Adjust size when many cards on field */
+    .game-field.many-cards .field-card img { width: 72px; height: 100px; }
+    .game-field.lots-cards .field-card img { width: 60px; height: 84px; }
+    
+    .field-card.tapped img { transform: rotate(90deg); opacity: 0.7; }
+    .field-card.selected { border: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.3); box-shadow: 0 0 16px rgba(251, 191, 36, 0.5); }
+    
+/* P/T delta display (auto-size pill) */
+.counter-badge {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  /* auto width/height (no fixed circle) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;            /* grows with content */
+  min-height: 22px;            /* comfortable touch size */
+  min-width: 22px;             /* tiny values still readable */
+  border-radius: 9999px;       /* pill */
+  background: #10b981;         /* emerald */
+  color: #0b1220;              /* dark text for contrast */
+  border: 2px solid #ffffff;
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;         /* keep “-10/+12” on one line */
+  z-index: 6;
+}
+    
+    /* Stun display */
+.stun-badge {
+  position: absolute;
+  bottom: -6px;
+  left: -6px;
+  background: #f59e0b; /* amber */
+  color: #111827;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-weight: 700;
+  font-size: 11px;
+  border: 2px solid white;
+  z-index: 6;
+}
+
+/* Collapsible counter panel */
+.counter-panel { width: 100%; }
+.counter-panel > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.counter-panel > summary::-webkit-details-marker { display: none; }
+.counter-panel[open] > summary { opacity: 0.9; }
+
+
+    .btn-purple { background: #7c3aed; color: white; }
+    .btn-purple:hover { background: #6d28d9; }
+    .sidebar { width: 280px; background: #1f2937; border-left: 1px solid #374151; padding: 16px; overflow-y: auto; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+    .modal-content { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .flex { display: flex; gap: 8px; align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .text-sm { font-size: 14px; }
+    .text-xs { font-size: 12px; }
+    .text-gray { color: #9ca3af; }
+    .text-red { color: #f87171; }
+    .text-green { color: #4ade80; }
+    .text-blue { color: #60a5fa; }
+    .deck-card { display: inline-block; position: relative; margin: 4px; }
+    .deck-card img { width: 100px; height: 140px; border-radius: 4px; border: 2px solid #4b5563; cursor: pointer; object-fit: cover; transition: all 0.2s; }
+    .deck-card:hover img { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+    .remove-btn { position: absolute; top: 0; right: 0; background: #dc2626; color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; display: none; cursor: pointer; }
+    .deck-card:hover .remove-btn { display: block; }
+    label { display: block; margin-bottom: 8px; color: #d1d5db; font-size: 14px; font-weight: 500; }
+    textarea { resize: vertical; min-height: 80px; }
+    .mana-symbol { display: inline-block; width: 20px; height: 20px; border-radius: 50%; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; margin: 0 2px; }
+    .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    
+    /* --- Draft mode layout --- */
+.draft-wrap{display:grid;grid-template-columns:1fr 320px;gap:16px;min-height:70vh}
+.draft-stage{background:#111827;border:1px solid #374151;border-radius:10px;padding:14px}
+.draft-row{display:grid;grid-template-columns:repeat(3, minmax(160px,1fr));gap:12px}
+.draft-choice{position:relative;border:2px solid #374151;border-radius:8px;overflow:hidden;cursor:pointer;transition:.15s}
+.draft-choice:hover{transform:translateY(-4px);border-color:#3b82f6;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.draft-hover{position:fixed;pointer-events:none;z-index:9999;display:none;background:#1f2937;border:1px solid #374151;border-radius:8px;width:360px;max-width:90vw;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.draft-side{background:#1f2937;border:1px solid #374151;border-radius:10px;padding:12px;overflow:auto}
+.draft-small{display:flex;gap:8px;align-items:center;margin:6px 0}
+.draft-small img{width:40px;height:56px;border-radius:4px;border:1px solid #4b5563;object-fit:cover}
+.badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid #374151;background:#0b1220}
+/* Hover card preview shown *inside* the zone modal so it isn't blurred */
+.zone-hover {
+  position: fixed;             /* relative to viewport */
+  pointer-events: none;
+  z-index: 10050;              /* above your modal content/overlay */
+  display: none;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  width: 360px;
+  max-width: 90vw;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.flash { box-shadow: 0 0 0 3px #f59e0b inset; transition: box-shadow .9s ease; }
+
+/* --- Mana curve (decklist) --- */
+.mana-curve-wrap {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(139,92,246,0.35);
+  border-radius: 12px;
+  padding: 12px;
+}
+.mana-curve-title {
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  opacity: .75;
+  margin-bottom: 8px;
+}
+.mana-curve {
+  display: grid;
+  grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
+  align-items: end;
+  gap: 10px;
+  height: 140px;                /* chart height */
+  padding: 8px 6px 0 6px;
+}
+.mc-col { position: relative; }
+.mc-bar {
+  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+  border: 2px solid #ecfdf5;
+  border-radius: 8px 8px 4px 4px;
+  width: 100%;
+  min-height: 4px;
+  transition: transform .12s ease, opacity .12s ease;
+}
+.mc-bar:hover { transform: translateY(-2px); }
+.mc-count {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #d1fae5;
+  text-shadow: 0 1px 0 rgba(0,0,0,.45);
+  white-space: nowrap;
+}
+.mc-x {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(var(--bins, 1), minmax(16px, 1fr));
+  gap: 10px;
+  font-size: 11px;
+  opacity: .8;
+  text-align: center;
+}
+
+  </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.container{width:100%}@media (min-width: 640px){.container{max-width:640px}}@media (min-width: 768px){.container{max-width:768px}}@media (min-width: 1024px){.container{max-width:1024px}}@media (min-width: 1280px){.container{max-width:1280px}}@media (min-width: 1536px){.container{max-width:1536px}}.mb-8{margin-bottom:2rem}.mb-4{margin-bottom:1rem}.mt-4{margin-top:1rem}.mb-2{margin-bottom:0.5rem}.flex{display:flex}.grid{display:grid}.p-4{padding:1rem}.text-center{text-align:center}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}</style><style>:is([id*='google_ads_iframe'],[id*='taboola-'],.taboolaHeight,.taboola-placeholder,#top-ad,#credential_picker_container,#credentials-picker-container,#credential_picker_iframe,[id*='google-one-tap-iframe'],#google-one-tap-popup-container,.google-one-tap__module,.google-one-tap-modal-div,#amp_floatingAdDiv,#ez-content-blocker-container) {display:none!important;min-height:0!important;height:0!important;}
+/* --- menu tiles --- */
+.menu-grid { display:grid; gap:20px; grid-template-columns: repeat(3, minmax(200px, 1fr)); }
+.menu-tile { position:relative; border:2px solid #866b2a; border-radius:14px; overflow:hidden; cursor:pointer; background:#0f172a; }
+.menu-tile img { width:100%; height:100%; display:block; object-fit:cover; filter: contrast(1.05) saturate(0.95); }
+.menu-tile:hover { transform: translateY(-4px); transition: transform .15s ease; box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+.menu-caption {
+  position:absolute; left:0; right:0; bottom:0;
+  background:linear-gradient(0deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,0) 60%);
+  color:#e5d7a1; text-align:center; padding:12px 8px; font-weight:800; letter-spacing:.5px;
+  text-shadow: 0 1px 2px #000;
+}
+.hero {
+  border:2px solid #866b2a; border-radius:14px; overflow:hidden; margin-bottom:16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.hero img { width:100%; height:auto; display:block; }
+</style>
+
+
+<style>:is([id*='google_ads_iframe'],[id*='taboola-'],.taboolaHeight,.taboola-placeholder,#top-ad,#credential_picker_container,#credentials-picker-container,#credential_picker_iframe,[id*='google-one-tap-iframe'],#google-one-tap-popup-container,.google-one-tap__module,.google-one-tap-modal-div,#amp_floatingAdDiv,#ez-content-blocker-container) {display:none!important;min-height:0!important;height:0!important;}</style></head>
+
+
+<body>
+  <div id="root"><div class="screen">
+    <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
+      <div class="hero"><img src="title_wizards.png" alt="Wizards Duel"></div>
+
+           <h1 style="
+  font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+   Galdur
+</h1>
+      <p class="text-gray mb-1" style="font-size: 14px;">Make custom cards. Play against a friend.</p>
+<p class="text-xs text-gray" style="margin-bottom: 20px;">
+  KS
+</p>
+<p class="text-xs text-gray" style="margin-bottom: 20px;">
+  CC Opensource. 2025.
+</p>
+
+      <div class="card" style="padding: 16px; margin: 0 auto; max-width: 420px;">
+        <label>Password</label>
+        <input id="appPw" class="input mb-4" type="password" autocomplete="current-password" placeholder="Enter password">
+        <div class="flex" style="gap: 24px; justify-content: center;">
+          <button id="p1btn" class="btn btn-secondary" style="padding: 24px 36px; font-size: 18px;">Player 1</button>
+          <button id="p2btn" class="btn btn-secondary" style="padding: 24px 36px; font-size: 18px;">Player 2</button>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  
+  <script>
+(function(){
+'use strict';
+
+const state = {
+  screen: 'login',
+  currentPlayer: null,
+  cards: [],
+  scryfallCards: [],
+  searchResults: [],
+  isLoadingScryfallCards: false,
+  decks: { player1: [], player2: [] },
+  editingCard: null,
+  activePlayer: 1,
+  gameState: {
+    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: [], health: 20 },
+    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: [], health: 20 }
+  },
+  gameStarted: false,
+  winner: null,
+  selectedCard: null,
+  selectedFieldCard: null,
+  selectedZoneCard: null,
+  hoveredCard: null,
+  viewingZone: null,
+  creatingToken: false,
+  onlineMode: false,
+  peerConnection: null,
+  dataChannel: null,
+  roomCode: null,
+  isHost: false,
+  waitingForAnswer: false,
+  answerCode: null,
+  showTurnNotification: false, 
+  actionMessage: null,   // NEW: transient action overlay (e.g., draws)
+  draft: {
+  active: false,
+  // NEW: first screen is a mode selector
+  screen: 'mode',               // 'mode' | 'setup' | 'custom-setup' | 'colors' | 'lands' | 'picks' | 'done'
+  // NEW: which draft engine to use
+  mode: 'traditional',          // 'traditional' | 'custom'
+
+  // shared
+  format: 'standard',           // 'standard' | 'modern' | 'commander'
+  target: 60,
+  allowDuplicates: true,
+
+  // color flow
+  offeredColorSets: [],         // arrays like ['U'], ['U','R'], ['W','U','B']
+  chosenColors: [],
+  basicLands: { W:0, U:0, B:0, R:0, G:0 },
+
+  // live draft state
+  picks: 0,
+  pool: [],                     // current 3 shown
+  deck: [],                     // chosen cards
+
+  // NEW: dedupe memory across the whole draft
+  seenIds: {},
+  seenNames: {},
+
+  // NEW: custom draft inputs
+  customPool: [],               // array of card objects (your export format)
+  customParams: {
+    filterByColors: true        // only offer cards within chosen colors
+    // (you can extend later: artifactChance, rareEvery, etc.)
+  },
+}
+
+};
+
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 400, maxH = 560;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > maxW) { h *= maxW / w; w = maxW; } }
+      else { if (h > maxH) { w *= maxH / h; h = maxH; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function checkWinner() {
+  if (state.gameStarted) {
+    if (state.gameState.player1.health <= 0) { state.winner = 2; state.gameStarted = false; }
+    else if (state.gameState.player2.health <= 0) { state.winner = 1; state.gameStarted = false; }
+  }
+}
+
+function toast(message, ms = 2200) {
+  const t = document.createElement('div');
+  t.setAttribute('role', 'status');
+  t.style.cssText = [
+    'position:fixed','right:16px','bottom:16px','z-index:10000',
+    'background:#111827','border:1px solid #374151','color:#fff',
+    'padding:10px 14px','border-radius:8px','box-shadow:0 8px 24px rgba(0,0,0,.35)',
+    'opacity:0','transform:translateY(8px)','transition:opacity .15s ease, transform .15s ease'
+  ].join(';');
+  t.textContent = message;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(8px)';
+    setTimeout(() => t.remove(), 180);
+  }, ms);
+}
+
+// --- Mana Curve helpers ---
+function getCMC(card) {
+  // Prefer explicit numeric cmc if present
+  if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) return Math.max(0, Math.floor(card.cmc));
+
+  // Common fields: manaCost like "{2}{G}{G}" or "2GG", or "3U/R" etc.
+  const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+  if (!s) return null;
+
+  // Braced form: sum digits; letters count as 1 each, 'X' counts as 0
+  // Examples: "{2}{G}{G}" => 4 ; "{X}{U}{U}" => 2
+  let sum = 0;
+  if (s.includes('{')) {
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens) {
+      const inner = t.slice(1, -1);
+      const n = parseInt(inner, 10);
+      if (Number.isFinite(n)) sum += n;
+      else {
+        // split hybrids like "G/U" -> ["G","U"]
+        const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+        for (const ch of letters) {
+          if ('WUBRGCS'.includes(ch)) sum += 1;   // treat W U B R G C S as 1
+          // 'X' -> 0
+        }
+      }
+    }
+    return sum;
+  }
+
+  // Unbraced fallback: digits + count of letters WUBRG (X=0)
+  const digits = (s.match(/\d+/g) || []).map(x => parseInt(x,10)).reduce((a,b)=>a+b,0);
+  const letters = (s.toUpperCase().match(/[WUBRGC]/g) || []).length;
+  return digits + letters;
+}
+
+function manaCurveData(cards) {
+  const counts = new Map();
+  for (const c of (cards || [])) {
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    counts.set(cmc, (counts.get(cmc) || 0) + 1);
+  }
+  if (counts.size === 0) return { bins: [], max: 0 };
+
+  const min = Math.min(...counts.keys());
+  const max = Math.max(...counts.keys());
+  const bins = [];
+  let peak = 0;
+  for (let k = min; k <= max; k++) {
+    const v = counts.get(k) || 0;
+    bins.push({ cmc: k, count: v });
+    if (v > peak) peak = v;
+  }
+  return { bins, max: peak };
+}
+
+function renderManaCurve(containerId, cards) {
+  const root = document.getElementById(containerId);
+  if (!root) return;
+  const { bins, max } = manaCurveData(cards);
+  if (bins.length === 0) {
+    root.innerHTML = `<div class="mana-curve-wrap">
+      <div class="mana-curve-title">Mana Curve</div>
+      <div style="opacity:.7; font-size:12px;">No mana-cost data in this deck.</div>
+    </div>`;
+    return;
+  }
+  
+const cols = bins.map(b => {
+  const h = max ? Math.max(4, Math.round((b.count / max) * 100)) : 0;
+  const label = `${b.count} card${b.count===1 ? '' : 's'} at CMC ${b.cmc}`;
+  return `
+    <div class="mc-col">
+      <div class="mc-bar" style="height:${h}%" title="${label}" aria-label="${label}"></div>
+    </div>`;
+}).join('');
+
+
+  const labels = bins.map(b => `<div>${b.cmc}</div>`).join('');
+
+  root.innerHTML = `
+    <div class="mana-curve-wrap">
+      <div class="mana-curve-title">Mana Curve</div>
+      <div class="mana-curve" style="--bins:${bins.length}">${cols}</div>
+      <div class="mc-x" style="--bins:${bins.length}">${labels}</div>
+    </div>`;
+}
+
+
+function getDeckForChart() {
+  const meKey = 'player' + state.currentPlayer;
+  // Try common working-deck shapes first
+  if (Array.isArray(state.currentDeck)) return state.currentDeck;
+  if (state.deckBuilder?.cards && Array.isArray(state.deckBuilder.cards)) return state.deckBuilder.cards;
+  if (Array.isArray(state.deck)) return state.deck;
+  // Fallback: the deck synced per player
+  return state.decks?.[meKey] || [];
+}
+
+
+
+function nInt(x) {
+  const v = parseInt(x, 10);
+  return Number.isFinite(v) ? v : 0;
+}
+
+// Effective (base + modifiers) P/T
+function effectivePT(card) {
+  // base values from card definition (or 0 if not a creature)
+  const baseP = nInt(card.power);
+  const baseT = nInt(card.toughness);
+
+  // deltas from new system; fall back to old 'counters' if present
+  const dP = (card && card.pt && typeof card.pt.p === 'number') ? card.pt.p : (card?.counters || 0);
+  const dT = (card && card.pt && typeof card.pt.t === 'number') ? card.pt.t : (card?.counters || 0);
+
+  return { p: baseP + dP, t: baseT + dT };
+}
+
+// --- NEW: in-game center overlay for actions, with optional broadcast ---
+function showAction(message, ms = 2000) {
+  state.actionMessage = message;
+  render();
+  setTimeout(() => { state.actionMessage = null; render(); }, ms);
+}
+
+function broadcastAction(message) {
+  // Always show locally
+  showAction(message);
+  // And notify peer if online
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({ type: 'notify', message }));
+  }
+}
+
+
+function sendGameUpdate() {
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({
+      type: 'gameUpdate',
+      gameState: state.gameState,
+      gameStarted: state.gameStarted,
+      activePlayer: state.activePlayer,
+      winner: state.winner,
+      showTurnNotification: state.showTurnNotification
+    }));
+  }
+}
+
+function setupDataChannel(channel) {
+  state.dataChannel = channel;
+  state.dataChannel.onopen = () => {
+    console.log('Connected!');
+    state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
+  };
+    
+    // --- WebRTC datachannel handlers ---
+state.dataChannel.onmessage = (event) => {
+  try {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'deckSync') {
+      const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+      if (data.decks && data.decks[oppKey]) {
+        state.decks[oppKey] = data.decks[oppKey];
+      }
+      render();
+
+    } else if (data.type === 'gameUpdate') {
+      state.gameState = data.gameState;
+      state.gameStarted = data.gameStarted;
+
+      const previousPlayer = state.activePlayer;
+      state.activePlayer = data.activePlayer;
+      state.winner = data.winner;
+
+      // If it just became this player's turn, flash the turn notice
+      if (previousPlayer !== state.activePlayer && state.activePlayer === state.currentPlayer) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+
+      render();
+
+    } else if (data.type === 'notify') {
+      // NEW: action overlay (deck → hand, etc.)
+      showAction(data.message);
+    }
+
+  } catch (e) {
+    console.error('dataChannel onmessage error:', e, event?.data);
+  }
+};
+
+state.dataChannel.onclose = () => {
+  alert('Connection closed');
+  disconnectOnline();
+  state.screen = 'menu';
+  render();
+};
+
+    
+  }
+
+async function createOnlineRoom() {
+  state.isHost = true;
+  state.onlineMode = true;
+  state.roomCode = 'waiting';
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  state.peerConnection = pc;
+  setupDataChannel(pc.createDataChannel('game'));
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') resolve();
+    else pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+  });
+  state.roomCode = btoa(JSON.stringify({ offer: pc.localDescription }));
+  state.waitingForAnswer = true;
+  render();
+}
+
+async function joinOnlineRoom(offerStr) {
+  state.isHost = false;
+  state.onlineMode = true;
+  state.roomCode = 'connecting';
+  try {
+    const data = JSON.parse(atob(offerStr));
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    state.peerConnection = pc;
+    pc.ondatachannel = (e) => setupDataChannel(e.channel);
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') resolve();
+      else pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+    });
+    state.answerCode = btoa(JSON.stringify({ answer: pc.localDescription }));
+    render();
+  } catch(e) {
+    alert('Invalid code: ' + e.message);
+    disconnectOnline();
+    state.screen = 'menu';
+    render();
+  }
+}
+
+async function completeConnection(answerStr) {
+  try {
+    const data = JSON.parse(atob(answerStr));
+    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    state.waitingForAnswer = false;
+    render();
+  } catch(e) {
+    alert('Invalid answer: ' + e.message);
+  }
+}
+
+function disconnectOnline() {
+  if (state.dataChannel) state.dataChannel.close();
+  if (state.peerConnection) state.peerConnection.close();
+  state.dataChannel = null;
+  state.peerConnection = null;
+  state.onlineMode = false;
+  state.roomCode = null;
+  state.isHost = false;
+  state.waitingForAnswer = false;
+  state.answerCode = null;
+}
+
+function saveDeck() {
+  const key = 'player' + state.currentPlayer;
+  const data = JSON.stringify({ player: state.currentPlayer, cards: state.decks[key], timestamp: Date.now() });
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'deck_player' + state.currentPlayer + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadDeck(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      state.decks['player' + state.currentPlayer] = data.cards || [];
+      render();
+    } catch(err) {
+      alert('Error loading deck');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function render() {
+  const root = document.getElementById('root');
+  if (!root) return;
+  root.innerHTML = '';
+  
+  if (state.screen === 'login') root.appendChild(LoginScreen());
+  else if (state.screen === 'menu') root.appendChild(MainMenu());
+  else if (state.screen === 'creator') root.appendChild(CardCreator());
+  else if (state.screen === 'builder') root.appendChild(DeckBuilder());
+  else if (state.screen === 'game') root.appendChild(GameBoard());
+  else if (state.screen === 'battlemenu') root.appendChild(BattleMenu());
+  else if (state.screen === 'draft') root.appendChild(DraftScreen());
+}
+
+function LoginScreen() {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  div.innerHTML = `
+    <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
+      <div class="hero"><img src="title_wizards.png" alt="Wizards Duel"></div>
+      <h1 style="
+  font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+  Galdurspjölt
+</h1>
+      <p class="text-gray mb-1" style="font-size: 14px;">Create custom cards, play with friends.</p>
+
+<p class="text-xs text-gray" style="margin-bottom: 20px;">
+ Made by KS. 2025. 
+</p>
+      <div class="card" style="padding: 16px; margin: 0 auto; max-width: 420px;">
+        <label>Password</label>
+        <input id="appPw" class="input mb-4" type="password" autocomplete="current-password" placeholder="Enter password">
+        <div class="flex" style="gap: 24px; justify-content: center;">
+          <button id="p1btn" class="btn btn-secondary" style="padding: 24px 36px; font-size: 18px;">Player 1</button>
+          <button id="p2btn" class="btn btn-secondary" style="padding: 24px 36px; font-size: 18px;">Player 2</button>
+        </div>
+      </div>
+    </div>
+
+  `;
+
+  const validate = () => {
+    const pw = div.querySelector('#appPw').value.trim();
+    if (pw !== 'mtgmtg123123') { alert('Incorrect password'); return false; }
+    return true;
+  };
+
+  div.querySelector('#p1btn').onclick = () => { if (!validate()) return; state.currentPlayer = 1; state.screen = 'menu'; render(); };
+  div.querySelector('#p2btn').onclick = () => { if (!validate()) return; state.currentPlayer = 2; state.screen = 'menu'; render(); };
+
+  return div;
+}
+
+function MainMenu() {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  div.innerHTML = `
+    <div style="max-width: 1100px; width: 100%; padding: 0 16px;">
+      
+      <div class="header">
+  <div></div>
+  <div></div>
+  <div class="flex" style="gap: 10px; align-items: center;">
+    <span id="playerTag" class="text-sm" style="opacity:.9;">Player ${state.currentPlayer}</span>
+    <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+  </div>
+</div>
+
+      <div class="menu-grid">
+        <div id="tileCreator" class="menu-tile" aria-label="Card Creator">
+          <img src="tile_card_creator.png" alt="Card Creator">
+          <div class="menu-caption"></div>
+        </div>
+        <div id="tileBuilder" class="menu-tile" aria-label="Deck Builder">
+          <img src="tile_deck_builder.png" alt="Deck Builder">
+          <div class="menu-caption"></div>
+        </div>
+        <div id="tileBattle" class="menu-tile" aria-label="Battle">
+          <img src="tile_battle.png" alt="Battle">
+          <div class="menu-caption"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // actions
+  div.querySelector('#logoutBtn').onclick  = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#tileCreator').onclick = () => { state.screen = 'creator'; render(); };
+  div.querySelector('#tileBuilder').onclick = () => { state.screen = 'builder'; render(); };
+  div.querySelector('#tileBattle').onclick  = () => { state.screen = 'battlemenu'; render(); };
+
+  return div;
+}
+
+function BattleMenu()  {
+  const div = document.createElement('div');
+  div.className = 'screen';
+
+  div.innerHTML = `
+    <div style="max-width: 800px; width:100%; padding: 0 16px;">
+      <div class="header">
+        <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size: 24px; font-weight: bold;"></h2>
+        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+      </div>
+
+      <!-- Image tile submenu -->
+      <div class="menu-grid" style="display:grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap:12px; margin-bottom:16px;">
+
+        <div id="playLocal" class="menu-tile" tabindex="0" role="button" aria-label="Play Local">
+          <img src="tile_battle_local.png" alt="Play Local">
+          <div class="menu-caption">Play Local</div>
+        </div>
+
+        <div id="hostGame" class="menu-tile" tabindex="0" role="button" aria-label="Host Game">
+          <img src="tile_battle_host.png" alt="Host Game">
+          <div class="menu-caption">Host Game</div>
+        </div>
+
+        <div id="joinGame" class="menu-tile" tabindex="0" role="button" aria-label="Join Game">
+          <img src="tile_battle_join.png" alt="Join Game">
+          <div class="menu-caption">Join Game</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // helper for keyboard activation on tiles
+  const bind = (sel, fn) => {
+    const el = div.querySelector(sel);
+    if (!el) return;
+    el.onclick = fn;
+    el.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+    };
+  };
+
+  // nav
+  bind('#backBtn',   () => { state.screen = 'menu';  render(); });
+  bind('#logoutBtn', () => { state.currentPlayer = null; state.screen = 'login'; render(); });
+
+  // local play
+  bind('#playLocal', () => {
+    state.onlineMode = false;
+    state.screen = 'game';
+    render();
+  });
+
+  // host online (ID FIX)
+  bind('#hostGame', () => {
+    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    if (!deck.length) { alert('Build a deck first!'); return; }
+    state.onlineMode = true;
+    if (typeof createOnlineRoom === 'function') createOnlineRoom();
+    state.screen = 'game';
+    render();
+  });
+
+  // join online (ID FIX)
+  bind('#joinGame', () => {
+    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    if (!deck.length) { alert('Build a deck first!'); return; }
+    const code = prompt('Paste connection code:');
+    if (code && code.trim()) {
+      state.onlineMode = true;
+      if (typeof joinOnlineRoom === 'function') joinOnlineRoom(code.trim());
+      state.screen = 'game';
+      render();
+    }
+  });
+
+  return div;
+}
+
+
+// ------------------------------ D R A F T  ------------------------------
+function DraftScreen(){
+  const div = document.createElement('div');
+  div.className = 'container';
+
+  const D = state.draft;
+
+
+  function setScreen(s){ D.screen = s; render(); }
+
+  // helpers ---------------------------------------------------------------
+  const colorNames = {W:'Plains',U:'Island',B:'Swamp',R:'Mountain',G:'Forest'};
+  const manaSym = {W:'⚪',U:'🔵',B:'⚫',R:'🔴',G:'🟢'};
+
+  function formatToScryfallLegal(format){
+    if (format === 'standard') return 'legal:standard';
+    if (format === 'modern')   return 'legal:modern';
+    return 'legal:commander';
+  }
+
+  function chosenIdentityToken(){
+    // Scryfall "id<=" means color identity is subset of these letters
+    // e.g., 'ur' allows U/R, UR multi, and mono U or mono R if not excluded elsewhere.
+    return D.chosenColors.join('').toLowerCase();
+  }
+
+async function fetchThreeChoices(){
+  const legal = formatToScryfallLegal(D.format);
+  const idTok = chosenIdentityToken();
+
+  // rarity & artifact logic (unchanged policy)
+  const rareRound   = (D.picks > 0 && D.picks % 10 === 0);
+  const wantArtifact = Math.random() < 0.12; // 12%
+
+  // helper: shuffle in-place
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+  // helper: draw a unique random card from Scryfall /cards/random with a query
+  async function drawRandomCard(q, attempts = 14){
+    const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
+    const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+
+    for (let k=0; k<attempts; k++){
+      const url = `https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`;
+      const r = await fetch(url, { headers:{Accept:'application/json'} });
+      if (!r.ok) continue;
+      const c = await r.json();
+
+      // skip if no image or it violates “never lands”
+      const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+      if (!img) continue;
+      if ((c.type_line || '').toLowerCase().includes('land')) continue;
+
+      // skip if we've seen/suggested/picked this already in this draft
+      if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
+
+      // commander singleton: allow suggesting duplicates but they’ll be blocked on pick; we still try to avoid repeats here
+      return {
+        id: c.id,
+        name: c.name,
+        type: c.type_line || '',
+        cost: c.mana_cost || '',
+        colors: c.colors || [],
+        effect: c.oracle_text || '',
+        power: c.power || 0,
+        toughness: c.toughness || 0,
+        imageUrl: img,
+        rarity: c.rarity || ''
+      };
+    }
+    return null; // fallback handled by caller
+  }
+
+  // Build three CMC bands per round (diversity)
+  const bands = shuffle([[0,2],[3,4],[5,20]]); // low, mid, high
+
+  // Base query: format + colors; never lands
+  const base = `${legal} id<=${idTok} -t:land`;
+
+  // Optional rarity upgrade
+  const rarityQ = rareRound ? ' (rarity>=rare)' : '';
+
+  // Optional artifact path (still respect format; artifacts are allowed outside color identity)
+  const maybeArtifactQ = wantArtifact ? `t:artifact ${legal} -t:land${rarityQ}` : null;
+
+  const picks = [];
+  for (let b = 0; b < bands.length; b++){
+    const [lo, hi] = bands[b];
+
+    // prefer color-filtered banded query; if artifact round, do one artifact slot
+    let q;
+    if (maybeArtifactQ && b === 0) {
+      // one slot is artifact in artifact rounds
+      q = `${maybeArtifactQ} cmc>=${lo} cmc<=${hi}`;
+    } else {
+      q = `${base}${rarityQ} cmc>=${lo} cmc<=${hi}`;
+    }
+
+    // Try to draw a unique card for this slot; broaden if necessary
+    let card = await drawRandomCard(q);
+    if (!card) {
+      // broaden by dropping cmc constraint
+      const broadQ = maybeArtifactQ && b === 0 ? maybeArtifactQ : `${base}${rarityQ}`;
+      card = await drawRandomCard(broadQ);
+    }
+    if (!card) {
+      // ultimate fallback: truly random within format, excluding lands
+      const lastResort = `${legal} -t:land`;
+      card = await drawRandomCard(lastResort);
+    }
+    if (card) {
+      // reserve these to avoid re-offering this round or later
+      if (!D.seenIds)   D.seenIds = {};
+      if (!D.seenNames) D.seenNames = {};
+      D.seenIds[card.id]   = 1;
+      D.seenNames[card.name] = 1;
+      picks.push(card);
+    }
+  }
+
+  // If for any reason we got fewer than 3, try to top up with very broad pulls
+  while (picks.length < 3){
+    const card = await drawRandomCard(`${legal} -t:land`);
+    if (!card) break;
+    D.seenIds[card.id] = 1;
+    D.seenNames[card.name] = 1;
+    picks.push(card);
+  }
+
+  D.pool = picks.slice(0,3);
+}
+
+async function fetchThreeChoicesCustom(){
+  const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+  const chosen = new Set((D.chosenColors || []).map(String));
+  const filterByColors = !!(D.customParams && D.customParams.filterByColors);
+
+  function eligible(c, relaxColors=false){
+    if (!c || !c.name) return false;
+
+    // hard exclude lands
+    const type = (c.type || '').toLowerCase();
+    if (type.includes('land')) return false;
+
+    // singleton suggestion level (avoid offering a name already in deck when duplicates disallowed)
+    if (!D.allowDuplicates && D.deck.some(x => x.name === c.name)) return false;
+
+    // never re-offer same name within this draft
+    if (seenNameSet.has(c.name)) return false;
+
+    // color gating (optional)
+    if (filterByColors && !relaxColors && chosen.size){
+      const cols = new Set((c.colors || []).map(String));
+      for (const col of cols) if (!chosen.has(col)) return false;
+    }
+    return true;
+  }
+
+  const fullPool = Array.isArray(D.customPool) ? D.customPool : [];
+
+  // First pass: strict colors (if enabled), no lands
+  let pool = fullPool.filter(c => eligible(c, false));
+
+  // If too few options, relax color filter but still exclude lands
+  if (pool.length < 3) pool = fullPool.filter(c => eligible(c, true));
+
+  if (pool.length === 0){
+    // Nothing eligible — keep UI responsive and instruct the user
+    D.pool = [];
+    toast('No eligible cards left in custom pool. Consider allowing duplicates or disabling color filtering.');
+    return;
+  }
+
+  // Shuffle and take up to 3 distinct names
+  for (let i = pool.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picks = [];
+  const used = new Set();
+  for (const c of pool){
+    if (!used.has(c.name)){
+      picks.push(c);
+      used.add(c.name);
+      if (picks.length >= 3) break;
+    }
+  }
+
+  if (!D.seenNames) D.seenNames = {};
+  picks.forEach(c => { D.seenNames[c.name] = 1; });
+  D.pool = picks;
+}
+
+async function ensurePool(){
+  if (D.pool.length === 0) {
+    try {
+      if (D.mode === 'custom') await fetchThreeChoicesCustom();
+      else await fetchThreeChoices();
+    } catch(e){
+      alert('Draft fetch failed: ' + e.message);
+      D.pool = [];
+    }
+  }
+}
+
+async function pushBasicLands(){
+  // Map draft shorthand → Scryfall type keyword
+  const typeName = { W:'Plains', U:'Island', B:'Swamp', R:'Mountain', G:'Forest' };
+
+  for (const k of Object.keys(D.basicLands)){
+    const n = (D.basicLands[k] | 0);
+    for (let i = 0; i < n; i++){
+      // random basic land printing with image
+      const q = `t:basic t:land type:${typeName[k]}`;
+      try{
+        const r = await fetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers:{Accept:'application/json'} });
+        if (!r.ok) throw new Error();
+        const c = await r.json();
+        const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+
+        D.deck.push({
+          id: c.id,
+          name: c.name || typeName[k],
+          type: c.type_line || `Basic Land — ${typeName[k]}`,
+          cost: '',
+          colors: [k],
+          effect: '',
+          power: 0, toughness: 0,
+          imageUrl: img,
+          rarity: c.rarity || 'common'
+        });
+
+        // also mark as seen so we never suggest this exact printing again
+        if (!D.seenIds)   D.seenIds = {};
+        if (!D.seenNames) D.seenNames = {};
+        D.seenIds[c.id] = 1;
+        D.seenNames[c.name] = 1;
+
+      }catch(e){
+        // fallback: push a text-only placeholder if Scryfall fails
+        D.deck.push({
+          id: 'land_'+k+'_'+i+'_'+Date.now(),
+          name: typeName[k],
+          type: 'Basic Land — ' + typeName[k],
+          cost: '',
+          colors: [k],
+          effect: '',
+          power: 0, toughness: 0,
+          imageUrl: '',
+          rarity: 'common'
+        });
+      }
+    }
+  }
+}
+
+  function canAdd(card){
+    if (D.allowDuplicates) return true;
+    return !D.deck.some(x => x.name === card.name);
+  }
+
+  async function pickCard(idx){
+    const card = D.pool[idx];
+    if (!card) return;
+    if (!canAdd(card)){
+      toast('Commander singleton: duplicate not allowed'); 
+      return;
+    }
+    if (!D.seenIds)   D.seenIds = {};
+if (!D.seenNames) D.seenNames = {};
+D.seenIds[card.id] = 1;
+D.seenNames[card.name] = 1;
+    D.deck.push(card);
+    D.picks += 1;
+    D.pool = []; // next round
+    const left = D.target - D.deck.length;
+    if (left <= 0){
+      D.screen = 'done';
+      render();
+      return;
+    }
+    await ensurePool();
+    render();
+  }
+
+  function deckCount(){ return D.deck.length; }
+  function leftCount(){ return Math.max(0, D.target - deckCount()); }
+
+function Mode(){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Builder</button>
+      <h1 style="font-size:24px;font-weight:800">Choose Draft Mode</h1>
+      <div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div class="card p-4" id="goTraditional" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Traditional Draft</h3>
+        <p class="text-xs text-gray">Random three-card offers from Scryfall, color-filtered by your choice; 60-card or 100-card Commander singleton.</p>
+      </div>
+      <div class="card p-4" id="goCustom" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Custom Draft</h3>
+        <p class="text-xs text-gray">Upload a JSON decklist (export format) to act as the draft pool. Optional color filtering. Same pick flow.</p>
+      </div>
+    </div>
+  `;
+  wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
+  wrap.querySelector('#goTraditional').onclick = ()=>{
+    D.mode='traditional';
+    D.screen='setup';
+    render();
+  };
+  wrap.querySelector('#goCustom').onclick = ()=>{
+    D.mode='custom';
+    D.screen='custom-setup';
+    render();
+  };
+  return wrap;
+}
+
+  // setup steps -----------------------------------------------------------
+  function Setup(){
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h1 style="font-size:24px;font-weight:700"></h1>
+
+      <div class="card p-4">
+        <div class="mb-4">
+          <label>Format</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
+            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
+            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray">After choosing a format, you’ll be offered random color schemes (mono / dual / triple) and then draft 3-card picks until the deck is full. Occasional picks upgrade to Rare/Mythic and artifacts may appear.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => { state.screen='builder'; render(); };
+    wrap.querySelectorAll('[data-f]').forEach(b=>{
+      b.onclick = ()=>{
+        const f = b.dataset.f;
+        D.format = f;
+        D.target = (f==='commander') ? 100 : 60;
+        D.allowDuplicates = (f!=='commander');
+        // create color offers: one mono, two duals, two triples at random
+        D.offeredColorSets = randomColorOffers();
+        setScreen('colors');
+      };
+    });
+    return wrap;
+  }
+  
+  function CustomSetup(){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Back</button>
+      <h2 style="font-size:20px;font-weight:700">Custom Draft — Pool & Settings</h2>
+      <div></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card p-4">
+        <label>Upload custom pool (.json)</label>
+        <input id="customPoolFile" type="file" accept=".json" class="input" />
+        <div id="customPoolStatus" class="text-xs text-gray" style="margin-top:8px">No file loaded.</div>
+
+        <div class="mb-4" style="margin-top:12px">
+          <label>Format</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
+            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
+            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+          </div>
+        </div>
+
+        <div class="flex" style="gap:10px;align-items:center;margin:8px 0 12px">
+          <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+            <input id="customFilterColors" type="checkbox" checked>
+            Only offer cards within chosen colors
+          </label>
+          <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+            <input id="customAllowDupes" type="checkbox" checked>
+            Allow duplicates
+          </label>
+        </div>
+
+        <div class="flex" style="gap:8px">
+          <button id="continueCustom" class="btn btn-primary" disabled>Continue</button>
+        </div>
+
+        <p class="text-xs text-gray mt-4">
+          JSON must be your app’s export format (i.e., <code>{"cards":[...]}</code>).
+          Cards in the pool with “Land” in type are ignored as draft offers.
+        </p>
+      </div>
+
+      <div class="card p-4">
+        <strong>Pool preview</strong>
+        <div id="customPoolPreview" class="text-xs text-gray" style="margin-top:6px">—</div>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
+
+  // format choose
+  wrap.querySelectorAll('[data-f]').forEach(b=>{
+    b.onclick = ()=>{
+      const f = b.dataset.f;
+      D.format = f;
+      D.target = (f==='commander') ? 100 : 60;
+      // default singleton only in commander – can be overridden by the checkbox
+      D.allowDuplicates = (f!=='commander');
+      wrap.querySelector('#customAllowDupes').checked = D.allowDuplicates;
+    };
+  });
+
+  // file upload
+  const fileInput = wrap.querySelector('#customPoolFile');
+  const statusEl  = wrap.querySelector('#customPoolStatus');
+  const previewEl = wrap.querySelector('#customPoolPreview');
+  const contBtn   = wrap.querySelector('#continueCustom');
+
+  fileInput.onchange = async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try{
+      const text = await f.text();
+      const j = JSON.parse(text);
+      if (!Array.isArray(j.cards)) throw new Error('Missing "cards" array.');
+      // normalize / hydrate images just in case
+      const pool = j.cards.map(c=>{
+        const img = c.image || c.imageUrl ||
+          `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(c.name||'')}`;
+        return {
+          id: c.id || (c.name + '_' + Math.random()),
+          name: c.name,
+          type: c.type || '',
+          cost: c.cost || '',
+          colors: Array.isArray(c.colors) ? c.colors : [],
+          effect: c.effect || '',
+          power: c.power || 0,
+          toughness: c.toughness || 0,
+          imageUrl: img,
+          rarity: c.rarity || 'common'
+        };
+      });
+      D.customPool = pool;
+      statusEl.textContent = `Loaded ${pool.length} cards.`;
+      previewEl.innerHTML = `${pool.slice(0,12).map(x=>x.name).join(', ')}${pool.length>12?' …':''}`;
+      contBtn.disabled = pool.length === 0;
+    }catch(err){
+      statusEl.textContent = 'Invalid JSON: ' + err.message;
+      contBtn.disabled = true;
+    }
+  };
+
+  // params
+  wrap.querySelector('#customAllowDupes').onchange = (e)=>{
+    D.allowDuplicates = !!e.target.checked;
+  };
+  wrap.querySelector('#customFilterColors').onchange = (e)=>{
+    D.customParams.filterByColors = !!e.target.checked;
+  };
+
+  // continue to color selection (we keep the same flow)
+  contBtn.onclick = ()=>{
+    D.offeredColorSets = randomColorOffers();
+    D.chosenColors = []; // chosen next step
+    D.seenIds = {}; D.seenNames = {};
+    D.screen = 'colors';
+    render();
+  };
+
+  return wrap;
+}
+
+  function Colors(){
+    const offers = D.offeredColorSets;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size:20px;font-weight:700">Choose a color scheme</h2>
+        <div></div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex" style="gap:10px;flex-wrap:wrap">
+          ${offers.map((set,i)=>`
+            <button class="btn btn-secondary" data-i="${i}">
+              ${set.map(c=>`${manaSym[c]} ${c}`).join(' ')}
+            </button>
+          `).join('')}
+        </div>
+        <p class="text-xs text-gray mt-4">Choices include mono / double / triple colors at random. Draft pool will be filtered to these colors when possible.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => setScreen('setup');
+    wrap.querySelectorAll('[data-i]').forEach(b=>{
+      b.onclick = ()=>{
+        D.chosenColors = offers[+b.dataset.i];
+        setScreen('lands');
+      };
+    });
+    return wrap;
+  }
+
+  function Lands(){
+    const wrap = document.createElement('div');
+    const cols = D.chosenColors;
+    const inputs = cols.map(c=>`
+      <div>
+        <label>${c} ${colorNames[c]}</label>
+        <input class="input" type="number" min="0" max="${(D.format==='commander')?40:30}" value="0" data-c="${c}">
+      </div>`).join('');
+
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size:20px;font-weight:700">Optional: pre-fill basic lands</h2>
+        <div></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card p-4">
+          <div class="grid grid-2" style="gap:12px">${inputs}</div>
+          <div class="mt-4 flex" style="gap:8px">
+            <button id="skip" class="btn btn-secondary">Skip</button>
+            <button id="apply" class="btn btn-primary">Continue</button>
+          </div>
+          <p class="text-xs text-gray mt-4">Example: set Islands=14 and continue; the draft will fill the remaining slots to ${D.target}.</p>
+        </div>
+        <div class="card p-4">
+          <div><strong>Format:</strong> ${D.format}, target ${D.target} cards</div>
+          <div class="text-xs text-gray mt-2">Commander: singletons enforced.</div>
+        </div>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => setScreen('colors');
+    wrap.querySelector('#skip').onclick = () => { D.basicLands={W:0,U:0,B:0,R:0,G:0}; beginPicks(); };
+    wrap.querySelector('#apply').onclick = ()=>{
+      const obj = {W:0,U:0,B:0,R:0,G:0};
+      wrap.querySelectorAll('input[data-c]').forEach(inp=>{
+        obj[inp.dataset.c] = Math.max(0, parseInt(inp.value||'0',10));
+      });
+      D.basicLands = obj;
+      beginPicks();
+    };
+    return wrap;
+  }
+
+ async function beginPicks(){
+   // prefill lands into deck if any (with images)
+   await pushBasicLands();
+   D.screen = 'picks';
+   await ensurePool();
+   render();
+ }
+
+  function Picks(){
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Exit</button>
+        <h2 style="font-size:20px;font-weight:700">Pick one card • ${deckCount()}/${D.target}</h2>
+        <div class="badge">Colors: ${D.chosenColors.join(', ') || '-'}</div>
+      </div>
+
+<!-- Stats toggle for draft deck -->
+<button id="draftStatsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="draftStatsCard">
+  <span class="left"><span class="chip"></span><span>Draft Deck Statistics </span>
+  <span class="chev">▸</span>
+</button>
+<div class="card p-4 hidden" id="draftStatsCard" style="margin-bottom:12px">
+  <div id="manaCurveDraftChart"></div>
+</div>
+
+      <div class="draft-wrap">
+        <div class="draft-stage">
+          <div id="draftRow" class="draft-row">
+            ${D.pool.map((c,i)=>`
+              <div class="draft-choice" data-i="${i}">
+                ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block">`
+                              : `<div style="height:220px;background:#374151;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+                <div style="position:absolute;left:6px;top:6px" class="badge">${(c.rarity||'').toUpperCase()}</div>
+                <div style="position:absolute;right:6px;bottom:6px" class="badge">${c.name}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="text-xs text-gray mt-4">Click one card to draft; the other two disappear.</div>
+        </div>
+
+        <div class="draft-side">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Draft List</strong></div>
+            <div class="text-xs badge">Left: ${leftCount()}</div>
+          </div>
+          <div id="draftList" style="margin-top:8px">
+            ${D.deck.map(c=>`
+              <div class="draft-small">
+                ${c.imageUrl ? `<img src="${c.imageUrl}">` : `<div class="badge">${c.name}</div>`}
+                <div class="text-xs" style="line-height:1.1">
+                  <div><strong>${c.name}</strong></div>
+                  <div class="text-gray">${c.type || ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="mt-4 flex" style="gap:8px">
+            <button id="finishNow" class="btn btn-secondary">Finish</button>
+          </div>
+          <p class="text-xs text-gray mt-2">“Finish” saves current picks into your deck even if not full.</p>
+        </div>
+      </div>
+    `;
+
+    // events
+    wrap.querySelector('#back').onclick = () => {
+      if (!confirm('Leave draft? Picks will be kept only if you finish.')) return;
+      state.screen='builder'; render();
+    };
+      
+      wrap.querySelectorAll('.draft-choice').forEach(el=>{
+  el.onclick = ()=> pickCard(+el.dataset.i);
+});
+    wrap.querySelector('#finishNow').onclick = ()=> setScreen('done');
+    
+    
+    // Ensure stats CSS is present (re-use from builder if available)
+(function ensureDeckStatsCSS(){
+  if (document.getElementById('deckStatsCSS')) return;
+  const s = document.createElement('style');
+  s.id = 'deckStatsCSS';
+  s.textContent = `
+  .ds-card{background:rgba(255,255,255,0.03);border:1px solid rgba(139,92,246,0.35);border-radius:12px;padding:12px;}
+  .ds-title{font-size:12px;letter-spacing:.04em;text-transform:uppercase;opacity:.8;margin-bottom:8px;}
+  .ds-row{display:grid;gap:12px;}
+  @media (min-width:900px){.ds-row{grid-template-columns:2fr 1fr 1fr;}}
+  .ds-curve{height:160px;display:grid;align-items:end;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));padding:8px 6px 0 6px;}
+  .ds-col{position:relative;height:100%;display:flex;flex-direction:column;justify-content:flex-end;}
+  .ds-seg{width:100%;border:2px solid #ecfdf5;}
+  .ds-seg.crea{background:linear-gradient(180deg,#34d399 0%,#10b981 100%);border-radius:8px 8px 0 0;}
+.ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 8px 8px; }
+.ds-seg.noncrea.only{
+  /* ensure the top “white outline” always shows */
+  border-top-width: 2px !important;
+  border-top-style: solid !important;
+  border-top-color: #ecfdf5 !important;
+
+  /* force the same rounded cap as the green bars */
+  border-top-left-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+  border-radius: 8px 8px 4px 4px !important;
+
+  /* optional: add a subtle crisp edge like the green cap */
+  box-shadow: 0 0 0 1px rgba(236,253,245,.65) inset;
+}
+  .ds-x{margin-top:6px;display:grid;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));font-size:11px;opacity:.8;text-align:center;}
+  .ds-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:11px;opacity:.85;}
+  .ds-key{display:inline-flex;align-items:center;gap:6px;}
+  .ds-swatch{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.5);}
+  .ds-pies{display:grid;gap:12px;grid-template-columns:1fr;}
+  @media (min-width:900px){.ds-pies{grid-template-columns:1fr 1fr;}}
+  .ds-piewrap{display:flex;gap:12px;align-items:center;}
+  .ds-pie{--size:120px;width:var(--size);height:var(--size);border-radius:50%;border:2px solid rgba(236,253,245,0.7);box-shadow:inset 0 0 16px rgba(0,0,0,0.35);}
+  .ds-list{font-size:12px;line-height:1.6;}
+  .ds-list .row{display:flex;justify-content:space-between;gap:12px;}
+  .ds-small{font-size:12px;opacity:.8;}
+  .stats-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(31,41,55,0.85);border:1px solid rgba(139,92,246,0.55);border-radius:10px;font-size:14px;font-weight:700;color:#e9d5ff;cursor:pointer;box-shadow:0 4px 14px rgba(139,92,246,0.25);transition:border-color .15s ease, background .15s ease, transform .08s ease;margin-bottom:10px;}
+  .stats-toggle:hover{border-color:#a78bfa;background:rgba(31,41,55,0.95);}
+  .stats-toggle:active{transform:translateY(1px);}
+  .stats-toggle .left{display:flex;align-items:center;gap:10px;}
+  .stats-toggle .chip{width:10px;height:10px;border-radius:50%;background:linear-gradient(180deg,#34d399 0%,#10b981 100%);border:1px solid #ecfdf5;box-shadow:0 0 0 2px rgba(16,185,129,25);}
+  .stats-toggle .chev{font-size:16px;opacity:.9;transition:transform .15s ease;}
+  .stats-toggle.open .chev{transform:rotate(90deg);}
+  `;
+  document.head.appendChild(s);
+})();
+
+function typesBreakdownLocal(cards){
+  const map = new Map();
+  const push = (k)=> map.set(k, (map.get(k)||0)+1);
+  for (const c of cards){
+    const t = (c.type||'').toLowerCase();
+    if (!t){ push('Other'); continue; }
+    if (t.includes('artifact') && t.includes('creature')) { push('Artifact Creature'); continue; }
+    if (t.includes('creature'))     { push('Creature'); continue; }
+    if (t.includes('instant'))      { push('Instant'); continue; }
+    if (t.includes('sorcery'))      { push('Sorcery'); continue; }
+    if (t.includes('enchantment'))  { push('Enchantment'); continue; }
+    if (t.includes('planeswalker')) { push('Planeswalker'); continue; }
+    if (t.includes('artifact'))     { push('Artifact'); continue; }
+    if (t.includes('basic') && t.includes('land')) { push('Basic Land'); continue; }
+    if (t.includes('land'))         { push('Land'); continue; }
+    push('Other');
+  }
+  return map;
+}
+function isLandLocal(c){ return ((c.type||'')+'').toLowerCase().includes('land'); }
+function isCreatureLocal(c){ return ((c.type||'')+'').toLowerCase().includes('creature'); }
+
+function getCMCLocal(card){
+  if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) return Math.max(0, Math.floor(card.cmc));
+  const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+  if (!s) return null;
+  if (s.includes('{')){
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    let sum = 0;
+    for (const t of tokens){
+      const inner = t.slice(1,-1);
+      const n = parseInt(inner,10);
+      if (Number.isFinite(n)) { sum += n; continue; }
+      const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+      for (const ch of letters){ if ('WUBRGCS'.includes(ch)) sum += 1; }
+    }
+    return sum;
+  }
+  const digits  = (s.match(/\d+/g)||[]).map(x=>parseInt(x,10)).reduce((a,b)=>a+b,0);
+  const letters = (s.toUpperCase().match(/[WUBRG]/g)||[]).length;
+  return digits + letters;
+}
+
+function stackedCurveLocal(cards){
+  const bins = new Map(); let peak = 0;
+  for (const c of cards){
+    if (isLandLocal(c)) continue;
+    const cmc = getCMCLocal(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    const o = bins.get(cmc) || {crea:0, non:0};
+    if (isCreatureLocal(c)) o.crea += 1; else o.non += 1;
+    bins.set(cmc, o);
+    const tot = o.crea + o.non; if (tot > peak) peak = tot;
+  }
+  const keys = [...bins.keys()].sort((a,b)=>a-b);
+  return { keys, bins, peak };
+}
+function averageCMCLocal(cards){
+  let sum=0, n=0;
+  for (const c of cards){
+    if (isLandLocal(c)) continue;
+    const cmc = getCMCLocal(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    sum+=cmc; n++;
+  }
+  return n? (sum/n) : 0;
+}
+function countManaSymbolsLocal(cards){
+  const out = {W:0,U:0,B:0,R:0,G:0};
+  for (const c of cards){
+    const s = (c?.manaCost || c?.manacost || c?.cost || '').toString().toUpperCase();
+    if (!s) continue;
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens){
+      const inner = t.slice(1,-1).toUpperCase();
+      for (const ch of inner.split(/[^A-Z]/).join('')){
+        if (out.hasOwnProperty(ch)) out[ch] += 1;
+      }
+    }
+    if (!tokens.length){
+      (s.match(/[WUBRG]/g)||[]).forEach(ch => out[ch] += 1);
+    }
+  }
+  return out;
+}
+function pieStyleFromCountsLocal(obj, palette){
+  const entries = Object.entries(obj).filter(([k,v]) => v>0);
+  const total = entries.reduce((a, [,v])=>a+v, 0) || 1;
+  let acc = 0;
+  const stops = entries.map(([k,v])=>{
+    const start = acc / total * 360; acc += v; const end = acc / total * 360;
+    const color = palette[k] || '#999';
+    return `${color} ${start}deg ${end}deg`;
+  }).join(', ');
+  return `background: conic-gradient(${stops});`;
+}
+
+function renderDraftStats(){
+  const mount = wrap.querySelector('#manaCurveDraftChart');
+  if (!mount) return;
+  const deck = D.deck || [];
+  const avg  = averageCMCLocal(deck);
+  const { keys, bins, peak } = stackedCurveLocal(deck);
+
+  const manaColors = countManaSymbolsLocal(deck);
+  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+
+  const tb = typesBreakdownLocal(deck);
+  const typeObj = Object.fromEntries(tb);
+  const typePalette = {
+    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
+    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
+    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+  };
+
+  const cols = keys.map(k=>{
+    const o = bins.get(k) || {crea:0, non:0};
+    const tot = o.crea + o.non;
+    const hC = peak ? Math.max(4, Math.round(o.crea/peak*100)) : 0;
+    const hN = peak ? Math.max(0, Math.round(o.non/peak*100)) : 0;
+    return `
+      <div class="ds-col" title="Total ${tot} (Creatures ${o.crea}, Non-creatures ${o.non})">
+        ${hN?`<div class="ds-seg noncrea${hC? '' : ' only'}" style="height:${hN}%"></div>`:''}
+        ${hC?`<div class="ds-seg crea" style="height:${hC}%"></div>`:''}
+      </div>`;
+  }).join('');
+  const xlabels = keys.map(k=>`<div>${k}</div>`).join('');
+  
+  const colorTitle = Object.entries(manaColors)
+  .filter(([,v])=>v>0)
+  .map(([k,v])=>`${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}: ${v}`)
+  .join(' • ');
+
+  const curveLegend = `
+    <div class="ds-legend">
+      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
+    </div>`;
+
+  const colorRows = Object.entries(manaColors)
+    .map(([k,v])=>`<div class="row"><span>${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}</span><span>${v}</span></div>`)
+    .join('');
+  const colorPieStyle = pieStyleFromCountsLocal(manaColors, colorPalette);
+
+  const typeEntries = Object.entries(typeObj).filter(([,v])=>v>0);
+  const typeTotal = typeEntries.reduce((a,[,v])=>a+v,0) || 1;
+  const typePieStyle = pieStyleFromCountsLocal(typeObj, typePalette);
+  const typeRows = typeEntries
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>{
+      const pct = (v/typeTotal*100).toFixed(1)+'%';
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
+    }).join('');
+
+  mount.innerHTML = `
+    <div class="ds-card">
+      <div class="ds-title">Mana Curve</div>
+      <div class="ds-row">
+        <div>
+          <div class="ds-curve" style="--bins:${keys.length}">${cols}</div>
+          <div class="ds-x" style="--bins:${keys.length}">${xlabels}</div>
+          ${curveLegend}
+        </div>
+        <div class="ds-piecard">
+          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${colorPieStyle}" title="${colorTitle}"></div>
+            <div class="ds-list">${colorRows || `<div class="ds-small">No mana symbols found.</div>`}</div>
+          </div>
+        </div>
+        <div class="ds-piecard">
+          <div class="ds-title">Types</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${typePieStyle}"></div>
+            <div class="ds-list">${typeRows || `<div class="ds-small">No type info available.</div>`}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+const toggle = wrap.querySelector('#draftStatsToggle');
+const card   = wrap.querySelector('#draftStatsCard');
+const chev   = toggle ? toggle.querySelector('.chev') : null;
+function openDraftStats(){ if (!card) return; card.classList.remove('hidden'); if (toggle){ toggle.classList.add('open'); toggle.setAttribute('aria-expanded','true'); if (chev) chev.textContent='▾'; } renderDraftStats(); }
+function closeDraftStats(){ if (!card) return; card.classList.add('hidden'); if (toggle){ toggle.classList.remove('open'); toggle.setAttribute('aria-expanded','false'); if (chev) chev.textContent='▸'; } }
+if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classList.contains('hidden')) openDraftStats(); else closeDraftStats(); }; }
+//// end 
+    
+    return wrap;
+  }
+
+  function Done(){
+    const key = 'player' + state.currentPlayer;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Builder</button>
+        <h2 style="font-size:20px;font-weight:700">Draft complete</h2>
+        <div></div>
+      </div>
+      <div class="card p-4">
+        <div class="mb-2">Total cards: <strong>${D.deck.length}</strong> (target ${D.target})</div>
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <button id="useDeck" class="btn btn-primary">Use this as my deck</button>
+          <button id="again" class="btn btn-secondary">Start new draft</button>
+        </div>
+        <p class="text-xs text-gray mt-2">“Use this as my deck” replaces your current deck in the builder.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
+    wrap.querySelector('#again').onclick = ()=>{ state.screen='draft'; state.draft.screen='setup'; render(); };
+    wrap.querySelector('#useDeck').onclick = ()=>{
+      state.decks[key] = D.deck.slice();
+      state.screen='builder';
+      render();
+      toast('Draft deck loaded into builder ✓');
+    };
+    return wrap;
+  }
+
+  // color offers ----------------------------------------------------------
+  function randomColorOffers(){
+    const all = ['W','U','B','R','G'];
+    function pick(n){
+      const pool = all.slice();
+      const res = [];
+      while (res.length<n){
+        const i = Math.floor(Math.random()*pool.length);
+        res.push(pool.splice(i,1)[0]);
+      }
+      return res.sort();
+    }
+    return [
+      pick(1), pick(2), pick(2), pick(3), pick(3)
+    ];
+  }
+  
+  // choose which subview to render
+let content;
+if (D.screen==='mode')         content = Mode();
+else if (D.screen==='setup')   content = Setup();        // traditional
+else if (D.screen==='custom-setup') content = CustomSetup();
+else if (D.screen==='colors')  content = Colors();
+else if (D.screen==='lands')   content = Lands();
+else if (D.screen==='picks')   content = Picks();
+else                           content = Done();
+
+  
+  // wrapper scaffold
+  div.innerHTML = `
+    <div class="header">
+  <button id="home" class="btn btn-secondary text-sm">← Menu</button>
+  <h1 style="font-size:24px;font-weight:800">${D.mode==='custom' ? 'Custom Draft' : 'Traditional Draft'}</h1>
+  <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}</div>
+</div>
+  `;
+  const mount = document.createElement('div');
+  mount.appendChild(content);
+  div.appendChild(mount);
+
+  // nav
+  div.querySelector('#home').onclick = ()=>{ state.screen='menu'; render(); };
+
+  return div;
+}
+// ---------------------------- end D R A F T ------------------------------
+
+
+function CardCreator() {
+  const form = state.editingCard || { name: '', type: 'Creature', cost: '', colors: [], power: 0, toughness: 0, effect: '', image: '', imageUrl: '' };
+  const div = document.createElement('div');
+  div.className = 'container';
+  
+  const cardsHtml = state.cards.map((c, i) => `
+    <div class="card-preview" style="position: relative;">
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+          <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+        </div>
+        <p class="text-xs text-gray">${c.type}</p>
+      </div>
+      <div class="card-img">${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+      ${c.type && c.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+      <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
+        <button class="btn btn-secondary text-xs editCard" data-id="${i}" style="padding: 4px 8px;">Edit</button>
+        <button class="btn btn-red text-xs delCard" data-id="${i}" style="padding: 4px 8px;">Del</button>
+      </div>
+    </div>
+  `).join('');
+  
+  div.innerHTML = `
+    <div class="header">
+      <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+      <h1 style="font-size: 24px; font-weight: bold;"></h1>
+      <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+    </div>
+    
+    <div class="card mb-4">
+      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">🔍 Search Scryfall Cards</h2>
+      <div style="background: #374151; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+        <p class="text-xs text-gray">💡 <strong>Tip:</strong> Search works best when hosted on HTTPS. If you get errors, try searching for specific card names like "Lightning Bolt" or "Black Lotus".</p>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input id="scryfallSearch" class="input" placeholder="Search for MTG cards (e.g., Lightning Bolt)..." style="flex: 1;">
+        <button id="searchBtn" class="btn btn-primary">Search</button>
+        <button id="loadAllBtn" class="btn btn-blue">Load All Cards</button>
+      </div>
+      <div id="searchResults" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+    
+    <h2 class="mb-4" style="font-size: 20px; font-weight: bold;">${state.editingCard ? 'Edit Card' : 'Create Custom Card'}</h2>
+    <div class="grid grid-2 mb-8">
+      <div class="card">
+        <div class="mb-4">
+          <label>Card Name</label>
+          <input id="cardName" class="input" value="${form.name}">
+        </div>
+        <div class="mb-4">
+          <label>Type</label>
+          <select id="cardType" class="input">
+            <option value="Creature">Creature</option>
+            <option value="Instant">Instant</option>
+            <option value="Sorcery">Sorcery</option>
+            <option value="Enchantment">Enchantment</option>
+            <option value="Artifact">Artifact</option>
+            <option value="Planeswalker">Planeswalker</option>
+            <option value="Land">Land</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label>Mana Cost</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button class="mana-btn" data-color="W" style="background: #f9fafb; color: #111827; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #d1d5db;">W</button>
+            <button class="mana-btn" data-color="U" style="background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">U</button>
+            <button class="mana-btn" data-color="B" style="background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #4b5563;">B</button>
+            <button class="mana-btn" data-color="R" style="background: #dc2626; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">R</button>
+            <button class="mana-btn" data-color="G" style="background: #059669; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">G</button>
+            <button class="mana-btn" data-color="C" style="background: #9ca3af; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">C</button>
+            <input id="genericMana" type="number" min="0" max="20" value="0" style="width: 60px;" class="input text-center" placeholder="0">
+            <button id="clearMana" class="btn btn-red text-xs" style="padding: 8px 12px;">Clear</button>
+          </div>
+          <input id="cardCost" class="input" value="${form.cost}" placeholder="{2}{U}{U}" readonly>
+        </div>
+        <div id="creatureStats" class="mb-4" style="${!form.type || !form.type.includes('Creature') ? 'display:none' : ''}">
+          <div class="grid grid-2">
+            <div>
+              <label>Power</label>
+              <input id="cardPower" class="input" type="text" value="${form.power}">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="cardToughness" class="input" type="text" value="${form.toughness}">
+            </div>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label>Effect / Oracle Text</label>
+          <textarea id="cardEffect" class="input" rows="4">${form.effect}</textarea>
+        </div>
+        <div class="mb-4">
+          <label>Upload Image</label>
+          <input id="cardImage" class="input" type="file" accept="image/*">
+          <label class="mt-4">Or Image URL</label>
+          <input id="cardImageUrl" class="input" placeholder="https://..." value="${form.imageUrl || ''}">
+        </div>
+        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? '✓ Update Card' : '+ Create Card'}</button>
+      </div>
+      <div>
+        <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
+        <div id="preview"></div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 id="collectionCount" class="mb-4" style="font-size: 18px; font-weight: bold;">Collection (${state.cards.length} cards)</h2>
+      <div id="collectionGrid" class="grid grid-4">
+       ${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall or create custom cards!</p>'}
+</div>
+
+
+    </div>
+  `;
+  
+  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
+  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#cardType').value = form.type;
+  
+  const updatePreview = () => {
+    form.name = div.querySelector('#cardName').value;
+    form.type = div.querySelector('#cardType').value;
+    form.power = div.querySelector('#cardPower').value;
+    form.toughness = div.querySelector('#cardToughness').value;
+    form.effect = div.querySelector('#cardEffect').value;
+    form.imageUrl = div.querySelector('#cardImageUrl').value;
+    div.querySelector('#creatureStats').style.display = form.type.includes('Creature') ? 'block' : 'none';
+    div.querySelector('#preview').innerHTML = `
+      <div class="card-preview">
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-weight: bold;">${form.name || 'Unnamed Card'}</h3>
+            <span style="font-size: 12px; color: #fbbf24;">${form.cost || ''}</span>
+          </div>
+          <p class="text-xs text-gray">${form.type}</p>
+        </div>
+        <div class="card-img">${form.image || form.imageUrl ? `<img src="${form.image || form.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+        ${form.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>PWR: ${form.power}</span><span>TGH: ${form.toughness}</span></div>` : ''}
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect text'}</p></div>
+      </div>
+    `;
+  };
+  
+  // Mana cost builder
+  div.querySelectorAll('.mana-btn').forEach(btn => {
+    btn.onclick = () => {
+      const color = btn.dataset.color;
+      if (!form.colors) form.colors = [];
+      form.colors.push(color);
+      const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+      form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+      div.querySelector('#cardCost').value = form.cost;
+      updatePreview();
+    };
+  });
+  
+  div.querySelector('#genericMana').oninput = () => {
+    const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+    if (!form.colors) form.colors = [];
+    form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+    div.querySelector('#cardCost').value = form.cost;
+    updatePreview();
+  };
+  
+  div.querySelector('#clearMana').onclick = () => {
+    form.colors = [];
+    form.cost = '';
+    div.querySelector('#cardCost').value = '';
+    div.querySelector('#genericMana').value = '0';
+    updatePreview();
+  };
+  
+  function appendToCollectionGrid(c, i) {
+  const grid = div.querySelector('#collectionGrid');
+  if (!grid) return;
+
+  // Remove "No cards yet" placeholder if present
+  if (grid.children.length === 1 && grid.firstElementChild.tagName === 'P') {
+    grid.innerHTML = '';
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'card-preview';
+  wrapper.style.position = 'relative';
+  wrapper.innerHTML = `
+    <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+        <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+      </div>
+      <p class="text-xs text-gray">${c.type || ''}</p>
+    </div>
+    <div class="card-img">
+      ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}
+    </div>
+    ${c.type && c.type.includes('Creature') ? `
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
+        <span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span>
+      </div>` : ''
+    }
+    <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+    <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
+      <button class="btn btn-secondary text-xs editCard" style="padding: 4px 8px;">Edit</button>
+      <button class="btn btn-red text-xs delCard" style="padding: 4px 8px;">Del</button>
+    </div>
+  `;
+
+  // Attach handlers for the two buttons
+  wrapper.querySelector('.editCard').onclick = () => { state.editingCard = state.cards[i]; render(); window.scrollTo(0, 0); };
+  wrapper.querySelector('.delCard').onclick = () => {
+    if (confirm('Delete this card?')) {
+      state.cards.splice(i, 1);
+      render();
+    }
+  };
+
+  grid.appendChild(wrapper);
+
+  // Update the "(N cards)" count
+  const countEl = div.querySelector('#collectionCount');
+  if (countEl) countEl.textContent = `Your Collection (${state.cards.length} cards)`;
+}
+  
+  // Scryfall search
+  div.querySelector('#searchBtn').onclick = async () => {
+    const query = div.querySelector('#scryfallSearch').value.trim();
+    if (!query) {
+      alert('Please enter a search term!');
+      return;
+    }
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading">Searching Scryfall...</p>';
+    try {
+      // Use the correct Scryfall API endpoint with proper encoding
+      const searchUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
+      console.log('Searching:', searchUrl);
+      
+      const response = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Scryfall response:', data);
+      
+      if (data.object === 'error') {
+        resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Scryfall Error: ${data.details || 'Invalid search'}</p>`;
+        return;
+      }
+      
+      if (data.data && data.data.length > 0) {
+        state.searchResults = data.data;
+        resultsDiv.innerHTML = data.data.slice(0, 40).map((card, idx) => {
+          const imgUrl = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '';
+          return `
+            <div class="scryfall-result" data-idx="${idx}" style="cursor: pointer; border: 2px solid #374151; border-radius: 6px; overflow: hidden; transition: all 0.2s; position: relative;">
+              ${imgUrl ? `<img src="${imgUrl}" style="width: 100%; display: block;">` : `<div style="padding: 20px; text-align: center; background: #374151; font-size: 12px;">${card.name}</div>`}
+              <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 4px; font-size: 10px; text-align: center;">${card.name}</div>
+            </div>
+          `;
+        }).join('');
+        
+        // ---------- Delegated hover + click on the search grid (no duplicates) ----------
+// 1) Create hover preview box once.
+let hoverDiv = document.getElementById('scryfallHover');
+if (!hoverDiv) {
+  hoverDiv = document.createElement('div');
+  hoverDiv.id = 'scryfallHover';
+  hoverDiv.style.cssText = 'position:fixed; pointer-events:none; z-index:9999; display:none; background:#1f2937; border:1px solid #374151; border-radius:8px; width:320px; max-width:90vw; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.5)';
+  document.body.appendChild(hoverDiv);
+}
+
+// 2) Small helper to render preview content for a card index.
+function showPreviewForIdx(idx) {
+  const card = data.data[idx];
+  if (!card) return;
+  const img = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+  hoverDiv.innerHTML = `
+    <div style="font-weight:700; margin-bottom:4px;">${card.name}</div>
+    <div class="text-xs text-gray" style="margin-bottom:6px;">${card.type_line || ''}</div>
+    ${img ? `<img src="${img}" style="width:100%; border-radius:6px; margin-bottom:8px;">` : ''}
+    <div style="font-size:12px; line-height:1.3; white-space:pre-wrap;">${(card.oracle_text || '').replaceAll('\\n','<br>')}</div>
+  `;
+  hoverDiv.style.display = 'block';
+}
+
+// 3) Delegated mousemove to position + render preview.
+resultsDiv.onmousemove = (e) => {
+  const tile = e.target.closest('.scryfall-result');
+  if (!tile || !resultsDiv.contains(tile)) {
+    hoverDiv.style.display = 'none';
+    return;
+  }
+  const idx = Number(tile.dataset.idx);
+  showPreviewForIdx(idx);
+  const pad = 16;
+  hoverDiv.style.left = (e.clientX + pad) + 'px';
+  hoverDiv.style.top  = (e.clientY + pad) + 'px';
+};
+
+// 4) Hide preview when leaving the grid.
+resultsDiv.onmouseleave = () => { hoverDiv.style.display = 'none'; };
+
+// 5) Delegated click: add exactly one card, mark tile, update collection grid.
+resultsDiv.onclick = (e) => {
+  const tile = e.target.closest('.scryfall-result');
+  if (!tile || !resultsDiv.contains(tile)) return;
+
+  const idx = Number(tile.dataset.idx);
+  const card = data.data[idx];
+  const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+
+  const newCard = {
+    id: Date.now() + Math.random(),
+    name: card.name,
+    type: card.type_line,
+    cost: card.mana_cost || '',
+    colors: card.colors || [],
+    power: card.power || 0,
+    toughness: card.toughness || 0,
+    effect: card.oracle_text || '',
+    image: '',
+    imageUrl: imgUrl,
+    scryfallId: card.id
+  };
+
+  state.cards.push(newCard);
+  toast('Added ' + card.name + ' ✓');
+
+  if (!tile.querySelector('.added-badge')) {
+    const badge = document.createElement('div');
+    badge.className = 'added-badge';
+    badge.textContent = 'Added ✓';
+    badge.style.cssText = 'position:absolute; top:6px; left:6px; background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px;';
+    tile.appendChild(badge);
+    tile.style.borderColor = '#10b981';
+  }
+
+  // Live update of the collection without re-rendering:
+  appendToCollectionGrid(newCard, state.cards.length - 1);
+};
+
+        
+      } else {
+        resultsDiv.innerHTML = '<p class="text-gray text-xs text-center p-4">No results found. Try a different search term.</p>';
+      }
+    } catch (err) {
+      console.error('Scryfall search error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error: ${err.message}<br><br>This might be a network issue or CORS restriction. Try:<br>1. Check your internet connection<br>2. Make sure you're using HTTPS<br>3. Try a different browser<br>4. Check browser console for details</p>`;
+    }
+  };
+  
+  // Load all Oracle cards
+  div.querySelector('#loadAllBtn').onclick = async () => {
+    if (state.isLoadingScryfallCards) return;
+    if (state.scryfallCards.length > 0) {
+      alert(`✓ ${state.scryfallCards.length} cards already loaded! Use search to find them.`);
+      return;
+    }
+    if (!confirm('This will download ~160MB of card data from Scryfall. This may take 1-2 minutes. Continue?\n\nNote: You can also just use the Search feature without loading all cards!')) return;
+    
+    state.isLoadingScryfallCards = true;
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading all MTG cards from Scryfall... Please wait...</p>';
+    
+    try {
+      console.log('Fetching bulk data list...');
+      const bulkResponse = await fetch('https://api.scryfall.com/bulk-data', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!bulkResponse.ok) {
+        throw new Error(`HTTP ${bulkResponse.status}: ${bulkResponse.statusText}`);
+      }
+      
+      const bulkData = await bulkResponse.json();
+      console.log('Bulk data received:', bulkData);
+      
+      const oracleData = bulkData.data.find(d => d.type === 'oracle_cards');
+      
+      if (oracleData) {
+        console.log('Downloading oracle cards from:', oracleData.download_uri);
+        resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading card database... This may take 1-2 minutes...</p>';
+        
+        const cardsResponse = await fetch(oracleData.download_uri);
+        
+        if (!cardsResponse.ok) {
+          throw new Error(`HTTP ${cardsResponse.status}: ${cardsResponse.statusText}`);
+        }
+        
+        const cards = await cardsResponse.json();
+        state.scryfallCards = cards;
+        console.log('Loaded cards:', cards.length);
+        alert(`✓ Success! Loaded ${cards.length.toLocaleString()} MTG cards! You can now search through all cards.`);
+        resultsDiv.innerHTML = '<p class="text-green text-xs text-center p-4">✓ All cards loaded! Use the search box above to find any MTG card.</p>';
+      } else {
+        throw new Error('Could not find oracle cards in bulk data');
+      }
+    } catch (err) {
+      console.error('Bulk load error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error loading cards: ${err.message}<br><br>Don't worry! You can still use the Search feature to find specific cards without loading the entire database.</p>`;
+    }
+    state.isLoadingScryfallCards = false;
+  };
+  
+  div.querySelector('#cardName').oninput = updatePreview;
+  div.querySelector('#cardType').onchange = updatePreview;
+  div.querySelector('#cardPower').oninput = updatePreview;
+  div.querySelector('#cardToughness').oninput = updatePreview;
+  div.querySelector('#cardEffect').oninput = updatePreview;
+  div.querySelector('#cardImageUrl').oninput = updatePreview;
+  
+  // Allow Enter key to search
+  div.querySelector('#scryfallSearch').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      div.querySelector('#searchBtn').click();
+    }
+  };
+  
+  div.querySelector('#cardImage').onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) compressImage(file, (img) => { form.image = img; updatePreview(); });
+  };
+  div.querySelector('#submitCard').onclick = () => {
+    if (!form.name.trim()) {
+      alert('Please enter a card name!');
+      return;
+    }
+    if (state.editingCard) {
+      const idx = state.cards.findIndex(c => c.id === state.editingCard.id);
+      state.cards[idx] = Object.assign({}, form, { id: state.editingCard.id });
+      state.editingCard = null;
+    } else {
+      state.cards.push(Object.assign({}, form, { id: Date.now() + Math.random() }));
+    }
+    render();
+  };
+  
+  div.querySelectorAll('.editCard').forEach((btn, i) => {
+    btn.onclick = () => { state.editingCard = state.cards[i]; render(); window.scrollTo(0, 0); };
+  });
+  div.querySelectorAll('.delCard').forEach((btn, i) => {
+    btn.onclick = () => { 
+      if (confirm('Delete this card?')) {
+        state.cards.splice(i, 1); 
+        render(); 
+      }
+    };
+  });
+  
+  updatePreview();
+  return div;
+}
+
+// ===============================
+// Deck import helpers (GLOBAL)
+// ===============================
+
+// 1) Parse simple text decklists into a Map(name -> qty)
+if (!window.parseDecklist) window.parseDecklist = function(text){
+  const lines = String(text||'').split(/[\r\n]+/).map(s=>s.trim());
+  const ignore = /^(#|\/\/|sideboard:|companions?:|maybeboard:)/i;
+  const m = new Map();
+  for (let raw of lines){
+    if (!raw || ignore.test(raw)) continue;
+    let line = raw.replace(/\s+/g,' ').trim();
+    line = line.replace(/\s*\/\/.*$/, '').trim();     // strip trailing // comments
+    if (!line) continue;
+
+    let qty = 1, name = line, match;
+    if ((match = line.match(/^(\d+)\s*x?\s+(.+)$/i))) { qty = +match[1]; name = match[2]; }
+    else if ((match = line.match(/^(.+?)\s+x(\d+)$/i))) { name = match[1]; qty = +match[2]; }
+    else if ((match = line.match(/^(\d+)x\s+(.+)$/i))) { qty = +match[1]; name = match[2]; }
+
+    name = name.replace(/\u2019/g,"'").replace(/\s+/g,' ').trim();
+    if (!name) continue;
+    m.set(name, (m.get(name)||0) + (Number.isFinite(qty)?qty:1));
+  }
+  return m;
+};
+
+// 2) Scryfall resolver by name (prefers set if provided)
+if (!window.fetchCardByName) window.fetchCardByName = async function(name, setPref){
+  const base = 'https://api.scryfall.com/cards/named';
+  const esc = encodeURIComponent(name);
+  async function get(u){ const r = await fetch(u); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j = await r.json(); if (j.object==='error') throw new Error(j.details||'Scryfall error'); return j; }
+  if (setPref) {
+    try { return await get(`${base}?exact=${esc}&set=${encodeURIComponent(setPref)}`); }
+    catch { /* fallback to any set */ }
+  }
+  return await get(`${base}?exact=${esc}`);
+};
+
+// 3) Convert a Scryfall card JSON to your in-game card objects (qty copies)
+if (!window.cardToGameObjects) window.cardToGameObjects = function(cardJSON, quantity, includeImages){
+  const type_line = cardJSON.type_line || '';
+  const colors = Array.isArray(cardJSON.colors) ? cardJSON.colors : [];
+  const mana_cost = cardJSON.mana_cost || '';
+  const oracle_text = cardJSON.oracle_text || '';
+
+  let power = cardJSON.power ?? 0;
+  let toughness = cardJSON.toughness ?? 0;
+
+  let imageUrl = '';
+  if (includeImages){
+    imageUrl =
+      cardJSON.image_uris?.normal ||
+      cardJSON.card_faces?.[0]?.image_uris?.normal ||
+      `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(cardJSON.name)}`;
+  }
+
+  if ((power==null || toughness==null) && Array.isArray(cardJSON.card_faces) && cardJSON.card_faces.length){
+    const f = cardJSON.card_faces[0];
+    power = f.power ?? 0; toughness = f.toughness ?? 0;
+  }
+  if (!/Creature/i.test(type_line)){ power = Number(power)||0; toughness = Number(toughness)||0; }
+
+  const out = [];
+  for (let i=0;i<(quantity||1);i++){
+    out.push({
+      id: Date.now() + Math.random(),
+      name: cardJSON.name,
+      type: type_line,
+      cost: mana_cost,
+      colors: colors,
+      power: String(power),
+      toughness: String(toughness),
+      effect: oracle_text,
+      image: "",
+      imageUrl
+    });
+  }
+  return out;
+};
+
+// 4) Full TXT → Scryfall → game objects converter (shows status via .textContent if provided)
+if (!window.convertDecklist) window.convertDecklist = async function(text, player, setPref, includeImages, statusElLike){
+  const setStatus = (t)=>{ if (statusElLike && typeof statusElLike.textContent === 'string') statusElLike.textContent = t; };
+  const m = window.parseDecklist(text);
+  if (!m.size) throw new Error('No valid card names found.');
+
+  const names = [...m.keys()];
+  const results = [];
+  const concurrency = 6;
+  let idx = 0, done = 0, errs = [];
+
+  async function next(){
+    if (idx >= names.length) return;
+    const myIdx = idx++;
+    const name = names[myIdx];
+    setStatus(`Fetching ${done}/${names.length} • Now: ${name}`);
+    try{
+      const cj = await window.fetchCardByName(name, setPref);
+      const qty = m.get(name)||1;
+      results.push(...window.cardToGameObjects(cj, qty, includeImages));
+    } catch(e){
+      errs.push({ name, error: e.message || String(e) });
+    } finally {
+      done++; setStatus(`Fetched ${done}/${names.length}`);
+      if (idx < names.length) await next();
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(concurrency, names.length)}, () => next()));
+  results.sort((a,b)=> a.name.localeCompare(b.name));
+  return { out: { player: Number(player)||1, timestamp: Date.now(), cards: results }, errors: errs };
+};
+
+
+// =====================================
+// Deck Builder
+// =====================================
+
+function DeckBuilder() {
+  const key = 'player' + state.currentPlayer;
+
+  const div = document.createElement('div');
+  div.className = 'container';
+
+
+// --- NEW: Deck Statistics CSS (once) ---
+(function ensureDeckStatsCSS(){
+  if (document.getElementById('deckStatsCSS')) return;
+  const s = document.createElement('style');
+  s.id = 'deckStatsCSS';
+  s.textContent = `
+  /* Card-like wrapper */
+  .ds-card{
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(139,92,246,0.35);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .ds-title{
+    font-size: 12px; letter-spacing:.04em; text-transform:uppercase;
+    opacity:.8; margin-bottom:8px;
+  }
+  .ds-row{ display:grid; gap:12px; }
+ @media (min-width: 900px){
+    .ds-row{ grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  /* Stacked mana curve */
+  .ds-curve{ height: 160px; display:grid; align-items:end; gap:10px;
+             grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); padding: 8px 6px 0 6px;}
+  .ds-col{ position:relative; height:100%; display:flex; flex-direction:column; justify-content:flex-end; }
+  .ds-seg{ width:100%; border:2px solid #ecfdf5; }
+  .ds-seg.crea{ background: linear-gradient(180deg,#34d399 0%,#10b981 100%); border-radius:8px 8px 0 0; }
+.ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 8px 8px; }
+.ds-seg.noncrea.only{
+  /* ensure the top “white outline” always shows */
+  border-top-width: 2px !important;
+  border-top-style: solid !important;
+  border-top-color: #ecfdf5 !important;
+
+  /* force the same rounded cap as the green bars */
+  border-top-left-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+  border-radius: 8px 8px 4px 4px !important;
+
+  /* optional: add a subtle crisp edge like the green cap */
+  box-shadow: 0 0 0 1px rgba(236,253,245,.65) inset;
+}
+  .ds-count{ position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:700; color:#d1fae5; text-shadow:0 1px 0 rgba(0,0,0,.45); }
+  .ds-x{ margin-top:6px; display:grid; gap:10px;
+         grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); font-size:11px; opacity:.8; text-align:center; }
+
+  .ds-legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; font-size:11px; opacity:.85; }
+  .ds-key{ display:inline-flex; align-items:center; gap:6px; }
+  .ds-swatch{ width:12px; height:12px; border-radius:3px; border:1px solid rgba(255,255,255,.5); }
+
+  /* Pie charts (conic-gradient) */
+  .ds-pies{ display:grid; gap:12px; grid-template-columns: 1fr; }
+  @media (min-width: 900px){ .ds-pies{ grid-template-columns: 1fr 1fr; } }
+  .ds-piecard{ }
+.ds-piewrap{ display:flex; gap:12px; align-items:center; flex-direction:column; }
+.ds-pie{
+    --size: 120px;
+    width: var(--size); height: var(--size); border-radius: 50%;
+    border:2px solid rgba(236,253,245,0.7);
+    box-shadow: inset 0 0 16px rgba(0,0,0,0.35);
+  }
+  .ds-list{ font-size:12px; line-height:1.6; }
+  .ds-list .row{ display:flex; justify-content:space-between; gap:12px; }
+  .ds-small{ font-size:12px; opacity:.8; }
+  
+  
+  /* Stretched toggle bar for Deck Statistics */
+.stats-toggle{
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(31,41,55,0.85);
+  border: 1px solid rgba(139,92,246,0.55);
+  border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  color: #e9d5ff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(139,92,246,0.25);
+  transition: border-color .15s ease, background .15s ease, transform .08s ease;
+  margin-bottom: 10px;
+}
+.stats-toggle:hover{ border-color:#a78bfa; background: rgba(31,41,55,0.95); }
+.stats-toggle:active{ transform: translateY(1px); }
+.stats-toggle .left{ display:flex; align-items:center; gap:10px; }
+.stats-toggle .chip{
+  width: 10px; height:10px; border-radius:50%;
+  background: linear-gradient(180deg,#34d399 0%,#10b981 100%);
+  border: 1px solid #ecfdf5;
+  box-shadow: 0 0 0 2px rgba(16,185,129,.25);
+}
+.stats-toggle .chev{
+  font-size: 16px; opacity: .9; transition: transform .15s ease;
+}
+.stats-toggle.open .chev{ transform: rotate(90deg); } /* ▸ → ▾ */
+  `;
+  document.head.appendChild(s);
+})();
+
+
+// --- NEW: type/color helpers for stats ---
+function isLand(c){ return ((c.type||'')+'' ).toLowerCase().includes('land'); }
+function isBasicLand(c){ const t=(c.type||'').toLowerCase(); return t.includes('basic') && t.includes('land'); }
+function isCreature(c){ return ((c.type||'')+'' ).toLowerCase().includes('creature'); }
+
+function getCMC(card){
+  if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) return Math.max(0, Math.floor(card.cmc));
+  const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+  if (!s) return null;
+  if (s.includes('{')){
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    let sum = 0;
+    for (const t of tokens){
+      const inner = t.slice(1,-1);
+      const n = parseInt(inner,10);
+      if (Number.isFinite(n)) { sum += n; continue; }
+      const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+      for (const ch of letters){
+        if ('WUBRGCS'.includes(ch)) sum += 1;  // treat W U B R G C S as 1; X as 0
+      }
+    }
+    return sum;
+  }
+  const digits  = (s.match(/\d+/g)||[]).map(x=>parseInt(x,10)).reduce((a,b)=>a+b,0);
+  const letters = (s.toUpperCase().match(/[WUBRGC]/g)||[]).length;
+  return digits + letters;
+}
+
+// Count W/U/B/R/G symbols in mana *costs*
+function countManaSymbols(cards){
+  const out = {W:0,U:0,B:0,R:0,G:0};
+  for (const c of cards){
+    const s = (c?.manaCost || c?.manacost || c?.cost || '').toString().toUpperCase();
+    if (!s) continue;
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens){
+      const inner = t.slice(1,-1).toUpperCase();
+      // split hybrids "G/U" => "GU"
+      for (const ch of inner.split(/[^A-Z]/).join('')){
+        if (out.hasOwnProperty(ch)) out[ch] += 1;
+      }
+    }
+    if (!tokens.length){
+      // unbraced fallback: count letters
+      (s.match(/[WUBRG]/g)||[]).forEach(ch => out[ch] += 1);
+    }
+  }
+  return out;
+}
+
+// Group types (with "Artifact Creature" kept separate)
+function typesBreakdown(cards){
+  const map = new Map();
+  const push = (k)=> map.set(k, (map.get(k)||0)+1);
+  for (const c of cards){
+    const t = (c.type||'').toLowerCase();
+    if (!t){ push('Other'); continue; }
+    if (t.includes('artifact') && t.includes('creature')) { push('Artifact Creature'); continue; }
+    if (t.includes('creature'))     { push('Creature'); continue; }
+    if (t.includes('instant'))      { push('Instant'); continue; }
+    if (t.includes('sorcery'))      { push('Sorcery'); continue; }
+    if (t.includes('enchantment'))  { push('Enchantment'); continue; }
+    if (t.includes('planeswalker')) { push('Planeswalker'); continue; }
+    if (t.includes('artifact'))     { push('Artifact'); continue; }
+    if (t.includes('basic') && t.includes('land')) { push('Basic Land'); continue; }
+    if (t.includes('land'))         { push('Land'); continue; }
+    push('Other');
+  }
+  return map;
+}
+
+// Stacked curve data (exclude lands)
+function stackedCurve(cards){
+  const bins = new Map();  // cmc -> {crea, non}
+  let peak = 0;
+  for (const c of cards){
+    if (isLand(c)) continue;                 // exclude lands from curve & avg
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    const k = cmc;
+    const o = bins.get(k) || {crea:0, non:0};
+    if (isCreature(c)) o.crea += 1; else o.non += 1;
+    bins.set(k, o);
+    const tot = o.crea + o.non;
+    if (tot > peak) peak = tot;
+  }
+  const keys = [...bins.keys()].sort((a,b)=>a-b);
+  return { keys, bins, peak };
+}
+
+// Average mana cost (spells only; lands excluded)
+function averageCMC(cards){
+  let sum = 0, n = 0;
+  for (const c of cards){
+    if (isLand(c)) continue;
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    sum += cmc; n += 1;
+  }
+  return n ? (sum/n) : 0;
+}
+
+// Build conic-gradient for a pie
+function pieStyleFromCounts(obj, palette){
+  const entries = Object.entries(obj).filter(([k,v]) => v>0);
+  const total = entries.reduce((a, [,v])=>a+v, 0) || 1;
+  let acc = 0;
+  const stops = entries.map(([k,v])=>{
+    const start = acc / total * 360;
+    acc += v;
+    const end = acc / total * 360;
+    const color = palette[k] || '#999';
+    return `${color} ${start}deg ${end}deg`;
+  }).join(', ');
+  return `background: conic-gradient(${stops});`;
+}
+
+
+// --- NEW: render Deck Statistics into existing mount ---
+function renderDeckStatsInto(containerId){
+  const mount = div.querySelector('#' + containerId);
+  if (!mount) return;
+
+  const deck = state.decks[key] || [];
+  const avg  = averageCMC(deck);
+  const { keys, bins, peak } = stackedCurve(deck);
+
+  // Colors pie (W/U/B/R/G)
+  const manaColors = countManaSymbols(deck);
+  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+
+  // Types pie
+  const tb = typesBreakdown(deck);
+  const typeObj = Object.fromEntries(tb);
+  // stable palette for common types
+  const typePalette = {
+    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
+    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
+    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+  };
+
+  // Build stacked curve columns
+  const cols = keys.map(k=>{
+  const o = bins.get(k) || {crea:0, non:0};
+  const tot = o.crea + o.non;
+  const hC = peak ? Math.max(4, Math.round(o.crea/peak*100)) : 0;
+  const hN = peak ? Math.max(0, Math.round(o.non/peak*100)) : 0;
+  return `
+    <div class="ds-col" title="Total ${tot} (Creatures ${o.crea}, Non-creatures ${o.non})">
+      ${hN?`<div class="ds-seg noncrea${hC ? '' : ' only'}" style="height:${hN}%"></div>`:''}
+      ${hC?`<div class="ds-seg crea" style="height:${hC}%"></div>`:''}
+    </div>`;
+}).join('');
+
+
+  const xlabels = keys.map(k=>`<div>${k}</div>`).join('');
+
+  // Legends
+  const curveLegend = `
+    <div class="ds-legend">
+      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
+    </div>`;
+
+  // Color pie legend/list
+  const colorRows = Object.entries(manaColors)
+    .map(([k,v])=>`<div class="row"><span>${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}</span><span>${v}</span></div>`)
+    .join('');
+  const colorPieStyle = pieStyleFromCounts(manaColors, colorPalette);
+
+  // Type pie legend/list
+  const typeEntries = Object.entries(typeObj).filter(([,v])=>v>0);
+  const typeTotal = typeEntries.reduce((a,[,v])=>a+v,0) || 1;
+  const typePieStyle = pieStyleFromCounts(typeObj, typePalette);
+  const typeRows = typeEntries
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>{
+      const pct = (v/typeTotal*100).toFixed(1)+'%';
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
+    }).join('');
+    
+    const colorTitle = Object.entries(manaColors)
+  .filter(([,v])=>v>0)
+  .map(([k,v])=>`${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}: ${v}`)
+  .join(' • ');
+
+
+  // Assemble
+  mount.innerHTML = `
+    <div class="ds-card">
+      <div class="ds-title"></div>
+
+      <div class="ds-row">
+        <!-- Stacked Mana Curve -->
+        <div>
+          <div class="ds-title" style="margin-bottom:4px;">Mana Curve</div>
+          <div class="ds-curve" style="--bins:${Math.max(keys.length,1)}">
+            ${cols || `<div class="text-xs" style="opacity:.7;">No spell costs found (lands excluded).</div>`}
+          </div>
+          <div class="ds-x" style="--bins:${Math.max(keys.length,1)}">${xlabels}</div>
+          ${curveLegend}
+        </div>
+
+        <!-- Colors in Mana Cost -->
+        <div class="ds-piecard">
+          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${colorPieStyle}" title="${colorTitle}"></div>
+            <div class="ds-list">
+              ${colorRows || `<div class="ds-small">No mana symbols found.</div>`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Types -->
+        <div class="ds-piecard">
+          <div class="ds-title">Types</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${typePieStyle}"></div>
+            <div class="ds-list">
+              ${typeRows || `<div class="ds-small">No type info available.</div>`}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+
+  // ---------- NEW: mana-curve helpers (local to this screen) ----------
+  function getCMC(card) {
+    if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) {
+      return Math.max(0, Math.floor(card.cmc));
+    }
+    const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+    if (!s) return null;
+
+    if (s.includes('{')) {
+      const tokens = s.match(/\{([^}]+)\}/g) || [];
+      let sum = 0;
+      for (const t of tokens) {
+        const inner = t.slice(1, -1);
+        const n = parseInt(inner, 10);
+        if (Number.isFinite(n)) { sum += n; continue; }
+        const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+        for (const ch of letters) {
+          if ('WUBRGCS'.includes(ch)) sum += 1; // W U B R G C (colorless) S (snow) → 1
+          // X → 0
+        }
+      }
+      return sum;
+    }
+    const digits = (s.match(/\d+/g) || []).map(x => parseInt(x,10)).reduce((a,b)=>a+b,0);
+    const letters = (s.toUpperCase().match(/[WUBRGC]/g) || []).length;
+    return digits + letters;
+  }
+
+  function manaCurveData(cards) {
+    const counts = new Map();
+    for (const c of (cards || [])) {
+      const cmc = getCMC(c);
+      if (cmc === null || !Number.isFinite(cmc)) continue;
+      counts.set(cmc, (counts.get(cmc) || 0) + 1);
+    }
+    if (counts.size === 0) return { bins: [], max: 0 };
+
+    const min = Math.min(...counts.keys());
+    const max = Math.max(...counts.keys());
+    const bins = [];
+    let peak = 0;
+    for (let k = min; k <= max; k++) {
+      const v = counts.get(k) || 0;
+      bins.push({ cmc: k, count: v });
+      if (v > peak) peak = v;
+    }
+    return { bins, max: peak };
+  }
+
+  function renderManaCurveDeck() {
+    const mount = div.querySelector('#manaCurveDeckChart');
+    if (!mount) return;
+
+    const deck = state.decks[key] || [];
+    const { bins, max } = manaCurveData(deck);
+
+    if (bins.length === 0) {
+      mount.innerHTML = `
+        <div class="mana-curve-wrap">
+          <div class="mana-curve-title">Mana Curve</div>
+          <div style="opacity:.7; font-size:12px;">No mana-cost data in this deck.</div>
+        </div>`;
+      return;
+    }
+
+const cols = bins.map(b=>{
+  const h = max ? Math.max(4, Math.round(b.count / max * 100)) : 0;
+  const label = `${b.count} card${b.count===1?'':'s'} at CMC ${b.cmc}`;
+  return `
+    <div class="mc-col">
+      <div class="mc-bar" style="height:${h}%" title="${label}" aria-label="${label}"></div>
+    </div>`;
+}).join('');
+    
+    const labels = bins.map(b => `<div>${b.cmc}</div>`).join('');
+
+    mount.innerHTML = `
+      <div class="mana-curve-wrap">
+        <div class="mana-curve-title">Mana Curve</div>
+        <div class="mana-curve" style="--bins:${bins.length}">${cols}</div>
+        <div class="mc-x" style="--bins:${bins.length}">${labels}</div>
+      </div>`;
+  }
+
+  // ---------- helpers (local to builder) ----------
+  const updateCardInfo = () => {
+    const infoDiv = div.querySelector('#cardInfoSidebar');
+    if (!infoDiv) return;
+    const c = state.hoveredCard;
+    if (!c) {
+      infoDiv.innerHTML = '<p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card to see details</p>';
+      return;
+    }
+    infoDiv.innerHTML = `
+      <div class="card-preview">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+          <div class="text-center mb-2" style="font-weight:700;font-size:16px;flex:1;">${c.name}</div>
+          ${c.cost ? `<div style="font-size:14px;color:#fbbf24;white-space:nowrap;">${c.cost}</div>` : ''}
+        </div>
+        <div class="text-xs text-gray text-center mb-2">${c.type || ''}</div>
+        ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%;border-radius:6px;margin-bottom:12px;">` : '<div class="card-img" style="height:180px;font-size:64px;">🃏</div>'}
+        ${(c.type||'').includes('Creature') ? `
+          <div class="mb-2" style="display:flex;justify-content:space-between;">
+            <span class="text-sm"><strong>PWR:</strong> ${c.power ?? 0}</span>
+            <span class="text-sm"><strong>TGH:</strong> ${c.toughness ?? 0}</span>
+          </div>` : ''
+        }
+        <div class="text-sm" style="margin-top:12px;"><strong>Effect:</strong></div>
+        <div class="text-xs" style="margin-top:8px;line-height:1.4;">${c.effect || 'No effect'}</div>
+      </div>
+    `;
+  };
+
+  const createCardElement = (c, isInDeck) => {
+    const cardDiv = document.createElement('div');
+    cardDiv.className = 'deck-card';
+
+    const img = document.createElement('img');
+    if (c.image || c.imageUrl) {
+      img.src = c.image || c.imageUrl;
+    } else {
+      const safeName = (c.name || 'Card').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
+      img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="%23374151"/><text x="50" y="70" text-anchor="middle" fill="white" font-size="10">${safeName}</text></svg>`;
+    }
+    img.alt = c.name || 'Card';
+
+    cardDiv.onmouseenter = () => { state.hoveredCard = c; updateCardInfo(); };
+    cardDiv.onmouseleave = () => { state.hoveredCard = null; updateCardInfo(); };
+    cardDiv.appendChild(img);
+
+    if (isInDeck) {
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        const i = state.decks[key].indexOf(c);
+        if (i > -1) state.decks[key].splice(i, 1);
+        render(); // will rebuild and re-render the chart
+      };
+      cardDiv.appendChild(removeBtn);
+    }
+
+    return cardDiv;
+  };
+
+  // ---------- build main containers ----------
+  const deckContainer = document.createElement('div');
+  deckContainer.style.cssText = 'background:#1f2937;padding:16px;border-radius:8px;min-height:200px;';
+  if (!state.decks[key] || state.decks[key].length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'text-gray text-center';
+    emptyMsg.style.padding = '32px 0';
+    emptyMsg.textContent = 'No cards in deck. Click cards below to add them!';
+    deckContainer.appendChild(emptyMsg);
+  } else {
+    state.decks[key].forEach(c => deckContainer.appendChild(createCardElement(c, true)));
+  }
+
+  const availContainer = document.createElement('div');
+  availContainer.style.cssText = 'background:#1f2937;padding:16px;border-radius:8px;min-height:200px;';
+  if (!state.cards || state.cards.length === 0) {
+    availContainer.innerHTML = '<p class="text-gray text-center" style="padding:32px;">No cards available. Go to Card Creator to add some!</p>';
+  } else {
+    state.cards.forEach(c => {
+      const el = createCardElement(c, false);
+      el.style.cursor = 'pointer';
+      el.onclick = () => {
+        const copy = { ...c, deckId: Date.now() + Math.random() };
+        state.decks[key] = state.decks[key] || [];
+        state.decks[key].push(copy);
+        render(); // will rebuild and re-render the chart
+      };
+      availContainer.appendChild(el);
+    });
+  }
+
+  // ---------- template ----------
+  div.innerHTML = `
+    <div class="header flex items-center justify-between gap-3">
+      <button id="backBtn" class="btn btn-secondary h-9 px-3 text-sm">← Back</button>
+      <h1 class="text-xl font-bold"></h1>
+      <div></div>
+    </div>
+
+    <div class="menu-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px;">
+      <div id="draftCTA" class="menu-tile" style="height:160px;">
+        <img src="tile_draft.png" alt="Draft a Deck">
+        <div class="menu-caption">Draft a Deck</div>
+      </div>
+      <div id="importCTA" class="menu-tile" style="height:160px;">
+        <img src="tile_import.png" alt="Import Decklist">
+        <div class="menu-caption">Import Decklist</div>
+      </div>
+      <div id="exportCTA" class="menu-tile" style="height:160px;">
+        <img src="tile_export.png" alt="Export Decklist">
+        <div class="menu-caption">Export Decklist</div>
+      </div>
+    </div>
+
+<!-- Stretched toggle bar for Deck Statistics -->
+<button id="statsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="deckStatsCard">
+  <span class="left"><span class="chip"></span><span id="statsLabel">Decklist Statistics</span></span>
+  <span class="chev" id="statsChevron">▸</span>
+</button>
+
+<!-- Collapsible stats card (initially hidden) -->
+<div class="card p-4 hidden" id="deckStatsCard" style="margin-bottom:16px">
+  <div id="manaCurveDeckChart"></div>
+</div>
+
+
+    <!-- Collapsed Import panel -->
+    <div class="card p-4 hidden" id="importCard" style="margin-bottom:16px">
+      <div class="flex justify-between" style="align-items:center;margin-bottom:8px">
+        <h3 style="font-weight:800;letter-spacing:.2px">Import decklist</h3>
+        <div class="text-xs text-gray">
+          <strong>.json</strong> upload = replace current deck immediately.<br>
+          <strong>.txt</strong> or pasted text = Parse → Import parsed.
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 320px;gap:12px">
+        <div>
+          <textarea id="importDeckTA" class="input" style="min-height:120px" placeholder="Examples:
+4 Lightning Bolt
+3x Counterspell
+Island x14
+# comments & Sideboard: are ignored"></textarea>
+
+          <div class="flex" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+            <label class="btn btn-secondary text-sm" style="cursor:pointer">
+              Upload .txt or .json
+              <input id="importDeckFile" type="file" accept=".txt,.json" class="hidden">
+            </label>
+
+            <div class="flex" style="gap:8px;align-items:center">
+              <span class="text-xs text-gray">Prefer set (optional)</span>
+              <input id="importSetPref" class="input" type="text" placeholder="e.g. ltr" style="width:100px">
+            </div>
+
+            <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+              <input id="importIncludeImages" type="checkbox" checked>
+              Include images
+            </label>
+
+            <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+              <input id="importReplace" type="checkbox">
+              Replace current deck (instead of add)
+            </label>
+
+            <button id="btnImportParse"  class="btn btn-primary text-sm">Parse</button>
+            <button id="btnImportApply"  class="btn btn-secondary text-sm" disabled>Import parsed</button>
+          </div>
+        </div>
+
+        <div>
+          <div id="importStatus" class="text-xs text-gray">Status: collapsed.</div>
+          <div id="importPreview" style="margin-top:8px;max-height:200px;overflow:auto;border:1px solid #374151;border-radius:8px;padding:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEW: Mana curve chart mount -->
+    <div id="manaCurveDeckChart"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:20px;">
+      <div class="card">
+        <h3 class="mb-4" style="font-weight:bold;">Decklist [${(state.decks[key]||[]).length}]</h3>
+        <p class="text-xs text-gray mb-4">Click the ✕ to remove cards</p>
+        <div id="deckContainer"></div>
+      </div>
+      <div class="card">
+        <h3 class="mb-4" style="font-weight:bold;">Collection [${(state.cards||[]).length}]</h3>
+        <p class="text-xs text-gray mb-4">Click cards to add to deck</p>
+        <div id="availContainer"></div>
+      </div>
+      <div class="card" style="position:sticky;top:20px;height:fit-content;">
+        <h3 class="mb-4" style="font-weight:bold;text-align:center;">Card Info</h3>
+        <div id="cardInfoSidebar">
+          <p class="text-gray text-xs text-center" style="padding:20px;">Hover over a card to see details</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ---------- mount dynamic containers ----------
+  div.querySelector('#deckContainer').appendChild(deckContainer);
+  div.querySelector('#availContainer').appendChild(availContainer);
+
+  // ---------- header / tiles wiring ----------
+  const backBtn   = div.querySelector('#backBtn');
+  if (backBtn) backBtn.onclick = () => { state.screen = 'menu'; render(); };
+
+  const exportCTA = div.querySelector('#exportCTA');
+  if (exportCTA) exportCTA.onclick = () => saveDeck();
+
+  const importCTA = div.querySelector('#importCTA');
+  const importCard = div.querySelector('#importCard');
+  if (importCTA && importCard) {
+    importCTA.onclick = () => {
+      importCard.classList.toggle('hidden');
+      const ta = div.querySelector('#importDeckTA');
+      const st = div.querySelector('#importStatus');
+      if (!importCard.classList.contains('hidden')) {
+        if (st) st.textContent = 'Status: ready.';
+        if (ta) ta.focus();
+        importCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        if (st) st.textContent = 'Status: collapsed.';
+      }
+    };
+  }
+
+  // Draft entry (image tile)
+  const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
+  if (openDraft) {
+    openDraft.onclick = () => {
+      state.draft = {
+        ...state.draft,
+        active: true, screen: 'mode', mode: 'traditional', format: 'standard',
+        target: 60, allowDuplicates: true, offeredColorSets: [], chosenColors: [],
+        basicLands: { W:0, U:0, B:0, R:0, G:0 }, picks: 0, pool: [], deck: [],
+        seenIds: {}, seenNames: {}, customPool: [], customParams: { filterByColors: true }
+      };
+      state.screen = 'draft';
+      render();
+    };
+  }
+
+  // ---------- Import panel wiring ----------
+  const importTA    = div.querySelector('#importDeckTA');
+  const importFile  = div.querySelector('#importDeckFile');
+  const importSet   = div.querySelector('#importSetPref');
+  const importImgs  = div.querySelector('#importIncludeImages');
+  const importRepl  = div.querySelector('#importReplace');
+  const importParse = div.querySelector('#btnImportParse');
+  const importApply = div.querySelector('#btnImportApply');
+  const importStat  = div.querySelector('#importStatus');
+  const importPrev  = div.querySelector('#importPreview');
+
+  // Keep a cache of the last parsed result (for TXT or pasted JSON)
+  let lastParsedCards = null;
+
+  function renderImportPreview(map){
+    if (!map || map.size === 0) { importPrev.innerHTML = ''; return; }
+    const rows = [];
+    let total = 0;
+    for (const [name, qty] of map){ rows.push(`<tr><td style="width:40px">${qty}</td><td>${name}</td></tr>`); total += qty; }
+    importPrev.innerHTML = `
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="text-align:left;width:40px">Qty</th><th style="text-align:left">Name</th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>
+      <div class="text-xs text-gray" style="margin-top:6px">
+        Parsed <strong>${map.size}</strong> unique names / <strong>${total}</strong> total.
+        Supported lines: <code>4 Lightning Bolt</code>, <code>Lightning Bolt x2</code>, <code>3x Counterspell</code>, or just the name.
+        Lines beginning with <code>#</code> or <code>//</code> and headers like <code>Sideboard:</code> are ignored.
+      </div>`;
+  }
+
+  function ensureImages(cards){
+    return cards.map(c => {
+      if (!c.imageUrl || !c.imageUrl.length){
+        const nm = encodeURIComponent(c.name || '');
+        c.imageUrl = `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${nm}`;
+      }
+      return c;
+    });
+  }
+
+  function applyToDeck(cards, replace){
+    const key2 = 'player' + state.currentPlayer;
+    if (replace) state.decks[key2] = cards.slice();
+    else state.decks[key2] = (state.decks[key2] || []).concat(cards);
+    toast(replace ? 'Deck replaced ✓' : `Added ${cards.length} card(s) ✓`);
+    render();
+  }
+
+  async function doParse(raw){
+    lastParsedCards = null;
+    importApply.disabled = true;
+    try{
+      if (!raw || !raw.trim()){
+        if (importStat) importStat.textContent = 'Nothing to parse.';
+        return;
+      }
+      if (raw.trim().startsWith('{')){
+        const j = JSON.parse(raw);
+        if (Array.isArray(j.cards)){
+          lastParsedCards = ensureImages(j.cards);
+          importPrev.innerHTML = `<div class="text-xs text-gray">Ready: JSON with <strong>${lastParsedCards.length}</strong> card objects.</div>`;
+          if (importStat) importStat.textContent = 'JSON parsed. Click “Import parsed” to load it.';
+          importApply.disabled = false;
+          return;
+        }
+      }
+      const m = parseDecklist(raw);
+      renderImportPreview(m);
+      if (!m.size){ if (importStat) importStat.textContent = 'No valid card names found.'; return; }
+
+      if (importStat) importStat.textContent = 'Fetching Scryfall data…';
+      const setPref = (importSet && importSet.value || '').trim();
+      const includeImages = !!(importImgs && importImgs.checked);
+      const { out, errors } = await convertDecklist(raw, state.currentPlayer, setPref, includeImages, { textContent: (t)=> { if(importStat) importStat.textContent = t; } });
+
+      lastParsedCards = out.cards;
+      importApply.disabled = false;
+
+      const warn = errors && errors.length ? ` • ${errors.length} could not be matched.` : '';
+      if (importStat) importStat.textContent = `Parsed ${m.size} unique (${[...m.values()].reduce((a,b)=>a+b,0)} total). Resolved ${out.cards.length} objects${warn}.`;
+    } catch(e){
+      if (importStat) importStat.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  function doImportParsed(){
+    if (!lastParsedCards || !lastParsedCards.length){
+      toast('Nothing parsed yet. Click Parse first.');
+      return;
+    }
+    const replace = !!(importRepl && importRepl.checked);
+    applyToDeck(lastParsedCards, replace);
+  }
+
+  if (importParse) importParse.onclick = () => {
+    const raw = (importTA && importTA.value) ? importTA.value : '';
+    doParse(raw);
+  };
+  if (importApply) importApply.onclick = () => doImportParsed();
+
+  if (importFile) importFile.onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    const name = (f.name || '').toLowerCase();
+
+    if (name.endsWith('.json') || text.trim().startsWith('{')){
+      try{
+        const j = JSON.parse(text);
+        if (!Array.isArray(j.cards)) throw new Error('Not a compatible deck JSON (missing "cards" array).');
+        const cards = ensureImages(j.cards);
+        applyToDeck(cards, true);
+        if (importStat) importStat.textContent = `Loaded JSON deck: ${cards.length} cards (replaced).`;
+        return;
+      } catch(err){
+        if (importStat) importStat.textContent = 'Invalid JSON: ' + err.message;
+        return;
+      }
+    }
+    if (importTA) importTA.value = text;
+    try { const m = parseDecklist(text); renderImportPreview(m); } catch {}
+    if (importStat) importStat.textContent = 'TXT loaded. Click “Parse” to resolve via Scryfall, then “Import parsed”.';
+    importApply.disabled = true;
+  };
+
+// --- Deck Statistics toggle wiring ---
+const statsToggle = div.querySelector('#statsToggle');
+const statsCard   = div.querySelector('#deckStatsCard');
+const statsLabel  = div.querySelector('#statsLabel');
+const statsChev   = div.querySelector('#statsChevron');
+
+function openStats(){
+  statsCard.classList.remove('hidden');
+  statsToggle.classList.add('open');
+  statsToggle.setAttribute('aria-expanded','true');
+  if (statsChev) statsChev.textContent = '▾';
+  // render when opened (fresh each time)
+  renderDeckStatsInto('manaCurveDeckChart');
+}
+
+function closeStats(){
+  statsCard.classList.add('hidden');
+  statsToggle.classList.remove('open');
+  statsToggle.setAttribute('aria-expanded','false');
+  if (statsChev) statsChev.textContent = '▸';
+}
+
+if (statsToggle && statsCard){
+  // default closed
+  closeStats();
+
+  statsToggle.onclick = () => {
+    if (statsCard.classList.contains('hidden')) openStats();
+    else closeStats();
+  };
+}
+
+
+  return div;
+}
+
+// GAME BOARD ----------------------------
+function GameBoard() {
+  const div = document.createElement('div');
+  
+  if (!state.gameStarted) {
+    div.className = 'container screen';
+    let connUI = '';
+    if (state.onlineMode && state.waitingForAnswer) {
+      connUI = `
+        <div class="card" style="background: rgba(30, 64, 175, 0.2); border-color: #3b82f6; margin-bottom: 24px;">
+          <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+          <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
+          <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
+          <hr style="border-color: #4b5563; margin: 16px 0;">
+          <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
+          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+          <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+        </div>
+      `;
+    } else if (state.onlineMode && state.answerCode) {
+      connUI = `
+        <div class="card" style="background: rgba(5, 150, 105, 0.2); border-color: #059669; margin-bottom: 24px;">
+          <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+          <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
+          <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+          <p class="text-green text-sm mt-4">Waiting for host...</p>
+        </div>
+      `;
+    } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+      connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to play.</div>';
+    }
+    
+    div.innerHTML = `
+      <div style="max-width: 800px; width: 100%;">
+        <div class="header">
+          <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+          <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+        </div>
+        ${connUI}
+        <div class="card text-center">
+          <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">⚔️ Ready to Play?</h1>
+          <p class="text-gray mb-8">${state.onlineMode ? 'Waiting for both players to be ready...' : 'Local game - Both players ready!'}</p>
+          <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? 'disabled' : ''}>Start Game</button>
+          ${state.decks.player1.length === 0 || state.decks.player2.length === 0 ? '<p class="text-red mt-4">⚠️ Both players need decks to start!</p>' : ''}
+        </div>
+      </div>
+    `;
+    
+    if (div.querySelector('#copyOffer')) {
+      div.querySelector('#copyOffer').onclick = () => {
+        div.querySelector('#offerCode').select();
+        document.execCommand('copy');
+        alert('✓ Code copied to clipboard!');
+      };
+    }
+    if (div.querySelector('#submitAnswer')) {
+      div.querySelector('#submitAnswer').onclick = () => {
+        const val = div.querySelector('#answerInput').value.trim();
+        if (val) completeConnection(val);
+        else alert('Please paste the answer code first!');
+      };
+    }
+    if (div.querySelector('#copyAnswer')) {
+      div.querySelector('#copyAnswer').onclick = () => {
+        div.querySelector('#answerCode').select();
+        document.execCommand('copy');
+        alert('✓ Answer code copied to clipboard!');
+      };
+    }
+    
+    div.querySelector('#backBtn').onclick = () => { 
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu'; 
+      render(); 
+    };
+    div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+    div.querySelector('#startBtn').onclick = () => {
+      const shuffle = (arr) => {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+      
+      const p1 = shuffle(state.decks.player1.map((c, i) => ({ ...c, gameId: 'p1-' + i, tapped: false, pt: { p: 0, t: 0 }, stun: 0 })));
+      const p2 = shuffle(state.decks.player2.map((c, i) => ({ ...c, gameId: 'p2-' + i, tapped: false, pt: { p: 0, t: 0 }, stun: 0 })));
+      
+      state.gameState = { 
+        player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p1, health: 20 }, 
+        player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], deck: p2, health: 20 } 
+      };
+      state.activePlayer = 1; 
+      state.gameStarted = true;
+      
+      // Show "Your Turn" notification for player 1 at game start
+      if (state.currentPlayer === 1) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+      
+      sendGameUpdate();
+      render();
+    };
+    return div;
+  }
+
+  // GAME SCREEN
+  const pKey = 'player' + state.currentPlayer;
+  const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+  const me = state.gameState[pKey];
+  const opp = state.gameState[oKey];
+  
+  const createGameCardImg = (c) => {
+    const img = document.createElement('img');
+    if (c.image || c.imageUrl) {
+      img.src = c.image || c.imageUrl;
+    } else {
+      const safeName = c.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ');
+      const bgColor = c.isToken ? '%23059669' : '%23374151';
+      const emoji = c.isToken ? '🎭' : '';
+      img.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"><rect width="100" height="140" fill="${bgColor}"/><text x="50" y="50" text-anchor="middle" fill="white" font-size="24">${emoji}</text><text x="50" y="80" text-anchor="middle" fill="white" font-size="10">${safeName}</text><text x="50" y="100" text-anchor="middle" fill="white" font-size="12">${c.power || '?'}/${c.toughness || '?'}</text></svg>`;
+    }
+    img.alt = '';
+    return img;
+  };
+  
+  const showCardInfo = (card, target) => {
+    const sidebar = target || div.querySelector('#cardInfo');
+    if (sidebar && card) {
+      const c = card;
+      const countersDisplay = c.counters && c.counters > 0 ? `<div class="text-green text-sm mt-2">✨ +${c.counters}/+${c.counters} Counters</div>` : '';
+      sidebar.innerHTML = `
+        <div class="card-preview">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.isToken ? '🎭 ' : ''}${c.name}</div>
+            ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${c.cost}</div>` : ''}
+          </div>
+          <div class="text-xs text-gray text-center mb-2">${c.type}${c.isToken ? ' (Token)' : ''}</div>
+          ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width: 100%; border-radius: 6px; margin-bottom: 8px;">` : `<div class="card-img" style="height: 120px; font-size: 48px; background: ${c.isToken ? '#059669' : '#4b5563'};">${c.isToken ? '🎭' : '🃏'}</div>`}
+          ${c.type && (c.type.includes('Creature') || c.isToken) ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${parseInt(c.power || 0) + (c.counters || 0)} <strong>TGH:</strong> ${parseInt(c.toughness || 0) + (c.counters || 0)}</div>` : ''}
+${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = effectivePT(c); return `<div class="text-xs text-green mt-1">P/T: ${e.p} / ${e.t}</div>`; })() 
+  : ''}
+          <div class="text-xs">${c.effect || 'No effect'}</div>
+          ${c.tapped ? '<div class="text-xs text-red mt-2">⟳ TAPPED</div>' : ''}
+          ${countersDisplay}
+        </div>
+      `;
+    }
+  };
+  
+  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'lowerField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
+  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'upperField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
+  
+  // Dynamic sizing classes based on card count
+  const getFieldClass = (cards) => {
+    const count = cards.length;
+    if (count > 10) return ' lots-cards';
+    if (count > 6) return ' many-cards';
+    return '';
+  };
+  
+  div.innerHTML = `
+    <div style="display: flex; height: 100vh;">
+      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="background: #1f2937; padding: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #374151;">
+          <button id="exitBtn" class="btn btn-secondary text-xs">← Exit</button>
+          <div class="text-center">
+            <span class="text-xs" style="font-weight: bold;">Player ${state.activePlayer}${state.activePlayer === state.currentPlayer ? ' (YOU)' : ''}</span>
+            <div class="text-xs text-gray">Current Turn</div>
+          </div>
+          <button id="endTurn" class="btn btn-blue text-xs">End Turn →</button>
+        </div>
+        <div style="flex: 1; overflow-y: auto; padding: 16px;">
+          <div class="mb-4 text-center">
+            <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ Opponent - LP: ${opp.health}</div>
+            <div class="text-xs text-gray">📚 Deck: ${opp.deck.length} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}</div>
+          </div>
+          <div class="game-field mb-4${getFieldClass(opp.upperField)}" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2"> </div>
+            ${oppUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div class="game-field mb-4${getFieldClass(opp.lowerField)}" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2"> </div>
+            ${oppLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div style="border-top: 3px dashed #7c3aed; margin: 16px 0;"> </div>
+          <div class="game-field player mb-4${getFieldClass(me.lowerField)}" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2">Lower </div>
+            ${myLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div class="game-field player mb-4${getFieldClass(me.upperField)}" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2">Upper </div>
+            ${myUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div class="mt-4 text-center">
+            <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ You - LP: ${me.health}</div>
+            <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${me.deck.length})</button>
+              <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
+              <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
+              <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
+              <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
+              <button id="viewDeck" class="btn btn-secondary text-xs">📚 Deck (${me.deck.length})</button>
+              <button id="viewOppGY" class="btn btn-secondary text-xs">👁️ Opp GY</button>
+              <button id="viewOppExile" class="btn btn-secondary text-xs">👁️ Opp Exile</button>
+              <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
+              <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
+              <button id="mulliganBtn" class="btn btn-blue text-xs">🔄 Mulligan</button>
+            </div>
+          </div>
+        </div>
+        <div id="handContainer" style="background: #1f2937; padding: 8px; height: 120px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; border-top: 2px solid #374151;"></div>
+      </div>
+      <div class="sidebar">
+        <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+        <div id="cardInfo">
+          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>
+        </div>
+      </div>
+    </div>
+    ${state.showTurnNotification ? `<div class="turn-notification">🎮 Your Turn!</div>` : ''}
+    ${state.actionMessage ? `<div class="turn-notification">${state.actionMessage}</div>` : ''} 
+    ${state.creatingToken ? `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+          <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">🎭 Create Token</h3>
+          <div class="mb-4">
+            <label>Token Name</label>
+            <input id="tokenName" class="input" placeholder="Soldier Token" value="Token">
+          </div>
+          <div class="mb-4">
+            <label>Token Type</label>
+            <input id="tokenType" class="input" placeholder="Creature — Soldier" value="Creature Token">
+          </div>
+          <div class="grid grid-2 mb-4">
+            <div>
+              <label>Power</label>
+              <input id="tokenPower" class="input" type="number" value="1">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="tokenToughness" class="input" type="number" value="1">
+            </div>
+          </div>
+          <div class="mb-4">
+            <label>Effect (Optional)</label>
+            <textarea id="tokenEffect" class="input" rows="2" placeholder="Flying, Haste"></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button id="createTokenUpper" class="btn btn-primary">⬇️ Create Upper</button>
+            <button id="createTokenLower" class="btn btn-primary">⬆️ Create Lower</button>
+          </div>
+          <button id="cancelToken" class="btn btn-secondary mt-3" style="width: 100%;">Cancel</button>
+        </div>
+      </div>
+    ` : ''}
+    
+    ${state.selectedFieldCard !== null ? (() => {
+  const sel = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
+  return `
+  <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #8b5cf6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 360px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);">
+    <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #a78bfa;">${sel.name}</div>
+
+    <!-- ACTION GRID: always two columns, evenly spaced -->
+    <div class="action-grid" style="display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; align-items: stretch;">
+      <button id="tapCard" class="btn ${sel.tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px; width:100%; text-align:center;">⟳ ${sel.tapped ? 'Untap' : 'Tap'}</button>
+      <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%; text-align:center;">🖐️ To Hand</button>
+
+      <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">⚰️ To GY</button>
+      <button id="toExile" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">🚫 Exile</button>
+
+      <!-- COUNTERS: spans full width so grid stays balanced; collapsed by default -->
+      <details class="counter-panel" style="grid-column: 1 / -1; margin-top: 0;">
+        <summary class="btn btn-secondary text-sm" style="display:block; width: 100%; padding: 14px; text-align:center;">
+          🔘 Counters
+        </summary>
+        <div style="padding: 10px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; margin-top: 8px;">
+          <div class="text-xs mb-1">P/T: <span id="ptNow"></span></div>
+          <div class="flex mb-2">
+            <button id="incP" class="btn btn-secondary text-xs">+P</button>
+            <button id="decP" class="btn btn-secondary text-xs">-P</button>
+            <button id="incT" class="btn btn-secondary text-xs">+T</button>
+            <button id="decT" class="btn btn-secondary text-xs">-T</button>
+          </div>
+
+          <div class="text-xs mb-1">Stun: <span id="stunNow"></span></div>
+          <div class="flex">
+            <button id="incS" class="btn btn-secondary text-xs">+S</button>
+            <button id="decS" class="btn btn-secondary text-xs">-S</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <button id="toBottomDeck" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">📚 To Deck</button>
+    <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">❌ Cancel</button>
+  </div>`;
+})() : ''}
+
+    
+    
+    
+    
+    
+    
+    
+    ${state.viewingZone ? `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+          <div class="flex justify-between mb-4">
+            <h3 style="font-weight: bold; font-size: 18px;">${state.viewingZone.title}</h3>
+            <button id="closeZone" class="btn btn-secondary text-xs">✕ Close</button>
+          </div>
+          ${state.viewingZone.owner === 'me' && state.selectedZoneCard !== null && state.viewingZone.cards[state.selectedZoneCard] ? `
+            <div style="background: #374151; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+              <div class="text-center mb-3" style="font-weight: bold; color: #fbbf24;">${state.viewingZone.cards[state.selectedZoneCard].name}</div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button id="zoneToHand" class="btn btn-primary text-xs">🖐️ To Hand</button>
+                <button id="zoneToUpper" class="btn btn-primary text-xs">⬇️ To Upper</button>
+                <button id="zoneToLower" class="btn btn-primary text-xs">⬆️ To Lower</button>
+                ${state.viewingZone.zone !== 'deck' ? '<button id="zoneToDeck" class="btn btn-secondary text-sm">📚 To Deck</button>' : ''}
+                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">🚫 Exile</button>' : ''}
+                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">⚰️ To GY</button>' : ''}
+                <button id="cancelZoneSelect" class="btn btn-secondary text-xs">❌ Cancel</button>
+              </div>
+            </div>
+          ` : ''}
+          <div id="zoneCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px; max-height: 60vh; overflow-y: auto;">
+            ${state.viewingZone.cards.length === 0 ? '<p class="text-gray text-center p-4">Empty</p>' : ''}
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
+      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬇️ Upper Field</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬆️ Lower Field</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">⚰️️ Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
+        </div>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
+      </div>
+    ` : ''}
+    ${state.winner ? `
+      <div class="modal">
+        <div class="modal-content text-center">
+          <h2 class="mb-4" style="font-size: 48px;">🏆</h2>
+          <h2 class="mb-4" style="font-size: 32px; font-weight: bold;">${state.winner === state.currentPlayer ? '🎉 You Win!' : '😔 You Lose'}</h2>
+          <p class="text-gray mb-8">Player ${state.winner} is victorious!</p>
+          <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+  
+  const handContainer = div.querySelector('#handContainer');
+  
+  
+  if (me.hand.length === 0) {
+    const emptyMsg = document.createElement('span');
+    emptyMsg.className = 'text-gray text-xs';
+    emptyMsg.textContent = '🃏 No cards in hand - Click Draw!';
+    handContainer.appendChild(emptyMsg);
+  } else {
+    me.hand.forEach((card, idx) => {
+      const cardDiv = document.createElement('div');
+      cardDiv.className = 'hand-card' + (state.selectedCard === idx ? ' selected' : '');
+      cardDiv.appendChild(createGameCardImg(card));
+      
+      cardDiv.onclick = () => {
+        state.selectedCard = state.selectedCard === idx ? null : idx;
+        state.selectedFieldCard = null;
+        render();
+      };
+      
+      cardDiv.onmouseenter = () => {
+        showCardInfo(card);
+      };
+      
+      handContainer.appendChild(cardDiv);
+    });
+  }
+  
+  div.querySelectorAll('.field-card').forEach(fieldCard => {
+    const zone = fieldCard.dataset.zone;
+    const owner = fieldCard.dataset.owner;
+    const idx = parseInt(fieldCard.dataset.idx);
+    const card = owner === 'me' ? me[zone][idx] : opp[zone][idx];
+    
+    if (card) {
+      const img = createGameCardImg(card);
+      img.style.pointerEvents = 'none'; // Critical: let parent handle events
+      fieldCard.appendChild(img);
+      
+      
+      // P/T delta badge (e.g., +1/0, 0/+1, -1/-1)
+if (!card.pt) card.pt = { p: 0, t: 0 };
+if (card.pt.p !== 0 || card.pt.t !== 0) {
+  const badge = document.createElement('div');
+  badge.className = 'counter-badge';
+  const s = (n) => (n >= 0 ? '+' + n : String(n));
+  badge.textContent = `${s(card.pt.p)}/${s(card.pt.t)}`;
+  fieldCard.appendChild(badge);
+}
+
+// Stun badge (e.g., S2)
+if (card.stun && card.stun > 0) {
+  const sBadge = document.createElement('div');
+  sBadge.className = 'stun-badge';
+  sBadge.textContent = 'S' + card.stun;
+  fieldCard.appendChild(sBadge);
+}
+      
+      
+      // Hover handler - works for ALL cards (yours and opponent's)
+      fieldCard.addEventListener('mouseenter', (e) => {
+        showCardInfo(card);
+      });
+      
+      fieldCard.addEventListener('mouseleave', (e) => {
+        // Optional: clear card info when mouse leaves
+      });
+      
+      // Click handler - only for YOUR cards
+      if (owner === 'me') {
+        fieldCard.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          state.selectedCard = null;
+          if (state.selectedFieldCard && state.selectedFieldCard.zone === zone && state.selectedFieldCard.idx === idx) {
+            state.selectedFieldCard = null;
+          } else {
+            state.selectedFieldCard = { zone, idx, owner };
+          }
+          render();
+        });
+        
+        // Double-click handler to tap/untap (only for your cards)
+        fieldCard.addEventListener('dblclick', (e) => {// Toggle with stun-prevention on untap
+if (card.tapped) {
+  // Attempt to untap
+  if (typeof card.stun === 'number' && card.stun > 0) {
+    card.stun -= 1;            // untap prevented, remove 1 stun
+    // remain tapped
+  } else {
+    card.tapped = false;       // no stun: untap
+  }
+} else {
+  // Tap is always allowed
+  card.tapped = true;
+}
+state.selectedFieldCard = null;
+sendGameUpdate();
+render();
+});
+        
+      }
+    }
+  });
+  
+  const exitBtn = div.querySelector('#exitBtn');
+  const drawBtn = div.querySelector('#drawBtn');
+  const upkeepBtn = div.querySelector('#upkeepBtn');
+  const createTokenBtn = div.querySelector('#createToken');
+  const gyBtn = div.querySelector('#viewGY');
+  const minusBtn = div.querySelector('#minusLP');
+  const plusBtn = div.querySelector('#plusLP');
+  const endBtn = div.querySelector('#endTurn');
+  const viewDeckBtn = div.querySelector('#viewDeck');
+  const mulliganBtn = div.querySelector('#mulliganBtn');
+  
+  
+  if (exitBtn) exitBtn.onclick = () => {
+    if (confirm('Exit game? Progress will be lost.')) {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      state.viewingZone = null;
+      render();
+    }
+  };
+  
+  
+  if (drawBtn) drawBtn.onclick = () => {
+  if (me.deck.length > 0) {
+    const idx = Math.floor(Math.random() * me.deck.length);
+    const card = me.deck[idx];
+ 
+    if (!('tapped' in card)) card.tapped = false;
+    if (!('pt' in card)) card.pt = { p: 0, t: 0 };
+    if (!('stun' in card)) card.stun = 0;
+
+    me.hand.push(card);
+    me.deck.splice(idx, 1);
+
+    sendGameUpdate();
+    render();
+    // No popup for draw button
+  }
+};
+
+
+  // Upkeep button - untap all your cards
+  if (upkeepBtn) upkeepBtn.onclick = () => {
+    // Untap upper row with stun-prevention
+me.upperField.forEach(card => {
+  if (card.tapped) {
+    if (typeof card.stun === 'number' && card.stun > 0) {
+      card.stun -= 1;          // prevented; stays tapped
+    } else {
+      card.tapped = false;     // untaps
+    }
+  }
+});
+
+// Untap lower row with stun-prevention
+me.lowerField.forEach(card => {
+  if (card.tapped) {
+    if (typeof card.stun === 'number' && card.stun > 0) {
+      card.stun -= 1;
+    } else {
+      card.tapped = false;
+    }
+  }
+});
+
+sendGameUpdate();
+render();
+    
+  };
+  
+  if (createTokenBtn) createTokenBtn.onclick = () => {
+    state.creatingToken = true;
+    render();
+  };
+  
+  if (gyBtn) gyBtn.onclick = () => { 
+    state.viewingZone = { title: '⚰️ Your Graveyard', cards: me.graveyard, zone: 'graveyard', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewExileBtn = div.querySelector('#viewExile');
+  if (viewExileBtn) viewExileBtn.onclick = () => {
+    state.viewingZone = { title: '🚫 Your Exile', cards: me.exile, zone: 'exile', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewOppGYBtn = div.querySelector('#viewOppGY');
+  if (viewOppGYBtn) viewOppGYBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Graveyard", cards: opp.graveyard, zone: 'graveyard', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewOppExileBtn = div.querySelector('#viewOppExile');
+  if (viewOppExileBtn) viewOppExileBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Exile", cards: opp.exile, zone: 'exile', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+      if (mulliganBtn) mulliganBtn.onclick = () => {
+  const n = me.hand.length;
+  if (n === 0) { toast('No cards in hand to mulligan.'); return; }
+  // Return entire hand to DECK (no redraw, no shuffle)
+  me.deck.push(...me.hand);
+  me.hand.length = 0;
+  toast(`Mulligan: returned ${n} card${n !== 1 ? 's' : ''} to deck.`);
+  sendGameUpdate();
+  render();
+};
+  
+  if (viewDeckBtn) viewDeckBtn.onclick = () => {
+  state.viewingZone = { title: '📚 Your Deck (top→bottom)', cards: me.deck, zone: 'deck', owner: 'me' };
+  state.selectedZoneCard = null;
+  render();
+};
+  
+  if (minusBtn) minusBtn.onclick = () => { me.health = Math.max(0, me.health - 1); checkWinner(); sendGameUpdate(); render(); };
+  if (plusBtn) plusBtn.onclick = () => { me.health++; sendGameUpdate(); render(); };
+  if (endBtn) endBtn.onclick = () => { 
+    const previousPlayer = state.activePlayer;
+    state.activePlayer = state.activePlayer === 1 ? 2 : 1; 
+    state.selectedCard = null; 
+    state.selectedFieldCard = null; 
+    state.selectedZoneCard = null; 
+    
+    // Show "Your Turn" notification if it's now the current player's turn
+    if (state.activePlayer === state.currentPlayer) {
+      state.showTurnNotification = true;
+      // Hide notification after animation completes
+      setTimeout(() => {
+        state.showTurnNotification = false;
+        render();
+      }, 2000);
+    }
+    
+    sendGameUpdate(); 
+    render(); 
+  };
+  
+  // Token creation modal
+  if (state.creatingToken) {
+    const cancelTokenBtn = div.querySelector('#cancelToken');
+    const createUpperBtn = div.querySelector('#createTokenUpper');
+    const createLowerBtn = div.querySelector('#createTokenLower');
+    
+    if (cancelTokenBtn) cancelTokenBtn.onclick = () => {
+      state.creatingToken = false;
+      render();
+    };
+    
+    const createToken = (field) => {
+      const name = div.querySelector('#tokenName').value || 'Token';
+      const type = div.querySelector('#tokenType').value || 'Creature Token';
+      const power = div.querySelector('#tokenPower').value || '1';
+      const toughness = div.querySelector('#tokenToughness').value || '1';
+      const effect = div.querySelector('#tokenEffect').value || '';
+      
+      const token = {
+        id: Date.now() + Math.random(),
+        gameId: 'token-' + Date.now(),
+        name: name,
+        type: type,
+        power: power,
+        toughness: toughness,
+        effect: effect,
+        cost: '',
+        colors: [],
+        image: '',
+        imageUrl: '',
+        tapped: false,
+        isToken: true,
+        counters: 0
+      };
+      
+      me[field].push(token);
+      state.creatingToken = false;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (createUpperBtn) createUpperBtn.onclick = () => createToken('upperField');
+    if (createLowerBtn) createLowerBtn.onclick = () => createToken('lowerField');
+  }
+  
+  // Zone viewer
+  if (state.viewingZone) {
+    const closeZoneBtn = div.querySelector('#closeZone');
+    if (closeZoneBtn) closeZoneBtn.onclick = () => {
+      state.viewingZone = null;
+      state.selectedZoneCard = null;
+      render();
+    };
+    
+    // Ensure a modal-scoped hover box exists so it won't be blurred
+let zoneHover = div.querySelector('#zoneHoverBox');
+if (!zoneHover) {
+  zoneHover = document.createElement('div');
+  zoneHover.id = 'zoneHoverBox';
+  zoneHover.className = 'zone-hover';
+  const modal = div.querySelector('.modal');
+  if (modal) modal.appendChild(zoneHover);
+}
+    
+    const zoneCardsDiv = div.querySelector('#zoneCards');
+    
+    
+    if (zoneCardsDiv && state.viewingZone.cards.length > 0) {
+      state.viewingZone.cards.forEach((card, idx) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'zone-card' + (state.selectedZoneCard === idx ? ' selected' : '');
+        const img = createGameCardImg(card);
+        img.style.pointerEvents = 'none';
+        cardDiv.appendChild(img);
+        
+       cardDiv.onmousemove = (e) => {
+  if (!zoneHover) return;
+  zoneHover.innerHTML = `
+    <div style="font-weight:700;margin-bottom:4px">${card.name || ''}</div>
+    <div class="text-xs text-gray" style="margin-bottom:6px">${card.type || ''}</div>
+    ${card.imageUrl ? `<img src="${card.imageUrl}" style="width:100%;border-radius:6px;margin-bottom:8px">` : ''}
+    <div style="font-size:12px;white-space:pre-wrap;line-height:1.3">
+      ${(card.effect || '').replaceAll('\\n','<br>')}
+    </div>
+  `;
+  const pad = 16;
+  zoneHover.style.left = (e.clientX + pad) + 'px';
+  zoneHover.style.top  = (e.clientY + pad) + 'px';
+  zoneHover.style.display = 'block';
+};
+cardDiv.onmouseleave = () => { if (zoneHover) zoneHover.style.display = 'none'; };
+ 
+        
+        // Only allow interaction with own zones
+        if (state.viewingZone.owner === 'me') {
+          cardDiv.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (state.selectedZoneCard === idx) {
+              state.selectedZoneCard = null;
+            } else {
+              state.selectedZoneCard = idx;
+            }
+            render();
+          });
+        }
+        
+        zoneCardsDiv.appendChild(cardDiv);
+      });
+    }
+    
+    // Zone card action handlers
+    if (state.selectedZoneCard !== null && state.viewingZone.owner === 'me') {
+      const card = state.viewingZone.cards[state.selectedZoneCard];
+      const zoneKey = state.viewingZone.zone;
+      const sourcePlayer = me;
+      
+      const toHandBtn = div.querySelector('#zoneToHand');
+      const toUpperBtn = div.querySelector('#zoneToUpper');
+      const toLowerBtn = div.querySelector('#zoneToLower');
+      const toDeckBtn = div.querySelector('#zoneToDeck');
+      const toExileBtn = div.querySelector('#zoneToExile');
+      const toGYBtn = div.querySelector('#zoneToGY');
+      const cancelZoneBtn = div.querySelector('#cancelZoneSelect');
+      
+if (toHandBtn) toHandBtn.onclick = () => {
+  const fromDeck = (zoneKey === 'deck');  // NEW
+  sourcePlayer.hand.push(card);
+  sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+  state.selectedZoneCard = null;
+  if (sourcePlayer[zoneKey].length === 0) {
+    state.viewingZone = null;
+  }
+  sendGameUpdate();
+  render();
+  // NEW: only announce deck→hand, not GY/exile→hand
+  if (fromDeck) broadcastAction(`🃏 Player ${state.currentPlayer} added a card from deck to hand`);
+};
+
+      
+      if (toUpperBtn) toUpperBtn.onclick = () => {
+const cardToPlace = { ...card, tapped: false };
+if (!('pt' in cardToPlace)) cardToPlace.pt = { p: 0, t: 0 };
+if (!('stun' in cardToPlace)) cardToPlace.stun = 0;
+        sourcePlayer.upperField.push(cardToPlace);
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toLowerBtn) toLowerBtn.onclick = () => {
+const cardToPlace = { ...card, tapped: false };
+if (!('pt' in cardToPlace)) cardToPlace.pt = { p: 0, t: 0 };
+if (!('stun' in cardToPlace)) cardToPlace.stun = 0;
+        sourcePlayer.lowerField.push(cardToPlace);
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toDeckBtn) toDeckBtn.onclick = () => {
+        sourcePlayer.deck.push(card);
+        sourcePlayer[zoneKey].splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer[zoneKey].length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toExileBtn) toExileBtn.onclick = () => {
+        sourcePlayer.exile.push(card);
+        sourcePlayer.graveyard.splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer.graveyard.length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (toGYBtn) toGYBtn.onclick = () => {
+        sourcePlayer.graveyard.push(card);
+        sourcePlayer.exile.splice(state.selectedZoneCard, 1);
+        state.selectedZoneCard = null;
+        if (sourcePlayer.exile.length === 0) {
+          state.viewingZone = null;
+        }
+        sendGameUpdate();
+        render();
+      };
+      
+      if (cancelZoneBtn) cancelZoneBtn.onclick = () => {
+        state.selectedZoneCard = null;
+        render();
+      };
+    }
+  }
+  
+  // Field card actions
+  if (state.selectedFieldCard) {
+    const tapBtn = div.querySelector('#tapCard');
+    const toHandBtn = div.querySelector('#toHand');
+    const toGYBtn = div.querySelector('#toGraveyard');
+    const toExileBtn = div.querySelector('#toExile');
+    const toBottomDeckBtn = div.querySelector('#toBottomDeck');
+    const cancelFieldBtn = div.querySelector('#cancelFieldSelect');
+    const card = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
+    
+    if (tapBtn) tapBtn.onclick = () => {
+      if (card.tapped) {
+  if (typeof card.stun === 'number' && card.stun > 0) {
+    card.stun -= 1;            // untap prevented
+  } else {
+    card.tapped = false;
+  }
+} else {
+  card.tapped = true;
+}
+state.selectedFieldCard = null;
+sendGameUpdate();
+render();
+    };
+    
+const incP = div.querySelector('#incP');
+const decP = div.querySelector('#decP');
+const incT = div.querySelector('#incT');
+const decT = div.querySelector('#decT');
+const incS = div.querySelector('#incS');
+const decS = div.querySelector('#decS');
+
+const refreshLabels = () => {
+  if (!card.pt) card.pt = { p: 0, t: 0 };
+  if (typeof card.stun !== 'number') card.stun = 0;
+  const s = (n) => (n >= 0 ? '+' + n : String(n));
+  const ptNow = div.querySelector('#ptNow');
+  const stunNow = div.querySelector('#stunNow');
+  if (ptNow) ptNow.textContent = `${s(card.pt.p)}/${s(card.pt.t)}`;
+  if (stunNow) stunNow.textContent = `S${card.stun}`;
+};
+refreshLabels();
+
+if (incP) incP.onclick = () => { if (!card.pt) card.pt = { p: 0, t: 0 }; card.pt.p += 1; sendGameUpdate(); render(); };
+if (decP) decP.onclick = () => { if (!card.pt) card.pt = { p: 0, t: 0 }; card.pt.p -= 1; sendGameUpdate(); render(); };
+if (incT) incT.onclick = () => { if (!card.pt) card.pt = { p: 0, t: 0 }; card.pt.t += 1; sendGameUpdate(); render(); };
+if (decT) decT.onclick = () => { if (!card.pt) card.pt = { p: 0, t: 0 }; card.pt.t -= 1; sendGameUpdate(); render(); };
+
+if (incS) incS.onclick = () => { if (typeof card.stun !== 'number') card.stun = 0; card.stun += 1; sendGameUpdate(); render(); };
+if (decS) decS.onclick = () => { if (typeof card.stun !== 'number') card.stun = 0; card.stun = Math.max(0, card.stun - 1); sendGameUpdate(); render(); };
+
+    
+    if (toHandBtn) toHandBtn.onclick = () => {
+      me.hand.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toGYBtn) toGYBtn.onclick = () => {
+      me.graveyard.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toExileBtn) toExileBtn.onclick = () => {
+      me.exile.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toBottomDeckBtn) toBottomDeckBtn.onclick = () => {
+      me.deck.push(card);
+      me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (cancelFieldBtn) cancelFieldBtn.onclick = () => {
+      state.selectedFieldCard = null;
+      render();
+    };
+  }
+  
+  // Card action handlers
+  if (state.selectedCard !== null) {
+    const discardBtn = div.querySelector('#discardCard');
+    const toDeckBtn = div.querySelector('#toDeck');
+    const cancelBtn = div.querySelector('#cancelSelect');
+    
+    if (discardBtn) discardBtn.onclick = () => {
+      me.graveyard.push(me.hand[state.selectedCard]);
+      me.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (toDeckBtn) toDeckBtn.onclick = () => {
+      me.deck.push(me.hand[state.selectedCard]);
+      me.hand.splice(state.selectedCard, 1);
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      sendGameUpdate();
+      render();
+    };
+    
+    if (cancelBtn) cancelBtn.onclick = () => {
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      render();
+    };
+    
+    div.querySelectorAll('.placeCard').forEach(btn => {
+      btn.onclick = () => {
+        const zone = btn.dataset.zone + 'Field';
+        const cardToPlace = { ...me.hand[state.selectedCard], tapped: false };
+        if (!('pt' in cardToPlace)) cardToPlace.pt = { p: 0, t: 0 };
+        if (!('stun' in cardToPlace)) cardToPlace.stun = 0;
+        me[zone].push(cardToPlace);
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        state.selectedFieldCard = null;
+        sendGameUpdate();
+        render();
+      };
+    });
+  }
+  
+  if (state.winner && div.querySelector('#returnBtn')) {
+    div.querySelector('#returnBtn').onclick = () => {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      state.viewingZone = null;
+      render();
+    };
+  }
+  
+  return div;
+}
+
+setTimeout(render, 100);
+
+})();
+  </script>
+
+</body></html>
