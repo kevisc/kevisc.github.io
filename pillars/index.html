@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Pillars</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hdr">
+    <span class="word">PILLARS</span>
+    <span class="sub">Markets &amp; macro overview</span>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="markets">Markets</button>
+    <button class="tab" data-tab="lyn">Lyn's Views</button>
+  </nav>
+
+  <main>
+    <section id="tab-markets" class="panel">
+      <div id="as-of" class="muted small"></div>
+
+      <h2>Today's movers</h2>
+      <div id="movers" class="movers"></div>
+
+      <h2>Global markets</h2>
+      <div id="tables"></div>
+
+      <h2>Performance <span class="muted small">— rebased to 100</span></h2>
+      <div id="chart-controls"></div>
+      <div id="chart"></div>
+
+      <h2>Macro &amp; government financials</h2>
+      <div id="macro" class="cards"></div>
+    </section>
+
+    <section id="tab-lyn" class="panel hidden">
+      <h2>Newsletter intelligence <span class="muted small">— Lyn Alden's positioning</span></h2>
+      <div id="calls"></div>
+
+      <h2>Lyn Alden — M1 Newsletter Model Portfolio</h2>
+      <div id="m1"></div>
+    </section>
+  </main>
+
+  <footer class="ftr muted small">
+    Markets via Yahoo Finance · macro via FRED · positioning from Lyn Alden's free newsletter.
+    Not investment advice.<span id="foot-updated"></span>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

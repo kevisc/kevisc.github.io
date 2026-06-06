@@ -1,0 +1,82 @@
+:root{
+  --ink:#15181c; --muted:#6b7178; --line:#e7e9ec; --bg:#fff;
+  --accent:#34536b; --up:#157a3f; --down:#b3261e; --soft:#f7f8f9;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:0 22px 60px}
+.muted{color:var(--muted)} .small{font-size:12px}
+.hidden{display:none}
+.r{text-align:right} .tk{color:var(--muted);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)}
+
+.hdr{max-width:1180px;margin:0 auto;padding:26px 22px 6px;display:flex;align-items:baseline;gap:.7rem}
+.word{font-weight:700;letter-spacing:.18em;font-size:1.4rem}
+.sub{color:var(--muted);font-size:.82rem}
+
+.tabs{max-width:1180px;margin:0 auto;padding:10px 22px 0;border-bottom:1px solid var(--line);display:flex;gap:4px}
+.tab{appearance:none;border:0;background:none;font:inherit;color:var(--muted);
+  padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.panel{padding-top:18px}
+h2{font-size:1rem;font-weight:600;letter-spacing:-.01em;margin:26px 0 10px}
+h3{font-size:.82rem;font-weight:600;color:var(--muted);text-transform:none;margin:16px 0 6px}
+
+/* cards (movers + macro) */
+.movers,.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg)}
+.cname{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cprice{font-weight:600;font-size:1.05rem;margin-top:2px;font-variant-numeric:tabular-nums}
+.cpct{font-size:12px;font-variant-numeric:tabular-nums}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.mkt th,.mkt td,.calls th,.calls td,.m1 th,.m1 td,.m1h th,.m1h td{
+  padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+thead th{color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--line)}
+tbody tr:hover{background:var(--soft)}
+.mkt td.r,.mkt th.r{font-variant-numeric:tabular-nums}
+
+/* chart */
+#chart-controls{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.rngs{display:flex;gap:4px}
+.rng{appearance:none;border:1px solid var(--line);background:var(--bg);font:inherit;font-size:12px;
+  padding:3px 10px;border-radius:6px;cursor:pointer;color:var(--muted)}
+.rng.active{border-color:var(--accent);color:var(--ink);font-weight:600}
+.cbs{display:flex;flex-wrap:wrap;gap:4px 12px}
+.cb{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.lc{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.grid{stroke:var(--line);stroke-width:1}
+.base100{stroke:#c9ccd1;stroke-width:1;stroke-dasharray:3 3}
+.axis{fill:var(--muted);font-size:10px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+.lg{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px}
+
+/* calls */
+.calls td.rat{max-width:320px;color:var(--ink)}
+.calls td.ev{max-width:340px;color:var(--muted);font-style:italic}
+details{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:0 12px}
+details>summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:.9rem;list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details[open]>summary{border-bottom:1px solid var(--line)}
+details table{margin:8px 0}
+
+/* M1 portfolio */
+.m1grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;margin-top:10px}
+.donutwrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.donut{position:relative;width:170px;height:170px;border-radius:50%}
+.donut::after{content:"";position:absolute;inset:30%;background:var(--bg);border-radius:50%}
+.legend2{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;width:100%}
+.lg2{font-size:12px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.ftr{max-width:1180px;margin:30px auto 0;padding:14px 22px;border-top:1px solid var(--line)}
+
+@media(max-width:720px){
+  .m1grid{grid-template-columns:1fr}
+  .calls td.rat,.calls td.ev{max-width:none}
+  table{font-size:13px}
+}

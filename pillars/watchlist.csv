@@ -1,0 +1,47 @@
+ticker,name,category
+^GSPC,S&P 500,US Indexes
+^IXIC,Nasdaq Composite,US Indexes
+^DJI,Dow Jones Industrial,US Indexes
+^RUT,Russell 2000,US Indexes
+^FTSE,FTSE 100 (UK),Global Indexes
+^GDAXI,DAX (Germany),Global Indexes
+^FCHI,CAC 40 (France),Global Indexes
+^STOXX50E,Euro Stoxx 50,Global Indexes
+^N225,Nikkei 225 (Japan),Global Indexes
+^HSI,Hang Seng (Hong Kong),Global Indexes
+000001.SS,Shanghai Composite,Global Indexes
+^BSESN,BSE Sensex (India),Global Indexes
+^KS11,KOSPI (Korea),Global Indexes
+AAPL,Apple,Tech (Mag 7+)
+MSFT,Microsoft,Tech (Mag 7+)
+NVDA,Nvidia,Tech (Mag 7+)
+GOOGL,Alphabet,Tech (Mag 7+)
+AMZN,Amazon,Tech (Mag 7+)
+META,Meta Platforms,Tech (Mag 7+)
+TSLA,Tesla,Tech (Mag 7+)
+GC=F,Gold (COMEX futures),Gold & Silver
+SI=F,Silver (COMEX futures),Gold & Silver
+GLD,Gold ETF (SPDR),Gold & Silver
+SLV,Silver ETF (iShares),Gold & Silver
+CL=F,WTI Crude Oil,Energy & Commodities
+BZ=F,Brent Crude Oil,Energy & Commodities
+NG=F,Natural Gas,Energy & Commodities
+HG=F,Copper,Energy & Commodities
+DBC,Broad Commodities ETF,Energy & Commodities
+XLE,Energy Sector ETF,Energy & Commodities
+URA,Uranium ETF,Energy & Commodities
+^TNX,US 10Y Treasury Yield,Bonds & Rates
+^TYX,US 30Y Treasury Yield,Bonds & Rates
+^FVX,US 5Y Treasury Yield,Bonds & Rates
+TLT,20+yr Treasuries ETF,Bonds & Rates
+IEF,7-10yr Treasuries ETF,Bonds & Rates
+SHY,1-3yr Treasuries ETF,Bonds & Rates
+TIP,TIPS (inflation-protected) ETF,Bonds & Rates
+SGOV,0-3mo T-Bills ETF,Bonds & Rates
+DX-Y.NYB,US Dollar Index (DXY),FX / Dollar
+UUP,US Dollar Bull ETF,FX / Dollar
+EURUSD=X,Euro / US Dollar,FX / Dollar
+USDJPY=X,US Dollar / Japanese Yen,FX / Dollar
+GBPUSD=X,British Pound / US Dollar,FX / Dollar
+BTC-USD,Bitcoin,Crypto
+ETH-USD,Ethereum,Crypto
