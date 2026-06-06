@@ -82,7 +82,21 @@ def build_market():
     return {"as_of": _now(), "dates": dates, "rows": rows}
 
 
-def _fred(series_id, timeout=12):
+def _fred(series_id, timeout=15):
+    """Fetch a FRED series. Prefers the official API (set FRED_API_KEY — reliable from CI);
+    falls back to the keyless graph-CSV endpoint (works on normal networks, blocked from some clouds)."""
+    key = os.environ.get("FRED_API_KEY")
+    if key:
+        url = ("https://api.stlouisfed.org/fred/series/observations"
+               f"?series_id={series_id}&api_key={key}&file_type=json&observation_start=2014-01-01")
+        r = requests.get(url, timeout=timeout, headers=UA)
+        r.raise_for_status()
+        df = pd.DataFrame(r.json().get("observations", []))
+        if df.empty:
+            return pd.Series(dtype="float64")
+        s = pd.to_numeric(df["value"], errors="coerce")  # FRED encodes missing as "."
+        s.index = pd.to_datetime(df["date"], errors="coerce")
+        return s.dropna()
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
     resp = requests.get(url, timeout=timeout, headers=UA)
     resp.raise_for_status()

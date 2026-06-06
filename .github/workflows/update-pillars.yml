@@ -23,6 +23,8 @@ jobs:
       - name: Install dependencies
         run: pip install --quiet yfinance pandas requests
       - name: Build market + macro JSON
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python pillars/build_data.py
       - name: Commit if changed
         run: |
