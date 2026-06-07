@@ -75,6 +75,17 @@ details table{margin:8px 0}
 
 .ftr{max-width:1180px;margin:30px auto 0;padding:14px 22px;border-top:1px solid var(--line)}
 
+/* sortable markets + macro tab */
+.sortbar{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+td.cat{color:var(--muted);font-size:12px}
+.card.sel{cursor:pointer;transition:border-color .1s}
+.card.sel:hover{border-color:#cfd3d8}
+.card.sel.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+#intl-chart,#usmacro-chart{margin:6px 0}
+#intl-table{margin-top:12px;max-width:520px}
+#intl-controls,#chart-controls{margin-bottom:8px}
+#intl-note{margin-top:6px}
+
 @media(max-width:720px){
   .m1grid{grid-template-columns:1fr}
   .calls td.rat,.calls td.ev{max-width:none}

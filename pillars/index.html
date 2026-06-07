@@ -15,6 +15,7 @@
 
   <nav class="tabs">
     <button class="tab active" data-tab="markets">Markets</button>
+    <button class="tab" data-tab="macro">Macro</button>
     <button class="tab" data-tab="lyn">Lyn's Views</button>
   </nav>
 
@@ -26,27 +27,37 @@
       <div id="movers" class="movers"></div>
 
       <h2>Global markets</h2>
+      <div id="sort-controls" class="sortbar"></div>
       <div id="tables"></div>
 
       <h2>Performance <span class="muted small">— rebased to 100</span></h2>
       <div id="chart-controls"></div>
       <div id="chart"></div>
+    </section>
 
-      <h2>Macro &amp; government financials</h2>
-      <div id="macro" class="cards"></div>
+    <section id="tab-macro" class="panel hidden">
+      <h2>Global government data <span class="muted small">— largest economies, last ~10 years</span></h2>
+      <div id="intl-controls"></div>
+      <div id="intl-chart"></div>
+      <div id="intl-note" class="muted small"></div>
+      <div id="intl-table"></div>
+
+      <h2>US financial conditions</h2>
+      <div id="usmacro-chart"></div>
+      <div id="usmacro" class="cards"></div>
+      <div class="muted small">Source: FRED. Click a tile to chart its 10-year history.</div>
     </section>
 
     <section id="tab-lyn" class="panel hidden">
       <h2>Newsletter intelligence <span class="muted small">— Lyn Alden's positioning</span></h2>
       <div id="calls"></div>
-
       <h2>Lyn Alden — M1 Newsletter Model Portfolio</h2>
       <div id="m1"></div>
     </section>
   </main>
 
   <footer class="ftr muted small">
-    Markets via Yahoo Finance · macro via FRED · positioning from Lyn Alden's free newsletter.
+    Markets via Yahoo Finance · US macro via FRED · cross-country data via IMF (WEO) &amp; BIS · positioning from Lyn Alden's free newsletter.
     Not investment advice.<span id="foot-updated"></span>
   </footer>
 

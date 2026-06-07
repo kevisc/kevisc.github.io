@@ -1,8 +1,11 @@
-"""Build market.json + macro.json for the static Pillars dashboard.
+"""Build market.json + macro.json + intl.json for the static Pillars dashboard.
 
-Runs in CI (GitHub Actions) where Yahoo Finance and FRED are reachable. Reads watchlist.csv
-and macro.csv (next to this file) and writes data/market.json + data/macro.json. Failures
-degrade gracefully (missing tickers/series are skipped) so a transient outage never breaks the page.
+Runs in CI (GitHub Actions). Sources:
+  - Yahoo Finance (yfinance) -> market prices + history
+  - FRED official API (needs FRED_API_KEY) -> US macro series (10y history) + BIS house prices
+  - IMF DataMapper (keyless) -> cross-country government data (GDP, inflation, unemployment,
+    debt, fiscal balance, current account) for the largest economies
+Failures degrade gracefully (missing items skipped) so a transient outage never breaks the page.
 """
 from __future__ import annotations
 
@@ -34,8 +37,9 @@ def _round(x, n=4):
         return None
 
 
+# ---------------------------------------------------------------- markets (yfinance)
+
 def _pct(s: pd.Series, lookback: int):
-    """Percent change over `lookback` trading days, computed on a ticker's real closes."""
     s = s.dropna()
     if len(s) < 2:
         return None
@@ -60,41 +64,35 @@ def build_market():
     tickers = list(watch["ticker"])
     data = yf.download(tickers, period="1y", interval="1d", auto_adjust=True, progress=False, threads=True)
     raw = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]].rename(columns={"Close": tickers[0]})
-    aligned = raw.dropna(how="all").ffill()  # continuous union index, for chart lines
+    aligned = raw.dropna(how="all").ffill()
     dates = [d.strftime("%Y-%m-%d") for d in aligned.index]
-
     rows = []
     for _, r in watch.iterrows():
         t = r["ticker"]
-        own = raw[t].dropna() if t in raw.columns else pd.Series(dtype="float64")  # real trading closes
-        line = aligned[t] if t in aligned.columns else pd.Series(dtype="float64")  # continuous, for chart
+        own = raw[t].dropna() if t in raw.columns else pd.Series(dtype="float64")
+        line = aligned[t] if t in aligned.columns else pd.Series(dtype="float64")
         rows.append({
-            "ticker": t,
-            "name": r["name"],
-            "category": r["category"],
+            "ticker": t, "name": r["name"], "category": r["category"],
             "price": _round(own.iloc[-1]) if not own.empty else None,
-            "d1": _pct(own, 1),
-            "w1": _pct(own, 5),
-            "m1": _pct(own, 21),
-            "ytd": _ytd(own),
+            "d1": _pct(own, 1), "w1": _pct(own, 5), "m1": _pct(own, 21), "ytd": _ytd(own),
             "closes": [_round(v) for v in line.tolist()] if t in aligned.columns else [],
         })
     return {"as_of": _now(), "dates": dates, "rows": rows}
 
 
+# ------------------------------------------------------------------- FRED (US macro)
+
 def _fred(series_id, timeout=15):
-    """Fetch a FRED series. Prefers the official API (set FRED_API_KEY — reliable from CI);
-    falls back to the keyless graph-CSV endpoint (works on normal networks, blocked from some clouds)."""
     key = os.environ.get("FRED_API_KEY")
     if key:
         url = ("https://api.stlouisfed.org/fred/series/observations"
-               f"?series_id={series_id}&api_key={key}&file_type=json&observation_start=2014-01-01")
+               f"?series_id={series_id}&api_key={key}&file_type=json&observation_start=2010-01-01")
         r = requests.get(url, timeout=timeout, headers=UA)
         r.raise_for_status()
         df = pd.DataFrame(r.json().get("observations", []))
         if df.empty:
             return pd.Series(dtype="float64")
-        s = pd.to_numeric(df["value"], errors="coerce")  # FRED encodes missing as "."
+        s = pd.to_numeric(df["value"], errors="coerce")
         s.index = pd.to_datetime(df["date"], errors="coerce")
         return s.dropna()
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
@@ -115,6 +113,16 @@ def _transform(s, kind):
     return s
 
 
+def _hist(s, years=10, max_pts=140):
+    s = s.dropna()
+    if s.empty:
+        return []
+    s = s[s.index >= s.index[-1] - pd.DateOffset(years=years)]
+    if len(s) > max_pts:
+        s = s.resample("ME").last().dropna()
+    return [[d.strftime("%Y-%m-%d"), round(float(v), 3)] for d, v in s.items()]
+
+
 def build_macro():
     macro = pd.read_csv(os.path.join(HERE, "macro.csv"))
 
@@ -123,30 +131,85 @@ def build_macro():
             s = _transform(_fred(rec["series_id"]), rec.get("transform", "level")).dropna()
             val = round(float(s.iloc[-1]), 2)
             delta = round(float(s.iloc[-1] - s.iloc[-2]), 2) if len(s) > 1 else None
+            hist = _hist(s)
         except Exception:
-            val, delta = None, None
+            val, delta, hist = None, None, []
         unit = rec.get("unit")
-        return {
-            "name": rec["name"], "category": rec.get("category", ""),
-            "val": val, "delta": delta, "unit": "" if pd.isna(unit) else str(unit),
-        }
+        return {"name": rec["name"], "category": rec.get("category", ""), "val": val,
+                "delta": delta, "unit": "" if pd.isna(unit) else str(unit), "hist": hist}
 
     with cf.ThreadPoolExecutor(max_workers=8) as ex:
         out = list(ex.map(one, macro.to_dict("records")))
     return {"as_of": _now(), "rows": out}
 
 
+# --------------------------------------------- cross-country govt data (IMF + BIS)
+
+IMF_INDICATORS = [
+    ("GGXWDG_NGDP", "Gov gross debt", "% GDP"),
+    ("NGDP_RPCH", "Real GDP growth", "%"),
+    ("PCPIPCH", "Inflation", "%"),
+    ("LUR", "Unemployment", "%"),
+    ("GGXCNL_NGDP", "Fiscal balance", "% GDP"),
+    ("BCA_NGDPD", "Current account", "% GDP"),
+]
+INTL_COUNTRIES = [("USA", "United States"), ("CHN", "China"), ("JPN", "Japan"),
+                  ("DEU", "Germany"), ("IND", "India"), ("GBR", "United Kingdom")]
+BIS_HOUSING = {"USA": "QUSR628BIS", "CHN": "QCNR628BIS", "JPN": "QJPR628BIS",
+               "DEU": "QDER628BIS", "IND": "QINR628BIS", "GBR": "QGBR628BIS"}
+
+
+def build_intl():
+    data = {}
+    for code, name, unit in IMF_INDICATORS:
+        try:
+            url = "https://www.imf.org/external/datamapper/api/v1/" + code + "/" + "/".join(c for c, _ in INTL_COUNTRIES)
+            vals = requests.get(url, timeout=20).json().get("values", {}).get(code, {})  # IMF rejects custom UA
+        except Exception:
+            vals = {}
+        per = {}
+        for c, _ in INTL_COUNTRIES:
+            s = vals.get(c, {})
+            pts = [[y, round(float(s[y]), 2)] for y in sorted(s) if s[y] is not None and 2014 <= int(y) <= 2027]
+            if pts:
+                per[c] = pts
+        data[code] = per
+    indicators = [{"key": k, "name": n, "unit": u} for k, n, u in IMF_INDICATORS]
+
+    # House prices via FRED BIS series (real residential property prices, rebased to 100 at start)
+    house = {}
+    for c, sid in BIS_HOUSING.items():
+        try:
+            s = _fred(sid).dropna()
+            if s.empty:
+                continue
+            s = s[s.index >= s.index[-1] - pd.DateOffset(years=15)]
+            base = float(s.iloc[0])
+            if base:
+                house[c] = [[d.strftime("%Y-%m-%d"), round(float(v) / base * 100, 1)] for d, v in s.items()]
+        except Exception:
+            pass
+    if house:
+        data["HOUSING"] = house
+        indicators.append({"key": "HOUSING", "name": "Real house prices (rebased=100)", "unit": "idx"})
+
+    return {"as_of": _now(), "indicators": indicators,
+            "countries": [{"code": c, "name": n} for c, n in INTL_COUNTRIES], "data": data}
+
+
 def main():
     os.makedirs(DATA, exist_ok=True)
-    market = build_market()
-    with open(os.path.join(DATA, "market.json"), "w") as f:
-        json.dump(market, f, separators=(",", ":"))
-    print(f"market.json: {len(market['rows'])} rows, {len(market['dates'])} dates")
-    macro = build_macro()
-    with open(os.path.join(DATA, "macro.json"), "w") as f:
-        json.dump(macro, f, separators=(",", ":"))
-    got = sum(1 for r in macro["rows"] if r["val"] is not None)
-    print(f"macro.json: {got}/{len(macro['rows'])} series populated")
+    for name, fn in [("market", build_market), ("macro", build_macro), ("intl", build_intl)]:
+        obj = fn()
+        with open(os.path.join(DATA, f"{name}.json"), "w") as f:
+            json.dump(obj, f, separators=(",", ":"))
+        if name == "market":
+            print(f"market.json: {len(obj['rows'])} rows, {len(obj['dates'])} dates")
+        elif name == "macro":
+            print(f"macro.json: {sum(1 for r in obj['rows'] if r['val'] is not None)}/{len(obj['rows'])} series")
+        else:
+            cs = sum(len(v) for v in obj["data"].values())
+            print(f"intl.json: {len(obj['indicators'])} indicators, {cs} country-series")
 
 
 if __name__ == "__main__":
