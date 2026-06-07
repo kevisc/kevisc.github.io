@@ -175,24 +175,6 @@ def build_intl():
                 per[c] = pts
         data[code] = per
     indicators = [{"key": k, "name": n, "unit": u} for k, n, u in IMF_INDICATORS]
-
-    # House prices via FRED BIS series (real residential property prices, rebased to 100 at start)
-    house = {}
-    for c, sid in BIS_HOUSING.items():
-        try:
-            s = _fred(sid).dropna()
-            if s.empty:
-                continue
-            s = s[s.index >= s.index[-1] - pd.DateOffset(years=15)]
-            base = float(s.iloc[0])
-            if base:
-                house[c] = [[d.strftime("%Y-%m-%d"), round(float(v) / base * 100, 1)] for d, v in s.items()]
-        except Exception:
-            pass
-    if house:
-        data["HOUSING"] = house
-        indicators.append({"key": "HOUSING", "name": "Real house prices (rebased=100)", "unit": "idx"})
-
     return {"as_of": _now(), "indicators": indicators,
             "countries": [{"code": c, "name": n} for c, n in INTL_COUNTRIES], "data": data}
 

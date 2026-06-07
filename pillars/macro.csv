@@ -13,3 +13,5 @@ DFII10,10Y Real Yield,Rates,level,%
 FEDFUNDS,Fed Funds Rate,Rates,level,%
 BAMLH0A0HYM2,High-Yield Credit Spread,Credit,level,%
 DTWEXBGS,Broad US Dollar Index,FX,level,
+CSUSHPISA,US Home Price Index (Case-Shiller),Housing,level,
+CSUSHPISA,US Home Prices (YoY),Housing,yoy,%
