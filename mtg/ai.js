@@ -40,7 +40,7 @@ function boot(){
   }
 
   function fieldCards(player){
-    return [...(player.upperField || []), ...(player.lowerField || [])];
+    return A.battlefieldCards(player);
   }
 
   function isLandCard(c){ return ((c?.type || '') + '').toLowerCase().includes('land'); }
@@ -151,7 +151,7 @@ function boot(){
   function bestHumanCreatureIdx(zone, predicate){
     const human = humanPlayer();
     let best = null;
-    for (const z of ['upperField', 'lowerField']) {
+    for (const z of A.BATTLE_ZONE_KEYS) {
       (human[z] || []).forEach((c, idx) => {
         if (!isCreatureCard(c)) return;
         if (predicate && !predicate(c)) return;
@@ -241,7 +241,7 @@ function boot(){
       const land = landsInHand[0];
       act('ai_play_land', { cardName: land.name }, () => {
         me.hand.splice(me.hand.indexOf(land), 1);
-        me.upperField.push({ ...land, tapped: false });
+        me.landField.push({ ...land, tapped: false });
       }, `AI plays ${land.name}.`);
       if (!await step()) return;
     }
@@ -322,11 +322,11 @@ function boot(){
 
       if (pick.kind === 'creature') {
         if (!keywordsOf(battleCard).haste) battleCard.aiSick = true;
-        me2.lowerField.push(battleCard);
+        me2[A.defaultZoneForCard(battleCard)].push(battleCard);
         return `AI casts ${battleCard.name}.`;
       }
       if (pick.kind === 'permanent') {
-        me2.lowerField.push(battleCard);
+        me2[A.defaultZoneForCard(battleCard)].push(battleCard);
         return `AI casts ${battleCard.name}.`;
       }
       // instants / sorceries the AI understands
@@ -459,11 +459,11 @@ function boot(){
       }
 
       for (const c of deadHuman) {
-        for (const z of ['upperField', 'lowerField']) if (removeFromZone(human, z, c)) break;
+        for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(human, z, c)) break;
         human.graveyard.push({ ...c, tapped: false, aiAttacking: undefined });
       }
       for (const c of deadAi) {
-        for (const z of ['upperField', 'lowerField']) if (removeFromZone(me, z, c)) break;
+        for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(me, z, c)) break;
         me.graveyard.push({ ...c, tapped: false, aiAttacking: undefined });
       }
       A.checkWinner();
@@ -514,7 +514,7 @@ function boot(){
     if (round >= 3 && round % 3 === 0) {
       const size = Math.min(2 + Math.floor(round / 3), 8);
       act('boss_minion', { round }, () => {
-        aiPlayer().lowerField.push({
+        aiPlayer().creatureField.push({
           id: 'minion' + round + Math.random(),
           gameId: 'boss-minion-' + round + '-' + Math.random().toString(36).slice(2),
           name: `Summoned Horror ${round / 3}`,
@@ -579,7 +579,7 @@ function boot(){
       const land = scored[0].c;
       act('ai_play_land', { cardName: land.name }, () => {
         me.hand.splice(me.hand.indexOf(land), 1);
-        me.lowerField.push({ ...land, tapped: false });
+        me.landField.push({ ...land, tapped: false });
         // resolve the land's effect, AI-side
         if (land.name === 'Island' && me.deck.length) { me.hand.push(me.deck.shift()); return `AI plays Island and draws.`; }
         if (land.name === 'Forest') {
@@ -596,7 +596,7 @@ function boot(){
           const targets = fieldCards(human);
           if (targets.length) {
             const t = targets[Math.floor(Math.random() * targets.length)];
-            for (const z of ['upperField', 'lowerField']) if (removeFromZone(human, z, t)) break;
+            for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(human, z, t)) break;
             human.graveyard.push(t);
             return `AI plays Mountain — destroys your ${t.name}.`;
           }

@@ -19,8 +19,8 @@ const state = {
   editingCard: null,
   activePlayer: 1,
   gameState: {
-    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], commanderZone: [], deck: [], health: 20 },
-    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], commanderZone: [], deck: [], health: 20 },
+    player1: { hand: [], creatureField: [], supportField: [], landField: [], graveyard: [], exile: [], commanderZone: [], deck: [], health: 20 },
+    player2: { hand: [], creatureField: [], supportField: [], landField: [], graveyard: [], exile: [], commanderZone: [], deck: [], health: 20 },
     shared: { enabled: false, label: '', deck: [], graveyard: [], exile: [] },
     stack: [],
     phase: 'Main',
@@ -725,8 +725,9 @@ function cloneForGame(card, gameId){
 function emptyPlayerState(deck, mode){
   return {
     hand: [],
-    upperField: [],
-    lowerField: [],
+    creatureField: [],
+    supportField: [],
+    landField: [],
     graveyard: [],
     exile: [],
     commanderZone: [],
@@ -1586,7 +1587,7 @@ function pushGameHistory(actionType){
 
 function restoreGameSnapshot(snapshot){
   if (!snapshot) return false;
-  state.gameState = cloneJSON(snapshot.gameState);
+  state.gameState = normalizeGameStateZones(cloneJSON(snapshot.gameState));
   state.activePlayer = snapshot.activePlayer;
   state.winner = snapshot.winner;
   state.selectedCard = snapshot.selectedCard;
@@ -1743,7 +1744,7 @@ state.dataChannel.onmessage = (event) => {
 
     } else if (data.type === 'gameInit') {
       // Host dealt both sides; adopt the full opening snapshot.
-      state.gameState = data.gameState;
+      state.gameState = normalizeGameStateZones(data.gameState);
       state.gameStarted = true;
       state.activePlayer = data.activePlayer;
       state.gameLog = Array.isArray(data.gameLog) ? data.gameLog : [];
@@ -1757,9 +1758,9 @@ state.dataChannel.onmessage = (event) => {
     } else if (data.type === 'gameUpdate') {
       // Adopt ONLY the sender's own board; never touch my own side.
       if (typeof data.from === 'number' && data.mine) {
-        state.gameState['player' + data.from] = data.mine;
+        state.gameState['player' + data.from] = normalizePlayerZones(data.mine);
       } else if (data.gameState) {
-        state.gameState = data.gameState;   // back-compat with full snapshots
+        state.gameState = normalizeGameStateZones(data.gameState);   // back-compat with full snapshots
       }
       if (data.shared) state.gameState.shared = data.shared;
       if (Array.isArray(data.stack)) state.gameState.stack = data.stack;
@@ -1785,7 +1786,7 @@ state.dataChannel.onmessage = (event) => {
 
     } else if (data.type === 'gameSync') {
       // Peer rewound shared history (undo): adopt their full snapshot.
-      state.gameState = data.gameState;
+      state.gameState = normalizeGameStateZones(data.gameState);
       state.activePlayer = data.activePlayer;
       state.winner = data.winner;
       state.gameStarted = data.gameStarted;
@@ -6364,6 +6365,72 @@ if (statsToggle && statsCard){
 }
 
 // GAME BOARD ----------------------------
+// ---------------------------------------------------------------------------
+// Battlefield zones
+//
+// The board is laid out the way a real table is: creatures (and planeswalkers)
+// in front, artifacts/enchantments beside them, and lands + mana rocks in the
+// back row next to the command zone, library and graveyard. Cards auto-route to
+// the right zone when played and can still be dragged anywhere.
+// ---------------------------------------------------------------------------
+
+const BATTLE_ZONES = [
+  { key: 'creatureField', label: 'Creatures, Etc.',         short: 'Creatures' },
+  { key: 'supportField',  label: 'Artifacts, Enchantments', short: 'Artifacts' },
+  { key: 'landField',     label: 'Lands & Rocks',           short: 'Lands' }
+];
+const BATTLE_ZONE_KEYS = BATTLE_ZONES.map(z => z.key);
+
+function battleZoneLabel(key){
+  return (BATTLE_ZONES.find(z => z.key === key) || {}).label || key;
+}
+
+// Every permanent the player controls, across all three battlefield zones.
+function battlefieldCards(player){
+  if (!player) return [];
+  return BATTLE_ZONE_KEYS.flatMap(k => player[k] || []);
+}
+
+// A mana rock belongs with the lands, per the table layout.
+function isManaRock(card){
+  const type = ((card?.type || '') + '').toLowerCase();
+  if (!type.includes('artifact')) return false;
+  return /add \{|add one mana|mana of any|adds? \w+ mana/i.test((card?.effect || '') + '');
+}
+
+function defaultZoneForCard(card){
+  const type = ((card?.type || '') + '').toLowerCase();
+  if (type.includes('land')) return 'landField';
+  if (type.includes('creature')) return 'creatureField';
+  if (type.includes('planeswalker') || type.includes('battle')) return 'creatureField';
+  if (isManaRock(card)) return 'landField';
+  if (type.includes('artifact') || type.includes('enchantment')) return 'supportField';
+  return 'supportField';
+}
+
+// Guarantee the three zones exist, folding any legacy upper/lower board into
+// them (older saved snapshots, or a peer still on the previous layout).
+function normalizePlayerZones(player){
+  if (!player) return player;
+  for (const key of BATTLE_ZONE_KEYS) {
+    if (!Array.isArray(player[key])) player[key] = [];
+  }
+  const legacy = [...(player.upperField || []), ...(player.lowerField || [])];
+  if (legacy.length) {
+    for (const card of legacy) player[defaultZoneForCard(card)].push(card);
+  }
+  if ('upperField' in player) delete player.upperField;
+  if ('lowerField' in player) delete player.lowerField;
+  return player;
+}
+
+function normalizeGameStateZones(gs){
+  if (!gs) return gs;
+  normalizePlayerZones(gs.player1);
+  normalizePlayerZones(gs.player2);
+  return gs;
+}
+
 // --- Battle-card + Horde engine (top level so the AI autopilot can drive it) ---
 
 function initBattleCard(card){
@@ -6396,7 +6463,7 @@ function drawHordeCard(){
 function placeHordeToken(card){
   // Fresh tokens are summoning-sick: without this the Horde can reveal a dozen
   // tokens and swing for lethal on the very first turn.
-  state.gameState.player2.lowerField.push(initBattleCard({ ...card, tapped: false, aiSick: true }));
+  state.gameState.player2.creatureField.push(initBattleCard({ ...card, tapped: false, aiSick: true }));
 }
 
 function resolveHordeAction(card){
@@ -6417,7 +6484,7 @@ function resolveHordeAction(card){
     returned.forEach(placeHordeToken);
     message = `Graveborn Return: ${returned.length} token${returned.length === 1 ? '' : 's'} returned.`;
   } else if (card.hordeEffect === 'untap') {
-    [...hordePlayer.upperField, ...hordePlayer.lowerField].forEach(c => { c.tapped = false; });
+    battlefieldCards(hordePlayer).forEach(c => { c.tapped = false; });
     message = 'Endless Moan: the Horde untaps.';
   } else if (card.hordeEffect === 'surge') {
     message = 'Mindless Surge: reveal two extra Horde cards.';
@@ -6469,7 +6536,7 @@ function hordeAttack(){
   executeGameAction('horde_attack', {}, () => {
     const hordePlayer = state.gameState.player2;
     const survivorPlayer = state.gameState.player1;
-    const attackers = [...hordePlayer.upperField, ...hordePlayer.lowerField]
+    const attackers = battlefieldCards(hordePlayer)
       .filter(card => (card.type || '').includes('Creature') || card.isToken)
       .filter(card => !card.tapped && !card.aiSick);
     const damage = attackers.reduce((sum, card) => sum + Math.max(0, effectivePT(card).p), 0);
@@ -6487,7 +6554,7 @@ function basicLandName(card){
 }
 
 function landGameFieldCards(player){
-  return [...(player.upperField || []), ...(player.lowerField || [])].filter(card => basicLandName(card));
+  return battlefieldCards(player).filter(card => basicLandName(card));
 }
 
 function landGameCounts(player){
@@ -6671,7 +6738,7 @@ function GameBoard() {
       const p2 = shuffle(state.decks.player2.map((c, i) => cloneForGame(c, 'p2-' + i)));
 
       state.battleMode = mode.id;
-      state.gameState = buildGameStateForMode(mode, p1, p2);
+      state.gameState = normalizeGameStateZones(buildGameStateForMode(mode, p1, p2));
       if (mode.commanderZone) {
         seedCommandZoneFromDeck(state.gameState.player1, mode);
         seedCommandZoneFromDeck(state.gameState.player2, mode);
@@ -6715,6 +6782,7 @@ function GameBoard() {
   // GAME SCREEN
   const pKey = 'player' + state.currentPlayer;
   const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+  normalizeGameStateZones(state.gameState);   // belt-and-braces: never render a half-built board
   const me = state.gameState[pKey];
   const opp = state.gameState[oKey];
   const mode = getModeConfig(state.gameState.mode || state.battleMode || state.selectedMode);
@@ -6777,7 +6845,7 @@ function GameBoard() {
       const owner = ownerPlayerFromStackItem(item);
       const card = initBattleCard({ ...item.card, tapped: false });
       if (isPermanentCard(card)) {
-        owner.lowerField.push(card);
+        owner[defaultZoneForCard(card)].push(card);
         if (rules.winCondition === 'basic-land-game') checkLandGameVictory();
       } else {
         owner.graveyard.push(card);
@@ -6819,8 +6887,10 @@ function GameBoard() {
 
   function dragTargetLabel(target){
     const labels = {
-      upperField: 'Upper Field',
-      lowerField: 'Lower Field',
+      creatureField: 'Creatures',
+      supportField: 'Artifacts & Enchantments',
+      landField: 'Lands & Rocks',
+      commanderZone: commandMeta.label,
       hand: 'Hand',
       graveyard: 'Graveyard',
       exile: 'Exile',
@@ -6848,7 +6918,7 @@ function GameBoard() {
 
   function removeDraggedCard(payload){
     if (!payload || payload.owner !== 'me') return null;
-    if (!['hand', 'upperField', 'lowerField'].includes(payload.source)) return null;
+    if (!['hand', ...BATTLE_ZONE_KEYS].includes(payload.source)) return null;
     const idx = Number(payload.idx);
     const source = me[payload.source];
     if (!Array.isArray(source) || !Number.isInteger(idx) || idx < 0 || idx >= source.length) return null;
@@ -6861,13 +6931,15 @@ function GameBoard() {
       showAction('Only cards from hand can be cast to the stack.');
       return;
     }
+    // Check before removing the card, or a rejected move would delete it.
+    if (target === 'commanderZone' && !canMoveToCommandZone(me)) return;
 
     executeGameAction('move_card', { source: payload.source, target }, () => {
       const card = removeDraggedCard(payload);
       if (!card) return null;
       const battleCard = initBattleCard({ ...card, tapped: false });
 
-      if (target === 'upperField' || target === 'lowerField') {
+      if (BATTLE_ZONE_KEYS.includes(target)) {
         me[target].push(battleCard);
         checkLandGameVictory();
       } else if (target === 'hand') {
@@ -6879,6 +6951,8 @@ function GameBoard() {
       } else if (target === 'deck') {
         const targetDeck = sharedGame ? shared.deck : me.deck;
         targetDeck.push(battleCard);
+      } else if (target === 'commanderZone') {
+        me.commanderZone.push(battleCard);
       } else if (target === 'stack') {
         gameStack.push({
           id: makeId('stack'),
@@ -6913,7 +6987,7 @@ function GameBoard() {
         .filter(item => basicLandName(item.card));
     }
     if (landName === 'Mountain') {
-      return ['lowerField', 'upperField'].flatMap(zone =>
+      return BATTLE_ZONE_KEYS.flatMap(zone =>
         opp[zone].map((card, idx) => ({ owner: 'opp', zone, idx, card, label: `Destroy ${card.name}` }))
       ).filter(item => basicLandName(item.card));
     }
@@ -7005,7 +7079,7 @@ function GameBoard() {
   }
 
   function aiAttackers(){
-    return [...(state.gameState.player2.upperField || []), ...(state.gameState.player2.lowerField || [])]
+    return battlefieldCards(state.gameState.player2)
       .filter(c => c.aiAttacking);
   }
 
@@ -7013,7 +7087,7 @@ function GameBoard() {
     if (!state.targeting || state.targeting.type !== 'ai-blockers' || !window.GALDUR_AI) return '';
     const attackers = aiAttackers();
     if (!attackers.length) return '';
-    const myBlockers = [...me.upperField, ...me.lowerField]
+    const myBlockers = battlefieldCards(me)
       .filter(c => ((c.type || '').toLowerCase().includes('creature') || c.isToken) && !c.tapped);
     return `
       <div class="modal">
@@ -7124,11 +7198,6 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     }
   };
   
-  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
-  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
-  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'lowerField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
-  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'upperField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
-  
   // Dynamic sizing classes based on card count
   const getFieldClass = (cards) => {
     const count = cards.length;
@@ -7136,7 +7205,70 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     if (count > 6) return ' many-cards';
     return '';
   };
-  
+
+  const zoneCardsHtml = (player, zoneKey, owner) => (player[zoneKey] || []).map((c, i) => {
+    const sel = owner === 'me'
+      && state.selectedFieldCard
+      && state.selectedFieldCard.zone === zoneKey
+      && state.selectedFieldCard.idx === i;
+    return `<div class="field-card${c.tapped ? ' tapped' : ''}${sel ? ' selected' : ''}" data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"></div>`;
+  }).join('');
+
+  // One battlefield zone box. Only the local player's zones accept drops.
+  const zoneBox = (player, zoneKey, owner, extraClass = '') => {
+    const cards = player[zoneKey] || [];
+    const drop = owner === 'me' ? ` data-drop-target="${zoneKey}"` : '';
+    return `
+      <div class="battle-zone ${extraClass}${getFieldClass(cards)}"${drop}>
+        <span class="zone-title">${htmlEscape(battleZoneLabel(zoneKey))}${cards.length ? ` · ${cards.length}` : ''}</span>
+        ${zoneCardsHtml(player, zoneKey, owner)}
+      </div>`;
+  };
+
+  // Command zone / library / graveyard sit in the back row beside the lands.
+  // The player's own piles double as drop targets, so a card can be dragged
+  // straight from the battlefield onto the graveyard.
+  const pileBox = (id, icon, label, count, clickable = true, dropTarget = '') => {
+    const body = `
+      <span class="zone-title">${htmlEscape(label)}</span>
+      <span class="pile-icon">${icon}</span>
+      <span class="pile-count">${count}</span>`;
+    const drop = dropTarget ? ` data-drop-target="${dropTarget}"` : '';
+    return clickable
+      ? `<button class="battle-zone pile" id="${id}"${drop}>${body}</button>`
+      : `<div class="battle-zone pile is-static"${drop}>${body}</div>`;
+  };
+
+  const backRow = (player, owner) => {
+    const isMe = owner === 'me';
+    const deckCount = sharedGame ? shared.deck.length : (player.deck || []).length;
+    const piles = [
+      commanderZoneOn
+        ? pileBox(isMe ? 'viewCommander' : 'viewOppCommander', '👑', commandMeta.shortLabel,
+            (player.commanderZone || []).length, true, isMe ? 'commanderZone' : '')
+        : '',
+      // The opponent's library is hidden information — show the count only.
+      pileBox(isMe ? 'viewDeck' : '', '📚', sharedGame ? shared.label : 'Library',
+        deckCount, isMe || sharedGame, isMe ? 'deck' : ''),
+      pileBox(isMe ? 'viewGY' : 'viewOppGY', '⚰️', 'Graveyard',
+        (player.graveyard || []).length, true, isMe ? 'graveyard' : ''),
+      pileBox(isMe ? 'viewExile' : 'viewOppExile', '🚫', 'Exile',
+        (player.exile || []).length, true, isMe ? 'exile' : '')
+    ].filter(Boolean).join('');
+    return `<div class="zone-row back">${zoneBox(player, 'landField', owner, 'lands')}${piles}</div>`;
+  };
+
+  const frontRow = (player, owner) => `
+    <div class="zone-row front">
+      ${zoneBox(player, 'creatureField', owner, 'creatures')}
+      ${zoneBox(player, 'supportField', owner, 'support')}
+    </div>`;
+
+  // The opponent's half is mirrored: their back row sits furthest away, so the
+  // two creature rows face each other across the divider, like a real table.
+  const opponentHalf = `<div class="battle-half opponent">${backRow(opp, 'opp')}${frontRow(opp, 'opp')}</div>`;
+  const myHalf = `<div class="battle-half you">${frontRow(me, 'me')}${backRow(me, 'me')}</div>`;
+
   div.innerHTML = `
     <div class="battle-shell" style="display: flex; height: 100vh;">
       <div class="battle-main" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
@@ -7161,27 +7293,13 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         <div class="battle-scroll" style="flex: 1; overflow-y: auto; padding: 16px;">
           <div class="mb-4 text-center battle-player-card opponent">
             <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ ${bossMode ? '💀 Boss' : hordeMode ? 'The Horde' : 'Opponent'} - LP: ${opp.health}</div>
-            <div class="text-xs text-gray battle-zone-line">📚 ${sharedGame ? htmlEscape(shared.label) : 'Deck'}: ${oppDeckCount} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}${commanderZoneOn ? ` | 👑 ${htmlEscape(commandMeta.shortLabel)}: ${opp.commanderZone.length}` : ''}${hordeMode ? ` | Horde field: ${hordePlayer.lowerField.length + hordePlayer.upperField.length}` : ''}</div>
+            <div class="text-xs text-gray battle-zone-line">📚 ${sharedGame ? htmlEscape(shared.label) : 'Deck'}: ${oppDeckCount} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}${commanderZoneOn ? ` | 👑 ${htmlEscape(commandMeta.shortLabel)}: ${opp.commanderZone.length}` : ''}${hordeMode ? ` | Horde field: ${battlefieldCards(hordePlayer).length}` : ''}</div>
             ${sharedGame ? `<div class="badge mt-2">${htmlEscape(shared.label)} center stack • top-to-bottom draw</div>` : ''}
             ${landGameMode ? `<div class="badge mt-2">Opponent lands: ${formatLandGameProgress(opp)}</div>` : ''}
           </div>
-          <div class="game-field mb-4${getFieldClass(opp.upperField)}" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2"> </div>
-            ${oppUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
-          </div>
-          <div class="game-field mb-4${getFieldClass(opp.lowerField)}" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2"> </div>
-            ${oppLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
-          </div>
-          <div class="battle-divider" style="border-top: 3px dashed #7c3aed; margin: 16px 0;"> </div>
-          <div id="myLowerField" class="game-field player mb-4${getFieldClass(me.lowerField)}" data-drop-target="lowerField" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2">Lower </div>
-            ${myLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
-          </div>
-          <div id="myUpperField" class="game-field player mb-4${getFieldClass(me.upperField)}" data-drop-target="upperField" style="min-height: 90px;">
-            <div class="text-xs text-gray text-center mb-2">Upper </div>
-            ${myUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
-          </div>
+          ${opponentHalf}
+          <div class="battle-divider"> </div>
+          ${myHalf}
           <div class="mt-4 text-center battle-player-card you">
             <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ ${state.coop ? `Survivors (Player ${state.coopSeat} acting)` : 'You'} - LP: ${me.health}</div>
             ${landGameMode ? `<div class="card p-3 mt-3" style="background:rgba(5,150,105,.12);border-color:#10b981">
@@ -7194,14 +7312,8 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
               <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
               <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
-              <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
-              <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
-              <button id="viewDeck" class="btn btn-secondary text-xs">📚 ${sharedGame ? 'Shared' : 'Deck'} (${myDeckCount})</button>
               ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal Top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn Top</button><button id="shuffleSharedStack" class="btn btn-purple text-xs">Shuffle Stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
-              ${commanderZoneOn ? `<button id="viewCommander" class="btn btn-secondary text-xs">👑 ${htmlEscape(commandMeta.shortLabel)} (${me.commanderZone.length})</button>` : ''}
               ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-purple text-xs">Horde Reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde Attack</button>' : ''}
-              <button id="viewOppGY" class="btn btn-secondary text-xs">👁️ Opp GY</button>
-              <button id="viewOppExile" class="btn btn-secondary text-xs">👁️ Opp Exile</button>
               <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
               <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
               <button id="mulliganBtn" class="btn btn-blue text-xs" ${rules.noMulligan ? 'disabled' : ''}>🔄 Mulligan</button>
@@ -7279,8 +7391,8 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
             <textarea id="tokenEffect" class="input" rows="2" placeholder="Flying, Haste"></textarea>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <button id="createTokenUpper" class="btn btn-primary">⬇️ Create Upper</button>
-            <button id="createTokenLower" class="btn btn-primary">⬆️ Create Lower</button>
+            <button id="createTokenUpper" class="btn btn-primary">Create in Creatures</button>
+            <button id="createTokenLower" class="btn btn-primary">Create in Artifacts</button>
           </div>
           <button id="cancelToken" class="btn btn-secondary mt-3" style="width: 100%;">Cancel</button>
         </div>
@@ -7370,8 +7482,14 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
         <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬇️ Upper Field</button>
-          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬆️ Lower Field</button>
+          ${(() => {
+            const card = me.hand[state.selectedCard];
+            const suggested = defaultZoneForCard(card);
+            // The suggested zone leads; the others stay available for odd cases.
+            return [suggested, ...BATTLE_ZONE_KEYS.filter(k => k !== suggested)]
+              .map((k, i) => `<button class="placeCard btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} text-sm" data-zone="${k}" style="padding:14px${i === 0 ? ';grid-column:1 / -1' : ''}">${i === 0 ? '▶ Play to ' : ''}${htmlEscape(battleZoneLabel(k))}</button>`)
+              .join('');
+          })()}
           <button id="castToStack" class="btn btn-blue text-sm" style="padding: 14px; grid-column:1 / -1;">Cast to Stack</button>
           <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">⚰️️ Discard</button>
           <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
@@ -7594,7 +7712,7 @@ if (card.stun && card.stun > 0) {
     executeGameAction('upkeep', { player: state.currentPlayer }, () => {
       let untapped = 0;
       let stunRemoved = 0;
-      [...me.upperField, ...me.lowerField].forEach(card => {
+      battlefieldCards(me).forEach(card => {
         if (!card.tapped) return;
         if (typeof card.stun === 'number' && card.stun > 0) {
           card.stun -= 1;
@@ -7663,6 +7781,13 @@ if (card.stun && card.stun > 0) {
   state.selectedZoneCard = null;
   render();
 };
+
+  const viewOppCommanderBtn = div.querySelector('#viewOppCommander');
+  if (viewOppCommanderBtn) viewOppCommanderBtn.onclick = () => {
+    state.viewingZone = { title: `👑 Opponent ${commandMeta.label}`, cards: opp.commanderZone, zone: 'commanderZone', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
 
   const viewCommanderBtn = div.querySelector('#viewCommander');
   if (viewCommanderBtn) viewCommanderBtn.onclick = () => {
@@ -7813,11 +7938,11 @@ if (card.stun && card.stun > 0) {
         me[field].push(token);
         state.creatingToken = false;
         return token;
-      }, `Created ${token.name} on ${field === 'upperField' ? 'Upper Field' : 'Lower Field'}.`);
+      }, `Created ${token.name} in ${battleZoneLabel(field)}.`);
     };
     
-    if (createUpperBtn) createUpperBtn.onclick = () => createToken('upperField');
-    if (createLowerBtn) createLowerBtn.onclick = () => createToken('lowerField');
+    if (createUpperBtn) createUpperBtn.onclick = () => createToken('creatureField');
+    if (createLowerBtn) createLowerBtn.onclick = () => createToken('supportField');
   }
   
   // Zone viewer
@@ -7924,16 +8049,16 @@ if (toHandBtn) toHandBtn.onclick = () => {
 
       
       if (toUpperBtn) toUpperBtn.onclick = () => {
-        moveZoneCard('upperField', 'Upper Field', moving => {
+        moveZoneCard('creatureField', 'Creatures', moving => {
           const cardToPlace = initBattleCard({ ...moving, tapped: false });
-          sourcePlayer.upperField.push(cardToPlace);
+          sourcePlayer.creatureField.push(cardToPlace);
         }, { checkVictory: true });
       };
       
       if (toLowerBtn) toLowerBtn.onclick = () => {
-        moveZoneCard('lowerField', 'Lower Field', moving => {
+        moveZoneCard('supportField', 'Artifacts & Enchantments', moving => {
           const cardToPlace = initBattleCard({ ...moving, tapped: false });
-          sourcePlayer.lowerField.push(cardToPlace);
+          sourcePlayer.supportField.push(cardToPlace);
         }, { checkVictory: true });
       };
       
@@ -8140,7 +8265,7 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
     
     div.querySelectorAll('.placeCard').forEach(btn => {
       btn.onclick = () => {
-        const zone = btn.dataset.zone + 'Field';
+        const zone = btn.dataset.zone;
         const card = me.hand[state.selectedCard];
         executeGameAction('hand_to_field', { cardName: card.name, zone }, () => {
           const cardToPlace = { ...card, tapped: false };
@@ -8151,7 +8276,7 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
           state.selectedCard = null;
           state.selectedFieldCard = null;
           checkLandGameVictory();
-        }, `Moved ${card.name} to ${zone === 'upperField' ? 'Upper Field' : 'Lower Field'}.`);
+        }, `Moved ${card.name} to ${battleZoneLabel(zone)}.`);
       };
     });
   }
@@ -8193,7 +8318,10 @@ window.GALDUR_APP = {
   getModeConfig,
   getModeRules,
   hordeReveal: revealHorde,
-  hordeAttack
+  hordeAttack,
+  BATTLE_ZONE_KEYS,
+  battlefieldCards,
+  defaultZoneForCard
 };
 
 loadLocal();          // restore saved collection + decks before first paint
