@@ -1,0 +1,7982 @@
+(function(){
+'use strict';
+
+const state = {
+  screen: 'login',
+  currentPlayer: null,
+  cards: [],
+  scryfallCards: [],
+  searchResults: [],
+  isLoadingScryfallCards: false,
+  decks: { player1: [], player2: [] },
+  modeSetups: {},
+  selectedMode: 'casual',
+  modeIntent: 'all',
+  modeQuery: '',
+  modeFamily: 'all',
+  battleMode: 'casual',
+  studioTab: 'play',
+  editingCard: null,
+  activePlayer: 1,
+  gameState: {
+    player1: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], commanderZone: [], deck: [], health: 20 },
+    player2: { hand: [], upperField: [], lowerField: [], graveyard: [], exile: [], commanderZone: [], deck: [], health: 20 },
+    shared: { enabled: false, label: '', deck: [], graveyard: [], exile: [] },
+    stack: [],
+    phase: 'Main',
+    mode: 'casual'
+  },
+  gameStarted: false,
+  winner: null,
+  selectedCard: null,
+  selectedFieldCard: null,
+  selectedZoneCard: null,
+  hoveredCard: null,
+  viewingZone: null,
+  creatingToken: false,
+  targeting: null,
+  gameLog: [],
+  gameHistory: [],
+  onlineMode: false,
+  vsAI: false,               // local game where the computer plays player 2
+  coop: false,               // two humans share the player-1 board vs the AI
+  coopSeat: 1,               // which teammate currently holds the device
+  bossRound: 0,
+  connectionStatus: '',
+  leavingOnline: false,
+  peerConnection: null,
+  dataChannel: null,
+  roomCode: null,
+  isHost: false,
+  waitingForAnswer: false,
+  answerCode: null,
+  showTurnNotification: false, 
+  actionMessage: null,   // NEW: transient action overlay (e.g., draws)
+  draft: {
+  active: false,
+  // NEW: first screen is a mode selector
+  screen: 'mode',               // 'mode' | 'setup' | 'custom-setup' | 'colors' | 'lands' | 'picks' | 'done'
+  // NEW: which draft engine to use
+  mode: 'traditional',          // 'traditional' | 'custom'
+
+  // shared
+  format: 'standard',           // 'standard' | 'modern' | 'commander'
+  modeId: 'standard-draft',
+  rarity: '',
+  setCode: '',
+  era: '',
+  queryExtra: '',
+  target: 60,
+  allowDuplicates: true,
+
+  // color flow
+  offeredColorSets: [],         // arrays like ['U'], ['U','R'], ['W','U','B']
+  chosenColors: [],
+  basicLands: { W:0, U:0, B:0, R:0, G:0 },
+
+  // live draft state
+  picks: 0,
+  pool: [],                     // current 3 shown
+  nextPool: [],                 // preloaded next 3 shown after a pick
+  isPreloadingNext: false,
+  deck: [],                     // chosen cards
+
+  // NEW: dedupe memory across the whole draft
+  seenIds: {},
+  seenNames: {},
+
+  // NEW: custom draft inputs
+  customPool: [],               // array of card objects (your export format)
+  customParams: {
+    filterByColors: true        // only offer cards within chosen colors
+    // (you can extend later: artifactChance, rareEvery, etc.)
+  },
+  
+    // --- Draft-off (two-player online draft) state ---
+  off: {
+    screen: 'setup',       // 'setup' | 'room'
+    round: 0,
+    startingPlayer: 1,     // alternates each round: 1 ↔ 2
+    currentPicker: 1,      // whose turn to pick now (1 or 2)
+    currentSet: null,      // e.g., 'khm'
+    table: [],             // current 15 cards on the field
+    p1: [],                // picks by player 1
+ p2: [],                // picks by player 2
+ isLocal: false,          // local (hotseat) flag
+  // New per-pack settings for 9-card micro-packs:
+  packSize: 9,
+  picksPerPlayerPerPack: 3,
+  picksMadeThisPack: 0
+  },
+
+  winston: {
+    pool: [],
+    piles: [[], [], []],
+    p1: [],
+    p2: [],
+    activePlayer: 1,
+    currentPile: 0,
+    log: []
+  },
+  
+}
+
+};
+
+const MODE_DATA = window.GALDUR_MODE_DATA;
+if (!MODE_DATA) throw new Error('modes.js must load before app.js');
+const { BASIC_LAND_NAMES, TURN_PHASES, MTG_MODE_LIBRARY, JUMPSTART_THEMES } = MODE_DATA;
+
+function makeId(prefix){
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function shuffleCopy(arr){
+  const out = (arr || []).slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function htmlEscape(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function getModeConfig(id){
+  return MTG_MODE_LIBRARY.find(m => m.id === id) || MTG_MODE_LIBRARY[0];
+}
+
+function currentModeConfig(){
+  return getModeConfig(state.battleMode || state.selectedMode || 'casual');
+}
+
+function freshWinstonState(){
+  return {
+    pool: [],
+    piles: [[], [], []],
+    p1: [],
+    p2: [],
+    activePlayer: 1,
+    currentPile: 0,
+    log: []
+  };
+}
+
+function freshDraftOffState(){
+  return {
+    screen: 'setup',
+    round: 0,
+    startingPlayer: 1,
+    currentPicker: 1,
+    currentSet: null,
+    table: [],
+    p1: [],
+    p2: [],
+    isLocal: false,
+    packSize: 9,
+    picksPerPlayerPerPack: 3,
+    picksMadeThisPack: 0,
+    p1LandsDone: false,
+    p2LandsDone: false
+  };
+}
+
+function currentModeId(){
+  return state.battleMode || state.selectedMode || 'casual';
+}
+
+function defaultSetupName(mode){
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return `${mode.title} Setup ${stamp}`;
+}
+
+function cloneCards(cards){
+  return cloneJSON(cards || []);
+}
+
+function modeSetupList(modeId = currentModeId()){
+  return (state.modeSetups && Array.isArray(state.modeSetups[modeId])) ? state.modeSetups[modeId] : [];
+}
+
+function captureModeSetup(modeOrId = currentModeConfig(), name = ''){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : (modeOrId || currentModeConfig());
+  const setupName = (name || defaultSetupName(mode)).trim();
+  return {
+    id: makeId('setup'),
+    name: setupName,
+    modeId: mode.id,
+    savedAt: Date.now(),
+    decks: {
+      player1: cloneCards(state.decks.player1),
+      player2: cloneCards(state.decks.player2)
+    }
+  };
+}
+
+function saveModeSetup(modeOrId = currentModeConfig(), name = ''){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : (modeOrId || currentModeConfig());
+  state.modeSetups = state.modeSetups || {};
+  const setup = captureModeSetup(mode, name);
+  const list = modeSetupList(mode.id).filter(existing => existing.name !== setup.name);
+  list.unshift(setup);
+  state.modeSetups[mode.id] = list.slice(0, 12);
+  saveLocal();
+  return setup;
+}
+
+function loadModeSetup(modeId, setupId){
+  const setup = modeSetupList(modeId).find(item => item.id === setupId);
+  if (!setup) return null;
+  state.decks.player1 = cloneCards(setup.decks?.player1);
+  state.decks.player2 = cloneCards(setup.decks?.player2);
+  return setup;
+}
+
+function deleteModeSetup(modeId, setupId){
+  state.modeSetups = state.modeSetups || {};
+  state.modeSetups[modeId] = modeSetupList(modeId).filter(item => item.id !== setupId);
+  saveLocal();
+}
+
+function setupDeckCount(setup, playerKey){
+  return (setup?.decks?.[playerKey] || []).length;
+}
+
+function allModePlaylists(limit = 6){
+  const rows = [];
+  const setupGroups = state.modeSetups || {};
+  Object.entries(setupGroups).forEach(([modeId, setups]) => {
+    const mode = getModeConfig(modeId);
+    (setups || []).forEach(setup => {
+      rows.push({
+        ...setup,
+        mode,
+        p1Count: setupDeckCount(setup, 'player1'),
+        p2Count: setupDeckCount(setup, 'player2')
+      });
+    });
+  });
+  return rows
+    .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+    .slice(0, limit);
+}
+
+function resetDraftForMode(modeId, options = {}){
+  const mode = getModeConfig(modeId);
+  const draftMode = options.draftMode || mode.preferredDraftMode || 'traditional';
+  const defaultScreen = draftMode === 'winston' ? 'winston-setup' : (draftMode === 'custom' ? 'custom-setup' : 'setup');
+  state.selectedMode = mode.id;
+  state.draft = {
+    ...state.draft,
+    active: true,
+    screen: options.screen || defaultScreen,
+    mode: draftMode,
+    modeId: mode.id,
+    format: options.format || mode.format || 'standard',
+    target: options.target || mode.target || (mode.format === 'commander' ? 100 : 60),
+    allowDuplicates: !mode.singleton,
+    rarity: options.rarity ?? (mode.rarity || ''),
+    setCode: options.setCode ?? '',
+    era: options.era ?? '',
+    queryExtra: options.queryExtra ?? (mode.queryExtra || ''),
+    offeredColorSets: [],
+    chosenColors: [],
+    basicLands: { W:0, U:0, B:0, R:0, G:0 },
+    picks: 0,
+    pool: [],
+    nextPool: [],
+    isPreloadingNext: false,
+    deck: [],
+    seenIds: {},
+    seenNames: {},
+    customPool: [],
+    customParams: { filterByColors: true },
+    off: freshDraftOffState(),
+    winston: freshWinstonState()
+  };
+}
+
+function routeToMode(modeId, action){
+  const mode = getModeConfig(modeId);
+  state.selectedMode = mode.id;
+  state.battleMode = mode.id;
+  if (action === 'build') state.studioTab = 'build';
+  else if (action === 'draft') state.studioTab = 'draft';
+  else if (action === 'play') state.studioTab = 'play';
+  else state.studioTab = mode.play ? 'play' : (mode.build ? 'build' : 'draft');
+  applyAutoDeck(mode);
+  state.screen = 'mode-studio';
+  render();
+}
+
+function makeBasicLandCard(name, copyIndex, owner){
+  const colorMap = { Plains:'W', Island:'U', Swamp:'B', Mountain:'R', Forest:'G' };
+  return {
+    id: `land_${owner}_${name}_${copyIndex}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    name,
+    type: `Basic Land - ${name}`,
+    cost: '',
+    colors: colorMap[name] ? [colorMap[name]] : [],
+    effect: '',
+    power: 0,
+    toughness: 0,
+    imageUrl: `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(name)}`,
+    rarity: 'common'
+  };
+}
+
+function normalizePlayableCard(card, fallbackName = 'Custom Card'){
+  const name = card?.name || fallbackName;
+  const type = card?.type || card?.type_line || '';
+  const colors = Array.isArray(card?.colors)
+    ? card.colors
+    : (Array.isArray(card?.color_identity) ? card.color_identity : []);
+  return {
+    id: card?.id || makeId('card'),
+    name,
+    type,
+    cost: card?.cost || card?.mana_cost || card?.manaCost || '',
+    colors,
+    effect: card?.effect || card?.oracle_text || '',
+    power: card?.power ?? 0,
+    toughness: card?.toughness ?? 0,
+    image: card?.image || '',
+    imageUrl: card?.imageUrl || card?.image_uris?.normal || card?.card_faces?.[0]?.image_uris?.normal || '',
+    rarity: card?.rarity || 'common',
+    isToken: !!card?.isToken,
+    generated: !!card?.generated,   // invented name; skip Scryfall image lookup
+    hordeRole: card?.hordeRole || '',
+    hordeEffect: card?.hordeEffect || ''
+  };
+}
+
+function makeGeneratedCard(name, type, cost, colors, effect, power = 0, toughness = 0, extra = {}){
+  return normalizePlayableCard({
+    id: makeId('gen'),
+    name,
+    type,
+    cost,
+    colors,
+    effect,
+    power,
+    toughness,
+    rarity: extra.rarity || 'common',
+    isToken: !!extra.isToken,
+    // Invented name → skip the Scryfall image lookup. Pass generated:false for
+    // builders that use real card names (Dandan) so their art still loads.
+    generated: extra.generated !== false,
+    hordeRole: extra.hordeRole || '',
+    hordeEffect: extra.hordeEffect || ''
+  }, name);
+}
+
+function optimizeCardImage(img, loading = 'lazy'){
+  if (!img) return img;
+  img.loading = loading;
+  img.decoding = 'async';
+  return img;
+}
+
+function cardArtLabel(name, maxChars = 26){
+  const clean = String(name || 'Card').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxChars) return clean;
+  return clean.slice(0, Math.max(8, maxChars - 1)).trim() + '...';
+}
+
+function cardPlaceholderSvgUrl(card, width = 100, height = 140){
+  const isToken = !!card?.isToken;
+  const name = htmlEscape(cardArtLabel(card?.name || (isToken ? 'Token' : 'Card')));
+  const type = htmlEscape(cardArtLabel(card?.type || '', 24));
+  const power = card?.power ?? '';
+  const toughness = card?.toughness ?? '';
+  // normalizePlayableCard coerces missing P/T to 0, so "has a value" is not a
+  // usable test — only creatures and tokens actually have a printed P/T box.
+  const typeText = ((card?.type || '') + '').toLowerCase();
+  const hasPt = (isToken || typeText.includes('creature')) && (power !== '' || toughness !== '');
+  const bg = isToken ? '#065f46' : '#334155';
+  const stroke = isToken ? '#10b981' : '#64748b';
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect width="${width}" height="${height}" rx="7" fill="${bg}"/>
+      <rect x="5" y="5" width="${width - 10}" height="${height - 10}" rx="5" fill="none" stroke="${stroke}" stroke-width="2"/>
+      <text x="${width / 2}" y="${height * 0.42}" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="10" font-weight="700">${name}</text>
+      ${type ? `<text x="${width / 2}" y="${height * 0.57}" text-anchor="middle" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="8">${type}</text>` : ''}
+      ${hasPt ? `<text x="${width / 2}" y="${height * 0.74}" text-anchor="middle" fill="#e2e8f0" font-family="Arial, sans-serif" font-size="10">${htmlEscape(power)}/${htmlEscape(toughness)}</text>` : ''}
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function namedCardImageUrl(card){
+  const name = String(card?.name || '').trim();
+  // Generated cards (jumpstart/horde/cube filler) have invented names, so this
+  // lookup is a guaranteed 404 — skip straight to the SVG placeholder instead
+  // of firing ~100 doomed requests and flickering on every horde/cube setup.
+  if (!name || card?.isToken || card?.generated) return '';
+  return `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(name)}`;
+}
+
+function applyCardImageFallback(img){
+  if (!img) return;
+  const stage = Number(img.dataset.fallbackStage || '0');
+  if (stage === 0 && img.dataset.fallbackSrc) {
+    img.dataset.fallbackStage = '1';
+    img.src = img.dataset.fallbackSrc;
+    return;
+  }
+  img.dataset.fallbackStage = '2';
+  img.onerror = null;
+  img.src = img.dataset.placeholderSrc || cardPlaceholderSvgUrl({ name: img.alt || 'Card' });
+}
+
+window.GALDUR_CARD_IMAGE_FALLBACK = applyCardImageFallback;
+
+function setCardImageElement(img, card, options = {}){
+  const width = options.width || 100;
+  const height = options.height || 140;
+  const placeholder = cardPlaceholderSvgUrl(card, width, height);
+  const direct = card?.image || card?.imageUrl || '';
+  const named = namedCardImageUrl(card);
+  const primary = direct || named || placeholder;
+  const fallback = direct && named && direct !== named ? named : '';
+  img.alt = card?.name || 'Card';
+  img.classList.add('card-art-img');
+  img.dataset.fallbackStage = '0';
+  img.dataset.fallbackSrc = fallback;
+  img.dataset.placeholderSrc = placeholder;
+  img.style.backgroundImage = `url("${placeholder}")`;
+  img.onerror = () => applyCardImageFallback(img);
+  img.src = primary;
+  return optimizeCardImage(img, options.loading || 'lazy');
+}
+
+function cardImageMarkup(card, options = {}){
+  const width = options.width || 100;
+  const height = options.height || 140;
+  const placeholder = cardPlaceholderSvgUrl(card, width, height);
+  const direct = card?.image || card?.imageUrl || '';
+  const named = namedCardImageUrl(card);
+  const primary = direct || named || placeholder;
+  const fallback = direct && named && direct !== named ? named : '';
+  const style = [
+    'background-size:cover',
+    'background-position:center',
+    `background-image:url("${placeholder}")`,
+    options.style || ''
+  ].filter(Boolean).join(';');
+  return `<img class="card-art-img ${htmlEscape(options.className || '')}" src="${htmlEscape(primary)}" alt="${htmlEscape(card?.name || 'Card')}" loading="${htmlEscape(options.loading || 'lazy')}" decoding="async" data-fallback-stage="0" data-fallback-src="${htmlEscape(fallback)}" data-placeholder-src="${htmlEscape(placeholder)}" onerror="window.GALDUR_CARD_IMAGE_FALLBACK && window.GALDUR_CARD_IMAGE_FALLBACK(this)" style="${htmlEscape(style)}">`;
+}
+
+function makeJumpstartPacket(themeId, packetIndex = 1){
+  const theme = JUMPSTART_THEMES.find(t => t.id === themeId) || JUMPSTART_THEMES[0];
+  const colors = theme.color === 'C' ? [] : [theme.color];
+  const spells = theme.cards.map(([name, type, cost, power, toughness, effect], i) => makeGeneratedCard(
+    `${name}`,
+    type,
+    cost,
+    colors,
+    effect,
+    power,
+    toughness,
+    { rarity: i % 6 === 0 ? 'uncommon' : 'common' }
+  ));
+  const lands = [];
+  for (let i = 0; i < 8; i++) lands.push(makeBasicLandCard(theme.land, `${packetIndex}_${i}`, `jumpstart_${theme.id}`));
+  return {
+    theme,
+    cards: shuffleCopy([...spells, ...lands]).map((card, i) => ({ ...card, packet: theme.title, deckId: makeId(`jump_${packetIndex}_${i}`) }))
+  };
+}
+
+function buildJumpstartDeck(themeAId, themeBId){
+  const packetA = makeJumpstartPacket(themeAId, 1);
+  const packetB = makeJumpstartPacket(themeBId, 2);
+  return {
+    name: `${packetA.theme.title} + ${packetB.theme.title}`,
+    cards: shuffleCopy([...packetA.cards, ...packetB.cards])
+  };
+}
+
+function makeStarterSurvivorDeck(owner = 'survivor'){
+  const deck = [];
+  const specs = [
+    ['Sanctuary Guard', 'Creature - Human Soldier', '{1}{W}', ['W'], 2, 2, 'Vigilance.'],
+    ['Expedition Healer', 'Creature - Human Cleric', '{2}{W}', ['W'], 2, 3, 'When this enters, you gain 2 life.'],
+    ['Trailblazing Archer', 'Creature - Elf Archer', '{1}{G}', ['G'], 2, 2, 'Reach.'],
+    ['Outpost Captain', 'Creature - Human Knight', '{3}{W}', ['W'], 3, 3, 'Other creatures you control get +0/+1.'],
+    ['Shelter Charm', 'Instant', '{W}', ['W'], 0, 0, 'Target creature gains indestructible until end of turn.'],
+    ['Coordinated Strike', 'Instant', '{1}{W}', ['W'], 0, 0, 'Two target creatures get +1/+1 until end of turn.'],
+    ['Monster Hunter', 'Creature - Human Warrior', '{2}{G}', ['G'], 3, 2, 'When this blocks a token, it gets +2/+2 until end of turn.'],
+    ['Campfire Renewal', 'Sorcery', '{2}{G}', ['G'], 0, 0, 'Return target creature card from your graveyard to your hand.']
+  ];
+  for (let round = 0; round < 4; round++) {
+    for (const [name, type, cost, colors, power, toughness, effect] of specs) {
+      deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness, { rarity: 'common' }));
+    }
+  }
+  for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Plains', `${owner}_p_${i}`, owner));
+  for (let i = 0; i < 10; i++) deck.push(makeBasicLandCard('Forest', `${owner}_f_${i}`, owner));
+  return shuffleCopy(deck);
+}
+
+function makeHordeToken(name, power, toughness, effect = ''){
+  return makeGeneratedCard(
+    name,
+    'Creature Token - Zombie',
+    '',
+    ['B'],
+    effect,
+    power,
+    toughness,
+    { isToken: true, hordeRole: 'token' }
+  );
+}
+
+function makeHordeAction(name, effect, hordeEffect){
+  return makeGeneratedCard(
+    name,
+    'Horde Sorcery',
+    '',
+    ['B'],
+    effect,
+    0,
+    0,
+    { hordeRole: 'action', hordeEffect }
+  );
+}
+
+function makeHordeDeck(){
+  const deck = [];
+  const tokenMix = [
+    () => makeHordeToken('Zombie Horde Token', 2, 2),
+    () => makeHordeToken('Decayed Zombie Token', 2, 1, 'This token is disposable fodder for the horde.'),
+    () => makeHordeToken('Rotting Brute Token', 3, 3),
+    () => makeHordeToken('Shambling Mass Token', 1, 1, 'When many of these appear, the horde gets wide quickly.')
+  ];
+  for (let i = 0; i < 72; i++) deck.push(tokenMix[i % tokenMix.length]());
+  for (let i = 0; i < 6; i++) deck.push(makeHordeAction('Mindless Surge', 'Reveal two extra Horde cards.', 'surge'));
+  for (let i = 0; i < 5; i++) deck.push(makeHordeAction('Graveborn Return', 'Return up to two Horde tokens from the graveyard to the battlefield.', 'regrow'));
+  for (let i = 0; i < 5; i++) deck.push(makeHordeAction('Gnawing Dread', 'Each survivor loses 2 life.', 'drain'));
+  for (let i = 0; i < 4; i++) deck.push(makeHordeAction('Endless Moan', 'Untap all Horde creatures.', 'untap'));
+  for (let i = 0; i < 8; i++) deck.push(makeHordeToken('Zombie Giant Token', 4, 4, 'Trample.'));
+  return shuffleCopy(deck);
+}
+
+function makeDandanLibrary(size = 80){
+  const requestedSize = parseInt(size || '80', 10);
+  const targetSize = Number.isFinite(requestedSize) ? Math.max(40, Math.min(160, requestedSize)) : 80;
+  const spellSpecs = [
+    [10, 'Dandan', 'Creature - Fish', '{U}{U}', 4, 1, 'Can only attack players who control an Island. The shared library makes every copy matter.'],
+    [4, 'Memory Lapse', 'Instant', '{1}{U}', 0, 0, 'Counter target spell, then put it on top of its owner library.'],
+    [4, 'Counterspell', 'Instant', '{U}{U}', 0, 0, 'Counter target spell.'],
+    [4, 'Brainstorm', 'Instant', '{U}', 0, 0, 'Draw three cards, then put two cards from your hand on top of the shared library.'],
+    [4, 'Ponder', 'Sorcery', '{U}', 0, 0, 'Look at the top cards of the shared library, then draw a card.'],
+    [4, 'Opt', 'Instant', '{U}', 0, 0, 'Scry 1, then draw a card.'],
+    [4, 'Accumulated Knowledge', 'Instant', '{1}{U}', 0, 0, 'Draw a card plus one for each copy in graveyards.'],
+    [4, 'Predict', 'Instant', '{1}{U}', 0, 0, 'Name a card, mill the top card, then draw if the name matched.'],
+    [4, 'Vision Charm', 'Instant', '{U}', 0, 0, 'Choose a small library, land, or phasing trick.'],
+    [4, 'Unsummon', 'Instant', '{U}', 0, 0, 'Return target creature to its owner hand.'],
+    [4, 'Boomerang', 'Instant', '{U}{U}', 0, 0, 'Return target permanent to its owner hand.'],
+    [4, 'Portent', 'Sorcery', '{U}', 0, 0, 'Reorder top cards and draw on the next upkeep.'],
+    [4, 'Force Spike', 'Instant', '{U}', 0, 0, 'Counter target spell unless its controller pays 1.'],
+    [4, 'Impulse', 'Instant', '{1}{U}', 0, 0, 'Look at the top cards and put one into your hand.']
+  ];
+  const cards = [];
+  spellSpecs.forEach(([qty, name, type, cost, power, toughness, effect]) => {
+    for (let i = 0; i < qty; i++) cards.push(makeGeneratedCard(name, type, cost, ['U'], effect, power, toughness, { rarity: 'common', generated: false }));
+  });
+  for (let i = 0; i < 18; i++) cards.push(makeBasicLandCard('Island', i, 'dandan'));
+  while (cards.length < targetSize) {
+    const i = cards.length;
+    cards.push(i % 3 === 0
+      ? makeBasicLandCard('Island', i, 'dandan')
+      : makeGeneratedCard('Dandan', 'Creature - Fish', '{U}{U}', ['U'], 'Can only attack players who control an Island.', 4, 1, { rarity: 'common', generated: false }));
+  }
+  return shuffleCopy(cards.slice(0, targetSize).map((card, i) => ({
+    ...card,
+    deckId: makeId(`dandan_${i}`)
+  })));
+}
+
+function setupHordeDecks(options = {}){
+  if (options.forceSurvivor || !(state.decks.player1 || []).length) state.decks.player1 = makeStarterSurvivorDeck('player1');
+  if (options.forceHorde || !(state.decks.player2 || []).length) state.decks.player2 = makeHordeDeck();
+}
+
+// The boss plays a real deck (lands + threats) so the standard AI turn logic
+// drives it; escalation on top of that is handled by the AI module.
+function makeBossDeck(){
+  const deck = [];
+  const threats = [
+    ['Ashen Warlord', 'Creature - Demon Warrior', '{3}{B}', ['B'], 4, 4, 'Menace.'],
+    ['Cinderscale Drake', 'Creature - Dragon', '{4}{R}', ['R'], 4, 3, 'Flying.'],
+    ['Grave Colossus', 'Creature - Zombie Giant', '{5}{B}', ['B'], 6, 6, 'Trample.'],
+    ['Emberfang Hound', 'Creature - Hound', '{1}{R}', ['R'], 2, 2, 'Haste.'],
+    ['Bonecrush Ogre', 'Creature - Ogre', '{3}{R}', ['R'], 5, 3, ''],
+    ['Nightmare Herald', 'Creature - Demon', '{2}{B}', ['B'], 3, 2, 'Flying, lifelink.'],
+    ['Molten Lash', 'Instant', '{1}{R}', ['R'], 0, 0, 'Deal 3 damage to target creature or player.'],
+    ['Soul Tithe', 'Sorcery', '{2}{B}', ['B'], 0, 0, 'Destroy target creature.'],
+    ['Dread Ritual', 'Sorcery', '{1}{B}', ['B'], 0, 0, 'Draw two cards and lose 2 life.'],
+    ['Wyrm of the Deep', 'Creature - Wurm', '{6}{R}', ['R'], 7, 7, 'Trample.'],
+    ['Shadow Stalker', 'Creature - Nightstalker', '{2}{B}', ['B'], 3, 3, 'Deathtouch.'],
+    ['Infernal Bolt', 'Instant', '{R}', ['R'], 0, 0, 'Deal 2 damage to target creature or player.']
+  ];
+  for (let cycle = 0; cycle < 3; cycle++) {
+    for (const [name, type, cost, colors, power, toughness, effect] of threats) {
+      deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness,
+        { rarity: cycle === 0 ? 'rare' : 'uncommon' }));
+    }
+  }
+  for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Swamp', `boss_s_${i}`, 'boss'));
+  for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Mountain', `boss_m_${i}`, 'boss'));
+  return shuffleCopy(deck);
+}
+
+function setupBossDecks(options = {}){
+  if (options.forceSurvivor || !(state.decks.player1 || []).length) state.decks.player1 = makeStarterSurvivorDeck('player1');
+  if (options.forceBoss || !(state.decks.player2 || []).length) state.decks.player2 = makeBossDeck();
+}
+
+// Single dispatch point so every entry into an auto-deck mode seeds the same way.
+function applyAutoDeck(modeOrId, options = {}){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : modeOrId;
+  if (!mode) return;
+  if (mode.autoDeck === 'basic-land-game') setupLandGameDecks(options);
+  else if (mode.autoDeck === 'horde') setupHordeDecks(options);
+  else if (mode.autoDeck === 'boss') setupBossDecks(options);
+}
+
+function makeStarterCubeStack(size = 90){
+  return makeWinstonStarterPool(size).map((card, i) => ({
+    ...card,
+    cubeSlot: i + 1,
+    deckId: makeId(`cube_${i}`)
+  }));
+}
+
+function makeWinstonStarterPool(size = 90){
+  const seeds = [];
+  for (const theme of JUMPSTART_THEMES) {
+    const colors = theme.color === 'C' ? [] : [theme.color];
+    theme.cards.forEach(([name, type, cost, power, toughness, effect]) => {
+      seeds.push({ name, type, cost, colors, power, toughness, effect });
+    });
+  }
+  const pool = [];
+  let i = 0;
+  while (pool.length < size) {
+    const seed = seeds[i % seeds.length];
+    const cycle = Math.floor(i / seeds.length) + 1;
+    pool.push(makeGeneratedCard(
+      cycle > 1 ? `${seed.name} ${cycle}` : seed.name,
+      seed.type,
+      seed.cost,
+      seed.colors,
+      seed.effect,
+      seed.power,
+      seed.toughness,
+      { rarity: i % 11 === 0 ? 'rare' : (i % 5 === 0 ? 'uncommon' : 'common') }
+    ));
+    i++;
+  }
+  return shuffleCopy(pool);
+}
+
+function isBasicLandGameDeck(deck){
+  const cards = deck || [];
+  return cards.length === 50 && cards.every(card => BASIC_LAND_NAMES.includes(card?.name));
+}
+
+// Only (re)generate when a slot is empty or already holds a land-game deck, so
+// opening the mode never destroys a real deck the player built.
+function setupLandGameDecks(options = {}){
+  const makeDeck = (owner) => {
+    const cards = [];
+    for (const name of BASIC_LAND_NAMES) {
+      for (let i = 0; i < 10; i++) cards.push(makeBasicLandCard(name, i, owner));
+    }
+    return cards;
+  };
+  const replaceable = (deck) => !(deck || []).length || isBasicLandGameDeck(deck);
+  if (options.force || replaceable(state.decks.player1)) state.decks.player1 = makeDeck('p1');
+  if (options.force || replaceable(state.decks.player2)) state.decks.player2 = makeDeck('p2');
+}
+
+function cloneForGame(card, gameId){
+  return {
+    ...card,
+    gameId,
+    tapped: false,
+    pt: { p: 0, t: 0 },
+    stun: 0
+  };
+}
+
+function emptyPlayerState(deck, mode){
+  return {
+    hand: [],
+    upperField: [],
+    lowerField: [],
+    graveyard: [],
+    exile: [],
+    commanderZone: [],
+    deck: deck || [],
+    health: mode.health || 20
+  };
+}
+
+function buildGameStateForMode(mode, p1Deck, p2Deck){
+  const rules = getModeRules(mode);
+  const shared = !!rules.sharedLibrary;
+  // Whichever slot actually holds the center stack wins; if both are filled,
+  // prefer the larger one (the generators write to the acting player's slot,
+  // which is not necessarily player 1).
+  const sharedDeck = shared
+    ? (p1Deck.length && p2Deck.length
+        ? (p2Deck.length > p1Deck.length ? p2Deck : p1Deck)
+        : (p1Deck.length ? p1Deck : p2Deck)).slice()
+    : [];
+  const bossState = emptyPlayerState(shared ? [] : p2Deck, rules);
+  if (rules.opponentHealth) bossState.health = rules.opponentHealth;
+  return {
+    player1: emptyPlayerState(shared ? [] : p1Deck, rules),
+    player2: bossState,
+    shared: {
+      enabled: shared,
+      label: rules.sharedLabel || 'Shared Library',
+      deck: sharedDeck,
+      graveyard: [],
+      exile: []
+    },
+    stack: [],
+    phase: 'Main',
+    mode: mode.id
+  };
+}
+
+function isSharedGame(){
+  return !!state.gameState?.shared?.enabled;
+}
+
+function usesCommanderZone(){
+  return !!getModeConfig(state.gameState?.mode || state.battleMode || state.selectedMode).commanderZone;
+}
+
+function commandZoneMeta(mode){
+  const cfg = mode || getModeConfig(state.gameState?.mode || state.battleMode || state.selectedMode);
+  return {
+    label: cfg.commandZoneLabel || 'Commander Zone',
+    shortLabel: cfg.commandZoneShortLabel || 'Cmd',
+    max: cfg.commandZoneMax || null
+  };
+}
+
+function commandZoneCandidateIndexes(deck, mode){
+  if (!mode?.commanderZone || !Array.isArray(deck)) return [];
+  const max = mode.commandZoneMax || (mode.id === 'oathbreaker' ? 2 : 1);
+  const typeAt = (idx) => (deck[idx]?.type || '').toLowerCase();
+  const used = new Set();
+  const out = [];
+  const addFirst = (predicate) => {
+    const idx = deck.findIndex((card, i) => !used.has(i) && predicate(card, typeAt(i)));
+    if (idx >= 0) {
+      used.add(idx);
+      out.push(idx);
+    }
+  };
+
+  if (mode.id === 'oathbreaker') {
+    addFirst((card, type) => type.includes('planeswalker'));
+    addFirst((card, type) => type.includes('instant') || type.includes('sorcery'));
+  } else {
+    addFirst((card, type) =>
+      type.includes('commander') ||
+      (type.includes('legendary') && (type.includes('creature') || type.includes('planeswalker')))
+    );
+  }
+
+  return out.slice(0, max);
+}
+
+function seedCommandZoneFromDeck(player, mode){
+  if (!mode?.commanderZone || !player?.deck) return;
+  const indexes = commandZoneCandidateIndexes(player.deck, mode).sort((a, b) => b - a);
+  indexes.forEach(idx => {
+    const card = player.deck.splice(idx, 1)[0];
+    if (card) player.commanderZone.unshift(card);
+  });
+}
+
+function getModeRules(modeOrId){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : (modeOrId || currentModeConfig());
+  const sharedLibrary = !!mode.sharedLibrary;
+  const defaultMaxCopies = (sharedLibrary || mode.family === 'Limited' || mode.id === 'horde') ? null : 4;
+  const maxCopies = mode.maxCopies ?? (mode.singleton ? 1 : defaultMaxCopies);
+  return {
+    id: mode.id,
+    title: mode.title,
+    family: mode.family,
+    deckTarget: mode.target || 60,
+    maxCopies,
+    singleton: !!mode.singleton,
+    startingHand: mode.startingHand || 0,
+    noMulligan: !!mode.noMulligan,
+    autoDeck: mode.autoDeck || '',
+    health: mode.health || 20,          // starting life; emptyPlayerState reads this
+    opponentHealth: mode.opponentHealth || 0,   // asymmetric modes (boss)
+    sharedLibrary,
+    sharedLabel: mode.sharedLabel || (sharedLibrary ? 'Shared Library' : ''),
+    drawSource: sharedLibrary ? 'shared-top' : 'deck-top',
+    commanderZone: !!mode.commanderZone,
+    commandZoneLabel: mode.commandZoneLabel || (mode.commanderZone ? 'Commander Zone' : ''),
+    commandZoneShortLabel: mode.commandZoneShortLabel || (mode.commanderZone ? 'Cmd' : ''),
+    commandZoneMax: mode.commandZoneMax || null,
+    winCondition: mode.id === 'land-game' ? 'basic-land-game' : 'life',
+    battlefieldTools: [
+      ...(mode.id === 'cube' || sharedLibrary ? ['shared-stack'] : []),
+      ...(mode.id === 'land-game' ? ['basic-land-effects'] : []),
+      ...(mode.id === 'horde' ? ['horde'] : [])
+    ]
+  };
+}
+
+function isBasicLandDeckCard(card){
+  const type = (card?.type || '').toLowerCase();
+  return BASIC_LAND_NAMES.includes(card?.name) || (type.includes('basic') && type.includes('land'));
+}
+
+function normalizeDeckCardName(card){
+  return (card?.name || 'Unknown Card').trim();
+}
+
+function sampleCardNames(cards, limit = 4){
+  const names = [...new Set(cards.map(card => normalizeDeckCardName(card)).filter(Boolean))];
+  const suffix = names.length > limit ? `, +${names.length - limit} more` : '';
+  return names.slice(0, limit).join(', ') + suffix;
+}
+
+function deckSizePolicy(mode){
+  if (mode.sizePolicy) return { ...mode.sizePolicy };
+  const exactSizeModes = new Set(['commander', 'oathbreaker', 'brawl', 'jumpstart', 'land-game']);
+  if (exactSizeModes.has(mode.id) && mode.target) return { kind: 'exact', count: mode.target };
+  if (mode.id === 'casual') return { kind: 'recommended', count: mode.target || 60 };
+  if (mode.id === 'cube' || mode.id === 'winston') return { kind: 'recommended', count: mode.target || 40, min: 24 };
+  if (mode.id === 'dandan') return { kind: 'recommended', count: mode.target || 80, min: 40 };
+  if (mode.id === 'horde') return { kind: 'min', count: 40 };
+  if (mode.sharedLibrary && mode.target) return { kind: 'recommended', count: mode.target, min: 24 };
+  if (mode.target) return { kind: 'min', count: mode.target };
+  return { kind: 'open' };
+}
+
+function validateDeckForMode(deck, modeOrId){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : (modeOrId || currentModeConfig());
+  const rules = getModeRules(mode);
+  const cards = deck || [];
+  const errors = [];
+  const warnings = [];
+  const facts = [];
+  const policy = deckSizePolicy(mode);
+
+  facts.push(`${cards.length} card${cards.length === 1 ? '' : 's'}`);
+  if (policy.kind === 'exact') facts.push(`exactly ${policy.count}`);
+  if (policy.kind === 'min') facts.push(`minimum ${policy.count}`);
+  if (policy.kind === 'recommended') facts.push(`recommended ${policy.count}`);
+  if (rules.singleton) facts.push('singleton');
+  else if (rules.maxCopies) facts.push(`${rules.maxCopies} copies max`);
+  if (mode.rarity === 'common') facts.push('commons only');
+  if (mode.sharedLibrary) facts.push('shared library');
+  if (mode.commanderZone) facts.push(mode.commandZoneLabel || 'command zone');
+
+  if (!cards.length) {
+    errors.push(mode.sharedLibrary ? 'Load a shared stack or pool before starting this mode.' : 'Add cards to this deck before starting.');
+  }
+
+  if (cards.length) {
+    if (policy.kind === 'exact' && cards.length !== policy.count) {
+      errors.push(`This mode uses exactly ${policy.count} cards; current deck has ${cards.length}.`);
+    } else if (policy.kind === 'min' && cards.length < policy.count) {
+      errors.push(`This format needs at least ${policy.count} cards; current deck has ${cards.length}.`);
+    } else if (policy.kind === 'recommended') {
+      if (policy.min && cards.length < policy.min) {
+        errors.push(`This mode needs at least ${policy.min} cards to play smoothly; current stack has ${cards.length}.`);
+      } else if (policy.count && cards.length < policy.count) {
+        warnings.push(`Recommended size is ${policy.count} cards; current stack has ${cards.length}.`);
+      }
+    }
+  }
+
+  const counts = new Map();
+  cards.forEach(card => {
+    if (isBasicLandDeckCard(card)) return;
+    const name = normalizeDeckCardName(card);
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  const copyLimit = rules.singleton ? 1 : (rules.maxCopies || null);
+  if (copyLimit) {
+    const overLimit = [...counts.entries()].filter(([, qty]) => qty > copyLimit);
+    if (overLimit.length) {
+      const examples = overLimit.slice(0, 4).map(([name, qty]) => `${name} x${qty}`).join(', ');
+      errors.push(`${rules.singleton ? 'Singleton' : 'Copy limit'} violation: ${examples}${overLimit.length > 4 ? ', +' + (overLimit.length - 4) + ' more' : ''}.`);
+    }
+  }
+
+  if (mode.rarity === 'common') {
+    const nonCommon = cards.filter(card => !isBasicLandDeckCard(card) && card.rarity && String(card.rarity).toLowerCase() !== 'common');
+    const missingRarity = cards.filter(card => !isBasicLandDeckCard(card) && !card.rarity);
+    if (nonCommon.length) errors.push(`Pauper requires commons: ${sampleCardNames(nonCommon)}.`);
+    if (missingRarity.length) warnings.push(`${missingRarity.length} non-land card${missingRarity.length === 1 ? '' : 's'} have no rarity recorded.`);
+  }
+
+  if (mode.id === 'oathbreaker') {
+    const hasPlaneswalker = cards.some(card => (card.type || '').toLowerCase().includes('planeswalker'));
+    if (cards.length && !hasPlaneswalker) warnings.push('Oathbreaker normally needs a planeswalker plus signature spell in the command zone.');
+  } else if (mode.commanderZone) {
+    const hasCommanderCandidate = cards.some(card => {
+      const type = (card.type || '').toLowerCase();
+      return type.includes('legendary') || type.includes('commander') || (mode.id === 'brawl' && type.includes('planeswalker'));
+    });
+    if (cards.length && !hasCommanderCandidate) warnings.push(`${mode.title} usually needs a commander candidate for the command zone.`);
+  }
+
+  if (mode.id === 'dandan' && cards.length && !cards.some(card => /dandan/i.test(card.name || ''))) {
+    warnings.push('Dandan usually plays best with at least one Dandan in the shared library.');
+  }
+
+  const status = errors.length ? 'blocked' : (warnings.length ? 'warning' : 'ready');
+  return { status, errors, warnings, facts, mode };
+}
+
+function deckValidationPanelHtml(validation, options = {}){
+  const statusLabels = { ready: 'Ready', warning: 'Review', blocked: 'Needs work' };
+  const title = options.title || 'Format Check';
+  const issueRows = [
+    ...validation.errors.map(message => ({ kind: 'error', message })),
+    ...validation.warnings.map(message => ({ kind: 'warning', message }))
+  ];
+  const emptyText = validation.status === 'ready' ? 'Deck matches the selected mode rules the app can verify.' : '';
+  return `
+    <div id="${options.id || 'deckValidation'}" class="deck-validation deck-validation-${validation.status}${options.compact ? ' compact' : ''}">
+      <div class="deck-validation-head">
+        <div>
+          <div class="text-xs text-gray">${htmlEscape(title)}</div>
+          <div class="deck-validation-title">${htmlEscape(validation.mode.title)}</div>
+        </div>
+        <span class="validation-status">${statusLabels[validation.status] || validation.status}</span>
+      </div>
+      <div class="validation-facts">
+        ${validation.facts.map(fact => `<span>${htmlEscape(fact)}</span>`).join('')}
+      </div>
+      <div class="validation-issues">
+        ${issueRows.map(item => `<div class="${item.kind}">${htmlEscape(item.message)}</div>`).join('') || `<div class="ok">${htmlEscape(emptyText)}</div>`}
+      </div>
+    </div>
+  `;
+}
+
+// --- Global player helpers (work for online and Local/Hotseat) ---
+if (!window.isMe) window.isMe = function(n){
+  const D = state?.draft;
+  // In local (hotseat), allow UI elements to treat either side as "me".
+  if (D?.mode === 'draftoff' && D?.off?.isLocal) return true;
+  return state.currentPlayer === n;
+};
+
+if (!window.myPicksFor) window.myPicksFor = function(who){
+  const D = state.draft;
+  return who === 1 ? D.off.p1 : D.off.p2;
+};
+
+function initLandsFill(who){
+  const D = state.draft;
+  D.lands = {
+    who,                              // 1 or 2; whose lands we are currently filling
+    targetTotal: D.target || 60,
+    baseCount: (who === 1 ? D.off.p1.length : D.off.p2.length),
+    remaining: 0,                     // computed below
+    finalizing: false,                // in-flight guard for the Finalize button
+    counts: { Plains:0, Island:0, Swamp:0, Mountain:0, Forest:0 }
+  };
+  D.lands.remaining = Math.max(0, D.lands.targetTotal - D.lands.baseCount);
+}
+
+
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 400, maxH = 560;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > maxW) { h *= maxW / w; w = maxW; } }
+      else { if (h > maxH) { w *= maxH / h; h = maxH; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function checkWinner() {
+  if (!state.gameStarted) return;
+  const p1Dead = state.gameState.player1.health <= 0;
+  const p2Dead = state.gameState.player2.health <= 0;
+  if (p1Dead && p2Dead) { state.winner = 'draw'; state.gameStarted = false; }
+  else if (p1Dead) { state.winner = 2; state.gameStarted = false; }
+  else if (p2Dead) { state.winner = 1; state.gameStarted = false; }
+}
+
+function toast(message, ms = 2200) {
+  const t = document.createElement('div');
+  t.setAttribute('role', 'status');
+  t.style.cssText = [
+    'position:fixed','right:16px','bottom:16px','z-index:10000',
+    'background:#111827','border:1px solid #374151','color:#fff',
+    'padding:10px 14px','border-radius:8px','box-shadow:0 8px 24px rgba(0,0,0,.35)',
+    'opacity:0','transform:translateY(8px)','transition:opacity .15s ease, transform .15s ease'
+  ].join(';');
+  t.textContent = message;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(8px)';
+    setTimeout(() => t.remove(), 180);
+  }, ms);
+}
+
+// --- Scryfall politeness: serialize calls ~100ms apart + retry on 429/503 ---
+let _scryQueue = Promise.resolve();
+function _delay(ms){ return new Promise(r => setTimeout(r, ms)); }
+const SCRY_CACHE_KEY = 'galdur-scry-cache-v1';
+let _scryCache = null;
+function scryCache(){
+  if (_scryCache) return _scryCache;
+  try {
+    _scryCache = JSON.parse(localStorage.getItem(SCRY_CACHE_KEY) || '{}');
+  } catch {
+    _scryCache = {};
+  }
+  return _scryCache;
+}
+function scryCacheGet(url){
+  const entry = scryCache()[url];
+  if (!entry || Date.now() - entry.savedAt > 1000 * 60 * 60 * 24 * 7) return null;
+  return new Response(JSON.stringify(entry.body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'X-Galdur-Cache': '1' }
+  });
+}
+async function scryCachePut(url, response){
+  try {
+    if (!response.ok || !String(response.headers.get('content-type') || '').includes('json')) return;
+    const clone = response.clone();
+    const body = await clone.json();
+    const cache = scryCache();
+    cache[url] = { savedAt: Date.now(), body };
+    let entries = Object.entries(cache).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, 400);
+    // Pruning by COUNT alone lets a few big Scryfall list pages blow the ~5MB
+    // origin quota, after which saveLocal() silently stops persisting the
+    // player's collection. Prune by size too, and drop the cache entirely
+    // rather than let a write failure cascade.
+    const MAX_BYTES = 2_000_000;
+    let payload = JSON.stringify(Object.fromEntries(entries));
+    while (payload.length > MAX_BYTES && entries.length > 1) {
+      entries = entries.slice(0, Math.floor(entries.length / 2));
+      payload = JSON.stringify(Object.fromEntries(entries));
+    }
+    _scryCache = Object.fromEntries(entries);
+    try {
+      localStorage.setItem(SCRY_CACHE_KEY, payload);
+    } catch {
+      _scryCache = {};
+      try { localStorage.removeItem(SCRY_CACHE_KEY); } catch {}
+    }
+  } catch { /* cache best-effort only */ }
+}
+function scryfetch(url, opts){
+  const method = (opts?.method || 'GET').toUpperCase();
+  const canCache = method === 'GET' && !String(url).includes('/random');
+  if (canCache) {
+    const cached = scryCacheGet(url);
+    if (cached) return Promise.resolve(cached);
+  }
+  const run = _scryQueue.then(async () => {
+    let lastErr = null;
+    for (let attempt = 0; attempt < 4; attempt++){
+      try {
+        const r = await fetch(url, opts);
+        // Retry on rate-limit / transient server errors.
+        if (r.status === 429 || r.status === 503){ await _delay(400 * (attempt + 1)); continue; }
+        if (canCache) scryCachePut(url, r);
+        return r;
+      } catch (e) {
+        // Network blip (e.g. "Failed to fetch") — back off and retry rather than abort.
+        lastErr = e;
+        await _delay(400 * (attempt + 1));
+      }
+    }
+    try {
+      const r = await fetch(url, opts);
+      if (canCache) scryCachePut(url, r);
+      return r;
+    }      // one last attempt
+    catch (e) { throw (lastErr || e); }
+  });
+  // advance the queue ~100ms after each request, whether it resolved or threw
+  _scryQueue = run.then(() => _delay(100), () => _delay(100));
+  return run;
+}
+window.scryfetch = scryfetch;
+
+// --- Local persistence: keep the custom card collection + built decks across reloads ---
+const SAVE_KEY = 'galdur-save-v1';
+let _saveTimer = null;
+function saveLocal(){
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      version: 2,
+      cards: state.cards,
+      decks: state.decks,
+      modeSetups: state.modeSetups || {},
+      selectedMode: state.selectedMode,
+      battleMode: state.battleMode,
+      studioTab: state.studioTab
+    }));
+  } catch (e) { /* quota exceeded or storage disabled — fail silently */ }
+}
+function scheduleSave(){
+  if (_saveTimer) return;                       // debounce: coalesce frequent renders
+  _saveTimer = setTimeout(() => { _saveTimer = null; saveLocal(); }, 500);
+}
+function loadLocal(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (Array.isArray(data.cards)) state.cards = data.cards;
+    if (data.decks && typeof data.decks === 'object') {
+      if (Array.isArray(data.decks.player1)) state.decks.player1 = data.decks.player1;
+      if (Array.isArray(data.decks.player2)) state.decks.player2 = data.decks.player2;
+    }
+    if (data.modeSetups && typeof data.modeSetups === 'object') state.modeSetups = data.modeSetups;
+    if (data.selectedMode) state.selectedMode = data.selectedMode;
+    if (data.battleMode) state.battleMode = data.battleMode;
+    if (data.studioTab) state.studioTab = data.studioTab;
+  } catch (e) { /* corrupt save — ignore and start fresh */ }
+}
+
+// Host broadcasts the full authoritative Draft-off snapshot to the joiner.
+function broadcastDraftState(phase){
+  const D = state.draft;
+  if (!D || D.off.isLocal || !state.isHost) return;
+  if (!(state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open')) return;
+  state.dataChannel.send(JSON.stringify({
+    type: 'draftoff_state',
+    phase: phase || 'draft',
+    round: D.off.round,
+    table: D.off.table,
+    p1: D.off.p1,
+    p2: D.off.p2,
+    currentPicker: D.off.currentPicker,
+    startingPlayer: D.off.startingPlayer,
+    picksMadeThisPack: D.off.picksMadeThisPack
+  }));
+}
+window.broadcastDraftState = broadcastDraftState;
+
+function draftOffCheckFinishOrNextPack(){
+  const D = state.draft;
+
+  const doneP1 = D.off.p1.length >= 42;
+  const doneP2 = D.off.p2.length >= 42;
+
+  if (doneP1 && doneP2){
+    // Move to basic-lands fill window
+    D.screen = 'landsfill';
+    // initialize lands fill state for the first player who will fill (1 in local; "me" online)
+    initLandsFill(D.off.isLocal ? 1 : state.currentPlayer);
+    render();
+    if (!D.off.isLocal) broadcastDraftState('landsfill');
+    return;
+  }
+
+  // Not finished: only the host (or a local hotseat) generates the next pack;
+  // the joiner receives it via the next draftoff_state snapshot.
+  if (D.off.isLocal || state.isHost){
+    if (window.draftOffStartNewPack) window.draftOffStartNewPack(true);
+  }
+}
+
+
+// --- Mana Curve helpers ---
+// Canonical mana-cost → numeric CMC. Used app-wide (top-level so it's in scope everywhere).
+function getCMC(card) {
+  if (card && typeof card.cmc === 'number' && Number.isFinite(card.cmc)) return Math.max(0, Math.floor(card.cmc));
+  const s = (card?.manaCost || card?.manacost || card?.cost || '').toString();
+  if (!s) return null;
+  if (s.includes('{')) {
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    let sum = 0;
+    for (const t of tokens) {
+      const inner = t.slice(1, -1);
+      const n = parseInt(inner, 10);
+      if (Number.isFinite(n)) { sum += n; continue; }
+      // A hybrid/phyrexian token like {G/U} or {W/P} is a SINGLE pip, so count
+      // the token once rather than once per letter inside it.
+      const letters = inner.toUpperCase().split(/[^A-Z]/).join('');
+      if ([...letters].some(ch => 'WUBRGCS'.includes(ch))) sum += 1;  // X → 0
+    }
+    return sum;
+  }
+  const digits = (s.match(/\d+/g) || []).map(x => parseInt(x,10)).reduce((a,b)=>a+b,0);
+  const letters = (s.toUpperCase().match(/[WUBRGC]/g) || []).length;
+  return digits + letters;
+}
+
+function manaCurveData(cards) {
+  const counts = new Map();
+  for (const c of (cards || [])) {
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    counts.set(cmc, (counts.get(cmc) || 0) + 1);
+  }
+  if (counts.size === 0) return { bins: [], max: 0 };
+
+  const min = Math.min(...counts.keys());
+  const max = Math.max(...counts.keys());
+  const bins = [];
+  let peak = 0;
+  for (let k = min; k <= max; k++) {
+    const v = counts.get(k) || 0;
+    bins.push({ cmc: k, count: v });
+    if (v > peak) peak = v;
+  }
+  return { bins, max: peak };
+}
+
+function renderManaCurve(containerId, cards) {
+  const root = document.getElementById(containerId);
+  if (!root) return;
+  const { bins, max } = manaCurveData(cards);
+  if (bins.length === 0) {
+    root.innerHTML = `<div class="mana-curve-wrap">
+      <div class="mana-curve-title">Mana Curve</div>
+      <div style="opacity:.7; font-size:12px;">No mana-cost data in this deck.</div>
+    </div>`;
+    return;
+  }
+  
+const cols = bins.map(b => {
+  const h = max ? Math.max(4, Math.round((b.count / max) * 100)) : 0;
+  const label = `${b.count} card${b.count===1 ? '' : 's'} at CMC ${b.cmc}`;
+  return `
+    <div class="mc-col">
+      <div class="mc-bar" style="height:${h}%" title="${label}" aria-label="${label}"></div>
+    </div>`;
+}).join('');
+
+
+  const labels = bins.map(b => `<div>${b.cmc}</div>`).join('');
+
+  root.innerHTML = `
+    <div class="mana-curve-wrap">
+      <div class="mana-curve-title">Mana Curve</div>
+      <div class="mana-curve" style="--bins:${bins.length}">${cols}</div>
+      <div class="mc-x" style="--bins:${bins.length}">${labels}</div>
+    </div>`;
+}
+
+
+function getDeckForChart() {
+  const meKey = 'player' + state.currentPlayer;
+  // Try common working-deck shapes first
+  if (Array.isArray(state.currentDeck)) return state.currentDeck;
+  if (state.deckBuilder?.cards && Array.isArray(state.deckBuilder.cards)) return state.deckBuilder.cards;
+  if (Array.isArray(state.deck)) return state.deck;
+  // Fallback: the deck synced per player
+  return state.decks?.[meKey] || [];
+}
+
+
+
+function nInt(x) {
+  const v = parseInt(x, 10);
+  return Number.isFinite(v) ? v : 0;
+}
+
+// Effective (base + modifiers) P/T
+function effectivePT(card) {
+  // base values from card definition (or 0 if not a creature)
+  const baseP = nInt(card.power);
+  const baseT = nInt(card.toughness);
+
+  // deltas from new system; fall back to old 'counters' if present
+  const dP = (card && card.pt && typeof card.pt.p === 'number') ? card.pt.p : (card?.counters || 0);
+  const dT = (card && card.pt && typeof card.pt.t === 'number') ? card.pt.t : (card?.counters || 0);
+
+  return { p: baseP + dP, t: baseT + dT };
+}
+
+function addGameLog(message, type = 'note', payload = {}){
+  if (!message) return;
+  state.gameLog = state.gameLog || [];
+  state.gameLog.unshift({
+    id: makeId('log'),
+    message,
+    type,
+    payload,
+    at: Date.now(),
+    player: state.currentPlayer,
+    activePlayer: state.activePlayer,
+    mode: state.gameState?.mode || state.battleMode || state.selectedMode
+  });
+  state.gameLog = state.gameLog.slice(0, 60);
+}
+
+function cloneJSON(value){
+  return JSON.parse(JSON.stringify(value));
+}
+
+function gameSnapshot(actionType = 'action'){
+  return {
+    id: makeId('history'),
+    actionType,
+    savedAt: Date.now(),
+    gameState: cloneJSON(state.gameState),
+    activePlayer: state.activePlayer,
+    winner: state.winner,
+    selectedCard: state.selectedCard,
+    selectedFieldCard: state.selectedFieldCard,
+    selectedZoneCard: null,
+    viewingZone: null,
+    targeting: null
+  };
+}
+
+function pushGameHistory(actionType){
+  if (!state.gameStarted || !state.gameState) return;
+  state.gameHistory = state.gameHistory || [];
+  state.gameHistory.unshift(gameSnapshot(actionType));
+  state.gameHistory = state.gameHistory.slice(0, 30);
+}
+
+function restoreGameSnapshot(snapshot){
+  if (!snapshot) return false;
+  state.gameState = cloneJSON(snapshot.gameState);
+  state.activePlayer = snapshot.activePlayer;
+  state.winner = snapshot.winner;
+  state.selectedCard = snapshot.selectedCard;
+  state.selectedFieldCard = snapshot.selectedFieldCard;
+  state.selectedZoneCard = snapshot.selectedZoneCard;
+  state.viewingZone = snapshot.viewingZone;
+  state.targeting = snapshot.targeting;
+  return true;
+}
+
+function executeGameAction(type, payload, mutator, message, options = {}){
+  pushGameHistory(type);
+  const result = typeof mutator === 'function' ? mutator() : null;
+  const resolvedMessage = typeof message === 'function' ? message(result) : message;
+  // Log BEFORE syncing, or the payload's gameLog omits the very entry that
+  // describes the action being sent and the peer's log loses it forever.
+  if (resolvedMessage) showAction(resolvedMessage, options.ms || 2000, options.log !== false, type, payload);
+  if (options.sync !== false) sendGameUpdate();
+  if (!resolvedMessage) render();
+  return result;
+}
+
+function undoLastGameAction(){
+  const snapshot = (state.gameHistory || []).shift();
+  if (!snapshot) {
+    showAction('Nothing to undo.', 1600, false);
+    return;
+  }
+  restoreGameSnapshot(snapshot);
+  addGameLog(`Undid ${snapshot.actionType}.`, 'undo', { actionType: snapshot.actionType });
+  // Undo rewinds BOTH boards locally, so a my-side-only gameUpdate would leave
+  // the peer holding a board this client no longer believes in. Send it all.
+  sendFullGameSync();
+  render();
+}
+
+// --- NEW: in-game center overlay for actions, with optional broadcast ---
+let _actionTimer = null;
+function showAction(message, ms = 2000, log = true, type = 'note', payload = {}) {
+  if (log) addGameLog(message, type, payload);
+  state.actionMessage = message;
+  // Cancel the previous overlay's timer, or it fires mid-way through this
+  // message and clears it early.
+  if (_actionTimer) clearTimeout(_actionTimer);
+  render();
+  _actionTimer = setTimeout(() => { _actionTimer = null; state.actionMessage = null; render(); }, ms);
+}
+
+function broadcastAction(message) {
+  // Always show locally
+  showAction(message);
+  // And notify peer if online
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({ type: 'notify', message }));
+  }
+}
+
+
+function sendGameUpdate() {
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    const meKey = 'player' + state.currentPlayer;
+    // Send ONLY my own board so concurrent edits never clobber the opponent's side.
+    state.dataChannel.send(JSON.stringify({
+      type: 'gameUpdate',
+      from: state.currentPlayer,
+      mine: state.gameState[meKey],
+      shared: state.gameState.shared,
+      stack: state.gameState.stack,
+      phase: state.gameState.phase,
+      mode: state.gameState.mode,
+      gameStarted: state.gameStarted,
+      activePlayer: state.activePlayer,
+      winner: state.winner,
+      gameLog: state.gameLog
+    }));
+  }
+}
+
+// Authoritative full-state push, used when one side rewinds shared history
+// (undo) and a my-side-only delta would desync the peer.
+function sendFullGameSync() {
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({
+      type: 'gameSync',
+      gameState: state.gameState,
+      activePlayer: state.activePlayer,
+      winner: state.winner,
+      gameStarted: state.gameStarted,
+      gameLog: state.gameLog
+    }));
+  }
+}
+
+// Host deals the opening hands/decks for both sides, so both peers agree on the
+// shuffled order. Sent once at game start as a full-state snapshot.
+function sendGameInit() {
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({
+      type: 'gameInit',
+      gameState: state.gameState,
+      mode: state.gameState.mode,
+      stack: state.gameState.stack,
+      phase: state.gameState.phase,
+      activePlayer: state.activePlayer,
+      gameStarted: true,
+      gameLog: state.gameLog
+    }));
+  }
+}
+
+function setupDataChannel(channel) {
+  state.dataChannel = channel;
+  state.dataChannel.onopen = () => {
+    console.log('Connected!');
+    state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
+
+    // Auto-enter the Draft-off room and start the first pack (host only)
+if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff') {
+  const D = state.draft;
+  D.screen = 'draftoff';       // ensure main Draft subview
+  D.off.screen = 'draftoff';   // optional mirror
+  D.off.isLocal = false;       // mark as online mode
+  D.off.round = 0;
+  D.off.p1 = [];
+  D.off.p2 = [];
+  D.off.table = [];
+  D.off.currentSet = null;
+  D.off.startingPlayer = 1;
+  D.off.currentPicker  = 1;
+  D.off.p1LandsDone = false;
+  D.off.p2LandsDone = false;
+  D.seenIds = {};
+  D.seenNames = {};
+  render();
+  if (state.isHost) {
+ if (window.draftOffStartNewPack) window.draftOffStartNewPack(true);  // host picks first in round 1
+  }
+}
+
+  };
+    
+    // --- WebRTC datachannel handlers ---
+state.dataChannel.onmessage = (event) => {
+  const D = state.draft;
+  try {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'deckSync') {
+      const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+      if (data.decks && data.decks[oppKey]) {
+        state.decks[oppKey] = data.decks[oppKey];
+      }
+      render();
+
+    } else if (data.type === 'gameInit') {
+      // Host dealt both sides; adopt the full opening snapshot.
+      state.gameState = data.gameState;
+      state.gameStarted = true;
+      state.activePlayer = data.activePlayer;
+      state.gameLog = Array.isArray(data.gameLog) ? data.gameLog : [];
+      state.winner = null;
+      if (state.activePlayer === state.currentPlayer) {
+        state.showTurnNotification = true;
+        setTimeout(() => { state.showTurnNotification = false; render(); }, 2000);
+      }
+      render();
+
+    } else if (data.type === 'gameUpdate') {
+      // Adopt ONLY the sender's own board; never touch my own side.
+      if (typeof data.from === 'number' && data.mine) {
+        state.gameState['player' + data.from] = data.mine;
+      } else if (data.gameState) {
+        state.gameState = data.gameState;   // back-compat with full snapshots
+      }
+      if (data.shared) state.gameState.shared = data.shared;
+      if (Array.isArray(data.stack)) state.gameState.stack = data.stack;
+      if (data.phase) state.gameState.phase = data.phase;
+      if (data.mode) state.gameState.mode = data.mode;
+      state.gameStarted = data.gameStarted;
+      if (Array.isArray(data.gameLog)) state.gameLog = data.gameLog;
+
+      const previousPlayer = state.activePlayer;
+      state.activePlayer = data.activePlayer;
+      state.winner = data.winner;
+
+      // If it just became this player's turn, flash the turn notice
+      if (previousPlayer !== state.activePlayer && state.activePlayer === state.currentPlayer) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+
+      render();
+
+    } else if (data.type === 'gameSync') {
+      // Peer rewound shared history (undo): adopt their full snapshot.
+      state.gameState = data.gameState;
+      state.activePlayer = data.activePlayer;
+      state.winner = data.winner;
+      state.gameStarted = data.gameStarted;
+      if (Array.isArray(data.gameLog)) state.gameLog = data.gameLog;
+      render();
+
+    } else if (data.type === 'notify') {
+      // NEW: action overlay (deck → hand, etc.)
+      showAction(data.message);
+    }
+    
+        else if (data.type === 'draftoff_state') {
+      // Host is authoritative; the joiner adopts each snapshot wholesale.
+      if (state.isHost) return;
+      D.mode = 'draftoff';
+      D.off.isLocal = false;
+      D.off.round = data.round;
+      D.off.table = (data.table || []).slice();
+      D.off.p1 = (data.p1 || []).slice();
+      D.off.p2 = (data.p2 || []).slice();
+      D.off.currentPicker = data.currentPicker;
+      D.off.startingPlayer = data.startingPlayer;
+      D.off.picksMadeThisPack = data.picksMadeThisPack || 0;
+      if (data.phase === 'landsfill') {
+        // enter my own lands-fill once; don't clobber it if I'm already filling/waiting
+        if (D.screen !== 'landsfill' && D.screen !== 'landswait' && D.screen !== 'decklists') {
+          D.screen = 'landsfill';
+          initLandsFill(state.currentPlayer);
+        }
+      } else {
+        D.screen = 'draftoff';
+      }
+      render();
+    }
+    else if (data.type === 'draftoff_pick_request') {
+      // Host only: validate it's the joiner's turn, then apply authoritatively.
+      if (!state.isHost) return;
+      if (D.off.currentPicker !== 2) return;
+      if (window.draftOffApplyPick) window.draftOffApplyPick(data.index, 2);
+    }
+    // Handle opponent finishing their lands fill
+    else if (data.type === 'draftoff_lands_done') {
+      const oppPlayer = data.player; // 1 or 2
+      const oppDeck = data.deck || [];
+
+      // Update opponent's deck
+      if (oppPlayer === 1) {
+        D.off.p1 = oppDeck;
+        D.off.p1LandsDone = true;
+      } else {
+        D.off.p2 = oppDeck;
+        D.off.p2LandsDone = true;
+      }
+
+      // Check if both players are done with lands
+      const myPlayer = state.currentPlayer;
+      const myDone = (myPlayer === 1) ? D.off.p1LandsDone : D.off.p2LandsDone;
+      const oppDone = (oppPlayer === 1) ? D.off.p1LandsDone : D.off.p2LandsDone;
+
+      if (myDone && oppDone) {
+        // Both done - go to results screen
+        state.decks.player1 = (D.off.p1 || []).slice();
+        state.decks.player2 = (D.off.p2 || []).slice();
+        D.screen = 'decklists';
+      }
+      render();
+    }
+
+
+  } catch (e) {
+    console.error('dataChannel onmessage error:', e, event?.data);
+  }
+};
+
+state.dataChannel.onclose = () => {
+  // A channel we closed ourselves also fires onclose — don't alarm the player
+  // who chose to leave.
+  if (state.leavingOnline) return;
+  toast('Connection closed — the other player disconnected.', 3200);
+  disconnectOnline();
+  state.screen = 'menu';
+  render();
+};
+
+    
+  }
+
+const ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+];
+
+// ICE gathering can hang indefinitely on restrictive networks. Resolve on
+// 'complete' or after a cap — the candidates gathered so far are usually enough.
+function waitForIceGathering(pc, timeoutMs = 4000){
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    let done = false;
+    const finish = () => { if (done) return; done = true; clearTimeout(timer); resolve(); };
+    const timer = setTimeout(finish, timeoutMs);
+    pc.addEventListener('icegatheringstatechange', () => {
+      if (pc.iceGatheringState === 'complete') finish();
+    });
+  });
+}
+
+// Surface connection progress/failure; the manual-signaling flow otherwise
+// leaves both players staring at a screen that never changes.
+function watchConnection(pc){
+  const update = () => {
+    const s = pc.connectionState || pc.iceConnectionState;
+    state.connectionStatus = s;
+    if (s === 'failed') {
+      toast('Connection failed. Your networks may need a TURN server — try the same Wi-Fi, or a hotspot.', 5000);
+    } else if (s === 'disconnected') {
+      toast('Connection lost — trying to recover…', 3000);
+    }
+    render();
+  };
+  pc.addEventListener('connectionstatechange', update);
+  pc.addEventListener('iceconnectionstatechange', update);
+}
+
+async function createOnlineRoom() {
+  state.isHost = true;
+  state.onlineMode = true;
+  state.roomCode = 'waiting';
+  state.connectionStatus = 'gathering';
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  state.peerConnection = pc;
+  state.currentPlayer = 1;  // host = player 1
+  watchConnection(pc);
+
+  setupDataChannel(pc.createDataChannel('game'));
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitForIceGathering(pc);
+  state.roomCode = btoa(JSON.stringify({ offer: pc.localDescription }));
+  state.waitingForAnswer = true;
+  state.connectionStatus = 'waiting for answer';
+  render();
+}
+
+async function joinOnlineRoom(offerStr) {
+  state.isHost = false;
+  state.onlineMode = true;
+  state.roomCode = 'connecting';
+  try {
+    const data = JSON.parse(atob(offerStr));
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    state.peerConnection = pc;
+    state.onlineMode = true;
+    state.isHost = false;
+    state.currentPlayer = 2; // joiner = player 2
+    state.connectionStatus = 'gathering';
+    watchConnection(pc);
+    pc.ondatachannel = (e) => setupDataChannel(e.channel);
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await waitForIceGathering(pc);
+    state.answerCode = btoa(JSON.stringify({ answer: pc.localDescription }));
+    state.connectionStatus = 'send the answer code back';
+    render();
+  } catch(e) {
+    alert('Invalid code: ' + e.message);
+    disconnectOnline();
+    state.screen = 'menu';
+    render();
+  }
+}
+
+// Host completes handshake by pasting the joiner's "answer" code
+async function finishRoomHandshake(answerCode){
+  const raw = (answerCode || '').trim();
+  if (!raw) { alert('Empty answer code'); return; }
+
+  // Helpers ----------------------------------------------------------
+  const safeJSON = (s)=>{ try { return JSON.parse(s); } catch { return null; } };
+  const b64decode = (s)=>{
+    // handle base64url and missing padding
+    let t = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (t.length % 4) t += '=';
+    return atob(t);
+  };
+  const tryAllParses = (s)=>{
+    // 1) raw JSON
+    let obj = safeJSON(s);
+    if (obj) return obj;
+    // 2) base64 / base64url → JSON
+    let d; try { d = b64decode(s); } catch { d = null; }
+    if (d) {
+      obj = safeJSON(d);
+      if (obj) return obj;
+      // 3) some apps double-encode JSON (JSON string inside base64 JSON)
+      const d2 = safeJSON(d);
+      if (typeof d2 === 'string') {
+        const d3 = safeJSON(d2);
+        if (d3) return d3;
+      }
+    }
+    return null;
+  };
+  // -----------------------------------------------------------------
+
+  // Accept raw JSON, base64, or base64url (with or without nested string)
+  let descInit = tryAllParses(raw);
+  if (!descInit) { alert('Invalid code: cannot parse JSON/base64.'); return; }
+
+  // Some wrappers use {desc:{type:'answer', sdp:'...'}} or { answer: {...} }
+  if (descInit.desc && descInit.desc.sdp) descInit = descInit.desc;
+  if (descInit.answer && descInit.answer.sdp) descInit = descInit.answer;
+  if (typeof descInit === 'string') {
+    const again = safeJSON(descInit);
+    if (again) descInit = again;
+  }
+
+  if (!descInit || typeof descInit.sdp !== 'string' || typeof descInit.type !== 'string') {
+    alert('Parsed code is missing required SDP fields.');
+    return;
+  }
+  if (descInit.type.toLowerCase() !== 'answer') {
+    alert(`Expected an SDP "answer", but got "${descInit.type}". Did you paste the offer instead of the answer?`);
+    return;
+  }
+
+  if (!state.peerConnection) {
+    alert('Peer connection not found. Start hosting again and paste the answer from the joiner.');
+    return;
+  }
+
+  try {
+    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(descInit));
+  } catch (err) {
+    console.error('setRemoteDescription failed:', err, descInit);
+    alert('Code looks well-formed, but applying it failed. See console for details.');
+    return;
+  }
+
+  // Success: clear transient UI
+  state.waitingForAnswer = false;
+  state.answerCode = null;
+
+  // If this handshake is for Draft-off, just move to the room. The first pack is
+  // dealt by the datachannel's onopen handler — dealing here too would race it
+  // (the channel is not open yet) and produce a short or duplicated pack.
+  if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff') {
+    state.draft.off.screen = 'draftoff';
+  }
+  render();
+}
+
+
+async function completeConnection(answerStr) {
+  try {
+    const data = JSON.parse(atob(answerStr));
+    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    state.waitingForAnswer = false;
+    render();
+  } catch(e) {
+    alert('Invalid answer: ' + e.message);
+  }
+}
+
+function disconnectOnline() {
+  state.leavingOnline = true;             // suppress our own onclose alert
+  if (state.dataChannel) state.dataChannel.close();
+  if (state.peerConnection) state.peerConnection.close();
+  state.dataChannel = null;
+  state.peerConnection = null;
+  state.onlineMode = false;
+  state.roomCode = null;
+  state.isHost = false;
+  state.waitingForAnswer = false;
+  state.answerCode = null;
+  setTimeout(() => { state.leavingOnline = false; }, 500);
+}
+
+function saveDeck() {
+  const key = 'player' + state.currentPlayer;
+  const data = JSON.stringify({ player: state.currentPlayer, cards: state.decks[key], timestamp: Date.now() });
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'deck_player' + state.currentPlayer + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadDeck(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      state.decks['player' + state.currentPlayer] = data.cards || [];
+      render();
+    } catch(err) {
+      alert('Error loading deck');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function render() {
+  scheduleSave();   // persist collection + decks (debounced) on any state change
+  const root = document.getElementById('root');
+  if (!root) return;
+  root.innerHTML = '';
+
+  if (state.screen === 'login') root.appendChild(LoginScreen());
+  else if (state.screen === 'menu') root.appendChild(MainMenu());
+  else if (state.screen === 'modes') root.appendChild(ModeHubScreen());
+  else if (state.screen === 'mode-studio') root.appendChild(ModeStudioScreen());
+  else if (state.screen === 'creator') root.appendChild(CardCreator());
+  else if (state.screen === 'builder') root.appendChild(DeckBuilder());
+  else if (state.screen === 'game') root.appendChild(GameBoard());
+  else if (state.screen === 'battlemenu') root.appendChild(BattleMenu());
+  else if (state.screen === 'draft') root.appendChild(DraftScreen());
+
+  // Let the AI module schedule any pending bot moves (AI turns, draft picks).
+  if (window.GALDUR_AI) window.GALDUR_AI.onRender();
+}
+
+function LoginScreen() {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  div.innerHTML = `
+    <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
+      <div class="hero"><img src="title_wizards.png" alt="Wizards Duel"></div>
+      <h1 style="
+  font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+  Galdurspjöld
+</h1>
+      <p class="text-gray mb-1" style="font-size: 14px;">Create custom cards, play with friends.</p>
+
+<p class="text-xs text-gray" style="margin-bottom: 20px;">
+ Made by KS. 2025. 
+</p>
+      <div class="card enter-card">
+        <p class="text-sm text-gray mb-4">Enter the table, then choose a player profile when preparing decks or games.</p>
+        <button id="enterApp" class="btn btn-primary" style="padding: 18px 42px; font-size: 18px;">Enter</button>
+      </div>
+    </div>
+
+  `;
+
+  div.querySelector('#enterApp').onclick = () => {
+    state.currentPlayer = state.currentPlayer || 1;
+    state.screen = 'menu';
+    render();
+  };
+
+  return div;
+}
+
+function ModeHubScreen() {
+  const div = document.createElement('div');
+  div.className = 'container';
+  const modes = MTG_MODE_LIBRARY;
+  const families = ['all', ...new Set(modes.map(mode => mode.family).filter(Boolean))];
+  const familyButtons = families.map(family => `
+    <button class="mode-filter-btn ${family === (state.modeFamily || 'all') ? 'active' : ''}" type="button" data-family="${htmlEscape(family)}">
+      ${family === 'all' ? 'All' : htmlEscape(family)}
+    </button>
+  `).join('');
+
+  div.innerHTML = `
+    <div class="header">
+      <button id="backBtn" class="btn btn-secondary text-sm">← Menu</button>
+      <h1 style="font-size:24px;font-weight:800">Choose Mode</h1>
+      <button id="collectionBtn" class="btn btn-secondary text-sm">Card Collection</button>
+    </div>
+
+    <div class="mode-filter-bar">
+      <div class="mode-filter-head">
+        <input id="modeSearch" class="input" type="search" autocomplete="off" placeholder="Search modes" value="${htmlEscape(state.modeQuery || '')}">
+        <span id="modeCount" class="mode-filter-count">${modes.length}/${modes.length}</span>
+      </div>
+      <div class="mode-family-tabs" aria-label="Mode families">
+        ${familyButtons}
+      </div>
+    </div>
+
+    <div class="mode-grid">
+      ${modes.map(mode => `
+        <div class="mode-card ${mode.id === state.selectedMode ? 'active' : ''}" data-mode-card data-mode-id="${htmlEscape(mode.id)}" data-family="${htmlEscape(mode.family)}" data-search="${htmlEscape([mode.title, mode.family, mode.summary, mode.format, mode.note].filter(Boolean).join(' ').toLowerCase())}">
+          <span class="mode-family">${htmlEscape(mode.family)}</span>
+          <h3>${htmlEscape(mode.title)}</h3>
+          <p class="mode-summary">${htmlEscape(mode.summary)}</p>
+          <div class="text-xs text-gray">
+            ${mode.target ? `Deck ${mode.target}` : 'Open deck size'}
+            ${mode.singleton ? ' • Singleton' : ''}
+            ${mode.rarity === 'common' ? ' • Commons only' : ''}
+            ${mode.sharedLibrary ? ' • Shared library' : ''}
+          </div>
+          ${mode.note ? `<div class="mode-note">${htmlEscape(mode.note)}</div>` : ''}
+          <div class="mode-actions">
+            <button class="btn btn-primary" data-action="open" data-mode="${mode.id}">Open Studio</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div id="modeEmpty" class="mode-empty" hidden>No matching modes.</div>
+  `;
+
+  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; render(); };
+  div.querySelector('#collectionBtn').onclick = () => { state.screen = 'creator'; render(); };
+  const searchInput = div.querySelector('#modeSearch');
+  const countEl = div.querySelector('#modeCount');
+  const emptyEl = div.querySelector('#modeEmpty');
+  let activeFamily = state.modeFamily || 'all';
+  const updateModeFilters = () => {
+    const query = (searchInput?.value || '').trim().toLowerCase();
+    state.modeQuery = searchInput?.value || '';
+    state.modeFamily = activeFamily;
+    let visible = 0;
+    div.querySelectorAll('[data-mode-card]').forEach(card => {
+      const matchesFamily = activeFamily === 'all' || card.dataset.family === activeFamily;
+      const matchesQuery = !query || (card.dataset.search || '').includes(query);
+      const show = matchesFamily && matchesQuery;
+      card.hidden = !show;
+      if (show) visible += 1;
+    });
+    if (countEl) countEl.textContent = `${visible}/${modes.length}`;
+    if (emptyEl) emptyEl.hidden = visible > 0;
+    div.querySelectorAll('.mode-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.family === activeFamily);
+    });
+  };
+  if (searchInput) searchInput.oninput = updateModeFilters;
+  div.querySelectorAll('.mode-filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      activeFamily = btn.dataset.family || 'all';
+      updateModeFilters();
+    };
+  });
+  updateModeFilters();
+  div.querySelectorAll('[data-action][data-mode]').forEach(btn => {
+    btn.onclick = () => routeToMode(btn.dataset.mode, btn.dataset.action);
+  });
+  return div;
+}
+
+function MainMenu() {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  const playlists = allModePlaylists(5);
+  const playlistHtml = playlists.length ? playlists.map(setup => `
+    <div class="playlist-row">
+      <div>
+        <div class="playlist-title">${htmlEscape(setup.name)}</div>
+        <div class="playlist-meta">${htmlEscape(setup.mode.title)} • P1 ${setup.p1Count} cards • P2 ${setup.p2Count} cards</div>
+      </div>
+      <button class="btn btn-secondary text-xs" data-open-playlist="${setup.id}" data-mode="${setup.modeId}">Open</button>
+    </div>
+  `).join('') : '<div class="playlist-empty">Saved deck playlists will appear here.</div>';
+
+  div.innerHTML = `
+    <div style="max-width: 1100px; width: 100%; padding: 0 16px;">
+      <div class="header">
+        <div>
+          <div class="mode-family">Galdurspjöld</div>
+          <h1 style="font-size:30px;font-weight:900;margin-top:4px">Mode Studio</h1>
+        </div>
+        <div class="flex" style="gap: 10px; align-items: center;">
+          <div class="player-switch" aria-label="Player profile">
+            <span class="player-switch-label">Profile</span>
+            <button id="menuPlayer1" class="${state.currentPlayer === 1 ? 'active' : ''}" type="button">P1</button>
+            <button id="menuPlayer2" class="${state.currentPlayer === 2 ? 'active' : ''}" type="button">P2</button>
+          </div>
+          <button id="logoutBtn" class="btn btn-secondary text-sm">Exit</button>
+        </div>
+      </div>
+
+      <div class="grid home-grid">
+        <div class="card p-4">
+          <h2 style="font-size:22px;font-weight:900;margin-bottom:8px">Choose a mode first</h2>
+          <p class="text-sm text-gray">Deck building, drafting, validation, and play setup now follow the selected format.</p>
+          <button id="chooseMode" class="btn btn-primary mt-4" style="padding:16px 26px;font-size:16px">Choose Mode</button>
+        </div>
+        <div class="card p-4">
+          <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Collection</h2>
+          <p class="text-sm text-gray">${(state.cards || []).length} custom card${(state.cards || []).length === 1 ? '' : 's'} saved.</p>
+          <button id="cardCollection" class="btn btn-secondary mt-4">Card Collection</button>
+        </div>
+      </div>
+
+      <div class="card p-4 mt-4">
+        <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="font-size:18px;font-weight:900;margin-bottom:6px">Deck Playlists</h2>
+            <p class="text-sm text-gray">Saved mode + deck configurations for quick setup.</p>
+          </div>
+          <button id="playlistModeBtn" class="btn btn-secondary text-xs">Browse Modes</button>
+        </div>
+        <div class="playlist-list mt-4">
+          ${playlistHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // actions
+  div.querySelector('#logoutBtn').onclick  = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#menuPlayer1').onclick = () => { state.currentPlayer = 1; render(); };
+  div.querySelector('#menuPlayer2').onclick = () => { state.currentPlayer = 2; render(); };
+  div.querySelector('#chooseMode').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
+  div.querySelector('#cardCollection').onclick = () => { state.screen = 'creator'; render(); };
+  div.querySelector('#playlistModeBtn').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
+  div.querySelectorAll('[data-open-playlist]').forEach(btn => {
+    btn.onclick = () => {
+      const setup = loadModeSetup(btn.dataset.mode, btn.dataset.openPlaylist);
+      if (!setup) {
+        toast('Playlist not found.');
+        return;
+      }
+      state.selectedMode = btn.dataset.mode;
+      state.battleMode = btn.dataset.mode;
+      state.studioTab = 'play';
+      state.screen = 'mode-studio';
+      render();
+    };
+  });
+
+  return div;
+}
+
+function ModeStudioScreen() {
+  const div = document.createElement('div');
+  div.className = 'container';
+  const mode = currentModeConfig();
+  const rules = getModeRules(mode);
+  const myKey = 'player' + state.currentPlayer;
+  const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
+  const sharedStackOwner = (state.decks.player1 || []).length ? 'Player 1' : ((state.decks.player2 || []).length ? 'Player 2' : '');
+  const sharedStackDeck = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+  const sharedStackCount = sharedStackDeck.length;
+  const p1Validation = validateDeckForMode(state.decks.player1 || [], mode);
+  const p2Validation = validateDeckForMode(state.decks.player2 || [], mode);
+  const sharedValidation = validateDeckForMode(sharedStackDeck, mode);
+  const savedSetups = modeSetupList(mode.id);
+  const setupOptions = savedSetups.map(setup => {
+    const saved = setup.savedAt ? new Date(setup.savedAt).toLocaleDateString() : '';
+    return `<option value="${setup.id}">${htmlEscape(setup.name)}${saved ? ` (${saved})` : ''}</option>`;
+  }).join('');
+  const matchValidationHtml = rules.sharedLibrary
+    ? deckValidationPanelHtml(sharedValidation, {
+        id: 'studioSharedValidation',
+        title: `${rules.sharedLabel || 'Shared Stack'} Readiness`,
+        compact: true
+      })
+    : `<div class="grid grid-2" style="gap:12px">
+        ${deckValidationPanelHtml(p1Validation, { id: 'studioP1Validation', title: 'Player 1 Deck', compact: true })}
+        ${deckValidationPanelHtml(p2Validation, { id: 'studioP2Validation', title: 'Player 2 Deck', compact: true })}
+      </div>`;
+  const availableTabs = [
+    ...(mode.build ? ['build'] : []),
+    ...(mode.draft ? ['draft'] : []),
+    ...(mode.play ? ['play'] : [])
+  ];
+  if (!availableTabs.length) availableTabs.push('play');
+  const currentTab = availableTabs.includes(state.studioTab) ? state.studioTab : availableTabs[0];
+  state.studioTab = currentTab;
+  const tabLabel = { build: 'Build', draft: 'Draft', play: 'Play' };
+  const tabButtons = availableTabs.map(tab => `
+    <button class="studio-tab ${currentTab === tab ? 'active' : ''}" data-tab="${tab}" type="button">${tabLabel[tab]}</button>
+  `).join('');
+  const buildValidation = rules.sharedLibrary ? sharedValidation : validateDeckForMode(state.decks[myKey] || [], mode);
+  const buildPanelHtml = `
+    <div class="studio-panel-card">
+      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Build For ${htmlEscape(mode.title)}</h2>
+      ${deckValidationPanelHtml(buildValidation, { id: 'studioBuildValidation', title: rules.sharedLibrary ? `${rules.sharedLabel || 'Shared Stack'} Build` : `Player ${state.currentPlayer} Deck`, compact: true })}
+      <div class="flex mt-4" style="gap:8px;flex-wrap:wrap">
+        ${mode.build ? '<button id="studioOpenBuilder" class="btn btn-primary">Open Builder</button>' : ''}
+        ${mode.id === 'jumpstart' ? '<button id="studioJumpstart" class="btn btn-secondary">Open Packet Mixer</button>' : ''}
+        ${mode.id === 'cube' ? '<button id="studioStarterCube" class="btn btn-secondary">Generate Starter Cube</button>' : ''}
+        ${mode.id === 'dandan' ? '<button id="studioStarterDandan" class="btn btn-secondary">Generate Dandan Library</button>' : ''}
+        ${mode.id === 'horde' ? '<button id="studioStarterHorde" class="btn btn-secondary">Regenerate Horde Decks</button>' : ''}
+        ${mode.id === 'land-game' ? '<button id="studioStarterLand" class="btn btn-secondary">Regenerate Land Decks</button>' : ''}
+      </div>
+    </div>
+  `;
+  const draftPanelHtml = `
+    <div class="studio-panel-card">
+      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">${htmlEscape(mode.title)} Draft</h2>
+      <p class="text-sm text-gray">${mode.draft ? 'Draft and pool tools are scoped to this mode.' : 'This mode does not use a draft flow.'}</p>
+      <div class="flex mt-4" style="gap:8px;flex-wrap:wrap">
+        ${mode.draft ? '<button id="studioStartDraft" class="btn btn-blue">Start Draft / Pool Builder</button>' : ''}
+      </div>
+    </div>
+  `;
+  const playPanelHtml = `
+    <div class="studio-panel-card">
+      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Match Readiness</h2>
+      ${matchValidationHtml}
+      <div class="flex mt-4" style="gap:10px;flex-wrap:wrap">
+        <button id="studioPlayLocal" class="btn btn-green" aria-label="Play Local">Play Local</button>
+        <button id="studioHost" class="btn btn-blue" aria-label="Host Game">Host Online</button>
+        <button id="studioJoin" class="btn btn-secondary" aria-label="Join Game">Join Online</button>
+      </div>
+    </div>
+  `;
+  const panelHtml = currentTab === 'build' ? buildPanelHtml : currentTab === 'draft' ? draftPanelHtml : playPanelHtml;
+
+  div.innerHTML = `
+    <div class="header">
+      <button id="studioBack" class="btn btn-secondary text-sm">← Modes</button>
+      <div>
+        <div class="mode-family">${htmlEscape(mode.family)}</div>
+        <h1 style="font-size:26px;font-weight:900;margin-top:4px">${htmlEscape(mode.title)} Studio</h1>
+      </div>
+      <button id="studioMenu" class="btn btn-secondary text-sm">Menu</button>
+    </div>
+
+    <div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(320px,1.35fr);gap:16px;align-items:start">
+      <div class="card p-4">
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode Requirements</h2>
+        <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
+        ${mode.note ? `<div class="mode-note mt-4">${htmlEscape(mode.note)}</div>` : ''}
+        <div class="validation-facts" style="margin-top:14px">
+          <span>${mode.target ? `${mode.target} card target` : 'open size'}</span>
+          ${mode.singleton ? '<span>singleton</span>' : ''}
+          ${mode.rarity === 'common' ? '<span>commons only</span>' : ''}
+          ${mode.sharedLibrary ? '<span>shared library</span>' : ''}
+          ${mode.commanderZone ? `<span>${htmlEscape(mode.commandZoneShortLabel || 'command zone')}</span>` : ''}
+        </div>
+        ${rules.sharedLibrary ? `<div class="mode-note mt-4">
+          ${sharedStackReady
+            ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards).`
+            : `No ${htmlEscape(rules.sharedLabel || 'shared library')} loaded yet.`}
+        </div>` : ''}
+        <div class="card p-3 mt-4 playlist-card">
+          <h3 style="font-size:14px;font-weight:800;margin-bottom:6px">Deck Playlists</h3>
+          <p class="text-xs text-gray mb-2">Save the current Player 1 / Player 2 decks for this mode.</p>
+          <div class="grid" style="gap:8px">
+            <input id="setupName" class="input" placeholder="${htmlEscape(defaultSetupName(mode))}">
+            <div class="flex" style="gap:8px;flex-wrap:wrap">
+              <button id="saveSetup" class="btn btn-primary text-xs">Save List</button>
+              <select id="setupSelect" class="input" style="min-width:180px;flex:1" ${savedSetups.length ? '' : 'disabled'}>
+                ${setupOptions || '<option>No saved playlists</option>'}
+              </select>
+              <button id="loadSetup" class="btn btn-secondary text-xs" ${savedSetups.length ? '' : 'disabled'}>Load</button>
+              <button id="deleteSetup" class="btn btn-red text-xs" ${savedSetups.length ? '' : 'disabled'}>Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode Workspace</h2>
+            <p class="text-sm text-gray">${htmlEscape(mode.title)} tools and readiness.</p>
+          </div>
+          <button id="studioChangeMode" class="btn btn-secondary text-sm">Change Mode</button>
+        </div>
+        <div class="studio-tabs mt-4" role="tablist">
+          ${tabButtons}
+        </div>
+        ${panelHtml}
+      </div>
+    </div>
+  `;
+
+  const bind = (sel, fn) => {
+    const el = div.querySelector(sel);
+    if (el) el.onclick = fn;
+  };
+  const ensureAutoDecks = () => {
+    applyAutoDeck(mode);
+  };
+  bind('#studioBack', () => { state.modeIntent = 'play'; state.screen = 'modes'; render(); });
+  bind('#studioMenu', () => { state.screen = 'menu'; render(); });
+  bind('#studioChangeMode', () => { state.modeIntent = 'play'; state.screen = 'modes'; render(); });
+  div.querySelectorAll('.studio-tab').forEach(btn => {
+    btn.onclick = () => {
+      state.studioTab = btn.dataset.tab;
+      render();
+    };
+  });
+  bind('#saveSetup', () => {
+    const name = (div.querySelector('#setupName')?.value || '').trim();
+    const setup = saveModeSetup(mode, name);
+    toast(`Saved setup: ${setup.name}`);
+    render();
+  });
+  bind('#loadSetup', () => {
+    const id = div.querySelector('#setupSelect')?.value;
+    const setup = loadModeSetup(mode.id, id);
+    if (!setup) {
+      toast('No setup selected.');
+      return;
+    }
+    toast(`Loaded setup: ${setup.name}`);
+    render();
+  });
+  bind('#deleteSetup', () => {
+    const id = div.querySelector('#setupSelect')?.value;
+    if (!id) return;
+    deleteModeSetup(mode.id, id);
+    toast('Setup deleted.');
+    render();
+  });
+  bind('#studioOpenBuilder', () => { state.selectedMode = mode.id; state.screen = 'builder'; render(); });
+  bind('#studioJumpstart', () => { state.selectedMode = mode.id; state.screen = 'builder'; render(); });
+  bind('#studioStartDraft', () => { resetDraftForMode(mode.id); state.screen = 'draft'; render(); });
+  bind('#studioStarterCube', () => {
+    state.decks[myKey] = makeStarterCubeStack(90);
+    toast('Starter cube stack generated.');
+    render();
+  });
+  bind('#studioStarterDandan', () => {
+    state.decks[myKey] = makeDandanLibrary(80);
+    toast('Dandan library generated.');
+    render();
+  });
+  bind('#studioStarterHorde', () => {
+    setupHordeDecks({ forceSurvivor: true, forceHorde: true });
+    toast('Horde decks regenerated.');
+    render();
+  });
+  bind('#studioStarterLand', () => {
+    setupLandGameDecks();
+    toast('Basic Land Game decks regenerated.');
+    render();
+  });
+  bind('#studioPlayLocal', () => {
+    ensureAutoDecks();
+    state.onlineMode = false;
+    state.screen = 'game';
+    render();
+  });
+  bind('#studioHost', () => {
+    ensureAutoDecks();
+    const deck = (state.decks && state.decks[myKey]) || [];
+    const hasSharedStack = rules.sharedLibrary && ((state.decks.player1 || []).length || (state.decks.player2 || []).length);
+    if (!deck.length && !hasSharedStack) { alert(rules.sharedLibrary ? 'Build or generate the shared stack first.' : 'Build a deck first.'); return; }
+    state.onlineMode = true;
+    if (typeof createOnlineRoom === 'function') createOnlineRoom();
+    state.screen = 'game';
+    render();
+  });
+  bind('#studioJoin', () => {
+    ensureAutoDecks();
+    const deck = (state.decks && state.decks[myKey]) || [];
+    if (!deck.length && !rules.sharedLibrary) { alert('Build a deck first.'); return; }
+    const code = prompt('Paste connection code:');
+    if (code && code.trim()) {
+      state.onlineMode = true;
+      if (typeof joinOnlineRoom === 'function') joinOnlineRoom(code.trim());
+      state.screen = 'game';
+      render();
+    }
+  });
+
+  return div;
+}
+
+function BattleMenu()  {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  const mode = currentModeConfig();
+  const rules = getModeRules(mode);
+  const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
+  const sharedStackOwner = (state.decks.player1 || []).length ? 'Player 1' : ((state.decks.player2 || []).length ? 'Player 2' : '');
+  const sharedStackCount = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
+  const sharedStackDeck = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+  const battleValidationHtml = rules.sharedLibrary
+    ? deckValidationPanelHtml(validateDeckForMode(sharedStackDeck, mode), {
+        id: 'battleDeckValidation',
+        title: `${rules.sharedLabel || 'Shared Stack'} Check`,
+        compact: true
+      })
+    : `<div class="grid grid-2" style="gap:12px;margin-top:12px">
+        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'p1DeckValidation', title: 'Player 1 Deck', compact: true })}
+        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'p2DeckValidation', title: 'Player 2 Deck', compact: true })}
+      </div>`;
+
+  div.innerHTML = `
+    <div style="max-width: 900px; width:100%; padding: 0 16px;">
+      <div class="header">
+        <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size: 24px; font-weight: bold;"></h2>
+        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+      </div>
+
+      <div class="card p-4 mb-4">
+        <div class="flex justify-between" style="align-items:flex-start;gap:12px;">
+          <div>
+            <div class="mode-family">${htmlEscape(mode.family)}</div>
+            <h3 style="font-size:20px;font-weight:800;margin:8px 0 4px">${htmlEscape(mode.title)}</h3>
+            <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
+            ${mode.note ? `<p class="mode-note mt-4">${htmlEscape(mode.note)}</p>` : ''}
+            ${rules.sharedLibrary ? `<p class="mode-note mt-4">
+              ${sharedStackReady
+                ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards).`
+                : `No shared center stack loaded yet. Build, import, or generate one before starting ${htmlEscape(mode.title)}.`}
+            </p>` : ''}
+            ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeBattle" class="btn btn-secondary text-sm mt-4">Generate Starter Cube Stack</button>' : ''}
+            ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanBattle" class="btn btn-secondary text-sm mt-4">Generate Dandan Library</button>' : ''}
+            ${battleValidationHtml}
+          </div>
+          <button id="changeMode" class="btn btn-secondary text-sm">Change</button>
+        </div>
+      </div>
+
+      <div class="action-panel-grid">
+        <button id="playLocal" class="action-panel" aria-label="Play Local">
+          <span>Play Local</span>
+          <small>Start a local game using this mode setup.</small>
+        </button>
+        <button id="playAI" class="action-panel" aria-label="Play vs AI" ${rules.sharedLibrary && mode.id !== 'horde' ? 'disabled' : ''}>
+          <span>${mode.id === 'horde' ? 'Fight the Horde (Auto)' : mode.id === 'boss' ? 'Fight the Boss' : 'Play vs AI'}</span>
+          <small>${mode.id === 'horde'
+            ? 'The Horde runs itself each turn: reveal, attack, pass.'
+            : mode.id === 'boss'
+              ? 'An escalating AI boss with 40 life takes its own turns.'
+              : rules.sharedLibrary
+                ? 'Not available for shared-stack modes yet.'
+                : 'The computer plays Player 2. No deck? One is generated.'}</small>
+        </button>
+        ${mode.coop ? `
+        <button id="playCoop" class="action-panel" aria-label="Co-op vs AI">
+          <span>🤝 Co-op vs AI</span>
+          <small>Two survivors share one board and pass the device between turns.</small>
+        </button>` : ''}
+        <button id="hostGame" class="action-panel" aria-label="Host Game">
+          <span>Host Online</span>
+          <small>Create a connection code for a friend.</small>
+        </button>
+        <button id="joinGame" class="action-panel" aria-label="Join Game">
+          <span>Join Online</span>
+          <small>Paste a host code to connect.</small>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // helper for keyboard activation on tiles
+  const bind = (sel, fn) => {
+    const el = div.querySelector(sel);
+    if (!el) return;
+    el.onclick = fn;
+    el.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+    };
+  };
+
+  // nav
+  bind('#backBtn',   () => { state.screen = 'menu';  render(); });
+  bind('#logoutBtn', () => { state.currentPlayer = null; state.screen = 'login'; render(); });
+  bind('#changeMode', () => { state.modeIntent = 'play'; state.screen = 'modes'; render(); });
+  bind('#starterCubeBattle', () => {
+    state.decks.player1 = makeStarterCubeStack(90);
+    toast('Starter cube stack generated.');
+    render();
+  });
+  bind('#starterDandanBattle', () => {
+    state.decks.player1 = makeDandanLibrary(80);
+    toast('Dandan library generated.');
+    render();
+  });
+
+  // local play
+  bind('#playLocal', () => {
+    state.onlineMode = false;
+    state.vsAI = false;
+    state.coop = false;
+    state.screen = 'game';
+    render();
+  });
+
+  // vs AI: computer plays player 2 locally
+  const startVsAI = (coop) => {
+    if (rules.sharedLibrary && mode.id !== 'horde') { toast('AI needs its own deck — shared-stack modes are PvP for now.'); return; }
+    state.onlineMode = false;
+    state.vsAI = true;
+    state.coop = !!coop;
+    state.coopSeat = 1;
+    state.bossRound = 0;
+    state.currentPlayer = 1;            // the human always sits in seat 1 vs the AI
+    applyAutoDeck(mode);
+    if (!mode.autoDeck && !(state.decks.player2 || []).length) {
+      const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
+      const built = buildJumpstartDeck(themes[0], themes[1]);
+      state.decks.player2 = built.cards;
+      toast(`AI deck generated: ${built.name}.`);
+    }
+    state.screen = 'game';
+    render();
+  };
+  bind('#playAI', () => startVsAI(false));
+  bind('#playCoop', () => startVsAI(true));
+
+  // host online (ID FIX)
+  bind('#hostGame', () => {
+    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    const hasSharedStack = rules.sharedLibrary && ((state.decks.player1 || []).length || (state.decks.player2 || []).length);
+    if (!deck.length && !hasSharedStack) { alert(rules.sharedLibrary ? 'Build or import the shared stack first.' : 'Build a deck first!'); return; }
+    state.onlineMode = true;
+    state.vsAI = false;
+    if (typeof createOnlineRoom === 'function') createOnlineRoom();
+    state.screen = 'game';
+    render();
+  });
+
+  // join online (ID FIX)
+  bind('#joinGame', () => {
+    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    if (!deck.length && !rules.sharedLibrary) { alert('Build a deck first!'); return; }
+    const code = prompt('Paste connection code:');
+    if (code && code.trim()) {
+      state.onlineMode = true;
+      state.vsAI = false;
+      if (typeof joinOnlineRoom === 'function') joinOnlineRoom(code.trim());
+      state.screen = 'game';
+      render();
+    }
+  });
+
+  return div;
+}
+
+
+// ------------------------------ D R A F T  ------------------------------
+function DraftScreen(){
+  const div = document.createElement('div');
+  div.className = 'container';
+
+  const D = state.draft;
+
+
+  function setScreen(s){ D.screen = s; render(); }
+
+  // helpers ---------------------------------------------------------------
+  const colorNames = {W:'Plains',U:'Island',B:'Swamp',R:'Mountain',G:'Forest'};
+  const manaSym = {W:'⚪',U:'🔵',B:'⚫',R:'🔴',G:'🟢'};
+
+  function formatToScryfallLegal(format){
+    // The format the player just picked wins. The entry mode's scryfall scope is
+    // only a fallback — otherwise picking "Pauper" inside the Modern studio kept
+    // querying legal:modern.
+    const mode = getModeConfig(D.modeId || format);
+    if (mode.scryfall && (!format || mode.format === format || mode.id === format)) return mode.scryfall;
+    if (format === 'standard') return 'legal:standard';
+    if (format === 'pioneer')  return 'legal:pioneer';
+    if (format === 'modern')   return 'legal:modern';
+    if (format === 'pauper')   return 'legal:pauper';
+    if (format === 'legacy')   return 'legal:legacy';
+    if (format === 'vintage')  return 'legal:vintage';
+    if (format === 'premodern') return 'year>=1995 year<=2003 -is:digital';
+    if (format === 'set' || format === 'cube' || format === 'casual') return 'game:paper';
+    return 'legal:commander';
+  }
+
+  function draftScopeQuery(){
+    const parts = [];
+    const setCode = (D.setCode || '').trim().toLowerCase();
+    if (setCode) parts.push(`set:${setCode}`);
+    if (D.era === 'oldschool') parts.push('year<=1994');
+    else if (D.era === 'premodern') parts.push('year>=1995 year<=2003');
+    else if (D.era === 'modern-era') parts.push('year>=2003');
+    else if (D.era === 'recent') parts.push('year>=2019');
+    if (D.queryExtra) parts.push(D.queryExtra);
+    return parts.join(' ');
+  }
+
+  function draftRarityQuery(){
+    if (D.rarity === 'common') return 'rarity:common';
+    if (D.rarity === 'uncommon') return 'rarity<=uncommon';
+    return '';
+  }
+
+  function draftScopeLabel(){
+    const bits = [];
+    if (D.setCode) bits.push(`Set ${D.setCode.toUpperCase()}`);
+    if (D.era) bits.push({
+      oldschool: 'Old School',
+      premodern: 'Premodern',
+      'modern-era': 'Modern era',
+      recent: 'Recent sets'
+    }[D.era] || D.era);
+    if (D.rarity === 'common') bits.push('Commons only');
+    return bits.join(' • ');
+  }
+
+  function chosenIdentityToken(){
+    // Scryfall "id<=" means color identity is subset of these letters
+    // e.g., 'ur' allows U/R, UR multi, and mono U or mono R if not excluded elsewhere.
+    return D.chosenColors.join('').toLowerCase();
+  }
+
+async function fetchThreeChoices(){
+  const legal = formatToScryfallLegal(D.format);
+  const idTok = chosenIdentityToken();
+  const scopeQ = draftScopeQuery();
+  const rarityFilter = draftRarityQuery();
+
+  // rarity & artifact logic (unchanged policy)
+  const rareRound   = (!rarityFilter && D.picks > 0 && D.picks % 10 === 0);
+  const wantArtifact = Math.random() < 0.12; // 12%
+
+  // helper: shuffle in-place
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+  // helper: draw a unique random card from Scryfall /cards/random with a query
+  async function drawRandomCard(q, attempts = 14){
+    const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
+    const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+
+    for (let k=0; k<attempts; k++){
+      const url = `https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`;
+      const r = await scryfetch(url, { headers:{Accept:'application/json'} });
+      if (!r.ok) continue;
+      const c = await r.json();
+
+      // skip if no image or it violates “never lands”
+      const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+      if (!img) continue;
+      if ((c.type_line || '').toLowerCase().includes('land')) continue;
+
+      // skip if we've seen/suggested/picked this already in this draft
+      if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
+
+      // commander singleton: allow suggesting duplicates but they’ll be blocked on pick; we still try to avoid repeats here
+      return {
+        id: c.id,
+        name: c.name,
+        type: c.type_line || '',
+        cost: c.mana_cost || '',
+        colors: c.colors || [],
+        effect: c.oracle_text || '',
+        power: c.power || 0,
+        toughness: c.toughness || 0,
+        imageUrl: img,
+        rarity: c.rarity || ''
+      };
+    }
+    return null; // fallback handled by caller
+  }
+
+  // Build three CMC bands per round (diversity)
+  const bands = shuffle([[0,2],[3,4],[5,20]]); // low, mid, high
+
+  // Base query: format + colors; never lands
+  const base = [legal, scopeQ, rarityFilter, `id<=${idTok}`, '-t:land'].filter(Boolean).join(' ');
+
+  // Optional rarity upgrade
+  const rarityQ = rareRound ? ' (rarity>=rare)' : '';
+
+  // Optional artifact path (still respect format; artifacts are allowed outside color identity)
+  const maybeArtifactQ = wantArtifact ? ['t:artifact', legal, scopeQ, rarityFilter, '-t:land', rarityQ].filter(Boolean).join(' ') : null;
+
+  const picks = [];
+  for (let b = 0; b < bands.length; b++){
+    const [lo, hi] = bands[b];
+
+    // prefer color-filtered banded query; if artifact round, do one artifact slot
+    let q;
+    if (maybeArtifactQ && b === 0) {
+      // one slot is artifact in artifact rounds
+      q = `${maybeArtifactQ} cmc>=${lo} cmc<=${hi}`;
+    } else {
+      q = `${base}${rarityQ} cmc>=${lo} cmc<=${hi}`;
+    }
+
+    // Try to draw a unique card for this slot; broaden if necessary
+    let card = await drawRandomCard(q);
+    if (!card) {
+      // broaden by dropping cmc constraint
+      const broadQ = maybeArtifactQ && b === 0 ? maybeArtifactQ : `${base}${rarityQ}`;
+      card = await drawRandomCard(broadQ);
+    }
+    if (!card) {
+      // ultimate fallback: truly random within format, excluding lands
+      const lastResort = [legal, scopeQ, rarityFilter, '-t:land'].filter(Boolean).join(' ');
+      card = await drawRandomCard(lastResort);
+    }
+    if (card) {
+      // reserve these to avoid re-offering this round or later
+      if (!D.seenIds)   D.seenIds = {};
+      if (!D.seenNames) D.seenNames = {};
+      D.seenIds[card.id]   = 1;
+      D.seenNames[card.name] = 1;
+      picks.push(card);
+    }
+  }
+
+  // If for any reason we got fewer than 3, try to top up with very broad pulls
+  while (picks.length < 3){
+    const card = await drawRandomCard([legal, scopeQ, rarityFilter, '-t:land'].filter(Boolean).join(' '));
+    if (!card) break;
+    D.seenIds[card.id] = 1;
+    D.seenNames[card.name] = 1;
+    picks.push(card);
+  }
+
+  D.pool = picks.slice(0,3);
+}
+
+async function fetchThreeChoicesCustom(){
+  const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+  const chosen = new Set((D.chosenColors || []).map(String));
+  const filterByColors = !!(D.customParams && D.customParams.filterByColors);
+
+  function eligible(c, relaxColors=false){
+    if (!c || !c.name) return false;
+
+    // hard exclude lands
+    const type = (c.type || '').toLowerCase();
+    if (type.includes('land')) return false;
+
+    // singleton suggestion level (avoid offering a name already in deck when duplicates disallowed)
+    if (!D.allowDuplicates && D.deck.some(x => x.name === c.name)) return false;
+
+    // never re-offer same name within this draft
+    if (seenNameSet.has(c.name)) return false;
+
+    // color gating (optional)
+    if (filterByColors && !relaxColors && chosen.size){
+      const cols = new Set((c.colors || []).map(String));
+      for (const col of cols) if (!chosen.has(col)) return false;
+    }
+    return true;
+  }
+
+  const fullPool = Array.isArray(D.customPool) ? D.customPool : [];
+
+  // First pass: strict colors (if enabled), no lands
+  let pool = fullPool.filter(c => eligible(c, false));
+
+  // If too few options, relax color filter but still exclude lands
+  if (pool.length < 3) pool = fullPool.filter(c => eligible(c, true));
+
+  if (pool.length === 0){
+    // Nothing eligible — keep UI responsive and instruct the user
+    D.pool = [];
+    toast('No eligible cards left in custom pool. Consider allowing duplicates or disabling color filtering.');
+    return;
+  }
+
+  // Shuffle and take up to 3 distinct names
+  for (let i = pool.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picks = [];
+  const used = new Set();
+  for (const c of pool){
+    if (!used.has(c.name)){
+      picks.push(c);
+      used.add(c.name);
+      if (picks.length >= 3) break;
+    }
+  }
+
+  if (!D.seenNames) D.seenNames = {};
+  picks.forEach(c => { D.seenNames[c.name] = 1; });
+  D.pool = picks;
+}
+
+async function fetchCurrentDraftPool(){
+  if (D.mode === 'custom') await fetchThreeChoicesCustom();
+  else await fetchThreeChoices();
+}
+
+async function generateNextDraftPool(){
+  const currentPool = Array.isArray(D.pool) ? D.pool.slice() : [];
+  D.pool = [];
+  await fetchCurrentDraftPool();
+  const generated = Array.isArray(D.pool) ? D.pool.slice(0, 3) : [];
+  D.pool = currentPool;
+  return generated;
+}
+
+async function preloadNextPool(){
+  if (D.isPreloadingNext || (D.nextPool && D.nextPool.length > 0)) return;
+  if (D.screen !== 'picks') return;
+  D.isPreloadingNext = true;
+  try {
+    const generated = await generateNextDraftPool();
+    if (generated.length > 0) D.nextPool = generated;
+  } catch (e) {
+    console.warn('Draft preload failed:', e);
+  } finally {
+    D.isPreloadingNext = false;
+  }
+}
+
+async function usePreloadedPoolIfReady(){
+  if (D.nextPool && D.nextPool.length > 0) {
+    D.pool = D.nextPool.slice(0, 3);
+    D.nextPool = [];
+    D.poolError = false;
+    preloadNextPool();
+    return true;
+  }
+
+  if (D.isPreloadingNext) {
+    for (let i = 0; i < 20; i++) {
+      await _delay(100);
+      if (D.nextPool && D.nextPool.length > 0) {
+        D.pool = D.nextPool.slice(0, 3);
+        D.nextPool = [];
+        D.poolError = false;
+        preloadNextPool();
+        return true;
+      }
+      if (!D.isPreloadingNext) break;
+    }
+  }
+  return false;
+}
+
+async function ensurePool(){
+  if (D.pool.length > 0) {
+    preloadNextPool();
+    return;
+  }
+  if (await usePreloadedPoolIfReady()) return;
+  D.poolError = false;
+  // Try a few times before giving up — a single network blip shouldn't end the draft.
+  for (let attempt = 0; attempt < 3; attempt++){
+    try {
+      await fetchCurrentDraftPool();
+      if (D.pool.length > 0) {
+        D.poolError = false;
+        preloadNextPool();
+        return;
+      }
+    } catch(e){
+      console.error('Draft fetch attempt failed:', e);
+    }
+    await _delay(500 * (attempt + 1));
+  }
+  // Still nothing: flag it so Picks shows a Retry button instead of a dead screen.
+  D.pool = [];
+  D.poolError = true;
+  toast('Couldn’t load cards from Scryfall. Check your connection and press Retry.', 3500);
+}
+
+async function pushBasicLands(){
+  // Map draft shorthand → Scryfall type keyword
+  const typeName = { W:'Plains', U:'Island', B:'Swamp', R:'Mountain', G:'Forest' };
+
+  for (const k of Object.keys(D.basicLands)){
+    const n = (D.basicLands[k] | 0);
+    for (let i = 0; i < n; i++){
+      // random basic land printing with image
+      const q = `t:basic t:land type:${typeName[k]}`;
+      try{
+        const r = await scryfetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers:{Accept:'application/json'} });
+        if (!r.ok) throw new Error();
+        const c = await r.json();
+        const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+
+        D.deck.push({
+          id: c.id,
+          name: c.name || typeName[k],
+          type: c.type_line || `Basic Land — ${typeName[k]}`,
+          cost: '',
+          colors: [k],
+          effect: '',
+          power: 0, toughness: 0,
+          imageUrl: img,
+          rarity: c.rarity || 'common'
+        });
+
+        // also mark as seen so we never suggest this exact printing again
+        if (!D.seenIds)   D.seenIds = {};
+        if (!D.seenNames) D.seenNames = {};
+        D.seenIds[c.id] = 1;
+        D.seenNames[c.name] = 1;
+
+      }catch(e){
+        // fallback: push a text-only placeholder if Scryfall fails
+        D.deck.push({
+          id: 'land_'+k+'_'+i+'_'+Date.now(),
+          name: typeName[k],
+          type: 'Basic Land — ' + typeName[k],
+          cost: '',
+          colors: [k],
+          effect: '',
+          power: 0, toughness: 0,
+          imageUrl: '',
+          rarity: 'common'
+        });
+      }
+    }
+  }
+}
+
+  function canAdd(card){
+    if (D.allowDuplicates) return true;
+    return !D.deck.some(x => x.name === card.name);
+  }
+
+  async function pickCard(idx){
+    const card = D.pool[idx];
+    if (!card) return;
+    if (!canAdd(card)){
+      toast('Commander singleton: duplicate not allowed'); 
+      return;
+    }
+    if (!D.seenIds)   D.seenIds = {};
+if (!D.seenNames) D.seenNames = {};
+D.seenIds[card.id] = 1;
+D.seenNames[card.name] = 1;
+    D.deck.push(card);
+    D.picks += 1;
+    D.pool = []; // next round
+    const left = D.target - D.deck.length;
+    if (left <= 0){
+      D.screen = 'done';
+      render();
+      return;
+    }
+    await ensurePool();
+    render();
+  }
+
+  function deckCount(){ return D.deck.length; }
+  function leftCount(){ return Math.max(0, D.target - deckCount()); }
+
+function Mode(){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Builder</button>
+      <h1 style="font-size:24px;font-weight:800">Choose Draft Mode</h1>
+      <div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div class="card p-4" id="goTraditional" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Traditional Draft</h3>
+        <p class="text-xs text-gray">Random three-card offers from Scryfall, color-filtered by your choice; 60-card or 100-card Commander singleton.</p>
+      </div>
+      <div class="card p-4" id="goCustom" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Custom Draft</h3>
+        <p class="text-xs text-gray">Upload a JSON decklist (export format) to act as the draft pool. Optional color filtering. Same pick flow.</p>
+      </div>
+      <div class="card p-4" id="goWinston" style="cursor:pointer">
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Winston Draft</h3>
+        <p class="text-xs text-gray">Local hotseat two-player pile draft from a cube, collection, deck, or generated starter pool.</p>
+      </div>
+        <div class="card p-4" id="goDraftOff" style="cursor:pointer">
+    <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Draft-off (2-Player Online)</h3>
+    <p class="text-xs text-gray">
+      Both players connect online. Each round, 9 random non-land cards from a random set appear.
+      Players alternate picks until 3 remain; the starting player alternates each round. Repeat until both reach 42 cards, then add lands to 60.
+    </p>
+  </div>
+
+      
+    </div>
+  `;
+  wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
+  wrap.querySelector('#goTraditional').onclick = ()=>{
+    D.mode='traditional';
+    D.screen='setup';
+    render();
+  };
+  wrap.querySelector('#goCustom').onclick = ()=>{
+    D.mode='custom';
+    D.screen='custom-setup';
+    render();
+  };
+  wrap.querySelector('#goWinston').onclick = ()=>{
+    D.mode='winston';
+    D.screen='winston-setup';
+    render();
+  };
+wrap.querySelector('#goDraftOff').onclick = ()=>{
+  D.mode = 'draftoff';
+  D.screen = 'draftoff-setup';   // <-- switch the main Draft sub-screen
+  state.screen = 'draft';
+  render();
+};
+  return wrap;
+}
+
+  // setup steps -----------------------------------------------------------
+  function Setup(){
+    const wrap = document.createElement('div');
+    const mode = getModeConfig(D.modeId || state.selectedMode || 'standard-draft');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h1 style="font-size:24px;font-weight:700">Draft Setup</h1>
+        <div class="badge">${htmlEscape(mode.title)}</div>
+      </div>
+
+      <div class="grid grid-2">
+      <div class="card p-4">
+        <div class="mb-4">
+          <label>Format preset</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
+            <button class="btn btn-secondary" data-f="pioneer">Pioneer (60)</button>
+            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
+            <button class="btn btn-secondary" data-f="premodern">Premodern (60)</button>
+            <button class="btn btn-secondary" data-f="pauper" data-rarity="common">Pauper (60)</button>
+            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+          </div>
+        </div>
+        <button id="useModePreset" class="btn btn-primary">Use ${htmlEscape(mode.title)} Preset</button>
+        <p class="text-xs text-gray mt-4">After choosing a format, you get a color scheme, optional basics, then three-card picks until the deck is full.</p>
+      </div>
+
+      <div class="card p-4">
+        <label>Set or period scope</label>
+        <div class="grid grid-2" style="gap:10px">
+          <div>
+            <label class="text-xs">Set code</label>
+            <input id="draftSetCode" class="input" placeholder="e.g. ltr, mh3, dmu" value="${htmlEscape(D.setCode || '')}">
+          </div>
+          <div>
+            <label class="text-xs">Period</label>
+            <select id="draftEra" class="input">
+              <option value="" ${!D.era ? 'selected' : ''}>Any</option>
+              <option value="oldschool" ${D.era === 'oldschool' ? 'selected' : ''}>Old School</option>
+              <option value="premodern" ${D.era === 'premodern' ? 'selected' : ''}>Premodern</option>
+              <option value="modern-era" ${D.era === 'modern-era' ? 'selected' : ''}>Modern era</option>
+              <option value="recent" ${D.era === 'recent' ? 'selected' : ''}>Recent sets</option>
+            </select>
+          </div>
+        </div>
+        <label class="text-xs flex mt-4" style="gap:6px;align-items:center;cursor:pointer">
+          <input id="draftCommonsOnly" type="checkbox" ${D.rarity === 'common' ? 'checked' : ''}>
+          Commons only
+        </label>
+        <button id="useScopedDraft" class="btn btn-blue mt-4">Use Set / Period Scope</button>
+        <p class="text-xs text-gray mt-4">Leave set code blank to draft from the selected period. Set code wins if both are filled.</p>
+      </div>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => { D.screen='mode'; render(); };
+
+    function beginDraft(format, opts = {}){
+      // Fresh draft: clear the previous run's picks, or the first pick of the
+      // new draft instantly "completes" an already-full deck.
+      D.deck = [];
+      D.picks = 0;
+      D.pool = [];
+      D.nextPool = [];
+      D.isPreloadingNext = false;
+      D.seenIds = {};
+      D.seenNames = {};
+      D.chosenColors = [];
+      D.basicLands = { W:0, U:0, B:0, R:0, G:0 };
+      D.format = format;
+      D.target = opts.target || (format === 'commander' ? 100 : 60);
+      D.allowDuplicates = opts.allowDuplicates ?? (format !== 'commander');
+      D.rarity = opts.rarity ?? '';
+      D.setCode = (opts.setCode ?? '').trim().toLowerCase();
+      D.era = opts.era ?? '';
+      D.queryExtra = opts.queryExtra ?? '';
+      D.offeredColorSets = randomColorOffers();
+      setScreen('colors');
+    }
+
+    wrap.querySelector('#useModePreset').onclick = () => {
+      beginDraft(mode.format || 'standard', {
+        target: mode.target || (mode.format === 'commander' ? 100 : 60),
+        allowDuplicates: !mode.singleton,
+        rarity: mode.rarity || '',
+        queryExtra: mode.queryExtra || ''
+      });
+    };
+
+    wrap.querySelector('#useScopedDraft').onclick = () => {
+      const setCode = (wrap.querySelector('#draftSetCode').value || '').trim().toLowerCase();
+      const era = wrap.querySelector('#draftEra').value || '';
+      const commonsOnly = !!wrap.querySelector('#draftCommonsOnly').checked;
+      beginDraft(setCode ? 'set' : (era === 'premodern' ? 'premodern' : 'set'), {
+        target: 60,
+        rarity: commonsOnly ? 'common' : '',
+        setCode,
+        era
+      });
+    };
+
+    wrap.querySelectorAll('[data-f]').forEach(b=>{
+      b.onclick = ()=>{
+        beginDraft(b.dataset.f, { rarity: b.dataset.rarity || '' });
+      };
+    });
+    return wrap;
+  }
+  
+  function CustomSetup(){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Back</button>
+      <h2 style="font-size:20px;font-weight:700">Custom Draft — Pool & Settings</h2>
+      <div></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card p-4">
+        <label>Upload custom pool (.json)</label>
+        <input id="customPoolFile" type="file" accept=".json" class="input" />
+        <div id="customPoolStatus" class="text-xs text-gray" style="margin-top:8px">No file loaded.</div>
+
+        <div class="mb-4" style="margin-top:12px">
+          <label>Format</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
+            <button class="btn btn-secondary" data-f="pioneer">Pioneer (60)</button>
+            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
+            <button class="btn btn-secondary" data-f="premodern">Premodern (60)</button>
+            <button class="btn btn-secondary" data-f="pauper" data-rarity="common">Pauper (60)</button>
+            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+          </div>
+        </div>
+
+        <div class="flex" style="gap:10px;align-items:center;margin:8px 0 12px">
+          <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+            <input id="customFilterColors" type="checkbox" checked>
+            Only offer cards within chosen colors
+          </label>
+          <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+            <input id="customAllowDupes" type="checkbox" checked>
+            Allow duplicates
+          </label>
+        </div>
+
+        <div class="flex" style="gap:8px">
+          <button id="continueCustom" class="btn btn-primary" disabled>Continue</button>
+        </div>
+
+        <p class="text-xs text-gray mt-4">
+          JSON must be your app’s export format (i.e., <code>{"cards":[...]}</code>).
+          Cards in the pool with “Land” in type are ignored as draft offers.
+        </p>
+      </div>
+
+      <div class="card p-4">
+        <strong>Pool preview</strong>
+        <div id="customPoolPreview" class="text-xs text-gray" style="margin-top:6px">—</div>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
+
+  // format choose
+  wrap.querySelectorAll('[data-f]').forEach(b=>{
+    b.onclick = ()=>{
+      const f = b.dataset.f;
+      D.format = f;
+      D.target = (f==='commander') ? 100 : 60;
+      D.rarity = b.dataset.rarity || '';
+      // default singleton only in commander – can be overridden by the checkbox
+      D.allowDuplicates = (f!=='commander');
+      wrap.querySelector('#customAllowDupes').checked = D.allowDuplicates;
+    };
+  });
+
+  // file upload
+  const fileInput = wrap.querySelector('#customPoolFile');
+  const statusEl  = wrap.querySelector('#customPoolStatus');
+  const previewEl = wrap.querySelector('#customPoolPreview');
+  const contBtn   = wrap.querySelector('#continueCustom');
+
+  fileInput.onchange = async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try{
+      const text = await f.text();
+      const j = JSON.parse(text);
+      if (!Array.isArray(j.cards)) throw new Error('Missing "cards" array.');
+      // normalize / hydrate images just in case
+      const pool = j.cards.map(c=>{
+        const img = c.image || c.imageUrl ||
+          `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(c.name||'')}`;
+        return {
+          id: c.id || (c.name + '_' + Math.random()),
+          name: c.name,
+          type: c.type || '',
+          cost: c.cost || '',
+          colors: Array.isArray(c.colors) ? c.colors : [],
+          effect: c.effect || '',
+          power: c.power || 0,
+          toughness: c.toughness || 0,
+          imageUrl: img,
+          rarity: c.rarity || 'common'
+        };
+      });
+      D.customPool = pool;
+      statusEl.textContent = `Loaded ${pool.length} cards.`;
+      previewEl.innerHTML = `${pool.slice(0,12).map(x=>x.name).join(', ')}${pool.length>12?' …':''}`;
+      contBtn.disabled = pool.length === 0;
+    }catch(err){
+      statusEl.textContent = 'Invalid JSON: ' + err.message;
+      contBtn.disabled = true;
+    }
+  };
+
+  // params
+  wrap.querySelector('#customAllowDupes').onchange = (e)=>{
+    D.allowDuplicates = !!e.target.checked;
+  };
+  wrap.querySelector('#customFilterColors').onchange = (e)=>{
+    D.customParams.filterByColors = !!e.target.checked;
+  };
+
+  // continue to color selection (we keep the same flow)
+  contBtn.onclick = ()=>{
+    D.offeredColorSets = randomColorOffers();
+    D.chosenColors = []; // chosen next step
+    D.seenIds = {}; D.seenNames = {};
+    D.screen = 'colors';
+    render();
+  };
+
+  return wrap;
+}
+
+  function Colors(){
+    const offers = D.offeredColorSets;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size:20px;font-weight:700">Choose a color scheme</h2>
+        <div></div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex" style="gap:10px;flex-wrap:wrap">
+          ${offers.map((set,i)=>`
+            <button class="btn btn-secondary" data-i="${i}">
+              ${set.map(c=>`${manaSym[c]} ${c}`).join(' ')}
+            </button>
+          `).join('')}
+        </div>
+        <p class="text-xs text-gray mt-4">Choices include mono / double / triple colors at random. Draft pool will be filtered to these colors when possible.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => setScreen('setup');
+    wrap.querySelectorAll('[data-i]').forEach(b=>{
+      b.onclick = ()=>{
+        D.chosenColors = offers[+b.dataset.i];
+        setScreen('lands');
+      };
+    });
+    return wrap;
+  }
+
+  function Lands(){
+    const wrap = document.createElement('div');
+    const cols = D.chosenColors;
+    const inputs = cols.map(c=>`
+      <div>
+        <label>${c} ${colorNames[c]}</label>
+        <input class="input" type="number" min="0" max="${(D.format==='commander')?40:30}" value="0" data-c="${c}">
+      </div>`).join('');
+
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Back</button>
+        <h2 style="font-size:20px;font-weight:700">Optional: pre-fill basic lands</h2>
+        <div></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card p-4">
+          <div class="grid grid-2" style="gap:12px">${inputs}</div>
+          <div class="mt-4 flex" style="gap:8px">
+            <button id="skip" class="btn btn-secondary">Skip</button>
+            <button id="apply" class="btn btn-primary">Continue</button>
+          </div>
+          <p class="text-xs text-gray mt-4">Example: set Islands=14 and continue; the draft will fill the remaining slots to ${D.target}.</p>
+        </div>
+        <div class="card p-4">
+          <div><strong>Format:</strong> ${D.format}, target ${D.target} cards</div>
+          <div class="text-xs text-gray mt-2">Commander: singletons enforced.</div>
+        </div>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = () => setScreen('colors');
+    wrap.querySelector('#skip').onclick = () => { D.basicLands={W:0,U:0,B:0,R:0,G:0}; beginPicks(); };
+    wrap.querySelector('#apply').onclick = ()=>{
+      const obj = {W:0,U:0,B:0,R:0,G:0};
+      wrap.querySelectorAll('input[data-c]').forEach(inp=>{
+        obj[inp.dataset.c] = Math.max(0, parseInt(inp.value||'0',10));
+      });
+      D.basicLands = obj;
+      beginPicks();
+    };
+    return wrap;
+  }
+  
+  function LandsFillScreen(){
+  const D = state.draft;
+  const wrap = document.createElement('div');
+  wrap.className = 'screen';
+    const who = D.lands.who;
+
+// Bind globals into this scope (works whether they’re defined inside or outside the IIFE)
+ const BASIC     = (window.BASIC_LANDS || ['Plains','Island','Swamp','Mountain','Forest']);
+ const fetchLand = window.fetchBasicLandCard || (async (landName)=>{
+   const r = await scryfetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(landName)}`);
+   const c = await r.json(); const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+   return { id:c.id, name:c.name, type:c.type_line||'Basic Land', cost:'', colors:[], effect:'', power:0, toughness:0, imageUrl:img, rarity:c.rarity||'common' };
+ });
+ const cloner    = window.cloneCard || (base => ({ ...base, id: 'id_'+Math.random().toString(36).slice(2)+Date.now().toString(36) }));
+
+
+  wrap.innerHTML = `
+    <div style="max-width:800px;margin:0 auto;padding:16px">
+      <h2 style="font-weight:800;font-size:22px;margin-bottom:8px">
+        Basic Lands — Player ${who}
+      </h2>
+      <p class="text-sm" style="opacity:.8;margin-bottom:10px">
+        Deck size target: ${D.lands.targetTotal}. Current nonland cards: <b>${D.lands.baseCount}</b>.
+        Remaining slots: <b id="remain">${D.lands.remaining}</b>.
+      </p>
+      <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px">
+           ${BASIC.map(n => `
+          <div class="card p-3" data-land="${n}">
+            <div style="font-weight:700;margin-bottom:6px">${n}</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-secondary" data-act="dec" data-name="${n}">−</button>
+              <div id="cnt_${n}" style="min-width:30px;text-align:center">${D.lands.counts[n] || 0}</div>
+              <button class="btn btn-secondary" data-act="inc" data-name="${n}">+</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="finalize" class="btn btn-primary" ${D.lands.remaining>0?'disabled':''}>
+          Finalize Player ${who}
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Wire +/- and finalize
+  wrap.querySelectorAll('button[data-act]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const name = btn.getAttribute('data-name');
+      const act  = btn.getAttribute('data-act');
+      if (act === 'inc' && D.lands.remaining > 0){
+        D.lands.counts[name] += 1;
+        D.lands.remaining -= 1;
+      } else if (act === 'dec' && D.lands.counts[name] > 0){
+        D.lands.counts[name] -= 1;
+        D.lands.remaining += 1;
+      }
+      wrap.querySelector('#remain').textContent = D.lands.remaining;
+      wrap.querySelector('#finalize').disabled  = D.lands.remaining > 0;
+  BASIC.forEach(n => {
+        const slot = wrap.querySelector('#cnt_'+n);
+        if (slot) slot.textContent = D.lands.counts[n];
+      });
+    };
+  });
+
+  wrap.querySelector('#finalize').onclick = async (ev)=>{
+    // Each land type costs one awaited fetch; without a guard a second click
+    // runs the whole loop again and doubles every basic in the pool.
+    if (D.lands.finalizing) return;
+    D.lands.finalizing = true;
+    ev.currentTarget.disabled = true;
+    ev.currentTarget.textContent = 'Finalizing…';
+    // Build land cards and append to the player's pool
+    const pool = (who === 1) ? D.off.p1 : D.off.p2;
+
+for (const n of BASIC){
+      const k = D.lands.counts[n];
+      if (k <= 0) continue;
+        const base = await fetchLand(n);
+  for (let i=0;i<k;i++) pool.push(cloner(base));
+  
+    }
+
+    if (D.off.isLocal){
+  if (who === 1){
+    if (D.off.vsBot && D.off.p2LandsDone){
+      // The bot already finished its deck — straight to the results screen.
+      state.decks.player1 = (D.off.p1 || []).slice();
+      state.decks.player2 = (D.off.p2 || []).slice();
+      D.screen = 'decklists';
+      render();
+      return;
+    }
+    initLandsFill(2);
+    render();
+    return;
+  } else {
+    // Both players finalized: save decks and show the side-by-side results screen
+    state.decks.player1 = (D.off.p1 || []).slice();
+    state.decks.player2 = (D.off.p2 || []).slice();
+    D.screen = 'decklists';
+    render();
+    return;
+  }
+}
+
+// Online: set my deck and send to opponent
+const meKey = 'player' + state.currentPlayer;
+const myPlayer = state.currentPlayer;
+state.decks[meKey] = pool.slice();
+D.deck = pool.slice();
+
+// Mark my lands as done
+if (myPlayer === 1) {
+  D.off.p1LandsDone = true;
+} else {
+  D.off.p2LandsDone = true;
+}
+
+// Send my finished deck to opponent
+sendDraftOff({
+  type: 'draftoff_lands_done',
+  player: myPlayer,
+  deck: pool.slice()
+});
+
+// Check if opponent already finished (from received message)
+const oppDone = (myPlayer === 1) ? D.off.p2LandsDone : D.off.p1LandsDone;
+if (oppDone) {
+  // Both done - go to results screen
+  state.decks.player1 = (D.off.p1 || []).slice();
+  state.decks.player2 = (D.off.p2 || []).slice();
+  D.screen = 'decklists';
+} else {
+  // Show waiting message
+  D.screen = 'landswait';
+}
+render();
+
+  };
+
+  return wrap;
+}
+
+function LandsWaitScreen(){
+  const D = state.draft;
+  const wrap = document.createElement('div');
+  wrap.className = 'screen';
+
+  const myPlayer = state.currentPlayer;
+  const myDeck = (myPlayer === 1) ? D.off.p1 : D.off.p2;
+
+  wrap.innerHTML = `
+    <div style="max-width:600px;margin:0 auto;padding:32px;text-align:center">
+      <h2 style="font-weight:800;font-size:24px;margin-bottom:16px">
+        Lands Finalized!
+      </h2>
+      <div class="card p-4 mb-4" style="background:rgba(59,130,246,0.15);border-color:#3b82f6;">
+        <div style="font-size:48px;margin-bottom:12px">⏳</div>
+        <p style="font-size:16px;margin-bottom:8px">
+          Waiting for opponent to finish adding lands...
+        </p>
+        <p class="text-sm text-gray">
+          Your deck: ${myDeck.length} cards
+        </p>
+      </div>
+      <div class="text-xs text-gray">
+        The results screen will appear when both players have finalized their decks.
+      </div>
+    </div>
+  `;
+
+  return wrap;
+}
+
+function DraftOffResults(){
+  const D = state.draft;
+  const wrap = document.createElement('div');
+  wrap.className = 'screen';
+
+  const p1 = D.off.p1 || [];
+  const p2 = D.off.p2 || [];
+
+  // group by name for a tidy list
+  function group(cards){
+    const m = new Map();
+    for (const c of cards){ m.set(c.name || 'Unknown', (m.get(c.name || 'Unknown')||0)+1); }
+    return Array.from(m.entries()).sort((a,b)=> b[1]-a[1] || (''+a[0]).localeCompare(b[0]));
+  }
+  const g1 = group(p1);
+  const g2 = group(p2);
+
+  function listHTML(g){
+    return g.map(([name,qty])=>`<div class="flex items-center justify-between text-sm py-1">
+      <span>${name}</span><span class="opacity-80">×${qty}</span></div>`).join('');
+  }
+
+  wrap.innerHTML = `
+    <div style="max-width:1000px;margin:0 auto;padding:16px">
+      <div class="header">
+        <button id="backToMenu" class="btn btn-secondary text-sm">← Menu</button>
+        <h2 style="font-size:20px;font-weight:700">Draft-off Results</h2>
+        <div class="badge">P1: ${p1.length}/60 • P2: ${p2.length}/60</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card p-4">
+          <h3 style="font-weight:800;margin-bottom:8px">Player 1 Deck (${p1.length})</h3>
+          <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+            ${listHTML(g1)}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="useP1" class="btn btn-primary">Use as Player 1 deck</button>
+            <button id="dlP1" class="btn btn-secondary">Download JSON</button>
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <h3 style="font-weight:800;margin-bottom:8px">Player 2 Deck (${p2.length})</h3>
+          <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+            ${listHTML(g2)}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="useP2" class="btn btn-primary">Use as Player 2 deck</button>
+            <button id="dlP2" class="btn btn-secondary">Download JSON</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-4 mt-4" style="text-align:center">
+        <h3 style="font-weight:800;margin-bottom:12px">Ready to Battle?</h3>
+        <p class="text-sm text-gray mb-3">Load both decks and start a game with your drafted cards.</p>
+        <button id="startBattle" class="btn btn-green" style="padding:12px 32px;font-size:16px">
+          Start Battle with Drafted Decks
+        </button>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('#backToMenu').onclick = ()=>{ state.screen = 'menu'; render(); };
+
+  function downloadNamedDeck(cards, filename){
+    const data = JSON.stringify({ name: filename.replace(/\.json$/,''), cards: cards }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Online: currentPlayer is the WebRTC seat (host=1, joiner=2) and drives pick
+  // gating, deck sync and turn attribution — reassigning it here would swap the
+  // player's identity mid-session. Only the local hotseat may switch seats.
+  wrap.querySelector('#useP1').onclick = ()=>{
+    state.decks.player1 = p1.slice();
+    if (D.off.isLocal) state.currentPlayer = 1;
+    toast('Loaded as Player 1 deck.');
+    render();
+  };
+  wrap.querySelector('#useP2').onclick = ()=>{
+    state.decks.player2 = p2.slice();
+    if (D.off.isLocal) state.currentPlayer = 2;
+    toast('Loaded as Player 2 deck.');
+    render();
+  };
+  wrap.querySelector('#dlP1').onclick = ()=> downloadNamedDeck(p1, 'draftoff_player1.json');
+  wrap.querySelector('#dlP2').onclick = ()=> downloadNamedDeck(p2, 'draftoff_player2.json');
+
+  wrap.querySelector('#startBattle').onclick = ()=>{
+    // Load both decks
+    state.decks.player1 = p1.slice();
+    state.decks.player2 = p2.slice();
+
+    // If online, go to battle menu; if local (hotseat), go to local battle
+    if (D.off.isLocal) {
+      // Local hotseat battle
+      state.onlineMode = false;
+      state.screen = 'battlemenu';
+    } else {
+      // Online battle - connection should still be open
+      state.screen = 'battlemenu';
+    }
+    render();
+  };
+
+  return wrap;
+}
+
+ async function beginPicks(){
+   // prefill lands into deck if any (with images)
+   await pushBasicLands();
+   D.screen = 'picks';
+   await ensurePool();
+   render();
+ }
+
+  function Picks(){
+    const wrap = document.createElement('div');
+    const preloadStatus = (D.nextPool && D.nextPool.length) ? 'Next ready' : (D.isPreloadingNext ? 'Preloading next' : '');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Exit</button>
+        <h2 style="font-size:20px;font-weight:700">Pick one card • ${deckCount()}/${D.target}</h2>
+        <div class="badge">Colors: ${D.chosenColors.join(', ') || '-'}${draftScopeLabel() ? ' • ' + htmlEscape(draftScopeLabel()) : ''}</div>
+        ${preloadStatus ? `<div class="badge">${preloadStatus}</div>` : ''}
+      </div>
+
+<!-- Stats toggle for draft deck -->
+<button id="draftStatsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="draftStatsCard">
+  <span class="left"><span class="chip"></span><span>Draft Deck Statistics </span></span>
+  <span class="chev">▸</span>
+</button>
+<div class="card p-4 hidden" id="draftStatsCard" style="margin-bottom:12px">
+  <div id="manaCurveDraftChart"></div>
+</div>
+
+      <div class="draft-wrap">
+        <div class="draft-stage">
+          <div id="draftRow" class="draft-row">
+            ${D.pool.map((c,i)=>`
+              <div class="draft-choice" data-i="${i}">
+                ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block">`
+                              : `<div style="height:220px;background:#374151;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+                <div style="position:absolute;left:6px;top:6px" class="badge">${(c.rarity||'').toUpperCase()}</div>
+                <div style="position:absolute;right:6px;bottom:6px" class="badge">${c.name}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${D.poolError ? `
+            <div class="text-center" style="padding:24px">
+              <p class="text-red mb-4">Couldn’t load cards from Scryfall.</p>
+              <button id="retryPool" class="btn btn-primary">↻ Retry</button>
+            </div>` : ''}
+          <div class="text-xs text-gray mt-4">Click one card to draft; the other two disappear.</div>
+        </div>
+
+        <div class="draft-side">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Draft List</strong></div>
+            <div class="text-xs badge">Left: ${leftCount()}</div>
+          </div>
+          <div id="draftList" style="margin-top:8px">
+            ${D.deck.map(c=>`
+              <div class="draft-small">
+                ${c.imageUrl ? `<img src="${c.imageUrl}">` : `<div class="badge">${c.name}</div>`}
+                <div class="text-xs" style="line-height:1.1">
+                  <div><strong>${c.name}</strong></div>
+                  <div class="text-gray">${c.type || ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="mt-4 flex" style="gap:8px">
+            <button id="finishNow" class="btn btn-secondary">Finish</button>
+          </div>
+          <p class="text-xs text-gray mt-2">“Finish” saves current picks into your deck even if not full.</p>
+        </div>
+      </div>
+    `;
+
+    // events
+    wrap.querySelector('#back').onclick = () => {
+      if (!confirm('Leave draft? Picks will be kept only if you finish.')) return;
+      state.screen='builder'; render();
+    };
+      
+      wrap.querySelectorAll('.draft-choice').forEach(el=>{
+  el.onclick = ()=> pickCard(+el.dataset.i);
+});
+    wrap.querySelector('#finishNow').onclick = ()=> setScreen('done');
+    const retryBtn = wrap.querySelector('#retryPool');
+    if (retryBtn) retryBtn.onclick = async ()=>{ retryBtn.disabled = true; retryBtn.textContent = 'Loading…'; await ensurePool(); render(); };
+
+    
+    // Ensure stats CSS is present (re-use from builder if available)
+(function ensureDeckStatsCSS(){
+  if (document.getElementById('deckStatsCSS')) return;
+  const s = document.createElement('style');
+  s.id = 'deckStatsCSS';
+  s.textContent = `
+  .ds-card{background:rgba(255,255,255,0.03);border:1px solid rgba(139,92,246,0.35);border-radius:12px;padding:12px;}
+  .ds-title{font-size:12px;letter-spacing:.04em;text-transform:uppercase;opacity:.8;margin-bottom:8px;}
+  .ds-row{display:grid;gap:12px;}
+  @media (min-width:900px){.ds-row{grid-template-columns:2fr 1fr 1fr;}}
+  .ds-curve{height:160px;display:grid;align-items:end;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));padding:8px 6px 0 6px;}
+  .ds-col{position:relative;height:100%;display:flex;flex-direction:column;justify-content:flex-end;}
+  .ds-seg{width:100%;border:2px solid #ecfdf5;}
+  .ds-seg.crea{background:linear-gradient(180deg,#34d399 0%,#10b981 100%);border-radius:8px 8px 0 0;}
+.ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 8px 8px; }
+.ds-seg.noncrea.only{
+  /* ensure the top “white outline” always shows */
+  border-top-width: 2px !important;
+  border-top-style: solid !important;
+  border-top-color: #ecfdf5 !important;
+
+  /* force the same rounded cap as the green bars */
+  border-top-left-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+  border-radius: 8px 8px 4px 4px !important;
+
+  /* optional: add a subtle crisp edge like the green cap */
+  box-shadow: 0 0 0 1px rgba(236,253,245,.65) inset;
+}
+  .ds-x{margin-top:6px;display:grid;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));font-size:11px;opacity:.8;text-align:center;}
+  .ds-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:11px;opacity:.85;}
+  .ds-key{display:inline-flex;align-items:center;gap:6px;}
+  .ds-swatch{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.5);}
+  .ds-pies{display:grid;gap:12px;grid-template-columns:1fr;}
+  @media (min-width:900px){.ds-pies{grid-template-columns:1fr 1fr;}}
+  .ds-piewrap{display:flex;gap:12px;align-items:center;}
+  .ds-pie{--size:120px;width:var(--size);height:var(--size);border-radius:50%;border:2px solid rgba(236,253,245,0.7);box-shadow:inset 0 0 16px rgba(0,0,0,0.35);}
+  .ds-list{font-size:12px;line-height:1.6;}
+  .ds-list .row{display:flex;justify-content:space-between;gap:12px;}
+  .ds-small{font-size:12px;opacity:.8;}
+  .stats-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(31,41,55,0.85);border:1px solid rgba(139,92,246,0.55);border-radius:10px;font-size:14px;font-weight:700;color:#e9d5ff;cursor:pointer;box-shadow:0 4px 14px rgba(139,92,246,0.25);transition:border-color .15s ease, background .15s ease, transform .08s ease;margin-bottom:10px;}
+  .stats-toggle:hover{border-color:#a78bfa;background:rgba(31,41,55,0.95);}
+  .stats-toggle:active{transform:translateY(1px);}
+  .stats-toggle .left{display:flex;align-items:center;gap:10px;}
+  .stats-toggle .chip{width:10px;height:10px;border-radius:50%;background:linear-gradient(180deg,#34d399 0%,#10b981 100%);border:1px solid #ecfdf5;box-shadow:0 0 0 2px rgba(16,185,129,25);}
+  .stats-toggle .chev{font-size:16px;opacity:.9;transition:transform .15s ease;}
+  .stats-toggle.open .chev{transform:rotate(90deg);}
+  `;
+  document.head.appendChild(s);
+})();
+
+function typesBreakdownLocal(cards){
+  const map = new Map();
+  const push = (k)=> map.set(k, (map.get(k)||0)+1);
+  for (const c of cards){
+    const t = (c.type||'').toLowerCase();
+    if (!t){ push('Other'); continue; }
+    if (t.includes('artifact') && t.includes('creature')) { push('Artifact Creature'); continue; }
+    if (t.includes('creature'))     { push('Creature'); continue; }
+    if (t.includes('instant'))      { push('Instant'); continue; }
+    if (t.includes('sorcery'))      { push('Sorcery'); continue; }
+    if (t.includes('enchantment'))  { push('Enchantment'); continue; }
+    if (t.includes('planeswalker')) { push('Planeswalker'); continue; }
+    if (t.includes('artifact'))     { push('Artifact'); continue; }
+    if (t.includes('basic') && t.includes('land')) { push('Basic Land'); continue; }
+    if (t.includes('land'))         { push('Land'); continue; }
+    push('Other');
+  }
+  return map;
+}
+function isLandLocal(c){ return ((c.type||'')+'').toLowerCase().includes('land'); }
+function isCreatureLocal(c){ return ((c.type||'')+'').toLowerCase().includes('creature'); }
+
+function getCMCLocal(card){ return getCMC(card); }   // delegates to the canonical top-level getCMC
+
+function stackedCurveLocal(cards){
+  const bins = new Map(); let peak = 0;
+  for (const c of cards){
+    if (isLandLocal(c)) continue;
+    const cmc = getCMCLocal(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    const o = bins.get(cmc) || {crea:0, non:0};
+    if (isCreatureLocal(c)) o.crea += 1; else o.non += 1;
+    bins.set(cmc, o);
+    const tot = o.crea + o.non; if (tot > peak) peak = tot;
+  }
+  const keys = [...bins.keys()].sort((a,b)=>a-b);
+  return { keys, bins, peak };
+}
+function averageCMCLocal(cards){
+  let sum=0, n=0;
+  for (const c of cards){
+    if (isLandLocal(c)) continue;
+    const cmc = getCMCLocal(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    sum+=cmc; n++;
+  }
+  return n? (sum/n) : 0;
+}
+function countManaSymbolsLocal(cards){
+  const out = {W:0,U:0,B:0,R:0,G:0};
+  for (const c of cards){
+    const s = (c?.manaCost || c?.manacost || c?.cost || '').toString().toUpperCase();
+    if (!s) continue;
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens){
+      const inner = t.slice(1,-1).toUpperCase();
+      for (const ch of inner.split(/[^A-Z]/).join('')){
+        if (out.hasOwnProperty(ch)) out[ch] += 1;
+      }
+    }
+    if (!tokens.length){
+      (s.match(/[WUBRG]/g)||[]).forEach(ch => out[ch] += 1);
+    }
+  }
+  return out;
+}
+function pieStyleFromCountsLocal(obj, palette){
+  const entries = Object.entries(obj).filter(([k,v]) => v>0);
+  const total = entries.reduce((a, [,v])=>a+v, 0) || 1;
+  let acc = 0;
+  const stops = entries.map(([k,v])=>{
+    const start = acc / total * 360; acc += v; const end = acc / total * 360;
+    const color = palette[k] || '#999';
+    return `${color} ${start}deg ${end}deg`;
+  }).join(', ');
+  return `background: conic-gradient(${stops});`;
+}
+
+function renderDraftStats(){
+  const mount = wrap.querySelector('#manaCurveDraftChart');
+  if (!mount) return;
+  const deck = D.deck || [];
+  const avg  = averageCMCLocal(deck);
+  const { keys, bins, peak } = stackedCurveLocal(deck);
+
+  const manaColors = countManaSymbolsLocal(deck);
+  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+
+  const tb = typesBreakdownLocal(deck);
+  const typeObj = Object.fromEntries(tb);
+  const typePalette = {
+    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
+    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
+    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+  };
+
+  const cols = keys.map(k=>{
+    const o = bins.get(k) || {crea:0, non:0};
+    const tot = o.crea + o.non;
+    const hC = (peak && o.crea) ? Math.max(4, Math.round(o.crea/peak*100)) : 0;
+    const hN = peak ? Math.max(0, Math.round(o.non/peak*100)) : 0;
+    return `
+      <div class="ds-col" title="Total ${tot} (Creatures ${o.crea}, Non-creatures ${o.non})">
+        ${hN?`<div class="ds-seg noncrea${hC? '' : ' only'}" style="height:${hN}%"></div>`:''}
+        ${hC?`<div class="ds-seg crea" style="height:${hC}%"></div>`:''}
+      </div>`;
+  }).join('');
+  const xlabels = keys.map(k=>`<div>${k}</div>`).join('');
+  
+  const colorTitle = Object.entries(manaColors)
+  .filter(([,v])=>v>0)
+  .map(([k,v])=>`${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}: ${v}`)
+  .join(' • ');
+
+  const curveLegend = `
+    <div class="ds-legend">
+      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
+    </div>`;
+
+  const colorRows = Object.entries(manaColors)
+    .map(([k,v])=>`<div class="row"><span>${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}</span><span>${v}</span></div>`)
+    .join('');
+  const colorPieStyle = pieStyleFromCountsLocal(manaColors, colorPalette);
+
+  const typeEntries = Object.entries(typeObj).filter(([,v])=>v>0);
+  const typeTotal = typeEntries.reduce((a,[,v])=>a+v,0) || 1;
+  const typePieStyle = pieStyleFromCountsLocal(typeObj, typePalette);
+  const typeRows = typeEntries
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>{
+      const pct = (v/typeTotal*100).toFixed(1)+'%';
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
+    }).join('');
+
+  mount.innerHTML = `
+    <div class="ds-card">
+      <div class="ds-title">Mana Curve</div>
+      <div class="ds-row">
+        <div>
+          <div class="ds-curve" style="--bins:${keys.length}">${cols}</div>
+          <div class="ds-x" style="--bins:${keys.length}">${xlabels}</div>
+          ${curveLegend}
+        </div>
+        <div class="ds-piecard">
+          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${colorPieStyle}" title="${colorTitle}"></div>
+            <div class="ds-list">${colorRows || `<div class="ds-small">No mana symbols found.</div>`}</div>
+          </div>
+        </div>
+        <div class="ds-piecard">
+          <div class="ds-title">Types</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${typePieStyle}"></div>
+            <div class="ds-list">${typeRows || `<div class="ds-small">No type info available.</div>`}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+const toggle = wrap.querySelector('#draftStatsToggle');
+const card   = wrap.querySelector('#draftStatsCard');
+const chev   = toggle ? toggle.querySelector('.chev') : null;
+function openDraftStats(){ if (!card) return; card.classList.remove('hidden'); if (toggle){ toggle.classList.add('open'); toggle.setAttribute('aria-expanded','true'); if (chev) chev.textContent='▾'; } renderDraftStats(); }
+function closeDraftStats(){ if (!card) return; card.classList.add('hidden'); if (toggle){ toggle.classList.remove('open'); toggle.setAttribute('aria-expanded','false'); if (chev) chev.textContent='▸'; } }
+if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classList.contains('hidden')) openDraftStats(); else closeDraftStats(); }; }
+//// end 
+    
+    return wrap;
+  }
+  
+  function DraftOffSetup(){
+  const wrap = document.createElement('div');
+
+  // Reuse your existing connection UI pattern: waiting offer → paste answer → connected
+  let connUI = '';
+  if (state.onlineMode && state.waitingForAnswer && state.roomCode) {
+    connUI = `
+      <div class="card" style="background: rgba(59,130,246,0.15); border-color:#3b82f6; margin-bottom: 24px;">
+        <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+        <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
+        <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
+        <hr style="border-color: #4b5563; margin: 16px 0;">
+        <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
+        <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+        <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+      </div>`;
+  } else if (state.onlineMode && state.answerCode) {
+    connUI = `
+      <div class="card" style="background: rgba(5,150,105,0.2); border-color:#059669; margin-bottom: 24px;">
+        <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+        <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
+        <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+        <p class="text-green text-sm mt-2">Waiting for host…</p>
+      </div>`;
+  } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+    connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to draft.</div>';
+  }
+
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
+      <h2 style="font-size:20px;font-weight:700">Draft-off • Setup</h2>
+      <div></div>
+    </div>
+
+    ${connUI}
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:6px">Host Draft-off</h3>
+        <p class="text-xs text-gray mb-2">Create a room and share the code.</p>
+        <button id="hostOff" class="btn btn-primary">Host</button>
+      </div>
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:6px">Join Draft-off</h3>
+        <p class="text-xs text-gray mb-2">Paste the host’s code to connect.</p>
+        <input id="joinCode" class="input mb-2" placeholder="Paste host code">
+        <button id="joinOff" class="btn btn-primary">Join</button>
+      </div>
+      
+        <div class="card p-4">
+    <h3 style="font-weight:800;margin-bottom:6px">Local (Hotseat)</h3>
+    <p class="text-xs text-gray mb-2">Two players on one device. No internet connection.</p>
+    <button id="localOff" class="btn btn-secondary">Start Local</button>
+  </div>
+
+      <div class="card p-4">
+    <h3 style="font-weight:800;margin-bottom:6px">Solo vs Bot 🤖</h3>
+    <p class="text-xs text-gray mb-2">Draft against a computer opponent, then battle its deck.</p>
+    <button id="botOff" class="btn btn-primary">Start vs Bot</button>
+  </div>
+
+    </div>
+  `;
+
+  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
+
+  const hostBtn = wrap.querySelector('#hostOff');
+  if (hostBtn) hostBtn.onclick = async ()=>{
+    state.onlineMode = true;
+    await createOnlineRoom();        // uses your existing WebRTC code
+    // stay on setup until connected; host will paste answer; once connected, we can go to room
+    render();
+  };
+
+  const joinBtn = wrap.querySelector('#joinOff');
+  if (joinBtn) joinBtn.onclick = async ()=>{
+    const code = (wrap.querySelector('#joinCode').value||'').trim();
+    if (!code) { alert('Paste a host code'); return; }
+    state.onlineMode = true;
+    await joinOnlineRoom(code);
+    // when connected, switch to room
+    if (state.dataChannel && state.dataChannel.readyState === 'open'){
+      D.screen = 'draftoff';
+      render();
+    }
+  };
+  
+  const startLocalDraftOff = async (vsBot) => {
+    // Ensure we're not in online mode
+    state.onlineMode = false;
+    state.isHost = true;           // single machine owns the flow
+    state.currentPlayer = 1;       // arbitrary; not used for gating in local
+    // initialize Draft-off local
+    D.mode = 'draftoff';
+    D.off.screen = 'room';
+    D.off.round = 0;
+    D.off.p1 = [];
+    D.off.p2 = [];
+    D.off.table = [];
+    D.off.currentSet = null;
+    D.off.startingPlayer = 1;
+    D.off.currentPicker  = 1;
+    D.off.isLocal = true;
+    D.off.vsBot = !!vsBot;
+    D.off.p1LandsDone = false;
+    D.off.p2LandsDone = false;
+
+    D.screen = 'draftoff';
+    render();
+
+    // Start first pack with Player 1 picking first
+    if (window.draftOffStartNewPack) await window.draftOffStartNewPack(true);
+    render();
+  };
+  const localBtn = wrap.querySelector('#localOff');
+  if (localBtn) localBtn.onclick = () => startLocalDraftOff(false);
+  const botBtn = wrap.querySelector('#botOff');
+  if (botBtn) botBtn.onclick = () => startLocalDraftOff(true);
+
+  // wire offer/answer UI if present
+  const copyOffer = wrap.querySelector('#copyOffer');
+  if (copyOffer) copyOffer.onclick = ()=>{
+    navigator.clipboard.writeText(state.roomCode||'');
+    copyOffer.textContent = 'Copied ✓';
+    setTimeout(()=>copyOffer.textContent='Copy Code',1000);
+  };
+  const submitAnswer = wrap.querySelector('#submitAnswer');
+  if (submitAnswer) submitAnswer.onclick = async ()=>{
+    const ans = (wrap.querySelector('#answerInput').value||'').trim();
+    if (!ans) return;
+    await finishRoomHandshake(ans);  // this exists in your online flow
+    // The room + first pack are driven by the datachannel onopen handler once
+    // the connection is actually live; nothing to start here.
+    D.screen = 'draftoff';
+    render();
+  };
+
+  const copyAnswer = wrap.querySelector('#copyAnswer');
+  if (copyAnswer) copyAnswer.onclick = ()=>{
+    navigator.clipboard.writeText(state.answerCode||'');
+    copyAnswer.textContent = 'Copied ✓';
+    setTimeout(()=>copyAnswer.textContent='Copy Answer Code',1000);
+  };
+
+  return wrap;
+}
+
+function DraftOffRoom(){
+  
+  const me = state.currentPlayer;
+const myTurn = D.off.isLocal ? true : (D.off.currentPicker === me);
+const status = D.off.isLocal
+  ? (D.off.currentPicker === 1 ? 'Player 1 pick' : 'Player 2 pick')
+  : (myTurn ? 'Your pick' : 'Waiting for opponent…');
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="leave" class="btn btn-secondary text-sm">← Exit</button>
+      <h2 style="font-size:20px;font-weight:700">Draft-off • Round ${D.off.round} • ${status}</h2>
+      <div class="badge">Pool: Random mix</div>
+      <div class="badge">P1: ${D.off.p1.length}/42 • P2: ${D.off.p2.length}/42</div>
+    </div>
+    
+
+    <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
+      <div class="card p-4">
+        <div id="table" class="grid" style="grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px;">
+          ${D.off.table.map((c,i)=>`
+            <div class="card" data-i="${i}" style="padding:0;position:relative;cursor:${myTurn?'pointer':'not-allowed'}">
+              ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block;border-radius:8px">`
+                           : `<div style="height:220px;background:#374151;border-radius:8px;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+              <div class="badge" style="position:absolute;left:6px;top:6px">${(c.rarity||'').toUpperCase()}</div>
+              <div class="badge" style="position:absolute;right:6px;bottom:6px">${c.name}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="text-xs text-gray mt-2">Picks until table reaches 3 cards, then a new set appears. Starting player alternates each round.</div>
+      </div>
+
+      <div>
+        <div class="card p-4">
+          <div class="text-xs text-gray mb-2">Hover to preview</div>
+          <img id="hoverImg" style="width:100%;border-radius:8px;display:none">
+          <div class="mt-2 text-xs text-gray">
+            You: ${isMe(1)? D.off.p1.length : D.off.p2.length} • Opp: ${isMe(1)? D.off.p2.length : D.off.p1.length} (target 42)
+          </div>
+          <div class="mt-2">
+            <button id="toLands" class="btn btn-primary" ${ ( (isMe(1)?D.off.p1.length:D.off.p2.length) >= 42 && (isMe(1)?D.off.p2.length:D.off.p1.length) >=42 ) ? '' : 'disabled' }>
+              Continue to Lands
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  wrap.querySelector('#leave').onclick = ()=>{ D.screen='mode'; render(); };
+
+  // hover preview
+  const hoverImg = wrap.querySelector('#hoverImg');
+  wrap.querySelectorAll('#table .card').forEach(el=>{
+    const i = parseInt(el.getAttribute('data-i'),10);
+    const c = D.off.table[i];
+    el.onmouseenter = ()=>{ if (c?.imageUrl){ hoverImg.src = c.imageUrl; hoverImg.style.display='block'; } };
+    el.onmouseleave = ()=>{ hoverImg.style.display='none'; };
+
+    el.onclick = ()=>{
+      // Only act on your own turn (local hotseat lets either side click).
+      if (!D.off.isLocal && D.off.currentPicker !== state.currentPlayer) return;
+
+      if (D.off.isLocal) {
+        draftOffApplyPick(i, D.off.currentPicker);    // applies + re-renders locally
+      } else if (state.isHost) {
+        draftOffApplyPick(i, 1);                      // host = player 1; broadcasts snapshot
+      } else {
+        // joiner: ask the host to apply; the authoritative snapshot comes back.
+        sendDraftOff({ type:'draftoff_pick_request', index:i });
+      }
+    };
+  });
+
+
+  const toLands = wrap.querySelector('#toLands');
+  if (toLands) toLands.onclick = ()=>{
+    // Both players reached 42 — proceed to the per-side basic-land fill.
+    D.screen = 'landsfill';
+    initLandsFill(D.off.isLocal ? 1 : state.currentPlayer);
+    render();
+    if (!D.off.isLocal) broadcastDraftState('landsfill');
+  };
+
+  return wrap;
+}
+
+function cardImageHtml(c, height = 210){
+  return cardImageMarkup(c, {
+    height,
+    style: `width:100%;height:${height}px;object-fit:cover;display:block;border-radius:8px`
+  });
+}
+
+function prepareWinstonPool(cards, size){
+  return shuffleCopy((cards || [])
+    .map((card, i) => normalizePlayableCard(card, `Pool Card ${i + 1}`))
+    .filter(card => card.name && card.type)
+  ).slice(0, Math.max(24, size || 90));
+}
+
+function startWinstonDraft(cards, size, opts = {}){
+  const pool = prepareWinstonPool(cards, size);
+  if (pool.length < 24) {
+    toast('Winston needs at least 24 cards in the pool.');
+    return;
+  }
+  const startingCount = pool.length;
+  D.mode = 'winston';
+  D.target = 40;
+  D.winston = freshWinstonState();
+  D.winston.vsBot = !!opts.vsBot;
+  D.winston.pool = pool;
+  D.winston.piles = [[], [], []];
+  for (let i = 0; i < 3; i++) {
+    if (D.winston.pool.length) D.winston.piles[i].push(D.winston.pool.shift());
+  }
+  D.winston.log.unshift(`Started with ${startingCount} cards.`);
+  D.screen = 'winston';
+  render();
+}
+
+function winstonIsDone(){
+  const W = D.winston;
+  return W.pool.length === 0 && W.piles.every(pile => pile.length === 0);
+}
+
+// Exposed so the Winston bot (ai.js) can take its turn; re-assigned each render
+// because these close over this DraftScreen invocation's D.
+window.winstonTakePile = () => winstonTakePile();
+window.winstonSkipPile = () => winstonSkipPile();
+
+function winstonSwitchPlayer(){
+  D.winston.activePlayer = D.winston.activePlayer === 1 ? 2 : 1;
+  D.winston.currentPile = 0;
+}
+
+function winstonTakePile(){
+  const W = D.winston;
+  const pileIndex = W.currentPile;
+  const pile = W.piles[pileIndex] || [];
+  if (!pile.length) {
+    toast('That pile is empty.');
+    return;
+  }
+  const target = W.activePlayer === 1 ? W.p1 : W.p2;
+  target.push(...pile);
+  W.log.unshift(`Player ${W.activePlayer} took pile ${pileIndex + 1} (${pile.length} card${pile.length === 1 ? '' : 's'}).`);
+  W.piles[pileIndex] = [];
+  if (W.pool.length) W.piles[pileIndex].push(W.pool.shift());
+  if (winstonIsDone()) {
+    D.screen = 'winston-results';
+  } else {
+    winstonSwitchPlayer();
+  }
+  render();
+}
+
+function winstonSkipPile(){
+  const W = D.winston;
+  const pileIndex = W.currentPile;
+  if (W.pool.length) {
+    W.piles[pileIndex].push(W.pool.shift());
+    W.log.unshift(`Player ${W.activePlayer} skipped pile ${pileIndex + 1}; one card was added.`);
+  } else {
+    W.log.unshift(`Player ${W.activePlayer} skipped pile ${pileIndex + 1}.`);
+  }
+
+  if (pileIndex < 2) {
+    W.currentPile += 1;
+  } else {
+    const target = W.activePlayer === 1 ? W.p1 : W.p2;
+    if (W.pool.length) {
+      const card = W.pool.shift();
+      target.push(card);
+      W.log.unshift(`Player ${W.activePlayer} took the top card from the pool.`);
+    }
+    if (winstonIsDone()) {
+      D.screen = 'winston-results';
+    } else {
+      winstonSwitchPlayer();
+    }
+  }
+  render();
+}
+
+function WinstonSetup(){
+  const wrap = document.createElement('div');
+  const collectionCount = (state.cards || []).length;
+  const p1Count = (state.decks.player1 || []).length;
+  const p2Count = (state.decks.player2 || []).length;
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
+      <h2 style="font-size:20px;font-weight:700">Winston Draft Setup</h2>
+      <div class="badge">Local hotseat or vs bot</div>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <label class="text-xs flex" style="gap:8px;align-items:center;cursor:pointer">
+        <input id="winstonVsBot" type="checkbox">
+        <span><strong>Play against the bot 🤖</strong> — the computer takes Player 2's piles.</span>
+      </label>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:6px">Pool Source</h3>
+        <label class="text-xs">Pool size</label>
+        <input id="winstonPoolSize" class="input mb-3" type="number" min="24" max="180" value="90">
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <button id="useCollectionPool" class="btn btn-secondary" ${collectionCount < 24 ? 'disabled' : ''}>Use Collection (${collectionCount})</button>
+          <button id="useP1Pool" class="btn btn-secondary" ${p1Count < 24 ? 'disabled' : ''}>Use P1 Deck (${p1Count})</button>
+          <button id="useP2Pool" class="btn btn-secondary" ${p2Count < 24 ? 'disabled' : ''}>Use P2 Deck (${p2Count})</button>
+          <button id="useStarterPool" class="btn btn-primary">Generated Starter Cube</button>
+        </div>
+        <p class="text-xs text-gray mt-4">Winston uses three piles. Skip a pile to add a facedown card to it, or take the pile and pass the turn.</p>
+      </div>
+
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:6px">Upload Cube JSON</h3>
+        <input id="winstonPoolFile" type="file" accept=".json" class="input">
+        <div id="winstonPoolStatus" class="text-xs text-gray mt-3">Upload an exported deck JSON with a <code>cards</code> array.</div>
+        <button id="startUploadedWinston" class="btn btn-primary mt-3" disabled>Start Uploaded Pool</button>
+      </div>
+    </div>
+  `;
+
+  const poolSize = () => Math.max(24, parseInt(wrap.querySelector('#winstonPoolSize')?.value || '90', 10));
+  const vsBot = () => !!wrap.querySelector('#winstonVsBot')?.checked;
+  let uploadedPool = null;
+  wrap.querySelector('#back').onclick = () => { D.screen = 'mode'; render(); };
+  wrap.querySelector('#useCollectionPool').onclick = () => startWinstonDraft(state.cards, poolSize(), { vsBot: vsBot() });
+  wrap.querySelector('#useP1Pool').onclick = () => startWinstonDraft(state.decks.player1, poolSize(), { vsBot: vsBot() });
+  wrap.querySelector('#useP2Pool').onclick = () => startWinstonDraft(state.decks.player2, poolSize(), { vsBot: vsBot() });
+  wrap.querySelector('#useStarterPool').onclick = () => startWinstonDraft(makeWinstonStarterPool(poolSize()), poolSize(), { vsBot: vsBot() });
+
+  const status = wrap.querySelector('#winstonPoolStatus');
+  const startUploaded = wrap.querySelector('#startUploadedWinston');
+  wrap.querySelector('#winstonPoolFile').onchange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const json = JSON.parse(await file.text());
+      if (!Array.isArray(json.cards)) throw new Error('Missing cards array.');
+      uploadedPool = json.cards;
+      status.textContent = `Loaded ${uploadedPool.length} cards.`;
+      startUploaded.disabled = uploadedPool.length < 24;
+    } catch (err) {
+      uploadedPool = null;
+      startUploaded.disabled = true;
+      status.textContent = 'Invalid JSON: ' + err.message;
+    }
+  };
+  startUploaded.onclick = () => startWinstonDraft(uploadedPool || [], poolSize(), { vsBot: vsBot() });
+  return wrap;
+}
+
+function WinstonDraft(){
+  const W = D.winston;
+  const activePile = W.piles[W.currentPile] || [];
+  const pileCards = activePile.slice(-3).reverse();
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="leave" class="btn btn-secondary text-sm">← Exit</button>
+      <h2 style="font-size:20px;font-weight:700">Winston Draft • Player ${W.activePlayer}</h2>
+      <div class="badge">Pool ${W.pool.length} • P1 ${W.p1.length} • P2 ${W.p2.length}</div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:2fr 1fr;gap:16px">
+      <div class="card p-4">
+        <div class="grid" style="grid-template-columns:repeat(3,minmax(160px,1fr));gap:12px">
+          ${W.piles.map((pile, i) => `
+            <div class="card p-3" style="border-color:${i === W.currentPile ? '#fbbf24' : 'rgba(139,92,246,.35)'}">
+              <div class="flex justify-between mb-2">
+                <strong>Pile ${i + 1}</strong>
+                <span class="badge">${pile.length}</span>
+              </div>
+              ${pile.length ? cardImageHtml(pile[pile.length - 1], 180) : '<div class="text-xs text-gray text-center" style="padding:72px 0">Empty</div>'}
+              ${i === W.currentPile ? '<div class="badge mt-2">Current</div>' : ''}
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="card p-4 mt-4">
+          <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
+            <div>
+              <h3 style="font-weight:800">Inspecting Pile ${W.currentPile + 1}</h3>
+              <p class="text-xs text-gray">${activePile.length ? `${activePile.length} card${activePile.length === 1 ? '' : 's'} in this pile.` : 'This pile is empty.'}</p>
+            </div>
+            <div class="flex" style="gap:8px;flex-wrap:wrap">
+              <button id="takeWinstonPile" class="btn btn-primary" ${activePile.length ? '' : 'disabled'}>Take Pile</button>
+              <button id="skipWinstonPile" class="btn btn-secondary">Skip / Add</button>
+            </div>
+          </div>
+          <div class="grid mt-3" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+            ${pileCards.map(card => `<div>${cardImageHtml(card, 160)}<div class="text-xs mt-1">${htmlEscape(card.name)}</div></div>`).join('') || '<div class="text-xs text-gray">No cards to show.</div>'}
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:8px">Draft Log</h3>
+        <div style="max-height:420px;overflow:auto">
+          ${W.log.slice(0, 24).map(line => `<div class="text-xs text-gray" style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)">${htmlEscape(line)}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  wrap.querySelector('#leave').onclick = () => {
+    if (!confirm('Leave Winston draft? Current picks will be discarded unless you finish.')) return;
+    D.screen = 'mode';
+    render();
+  };
+  wrap.querySelector('#takeWinstonPile').onclick = winstonTakePile;
+  wrap.querySelector('#skipWinstonPile').onclick = winstonSkipPile;
+  return wrap;
+}
+
+function WinstonResults(){
+  const W = D.winston;
+  const wrap = document.createElement('div');
+  function grouped(cards){
+    const map = new Map();
+    cards.forEach(card => map.set(card.name, (map.get(card.name) || 0) + 1));
+    return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }
+  function list(cards){
+    return grouped(cards).map(([name, qty]) => `<div class="flex justify-between text-sm py-1"><span>${htmlEscape(name)}</span><span>x${qty}</span></div>`).join('');
+  }
+  wrap.innerHTML = `
+    <div class="header">
+      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
+      <h2 style="font-size:20px;font-weight:700">Winston Results</h2>
+      <div class="badge">P1 ${W.p1.length} • P2 ${W.p2.length}</div>
+    </div>
+    <div class="grid grid-2" style="gap:16px">
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:8px">Player 1 Picks</h3>
+        <div style="max-height:340px;overflow:auto">${list(W.p1)}</div>
+      </div>
+      <div class="card p-4">
+        <h3 style="font-weight:800;margin-bottom:8px">Player 2 Picks</h3>
+        <div style="max-height:340px;overflow:auto">${list(W.p2)}</div>
+      </div>
+    </div>
+    <div class="card p-4 mt-4 text-center">
+      <button id="loadWinstonDecks" class="btn btn-primary">Load Both Decks</button>
+      <button id="battleWinston" class="btn btn-green">Battle with Winston Decks</button>
+    </div>
+  `;
+  function loadDecks(){
+    state.decks.player1 = W.p1.slice();
+    state.decks.player2 = W.p2.slice();
+  }
+  wrap.querySelector('#back').onclick = () => { D.screen = 'mode'; render(); };
+  wrap.querySelector('#loadWinstonDecks').onclick = () => {
+    loadDecks();
+    state.currentPlayer = 1;
+    state.screen = 'builder';
+    render();
+    toast('Winston decks loaded.');
+  };
+  wrap.querySelector('#battleWinston').onclick = () => {
+    loadDecks();
+    state.battleMode = 'winston';
+    state.onlineMode = false;
+    state.screen = 'battlemenu';
+    render();
+  };
+  return wrap;
+}
+
+
+  function Done(){
+    const key = 'player' + state.currentPlayer;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="header">
+        <button id="back" class="btn btn-secondary text-sm">← Builder</button>
+        <h2 style="font-size:20px;font-weight:700">Draft complete</h2>
+        <div></div>
+      </div>
+      <div class="card p-4">
+        <div class="mb-2">Total cards: <strong>${D.deck.length}</strong> (target ${D.target})</div>
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <button id="useDeck" class="btn btn-primary">Use this as my deck</button>
+          <button id="again" class="btn btn-secondary">Start new draft</button>
+        </div>
+        <p class="text-xs text-gray mt-2">“Use this as my deck” replaces your current deck in the builder.</p>
+      </div>
+    `;
+    wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
+    wrap.querySelector('#again').onclick = ()=>{ state.screen='draft'; state.draft.screen='setup'; render(); };
+    wrap.querySelector('#useDeck').onclick = ()=>{
+      state.decks[key] = D.deck.slice();
+      state.screen='builder';
+      render();
+      toast('Draft deck loaded into builder ✓');
+    };
+    return wrap;
+  }
+
+  // color offers ----------------------------------------------------------
+  function randomColorOffers(){
+    const all = ['W','U','B','R','G'];
+    function pick(n){
+      const pool = all.slice();
+      const res = [];
+      while (res.length<n){
+        const i = Math.floor(Math.random()*pool.length);
+        res.push(pool.splice(i,1)[0]);
+      }
+      return res.sort();
+    }
+    return [
+      pick(1), pick(2), pick(2), pick(3), pick(3)
+    ];
+  }
+  
+
+function sendDraftOff(msg){
+  if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open'){
+    state.dataChannel.send(JSON.stringify(msg));
+  }
+}
+
+
+async function draftOffDrawRandomCard(q, attempts = 14){
+  const D = state.draft;
+  const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
+  const seenNameSet = new Set(Object.keys(D.seenNames || {}));
+
+  for (let k = 0; k < attempts; k++){
+    const r = await scryfetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers:{Accept:'application/json'} });
+    if (!r.ok) continue;   // 404 -> try again
+
+    const c = await r.json();
+    const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+    if (!img) continue;
+    if ((c.type_line || '').toLowerCase().includes('land')) continue;
+    if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
+
+    return {
+      id: c.id,
+      name: c.name,
+      type: c.type_line || '',
+      cost: c.mana_cost || '',
+      colors: c.colors || [],
+      effect: c.oracle_text || '',
+      power: c.power || 0,
+      toughness: c.toughness || 0,
+      imageUrl: img,
+      rarity: c.rarity || ''
+    };
+  }
+  return null;
+}
+
+
+
+async function draftOffApplyPick(index, picker){
+  const D = state.draft;
+  // Only the host (or a local hotseat) mutates authoritative draft state;
+  // the joiner just sends a pick-request and waits for the next snapshot.
+  if (!D.off.isLocal && !state.isHost) return;
+
+  const card = D.off.table.splice(index, 1)[0];
+  if (!card) return;
+
+  (picker === 1 ? D.off.p1 : D.off.p2).push(card);
+  D.off.picksMadeThisPack += 1;
+
+  // alternate picker
+  D.off.currentPicker = (picker === 1) ? 2 : 1;
+
+  // Once both players have taken their picks for this pack, discard the
+  // remainder and either finish (42/42) or deal the next pack.
+  if (D.off.picksMadeThisPack >= (D.off.picksPerPlayerPerPack * 2)) {
+    D.off.table.length = 0;                 // discard any remainder
+    await draftOffCheckFinishOrNextPack();  // handles its own render + broadcast
+    return;
+  }
+
+  render();
+  broadcastDraftState('draft');
+}
+window.draftOffApplyPick = draftOffApplyPick;
+
+
+async function draftOffStartNewPack(flipStarter = true){
+  const D = state.draft;
+  // Only host/local deals packs; the joiner receives them via draftoff_state.
+  if (!D.off.isLocal && !state.isHost) return;
+  // Each pack takes many awaited Scryfall calls; a second concurrent deal would
+  // interleave cards into the same table and reset the round counter mid-fill.
+  if (D.off.dealing) return;
+  D.off.dealing = true;
+  try {
+
+  // Alternate who starts each pack (after the very first)
+  if (flipStarter) {
+    D.off.startingPlayer = (D.off.round === 0) ? D.off.startingPlayer : (3 - D.off.startingPlayer);
+  }
+
+  D.off.round += 1;
+  D.off.picksMadeThisPack = 0;
+  D.off.currentPicker = D.off.startingPlayer;
+
+  // We are NOT using a set anymore
+  D.off.currentSet = null;
+
+  // Ensure global "seen" registries exist (to avoid duplicates across the whole draft)
+  D.seenIds   = D.seenIds   || {};
+  D.seenNames = D.seenNames || {};
+
+  // Build exactly 9 non-land paper cards from anywhere (completely random)
+  D.off.table = [];
+  const q = `-t:land game:paper`;       // fully random (no set), paper, no lands
+  let guard = 0;                         // simple safety valve
+
+  while (D.off.table.length < D.off.packSize && guard < 200){
+    const c = await draftOffDrawRandomCard(q, 10);
+    guard++;
+    if (!c) continue;
+    if (D.seenIds[c.id] || D.seenNames[c.name]) continue;  // avoid repeats
+    D.off.table.push(c);
+    D.seenIds[c.id] = 1;
+    D.seenNames[c.name] = 1;
+  }
+
+  if (D.off.table.length < D.off.packSize) {
+    toast(`Pack ${D.off.round}: only ${D.off.table.length}/${D.off.packSize} cards could be fetched.`);
+  }
+
+  render();
+  broadcastDraftState('draft');   // push the freshly dealt pack to the joiner
+  } finally {
+    D.off.dealing = false;
+  }
+}
+window.draftOffStartNewPack = draftOffStartNewPack;
+
+
+// Retained for backward compatibility; pack advancement now lives entirely in
+// draftOffApplyPick -> draftOffCheckFinishOrNextPack (host-authoritative).
+function draftOffMaybeNextRoundOrFinish(){ /* no-op */ }
+window.draftOffMaybeNextRoundOrFinish = draftOffMaybeNextRoundOrFinish;
+// -----------------------------------------------------------
+
+  
+  
+  // choose which subview to render
+let content;
+if (D.screen==='mode')         content = Mode();
+else if (D.screen==='setup')   content = Setup();        // traditional
+else if (D.screen==='custom-setup') content = CustomSetup();
+else if (D.screen==='colors')  content = Colors();
+else if (D.screen==='lands')   content = Lands();
+else if (D.screen === 'landsfill') content = LandsFillScreen();
+else if (D.screen==='picks')   content = Picks();
+
+// NEW: Draft-off
+else if (D.screen==='draftoff-setup') content = DraftOffSetup();
+else if (D.screen==='draftoff')       content = DraftOffRoom();
+else if (D.screen==='landswait')      content = LandsWaitScreen();
+else if (D.screen==='decklists')   content = DraftOffResults();
+else if (D.screen==='winston-setup') content = WinstonSetup();
+else if (D.screen==='winston')       content = WinstonDraft();
+else if (D.screen==='winston-results') content = WinstonResults();
+
+
+else                           content = Done();
+
+  
+  // wrapper scaffold
+  div.innerHTML = `
+    <div class="header">
+  <button id="home" class="btn btn-secondary text-sm">← Menu</button>
+<h1 style="font-size:24px;font-weight:800">${
+  D.mode==='custom'    ? 'Custom Draft' :
+  D.mode==='draftoff'  ? 'Draft-off' :
+  D.mode==='winston'   ? 'Winston Draft' :
+                         (getModeConfig(D.modeId || state.selectedMode).title + ' Draft')
+}</h1>
+  <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}${draftScopeLabel() ? ' • ' + htmlEscape(draftScopeLabel()) : ''}</div>
+</div>
+  `;
+  const mount = document.createElement('div');
+  mount.appendChild(content);
+  div.appendChild(mount);
+
+  // nav
+  div.querySelector('#home').onclick = ()=>{ state.screen='menu'; render(); };
+
+  return div;
+}
+// ---------------------------- end D R A F T ------------------------------
+
+
+function CardCreator() {
+  // Edit on a COPY so typing doesn't mutate the stored card until "Update" is clicked.
+  const form = state.editingCard
+    ? { ...state.editingCard, colors: [...(state.editingCard.colors || [])] }
+    : { name: '', type: 'Creature', cost: '', colors: [], power: 0, toughness: 0, effect: '', image: '', imageUrl: '' };
+  const div = document.createElement('div');
+  div.className = 'container';
+  
+  const cardsHtml = state.cards.map((c, i) => `
+    <div class="card-preview" style="position: relative;">
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+          <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+        </div>
+        <p class="text-xs text-gray">${c.type}</p>
+      </div>
+      <div class="card-img">${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+      ${c.type && c.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+      <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
+        <button class="btn btn-secondary text-xs editCard" data-id="${i}" style="padding: 4px 8px;">Edit</button>
+        <button class="btn btn-red text-xs delCard" data-id="${i}" style="padding: 4px 8px;">Del</button>
+      </div>
+    </div>
+  `).join('');
+  
+  div.innerHTML = `
+    <div class="header">
+      <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+      <h1 style="font-size: 24px; font-weight: bold;"></h1>
+      <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+    </div>
+    
+    <div class="card mb-4">
+      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">🔍 Search Scryfall Cards</h2>
+      <div style="background: #374151; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+        <p class="text-xs text-gray">💡 <strong>Tip:</strong> Search works best when hosted on HTTPS. If you get errors, try searching for specific card names like "Lightning Bolt" or "Black Lotus".</p>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input id="scryfallSearch" class="input" placeholder="Search for MTG cards (e.g., Lightning Bolt)..." style="flex: 1;">
+        <button id="searchBtn" class="btn btn-primary">Search</button>
+        <button id="loadAllBtn" class="btn btn-blue">Load All Cards</button>
+      </div>
+      <div id="searchResults" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+    
+    <h2 class="mb-4" style="font-size: 20px; font-weight: bold;">${state.editingCard ? 'Edit Card' : 'Create Custom Card'}</h2>
+    <div class="grid grid-2 mb-8">
+      <div class="card">
+        <div class="mb-4">
+          <label>Card Name</label>
+          <input id="cardName" class="input" value="${form.name}">
+        </div>
+        <div class="mb-4">
+          <label>Type</label>
+          <select id="cardType" class="input">
+            <option value="Creature">Creature</option>
+            <option value="Instant">Instant</option>
+            <option value="Sorcery">Sorcery</option>
+            <option value="Enchantment">Enchantment</option>
+            <option value="Artifact">Artifact</option>
+            <option value="Planeswalker">Planeswalker</option>
+            <option value="Land">Land</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label>Mana Cost</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button class="mana-btn" data-color="W" style="background: #f9fafb; color: #111827; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #d1d5db;">W</button>
+            <button class="mana-btn" data-color="U" style="background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">U</button>
+            <button class="mana-btn" data-color="B" style="background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #4b5563;">B</button>
+            <button class="mana-btn" data-color="R" style="background: #dc2626; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">R</button>
+            <button class="mana-btn" data-color="G" style="background: #059669; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">G</button>
+            <button class="mana-btn" data-color="C" style="background: #9ca3af; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">C</button>
+            <input id="genericMana" type="number" min="0" max="20" value="0" style="width: 60px;" class="input text-center" placeholder="0">
+            <button id="clearMana" class="btn btn-red text-xs" style="padding: 8px 12px;">Clear</button>
+          </div>
+          <input id="cardCost" class="input" value="${form.cost}" placeholder="{2}{U}{U}" readonly>
+        </div>
+        <div id="creatureStats" class="mb-4" style="${!form.type || !form.type.includes('Creature') ? 'display:none' : ''}">
+          <div class="grid grid-2">
+            <div>
+              <label>Power</label>
+              <input id="cardPower" class="input" type="text" value="${form.power}">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="cardToughness" class="input" type="text" value="${form.toughness}">
+            </div>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label>Effect / Oracle Text</label>
+          <textarea id="cardEffect" class="input" rows="4">${form.effect}</textarea>
+        </div>
+        <div class="mb-4">
+          <label>Upload Image</label>
+          <input id="cardImage" class="input" type="file" accept="image/*">
+          <label class="mt-4">Or Image URL</label>
+          <input id="cardImageUrl" class="input" placeholder="https://..." value="${form.imageUrl || ''}">
+        </div>
+        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? '✓ Update Card' : '+ Create Card'}</button>
+      </div>
+      <div>
+        <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
+        <div id="preview"></div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 id="collectionCount" class="mb-4" style="font-size: 18px; font-weight: bold;">Collection (${state.cards.length} cards)</h2>
+      <div id="collectionGrid" class="grid grid-4">
+       ${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall or create custom cards!</p>'}
+</div>
+
+
+    </div>
+  `;
+  
+  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
+  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#cardType').value = form.type;
+  
+  const updatePreview = () => {
+    form.name = div.querySelector('#cardName').value;
+    form.type = div.querySelector('#cardType').value;
+    form.power = div.querySelector('#cardPower').value;
+    form.toughness = div.querySelector('#cardToughness').value;
+    form.effect = div.querySelector('#cardEffect').value;
+    form.imageUrl = div.querySelector('#cardImageUrl').value;
+    div.querySelector('#creatureStats').style.display = form.type.includes('Creature') ? 'block' : 'none';
+    div.querySelector('#preview').innerHTML = `
+      <div class="card-preview">
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-weight: bold;">${form.name || 'Unnamed Card'}</h3>
+            <span style="font-size: 12px; color: #fbbf24;">${form.cost || ''}</span>
+          </div>
+          <p class="text-xs text-gray">${form.type}</p>
+        </div>
+        <div class="card-img">${form.image || form.imageUrl ? `<img src="${form.image || form.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+        ${form.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>PWR: ${form.power}</span><span>TGH: ${form.toughness}</span></div>` : ''}
+        <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect text'}</p></div>
+      </div>
+    `;
+  };
+  
+  // Mana cost builder
+  div.querySelectorAll('.mana-btn').forEach(btn => {
+    btn.onclick = () => {
+      const color = btn.dataset.color;
+      if (!form.colors) form.colors = [];
+      form.colors.push(color);
+      const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+      form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+      div.querySelector('#cardCost').value = form.cost;
+      updatePreview();
+    };
+  });
+  
+  div.querySelector('#genericMana').oninput = () => {
+    const generic = parseInt(div.querySelector('#genericMana').value) || 0;
+    if (!form.colors) form.colors = [];
+    form.cost = (generic > 0 ? `{${generic}}` : '') + form.colors.map(c => `{${c}}`).join('');
+    div.querySelector('#cardCost').value = form.cost;
+    updatePreview();
+  };
+  
+  div.querySelector('#clearMana').onclick = () => {
+    form.colors = [];
+    form.cost = '';
+    div.querySelector('#cardCost').value = '';
+    div.querySelector('#genericMana').value = '0';
+    updatePreview();
+  };
+  
+  function appendToCollectionGrid(c, i) {
+  const grid = div.querySelector('#collectionGrid');
+  if (!grid) return;
+
+  // Remove "No cards yet" placeholder if present
+  if (grid.children.length === 1 && grid.firstElementChild.tagName === 'P') {
+    grid.innerHTML = '';
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'card-preview';
+  wrapper.style.position = 'relative';
+  wrapper.innerHTML = `
+    <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+        <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+      </div>
+      <p class="text-xs text-gray">${c.type || ''}</p>
+    </div>
+    <div class="card-img">
+      ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}
+    </div>
+    ${c.type && c.type.includes('Creature') ? `
+      <div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
+        <span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span>
+      </div>` : ''
+    }
+    <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+    <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
+      <button class="btn btn-secondary text-xs editCard" style="padding: 4px 8px;">Edit</button>
+      <button class="btn btn-red text-xs delCard" style="padding: 4px 8px;">Del</button>
+    </div>
+  `;
+
+  // Attach handlers for the two buttons
+  wrapper.querySelector('.editCard').onclick = () => { state.editingCard = state.cards[i]; render(); window.scrollTo(0, 0); };
+  wrapper.querySelector('.delCard').onclick = () => {
+    if (confirm('Delete this card?')) {
+      state.cards.splice(i, 1);
+      render();
+    }
+  };
+
+  grid.appendChild(wrapper);
+
+  // Update the "(N cards)" count
+  const countEl = div.querySelector('#collectionCount');
+  if (countEl) countEl.textContent = `Your Collection (${state.cards.length} cards)`;
+}
+  
+  // Scryfall search
+  div.querySelector('#searchBtn').onclick = async () => {
+    const query = div.querySelector('#scryfallSearch').value.trim();
+    if (!query) {
+      alert('Please enter a search term!');
+      return;
+    }
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading">Searching Scryfall...</p>';
+    try {
+      // Use the correct Scryfall API endpoint with proper encoding
+      const searchUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
+      console.log('Searching:', searchUrl);
+      
+      const response = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Scryfall response:', data);
+      
+      if (data.object === 'error') {
+        resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Scryfall Error: ${data.details || 'Invalid search'}</p>`;
+        return;
+      }
+      
+      if (data.data && data.data.length > 0) {
+        state.searchResults = data.data;
+        resultsDiv.innerHTML = data.data.slice(0, 40).map((card, idx) => {
+          const imgUrl = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '';
+          return `
+            <div class="scryfall-result" data-idx="${idx}" style="cursor: pointer; border: 2px solid #374151; border-radius: 6px; overflow: hidden; transition: all 0.2s; position: relative;">
+              ${imgUrl ? `<img src="${imgUrl}" style="width: 100%; display: block;">` : `<div style="padding: 20px; text-align: center; background: #374151; font-size: 12px;">${card.name}</div>`}
+              <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 4px; font-size: 10px; text-align: center;">${card.name}</div>
+            </div>
+          `;
+        }).join('');
+        
+        // ---------- Delegated hover + click on the search grid (no duplicates) ----------
+// 1) Create hover preview box once.
+let hoverDiv = document.getElementById('scryfallHover');
+if (!hoverDiv) {
+  hoverDiv = document.createElement('div');
+  hoverDiv.id = 'scryfallHover';
+  hoverDiv.style.cssText = 'position:fixed; pointer-events:none; z-index:9999; display:none; background:#1f2937; border:1px solid #374151; border-radius:8px; width:320px; max-width:90vw; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.5)';
+  document.body.appendChild(hoverDiv);
+}
+
+// 2) Small helper to render preview content for a card index.
+function showPreviewForIdx(idx) {
+  const card = data.data[idx];
+  if (!card) return;
+  const img = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+  hoverDiv.innerHTML = `
+    <div style="font-weight:700; margin-bottom:4px;">${card.name}</div>
+    <div class="text-xs text-gray" style="margin-bottom:6px;">${card.type_line || ''}</div>
+    ${img ? `<img src="${img}" style="width:100%; border-radius:6px; margin-bottom:8px;">` : ''}
+    <div style="font-size:12px; line-height:1.3; white-space:pre-wrap;">${(card.oracle_text || '').replaceAll('\\n','<br>')}</div>
+  `;
+  hoverDiv.style.display = 'block';
+}
+
+// 3) Delegated mousemove to position + render preview.
+resultsDiv.onmousemove = (e) => {
+  const tile = e.target.closest('.scryfall-result');
+  if (!tile || !resultsDiv.contains(tile)) {
+    hoverDiv.style.display = 'none';
+    return;
+  }
+  const idx = Number(tile.dataset.idx);
+  showPreviewForIdx(idx);
+  const pad = 16;
+  hoverDiv.style.left = (e.clientX + pad) + 'px';
+  hoverDiv.style.top  = (e.clientY + pad) + 'px';
+};
+
+// 4) Hide preview when leaving the grid.
+resultsDiv.onmouseleave = () => { hoverDiv.style.display = 'none'; };
+
+// 5) Delegated click: add exactly one card, mark tile, update collection grid.
+resultsDiv.onclick = (e) => {
+  const tile = e.target.closest('.scryfall-result');
+  if (!tile || !resultsDiv.contains(tile)) return;
+
+  const idx = Number(tile.dataset.idx);
+  const card = data.data[idx];
+  const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+
+  const newCard = {
+    id: Date.now() + Math.random(),
+    name: card.name,
+    type: card.type_line,
+    cost: card.mana_cost || '',
+    colors: card.colors || [],
+    power: card.power || 0,
+    toughness: card.toughness || 0,
+    effect: card.oracle_text || '',
+    image: '',
+    imageUrl: imgUrl,
+    scryfallId: card.id
+  };
+
+  state.cards.push(newCard);
+  toast('Added ' + card.name + ' ✓');
+
+  if (!tile.querySelector('.added-badge')) {
+    const badge = document.createElement('div');
+    badge.className = 'added-badge';
+    badge.textContent = 'Added ✓';
+    badge.style.cssText = 'position:absolute; top:6px; left:6px; background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px;';
+    tile.appendChild(badge);
+    tile.style.borderColor = '#10b981';
+  }
+
+  // Live update of the collection without re-rendering:
+  appendToCollectionGrid(newCard, state.cards.length - 1);
+};
+
+        
+      } else {
+        resultsDiv.innerHTML = '<p class="text-gray text-xs text-center p-4">No results found. Try a different search term.</p>';
+      }
+    } catch (err) {
+      console.error('Scryfall search error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error: ${err.message}<br><br>This might be a network issue or CORS restriction. Try:<br>1. Check your internet connection<br>2. Make sure you're using HTTPS<br>3. Try a different browser<br>4. Check browser console for details</p>`;
+    }
+  };
+  
+  // Load all Oracle cards
+  div.querySelector('#loadAllBtn').onclick = async () => {
+    if (state.isLoadingScryfallCards) return;
+    if (state.scryfallCards.length > 0) {
+      alert(`✓ ${state.scryfallCards.length} cards already loaded! Use search to find them.`);
+      return;
+    }
+    if (!confirm('This will download ~160MB of card data from Scryfall. This may take 1-2 minutes. Continue?\n\nNote: You can also just use the Search feature without loading all cards!')) return;
+    
+    state.isLoadingScryfallCards = true;
+    const resultsDiv = div.querySelector('#searchResults');
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading all MTG cards from Scryfall... Please wait...</p>';
+    
+    try {
+      console.log('Fetching bulk data list...');
+      const bulkResponse = await fetch('https://api.scryfall.com/bulk-data', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!bulkResponse.ok) {
+        throw new Error(`HTTP ${bulkResponse.status}: ${bulkResponse.statusText}`);
+      }
+      
+      const bulkData = await bulkResponse.json();
+      console.log('Bulk data received:', bulkData);
+      
+      const oracleData = bulkData.data.find(d => d.type === 'oracle_cards');
+      
+      if (oracleData) {
+        console.log('Downloading oracle cards from:', oracleData.download_uri);
+        resultsDiv.innerHTML = '<p class="text-blue text-xs loading text-center p-4">Downloading card database... This may take 1-2 minutes...</p>';
+        
+        const cardsResponse = await fetch(oracleData.download_uri);
+        
+        if (!cardsResponse.ok) {
+          throw new Error(`HTTP ${cardsResponse.status}: ${cardsResponse.statusText}`);
+        }
+        
+        const cards = await cardsResponse.json();
+        state.scryfallCards = cards;
+        console.log('Loaded cards:', cards.length);
+        alert(`✓ Success! Loaded ${cards.length.toLocaleString()} MTG cards! You can now search through all cards.`);
+        resultsDiv.innerHTML = '<p class="text-green text-xs text-center p-4">✓ All cards loaded! Use the search box above to find any MTG card.</p>';
+      } else {
+        throw new Error('Could not find oracle cards in bulk data');
+      }
+    } catch (err) {
+      console.error('Bulk load error:', err);
+      resultsDiv.innerHTML = `<p class="text-red text-xs text-center p-4">Error loading cards: ${err.message}<br><br>Don't worry! You can still use the Search feature to find specific cards without loading the entire database.</p>`;
+    }
+    state.isLoadingScryfallCards = false;
+  };
+  
+  div.querySelector('#cardName').oninput = updatePreview;
+  div.querySelector('#cardType').onchange = updatePreview;
+  div.querySelector('#cardPower').oninput = updatePreview;
+  div.querySelector('#cardToughness').oninput = updatePreview;
+  div.querySelector('#cardEffect').oninput = updatePreview;
+  div.querySelector('#cardImageUrl').oninput = updatePreview;
+  
+  // Allow Enter key to search
+  div.querySelector('#scryfallSearch').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      div.querySelector('#searchBtn').click();
+    }
+  };
+  
+  div.querySelector('#cardImage').onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) compressImage(file, (img) => { form.image = img; updatePreview(); });
+  };
+  div.querySelector('#submitCard').onclick = () => {
+    if (!form.name.trim()) {
+      alert('Please enter a card name!');
+      return;
+    }
+    if (state.editingCard) {
+      const idx = state.cards.findIndex(c => c.id === state.editingCard.id);
+      state.cards[idx] = Object.assign({}, form, { id: state.editingCard.id });
+      state.editingCard = null;
+    } else {
+      state.cards.push(Object.assign({}, form, { id: Date.now() + Math.random() }));
+    }
+    render();
+  };
+  
+  div.querySelectorAll('.editCard').forEach((btn, i) => {
+    btn.onclick = () => { state.editingCard = state.cards[i]; render(); window.scrollTo(0, 0); };
+  });
+  div.querySelectorAll('.delCard').forEach((btn, i) => {
+    btn.onclick = () => { 
+      if (confirm('Delete this card?')) {
+        state.cards.splice(i, 1); 
+        render(); 
+      }
+    };
+  });
+  
+  updatePreview();
+  return div;
+}
+
+// ===============================
+// Deck import helpers (GLOBAL)
+// ===============================
+
+// 1) Parse simple text decklists into a Map(name -> qty)
+if (!window.parseDecklist) window.parseDecklist = function(text){
+  const lines = String(text||'').split(/[\r\n]+/).map(s=>s.trim());
+  const ignore = /^(#|\/\/|sideboard:|companions?:|maybeboard:)/i;
+  const m = new Map();
+  for (let raw of lines){
+    if (!raw || ignore.test(raw)) continue;
+    let line = raw.replace(/\s+/g,' ').trim();
+    line = line.replace(/\s*\/\/.*$/, '').trim();     // strip trailing // comments
+    if (!line) continue;
+
+    let qty = 1, name = line, match;
+    if ((match = line.match(/^(\d+)\s*x?\s+(.+)$/i))) { qty = +match[1]; name = match[2]; }
+    else if ((match = line.match(/^(.+?)\s+x(\d+)$/i))) { name = match[1]; qty = +match[2]; }
+    else if ((match = line.match(/^(\d+)x\s+(.+)$/i))) { qty = +match[1]; name = match[2]; }
+
+    name = name.replace(/\u2019/g,"'").replace(/\s+/g,' ').trim();
+    if (!name) continue;
+    m.set(name, (m.get(name)||0) + (Number.isFinite(qty)?qty:1));
+  }
+  return m;
+};
+
+// 2) Scryfall resolver by name (prefers set if provided)
+if (!window.fetchCardByName) window.fetchCardByName = async function(name, setPref){
+  const base = 'https://api.scryfall.com/cards/named';
+  const esc = encodeURIComponent(name);
+  async function get(u){ const r = await fetch(u); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j = await r.json(); if (j.object==='error') throw new Error(j.details||'Scryfall error'); return j; }
+  if (setPref) {
+    try { return await get(`${base}?exact=${esc}&set=${encodeURIComponent(setPref)}`); }
+    catch { /* fallback to any set */ }
+  }
+  return await get(`${base}?exact=${esc}`);
+};
+
+// 3) Convert a Scryfall card JSON to your in-game card objects (qty copies)
+if (!window.cardToGameObjects) window.cardToGameObjects = function(cardJSON, quantity, includeImages){
+  const type_line = cardJSON.type_line || '';
+  const colors = Array.isArray(cardJSON.colors) ? cardJSON.colors : [];
+  const mana_cost = cardJSON.mana_cost || '';
+  const oracle_text = cardJSON.oracle_text || '';
+
+  let power = cardJSON.power ?? 0;
+  let toughness = cardJSON.toughness ?? 0;
+
+  let imageUrl = '';
+  if (includeImages){
+    imageUrl =
+      cardJSON.image_uris?.normal ||
+      cardJSON.card_faces?.[0]?.image_uris?.normal ||
+      `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(cardJSON.name)}`;
+  }
+
+  if ((power==null || toughness==null) && Array.isArray(cardJSON.card_faces) && cardJSON.card_faces.length){
+    const f = cardJSON.card_faces[0];
+    power = f.power ?? 0; toughness = f.toughness ?? 0;
+  }
+  if (!/Creature/i.test(type_line)){ power = Number(power)||0; toughness = Number(toughness)||0; }
+
+  const out = [];
+  for (let i=0;i<(quantity||1);i++){
+    out.push({
+      id: Date.now() + Math.random(),
+      name: cardJSON.name,
+      type: type_line,
+      cost: mana_cost,
+      colors: colors,
+      power: String(power),
+      toughness: String(toughness),
+      effect: oracle_text,
+      image: "",
+      imageUrl
+    });
+  }
+  return out;
+};
+
+// 4) Full TXT → Scryfall → game objects converter (shows status via .textContent if provided)
+if (!window.convertDecklist) window.convertDecklist = async function(text, player, setPref, includeImages, statusElLike){
+  const setStatus = (t)=>{ if (statusElLike && typeof statusElLike.textContent === 'string') statusElLike.textContent = t; };
+  const m = window.parseDecklist(text);
+  if (!m.size) throw new Error('No valid card names found.');
+
+  const names = [...m.keys()];
+  const results = [];
+  const concurrency = 6;
+  let idx = 0, done = 0, errs = [];
+
+  async function next(){
+    if (idx >= names.length) return;
+    const myIdx = idx++;
+    const name = names[myIdx];
+    setStatus(`Fetching ${done}/${names.length} • Now: ${name}`);
+    try{
+      const cj = await window.fetchCardByName(name, setPref);
+      const qty = m.get(name)||1;
+      results.push(...window.cardToGameObjects(cj, qty, includeImages));
+    } catch(e){
+      errs.push({ name, error: e.message || String(e) });
+    } finally {
+      done++; setStatus(`Fetched ${done}/${names.length}`);
+      if (idx < names.length) await next();
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(concurrency, names.length)}, () => next()));
+  results.sort((a,b)=> a.name.localeCompare(b.name));
+  return { out: { player: Number(player)||1, timestamp: Date.now(), cards: results }, errors: errs };
+};
+
+
+// =====================================
+// Deck Builder
+// =====================================
+
+function DeckBuilder() {
+  const key = 'player' + state.currentPlayer;
+  const mode = getModeConfig(state.selectedMode || 'casual');
+
+  const div = document.createElement('div');
+  div.className = 'container';
+
+
+// --- NEW: Deck Statistics CSS (once) ---
+(function ensureDeckStatsCSS(){
+  if (document.getElementById('deckStatsCSS')) return;
+  const s = document.createElement('style');
+  s.id = 'deckStatsCSS';
+  s.textContent = `
+  /* Card-like wrapper */
+  .ds-card{
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(139,92,246,0.35);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .ds-title{
+    font-size: 12px; letter-spacing:.04em; text-transform:uppercase;
+    opacity:.8; margin-bottom:8px;
+  }
+  .ds-row{ display:grid; gap:12px; }
+ @media (min-width: 900px){
+    .ds-row{ grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  /* Stacked mana curve */
+  .ds-curve{ height: 160px; display:grid; align-items:end; gap:10px;
+             grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); padding: 8px 6px 0 6px;}
+  .ds-col{ position:relative; height:100%; display:flex; flex-direction:column; justify-content:flex-end; }
+  .ds-seg{ width:100%; border:2px solid #ecfdf5; }
+  .ds-seg.crea{ background: linear-gradient(180deg,#34d399 0%,#10b981 100%); border-radius:8px 8px 0 0; }
+.ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 8px 8px; }
+.ds-seg.noncrea.only{
+  /* ensure the top “white outline” always shows */
+  border-top-width: 2px !important;
+  border-top-style: solid !important;
+  border-top-color: #ecfdf5 !important;
+
+  /* force the same rounded cap as the green bars */
+  border-top-left-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+  border-radius: 8px 8px 4px 4px !important;
+
+  /* optional: add a subtle crisp edge like the green cap */
+  box-shadow: 0 0 0 1px rgba(236,253,245,.65) inset;
+}
+  .ds-count{ position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:700; color:#d1fae5; text-shadow:0 1px 0 rgba(0,0,0,.45); }
+  .ds-x{ margin-top:6px; display:grid; gap:10px;
+         grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); font-size:11px; opacity:.8; text-align:center; }
+
+  .ds-legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; font-size:11px; opacity:.85; }
+  .ds-key{ display:inline-flex; align-items:center; gap:6px; }
+  .ds-swatch{ width:12px; height:12px; border-radius:3px; border:1px solid rgba(255,255,255,.5); }
+
+  /* Pie charts (conic-gradient) */
+  .ds-pies{ display:grid; gap:12px; grid-template-columns: 1fr; }
+  @media (min-width: 900px){ .ds-pies{ grid-template-columns: 1fr 1fr; } }
+  .ds-piecard{ }
+.ds-piewrap{ display:flex; gap:12px; align-items:center; flex-direction:column; }
+.ds-pie{
+    --size: 120px;
+    width: var(--size); height: var(--size); border-radius: 50%;
+    border:2px solid rgba(236,253,245,0.7);
+    box-shadow: inset 0 0 16px rgba(0,0,0,0.35);
+  }
+  .ds-list{ font-size:12px; line-height:1.6; }
+  .ds-list .row{ display:flex; justify-content:space-between; gap:12px; }
+  .ds-small{ font-size:12px; opacity:.8; }
+  
+  
+  /* Stretched toggle bar for Deck Statistics */
+.stats-toggle{
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(31,41,55,0.85);
+  border: 1px solid rgba(139,92,246,0.55);
+  border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  color: #e9d5ff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(139,92,246,0.25);
+  transition: border-color .15s ease, background .15s ease, transform .08s ease;
+  margin-bottom: 10px;
+}
+.stats-toggle:hover{ border-color:#a78bfa; background: rgba(31,41,55,0.95); }
+.stats-toggle:active{ transform: translateY(1px); }
+.stats-toggle .left{ display:flex; align-items:center; gap:10px; }
+.stats-toggle .chip{
+  width: 10px; height:10px; border-radius:50%;
+  background: linear-gradient(180deg,#34d399 0%,#10b981 100%);
+  border: 1px solid #ecfdf5;
+  box-shadow: 0 0 0 2px rgba(16,185,129,.25);
+}
+.stats-toggle .chev{
+  font-size: 16px; opacity: .9; transition: transform .15s ease;
+}
+.stats-toggle.open .chev{ transform: rotate(90deg); } /* ▸ → ▾ */
+  `;
+  document.head.appendChild(s);
+})();
+
+
+// --- NEW: type/color helpers for stats ---
+function isLand(c){ return ((c.type||'')+'' ).toLowerCase().includes('land'); }
+function isBasicLand(c){ const t=(c.type||'').toLowerCase(); return t.includes('basic') && t.includes('land'); }
+function isCreature(c){ return ((c.type||'')+'' ).toLowerCase().includes('creature'); }
+
+// getCMC is defined once, near the mana-curve helpers at the top of this file.
+// The duplicate that used to live here shadowed it (function declarations in the
+// same scope: last one wins), so edits to the canonical copy silently did nothing.
+
+// Count W/U/B/R/G symbols in mana *costs*
+function countManaSymbols(cards){
+  const out = {W:0,U:0,B:0,R:0,G:0};
+  for (const c of cards){
+    const s = (c?.manaCost || c?.manacost || c?.cost || '').toString().toUpperCase();
+    if (!s) continue;
+    const tokens = s.match(/\{([^}]+)\}/g) || [];
+    for (const t of tokens){
+      const inner = t.slice(1,-1).toUpperCase();
+      // split hybrids "G/U" => "GU"
+      for (const ch of inner.split(/[^A-Z]/).join('')){
+        if (out.hasOwnProperty(ch)) out[ch] += 1;
+      }
+    }
+    if (!tokens.length){
+      // unbraced fallback: count letters
+      (s.match(/[WUBRG]/g)||[]).forEach(ch => out[ch] += 1);
+    }
+  }
+  return out;
+}
+
+// Group types (with "Artifact Creature" kept separate)
+function typesBreakdown(cards){
+  const map = new Map();
+  const push = (k)=> map.set(k, (map.get(k)||0)+1);
+  for (const c of cards){
+    const t = (c.type||'').toLowerCase();
+    if (!t){ push('Other'); continue; }
+    if (t.includes('artifact') && t.includes('creature')) { push('Artifact Creature'); continue; }
+    if (t.includes('creature'))     { push('Creature'); continue; }
+    if (t.includes('instant'))      { push('Instant'); continue; }
+    if (t.includes('sorcery'))      { push('Sorcery'); continue; }
+    if (t.includes('enchantment'))  { push('Enchantment'); continue; }
+    if (t.includes('planeswalker')) { push('Planeswalker'); continue; }
+    if (t.includes('artifact'))     { push('Artifact'); continue; }
+    if (t.includes('basic') && t.includes('land')) { push('Basic Land'); continue; }
+    if (t.includes('land'))         { push('Land'); continue; }
+    push('Other');
+  }
+  return map;
+}
+
+// Stacked curve data (exclude lands)
+function stackedCurve(cards){
+  const bins = new Map();  // cmc -> {crea, non}
+  let peak = 0;
+  for (const c of cards){
+    if (isLand(c)) continue;                 // exclude lands from curve & avg
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    const k = cmc;
+    const o = bins.get(k) || {crea:0, non:0};
+    if (isCreature(c)) o.crea += 1; else o.non += 1;
+    bins.set(k, o);
+    const tot = o.crea + o.non;
+    if (tot > peak) peak = tot;
+  }
+  const keys = [...bins.keys()].sort((a,b)=>a-b);
+  return { keys, bins, peak };
+}
+
+// Average mana cost (spells only; lands excluded)
+function averageCMC(cards){
+  let sum = 0, n = 0;
+  for (const c of cards){
+    if (isLand(c)) continue;
+    const cmc = getCMC(c);
+    if (cmc === null || !Number.isFinite(cmc)) continue;
+    sum += cmc; n += 1;
+  }
+  return n ? (sum/n) : 0;
+}
+
+// Build conic-gradient for a pie
+function pieStyleFromCounts(obj, palette){
+  const entries = Object.entries(obj).filter(([k,v]) => v>0);
+  const total = entries.reduce((a, [,v])=>a+v, 0) || 1;
+  let acc = 0;
+  const stops = entries.map(([k,v])=>{
+    const start = acc / total * 360;
+    acc += v;
+    const end = acc / total * 360;
+    const color = palette[k] || '#999';
+    return `${color} ${start}deg ${end}deg`;
+  }).join(', ');
+  return `background: conic-gradient(${stops});`;
+}
+
+
+// --- NEW: render Deck Statistics into existing mount ---
+function renderDeckStatsInto(containerId){
+  const mount = div.querySelector('#' + containerId);
+  if (!mount) return;
+
+  const deck = state.decks[key] || [];
+  const avg  = averageCMC(deck);
+  const { keys, bins, peak } = stackedCurve(deck);
+
+  // Colors pie (W/U/B/R/G)
+  const manaColors = countManaSymbols(deck);
+  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+
+  // Types pie
+  const tb = typesBreakdown(deck);
+  const typeObj = Object.fromEntries(tb);
+  // stable palette for common types
+  const typePalette = {
+    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
+    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
+    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+  };
+
+  // Build stacked curve columns
+  const cols = keys.map(k=>{
+  const o = bins.get(k) || {crea:0, non:0};
+  const tot = o.crea + o.non;
+  const hC = (peak && o.crea) ? Math.max(4, Math.round(o.crea/peak*100)) : 0;
+  const hN = peak ? Math.max(0, Math.round(o.non/peak*100)) : 0;
+  return `
+    <div class="ds-col" title="Total ${tot} (Creatures ${o.crea}, Non-creatures ${o.non})">
+      ${hN?`<div class="ds-seg noncrea${hC ? '' : ' only'}" style="height:${hN}%"></div>`:''}
+      ${hC?`<div class="ds-seg crea" style="height:${hC}%"></div>`:''}
+    </div>`;
+}).join('');
+
+
+  const xlabels = keys.map(k=>`<div>${k}</div>`).join('');
+
+  // Legends
+  const curveLegend = `
+    <div class="ds-legend">
+      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
+    </div>`;
+
+  // Color pie legend/list
+  const colorRows = Object.entries(manaColors)
+    .map(([k,v])=>`<div class="row"><span>${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}</span><span>${v}</span></div>`)
+    .join('');
+  const colorPieStyle = pieStyleFromCounts(manaColors, colorPalette);
+
+  // Type pie legend/list
+  const typeEntries = Object.entries(typeObj).filter(([,v])=>v>0);
+  const typeTotal = typeEntries.reduce((a,[,v])=>a+v,0) || 1;
+  const typePieStyle = pieStyleFromCounts(typeObj, typePalette);
+  const typeRows = typeEntries
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>{
+      const pct = (v/typeTotal*100).toFixed(1)+'%';
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
+    }).join('');
+    
+    const colorTitle = Object.entries(manaColors)
+  .filter(([,v])=>v>0)
+  .map(([k,v])=>`${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[k]}: ${v}`)
+  .join(' • ');
+
+
+  // Assemble
+  mount.innerHTML = `
+    <div class="ds-card">
+      <div class="ds-title"></div>
+
+      <div class="ds-row">
+        <!-- Stacked Mana Curve -->
+        <div>
+          <div class="ds-title" style="margin-bottom:4px;">Mana Curve</div>
+          <div class="ds-curve" style="--bins:${Math.max(keys.length,1)}">
+            ${cols || `<div class="text-xs" style="opacity:.7;">No spell costs found (lands excluded).</div>`}
+          </div>
+          <div class="ds-x" style="--bins:${Math.max(keys.length,1)}">${xlabels}</div>
+          ${curveLegend}
+        </div>
+
+        <!-- Colors in Mana Cost -->
+        <div class="ds-piecard">
+          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${colorPieStyle}" title="${colorTitle}"></div>
+            <div class="ds-list">
+              ${colorRows || `<div class="ds-small">No mana symbols found.</div>`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Types -->
+        <div class="ds-piecard">
+          <div class="ds-title">Types</div>
+          <div class="ds-piewrap">
+            <div class="ds-pie" style="${typePieStyle}"></div>
+            <div class="ds-list">
+              ${typeRows || `<div class="ds-small">No type info available.</div>`}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+
+  // mana-curve helpers: use the canonical top-level getCMC() / manaCurveData()
+  // (the former per-screen duplicates were identical and have been removed).
+
+  function renderManaCurveDeck() {
+    const mount = div.querySelector('#manaCurveDeckChart');
+    if (!mount) return;
+
+    const deck = state.decks[key] || [];
+    const { bins, max } = manaCurveData(deck);
+
+    if (bins.length === 0) {
+      mount.innerHTML = `
+        <div class="mana-curve-wrap">
+          <div class="mana-curve-title">Mana Curve</div>
+          <div style="opacity:.7; font-size:12px;">No mana-cost data in this deck.</div>
+        </div>`;
+      return;
+    }
+
+const cols = bins.map(b=>{
+  const h = max ? Math.max(4, Math.round(b.count / max * 100)) : 0;
+  const label = `${b.count} card${b.count===1?'':'s'} at CMC ${b.cmc}`;
+  return `
+    <div class="mc-col">
+      <div class="mc-bar" style="height:${h}%" title="${label}" aria-label="${label}"></div>
+    </div>`;
+}).join('');
+    
+    const labels = bins.map(b => `<div>${b.cmc}</div>`).join('');
+
+    mount.innerHTML = `
+      <div class="mana-curve-wrap">
+        <div class="mana-curve-title">Mana Curve</div>
+        <div class="mana-curve" style="--bins:${bins.length}">${cols}</div>
+        <div class="mc-x" style="--bins:${bins.length}">${labels}</div>
+      </div>`;
+  }
+
+  // ---------- helpers (local to builder) ----------
+  const updateCardInfo = () => {
+    const infoDiv = div.querySelector('#cardInfoSidebar');
+    if (!infoDiv) return;
+    const c = state.hoveredCard;
+    if (!c) {
+      infoDiv.innerHTML = '<p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card to see details</p>';
+      return;
+    }
+    infoDiv.innerHTML = `
+      <div class="card-preview">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+          <div class="text-center mb-2" style="font-weight:700;font-size:16px;flex:1;">${c.name}</div>
+          ${c.cost ? `<div style="font-size:14px;color:#fbbf24;white-space:nowrap;">${c.cost}</div>` : ''}
+        </div>
+        <div class="text-xs text-gray text-center mb-2">${c.type || ''}</div>
+        ${cardImageMarkup(c, { style: 'width:100%;border-radius:6px;margin-bottom:12px;display:block' })}
+        ${(c.type||'').includes('Creature') ? `
+          <div class="mb-2" style="display:flex;justify-content:space-between;">
+            <span class="text-sm"><strong>PWR:</strong> ${c.power ?? 0}</span>
+            <span class="text-sm"><strong>TGH:</strong> ${c.toughness ?? 0}</span>
+          </div>` : ''
+        }
+        <div class="text-sm" style="margin-top:12px;"><strong>Effect:</strong></div>
+        <div class="text-xs" style="margin-top:8px;line-height:1.4;">${c.effect || 'No effect'}</div>
+      </div>
+    `;
+  };
+  
+  ////
+  function uid(){ return 'id_' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+const BASIC_LANDS = ['Plains','Island','Swamp','Mountain','Forest'];
+
+async function fetchBasicLandCard(landName){
+  // Cache on state to avoid repeated fetches
+  const D = state.draft;
+  D._landCache = D._landCache || {};
+  if (D._landCache[landName]) return D._landCache[landName];
+
+  const r = await scryfetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(landName)}`);
+  if (!r.ok) throw new Error('Land fetch failed: ' + landName);
+  const c = await r.json();
+
+  const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
+  const normalized = {
+    id: c.id,
+    name: c.name,
+    type: c.type_line || 'Basic Land',
+    cost: '',
+    colors: [],
+    effect: '',
+    power: 0,
+    toughness: 0,
+    imageUrl: img,
+    rarity: c.rarity || 'common'
+  };
+  D._landCache[landName] = normalized;
+  return normalized;
+}
+
+function cloneCard(base){
+  return { ...base, id: uid() }; // ensure unique ids for duplicates
+}
+
+
+  const createCardElement = (c, isInDeck) => {
+    const cardDiv = document.createElement('div');
+    cardDiv.className = 'deck-card';
+
+    const img = setCardImageElement(document.createElement('img'), c, { loading: 'lazy', width: 100, height: 140 });
+
+    cardDiv.onmouseenter = () => { state.hoveredCard = c; updateCardInfo(); };
+    cardDiv.onmouseleave = () => { state.hoveredCard = null; updateCardInfo(); };
+    cardDiv.appendChild(img);
+
+    if (isInDeck) {
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        const i = state.decks[key].indexOf(c);
+        if (i > -1) state.decks[key].splice(i, 1);
+        render(); // will rebuild and re-render the chart
+      };
+      cardDiv.appendChild(removeBtn);
+    }
+
+    return cardDiv;
+  };
+
+  // ---------- build main containers ----------
+  const deckContainer = document.createElement('div');
+  deckContainer.style.cssText = 'background:#1f2937;padding:16px;border-radius:8px;min-height:200px;';
+  if (!state.decks[key] || state.decks[key].length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'text-gray text-center';
+    emptyMsg.style.padding = '32px 0';
+    emptyMsg.textContent = 'No cards in deck. Click cards below to add them!';
+    deckContainer.appendChild(emptyMsg);
+  } else {
+    state.decks[key].forEach(c => deckContainer.appendChild(createCardElement(c, true)));
+  }
+
+  const availContainer = document.createElement('div');
+  availContainer.style.cssText = 'background:#1f2937;padding:16px;border-radius:8px;min-height:200px;';
+  if (!state.cards || state.cards.length === 0) {
+    availContainer.innerHTML = '<p class="text-gray text-center" style="padding:32px;">No cards available. Go to Card Creator to add some!</p>';
+  } else {
+    state.cards.forEach(c => {
+      const el = createCardElement(c, false);
+      el.style.cursor = 'pointer';
+      el.onclick = () => {
+        const copy = { ...c, deckId: Date.now() + Math.random() };
+        state.decks[key] = state.decks[key] || [];
+        state.decks[key].push(copy);
+        render(); // will rebuild and re-render the chart
+      };
+      availContainer.appendChild(el);
+    });
+  }
+
+  function jumpstartPanelHtml(){
+    if (mode.id !== 'jumpstart') return '';
+    const options = JUMPSTART_THEMES.map(t => `<option value="${t.id}">${htmlEscape(t.title)}</option>`).join('');
+    return `
+      <div class="card p-4 mb-4" id="jumpstartMixer">
+        <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Jumpstart Packet Mixer</h3>
+            <p class="text-sm text-gray">Pick two themes, then build a shuffled 40-card packet deck for Player ${state.currentPlayer}.</p>
+          </div>
+          <div class="badge" id="jumpstartDeckName">40 cards</div>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px">
+          <div>
+            <label class="text-xs">Packet A</label>
+            <select id="jumpPacketA" class="input">${options}</select>
+          </div>
+          <div>
+            <label class="text-xs">Packet B</label>
+            <select id="jumpPacketB" class="input">${options}</select>
+          </div>
+          <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+            <button id="randomJumpstart" class="btn btn-secondary">Randomize</button>
+            <button id="buildJumpstart" class="btn btn-primary">Build Deck</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function cubePanelHtml(){
+    if (mode.id !== 'cube') return '';
+    return `
+      <div class="card p-4 mb-4" id="cubeStackTools">
+        <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Cube Center Stack</h3>
+            <p class="text-sm text-gray">Use your current deck as the shared center stack, import a cube list, or generate a starter cube for quick testing.</p>
+          </div>
+          <div class="badge">Shared draw pile</div>
+        </div>
+        <div class="grid" style="grid-template-columns:160px auto;gap:12px;margin-top:12px;align-items:end">
+          <div>
+            <label class="text-xs">Starter size</label>
+            <input id="cubeStackSize" class="input" type="number" min="40" max="180" value="90">
+          </div>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button id="buildCubeStack" class="btn btn-primary">Generate Starter Cube Stack</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function dandanPanelHtml(){
+    if (mode.id !== 'dandan') return '';
+    return `
+      <div class="card p-4 mb-4" id="dandanLibraryTools">
+        <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Dandan Shared Library</h3>
+            <p class="text-sm text-gray">Generate a blue shared-library stack with Dandan, counterplay, cantrips, bounce, and Islands.</p>
+          </div>
+          <div class="badge">Shared draw pile</div>
+        </div>
+        <div class="grid" style="grid-template-columns:160px auto;gap:12px;margin-top:12px;align-items:end">
+          <div>
+            <label class="text-xs">Library size</label>
+            <input id="dandanLibrarySize" class="input" type="number" min="40" max="160" value="80">
+          </div>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <button id="buildDandanLibrary" class="btn btn-primary">Generate Dandan Library</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const deckValidation = validateDeckForMode(state.decks[key] || [], mode);
+
+  // ---------- template ----------
+  div.innerHTML = `
+    <div class="header flex items-center justify-between gap-3">
+      <button id="backBtn" class="btn btn-secondary h-9 px-3 text-sm">← Back</button>
+      <h1 class="text-xl font-bold">Deck Builder • ${htmlEscape(mode.title)}</h1>
+      <button id="changeMode" class="btn btn-secondary h-9 px-3 text-sm">Change Format</button>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <div class="flex justify-between" style="align-items:flex-start;gap:12px;">
+        <div>
+          <span class="mode-family">${htmlEscape(mode.family)}</span>
+          <div class="text-sm text-gray mt-2">${htmlEscape(mode.summary)}</div>
+          <div class="text-xs text-gray mt-2">
+            ${mode.target ? `Target ${mode.target} cards` : 'Open deck size'}
+            ${mode.singleton ? ' • Singleton' : ''}
+            ${mode.rarity === 'common' ? ' • Commons only' : ''}
+            ${mode.commanderZone ? ' • Commander zone in battle' : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${deckValidationPanelHtml(deckValidation)}
+
+    ${jumpstartPanelHtml()}
+    ${cubePanelHtml()}
+    ${dandanPanelHtml()}
+
+    <div class="action-panel-grid" style="margin-bottom:16px;">
+      <button id="draftCTA" class="action-panel" type="button">
+        <span>Draft</span>
+        <small>Open the draft or pool builder for this mode.</small>
+      </button>
+      <button id="importCTA" class="action-panel" type="button">
+        <span>Import</span>
+        <small>Paste or upload a decklist.</small>
+      </button>
+      <button id="exportCTA" class="action-panel" type="button">
+        <span>Export</span>
+        <small>Download the current deck.</small>
+      </button>
+    </div>
+
+<!-- Stretched toggle bar for Deck Statistics -->
+<button id="statsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="deckStatsCard">
+  <span class="left"><span class="chip"></span><span id="statsLabel">Decklist Statistics</span></span>
+  <span class="chev" id="statsChevron">▸</span>
+</button>
+
+<!-- Collapsible stats card (initially hidden) -->
+<div class="card p-4 hidden" id="deckStatsCard" style="margin-bottom:16px">
+  <div id="manaCurveDeckChart"></div>
+</div>
+
+
+    <!-- Collapsed Import panel -->
+    <div class="card p-4 hidden" id="importCard" style="margin-bottom:16px">
+      <div class="flex justify-between" style="align-items:center;margin-bottom:8px">
+        <h3 style="font-weight:800;letter-spacing:.2px">Import decklist</h3>
+        <div class="text-xs text-gray">
+          <strong>.json</strong> upload = replace current deck immediately.<br>
+          <strong>.txt</strong> or pasted text = Parse → Import parsed.
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 320px;gap:12px">
+        <div>
+          <textarea id="importDeckTA" class="input" style="min-height:120px" placeholder="Examples:
+4 Lightning Bolt
+3x Counterspell
+Island x14
+# comments & Sideboard: are ignored"></textarea>
+
+          <div class="flex" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+            <label class="btn btn-secondary text-sm" style="cursor:pointer">
+              Upload .txt or .json
+              <input id="importDeckFile" type="file" accept=".txt,.json" class="hidden">
+            </label>
+
+            <div class="flex" style="gap:8px;align-items:center">
+              <span class="text-xs text-gray">Prefer set (optional)</span>
+              <input id="importSetPref" class="input" type="text" placeholder="e.g. ltr" style="width:100px">
+            </div>
+
+            <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+              <input id="importIncludeImages" type="checkbox" checked>
+              Include images
+            </label>
+
+            <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
+              <input id="importReplace" type="checkbox">
+              Replace current deck (instead of add)
+            </label>
+
+            <button id="btnImportParse"  class="btn btn-primary text-sm">Parse</button>
+            <button id="btnImportApply"  class="btn btn-secondary text-sm" disabled>Import parsed</button>
+          </div>
+        </div>
+
+        <div>
+          <div id="importStatus" class="text-xs text-gray">Status: collapsed.</div>
+          <div id="importPreview" style="margin-top:8px;max-height:200px;overflow:auto;border:1px solid #374151;border-radius:8px;padding:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The mana curve renders inside the collapsible stats card above; a second
+         mount with the same id was always left empty (querySelector takes the first). -->
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:20px;">
+      <div class="card">
+        <h3 class="mb-4" style="font-weight:bold;">Decklist [${(state.decks[key]||[]).length}]</h3>
+        <p class="text-xs text-gray mb-4">Click the ✕ to remove cards</p>
+        <div id="deckContainer"></div>
+      </div>
+      <div class="card">
+        <h3 class="mb-4" style="font-weight:bold;">Collection [${(state.cards||[]).length}]</h3>
+        <p class="text-xs text-gray mb-4">Click cards to add to deck</p>
+        <div id="availContainer"></div>
+      </div>
+      <div class="card" style="position:sticky;top:20px;height:fit-content;">
+        <h3 class="mb-4" style="font-weight:bold;text-align:center;">Card Info</h3>
+        <div id="cardInfoSidebar">
+          <p class="text-gray text-xs text-center" style="padding:20px;">Hover over a card to see details</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ---------- mount dynamic containers ----------
+  div.querySelector('#deckContainer').appendChild(deckContainer);
+  div.querySelector('#availContainer').appendChild(availContainer);
+
+  // ---------- header / tiles wiring ----------
+  const backBtn   = div.querySelector('#backBtn');
+  if (backBtn) backBtn.onclick = () => {
+    state.screen = state.battleMode === state.selectedMode ? 'mode-studio' : 'menu';
+    render();
+  };
+
+  const changeModeBtn = div.querySelector('#changeMode');
+  if (changeModeBtn) changeModeBtn.onclick = () => { state.modeIntent = 'build'; state.screen = 'modes'; render(); };
+
+  const exportCTA = div.querySelector('#exportCTA');
+  if (exportCTA) exportCTA.onclick = () => saveDeck();
+
+  const importCTA = div.querySelector('#importCTA');
+  const importCard = div.querySelector('#importCard');
+  if (importCTA && importCard) {
+    importCTA.onclick = () => {
+      importCard.classList.toggle('hidden');
+      const ta = div.querySelector('#importDeckTA');
+      const st = div.querySelector('#importStatus');
+      if (!importCard.classList.contains('hidden')) {
+        if (st) st.textContent = 'Status: ready.';
+        if (ta) ta.focus();
+        importCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        if (st) st.textContent = 'Status: collapsed.';
+      }
+    };
+  }
+
+  // Draft entry (image tile)
+  const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
+  if (openDraft) {
+    openDraft.onclick = () => {
+      resetDraftForMode(state.selectedMode || 'casual', { screen: 'mode' });
+      state.screen = 'draft';
+      render();
+    };
+  }
+
+  const jumpA = div.querySelector('#jumpPacketA');
+  const jumpB = div.querySelector('#jumpPacketB');
+  const randomJumpstart = div.querySelector('#randomJumpstart');
+  const buildJumpstart = div.querySelector('#buildJumpstart');
+  if (jumpA && jumpB && JUMPSTART_THEMES.length > 1) jumpB.value = JUMPSTART_THEMES[1].id;
+  function randomizeJumpstart(){
+    if (!jumpA || !jumpB) return;
+    const themes = shuffleCopy(JUMPSTART_THEMES);
+    jumpA.value = themes[0].id;
+    jumpB.value = (themes[1] || themes[0]).id;
+  }
+  if (randomJumpstart) randomJumpstart.onclick = randomizeJumpstart;
+  if (buildJumpstart) buildJumpstart.onclick = () => {
+    const deck = buildJumpstartDeck(jumpA?.value, jumpB?.value);
+    state.decks[key] = deck.cards;
+    toast(`Jumpstart deck built: ${deck.name}`);
+    render();
+  };
+
+  const buildCubeStack = div.querySelector('#buildCubeStack');
+  if (buildCubeStack) buildCubeStack.onclick = () => {
+    const sizeInput = div.querySelector('#cubeStackSize');
+    const size = Math.max(40, Math.min(180, parseInt(sizeInput?.value || '90', 10)));
+    state.decks[key] = makeStarterCubeStack(size);
+    toast(`Starter cube stack built: ${size} cards`);
+    render();
+  };
+
+  const buildDandanLibrary = div.querySelector('#buildDandanLibrary');
+  if (buildDandanLibrary) buildDandanLibrary.onclick = () => {
+    const sizeInput = div.querySelector('#dandanLibrarySize');
+    const size = Math.max(40, Math.min(160, parseInt(sizeInput?.value || '80', 10)));
+    state.decks[key] = makeDandanLibrary(size);
+    toast(`Dandan library built: ${size} cards`);
+    render();
+  };
+
+  // ---------- Import panel wiring ----------
+  const importTA    = div.querySelector('#importDeckTA');
+  const importFile  = div.querySelector('#importDeckFile');
+  const importSet   = div.querySelector('#importSetPref');
+  const importImgs  = div.querySelector('#importIncludeImages');
+  const importRepl  = div.querySelector('#importReplace');
+  const importParse = div.querySelector('#btnImportParse');
+  const importApply = div.querySelector('#btnImportApply');
+  const importStat  = div.querySelector('#importStatus');
+  const importPrev  = div.querySelector('#importPreview');
+
+  // Keep a cache of the last parsed result (for TXT or pasted JSON)
+  let lastParsedCards = null;
+
+  function renderImportPreview(map){
+    if (!map || map.size === 0) { importPrev.innerHTML = ''; return; }
+    const rows = [];
+    let total = 0;
+    // Names come straight from pasted text — escape before injecting as HTML.
+    for (const [name, qty] of map){ rows.push(`<tr><td style="width:40px">${htmlEscape(String(qty))}</td><td>${htmlEscape(name)}</td></tr>`); total += qty; }
+    importPrev.innerHTML = `
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="text-align:left;width:40px">Qty</th><th style="text-align:left">Name</th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>
+      <div class="text-xs text-gray" style="margin-top:6px">
+        Parsed <strong>${map.size}</strong> unique names / <strong>${total}</strong> total.
+        Supported lines: <code>4 Lightning Bolt</code>, <code>Lightning Bolt x2</code>, <code>3x Counterspell</code>, or just the name.
+        Lines beginning with <code>#</code> or <code>//</code> and headers like <code>Sideboard:</code> are ignored.
+      </div>`;
+  }
+
+  function ensureImages(cards){
+    return cards.map(c => {
+      if (!c.imageUrl || !c.imageUrl.length){
+        const nm = encodeURIComponent(c.name || '');
+        c.imageUrl = `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${nm}`;
+      }
+      return c;
+    });
+  }
+
+  function applyToDeck(cards, replace){
+    const key2 = 'player' + state.currentPlayer;
+    if (replace) state.decks[key2] = cards.slice();
+    else state.decks[key2] = (state.decks[key2] || []).concat(cards);
+    toast(replace ? 'Deck replaced ✓' : `Added ${cards.length} card(s) ✓`);
+    render();
+  }
+
+  async function doParse(raw){
+    lastParsedCards = null;
+    importApply.disabled = true;
+    try{
+      if (!raw || !raw.trim()){
+        if (importStat) importStat.textContent = 'Nothing to parse.';
+        return;
+      }
+      if (raw.trim().startsWith('{')){
+        const j = JSON.parse(raw);
+        if (Array.isArray(j.cards)){
+          lastParsedCards = ensureImages(j.cards);
+          importPrev.innerHTML = `<div class="text-xs text-gray">Ready: JSON with <strong>${lastParsedCards.length}</strong> card objects.</div>`;
+          if (importStat) importStat.textContent = 'JSON parsed. Click “Import parsed” to load it.';
+          importApply.disabled = false;
+          return;
+        }
+      }
+      const m = parseDecklist(raw);
+      renderImportPreview(m);
+      if (!m.size){ if (importStat) importStat.textContent = 'No valid card names found.'; return; }
+
+      if (importStat) importStat.textContent = 'Fetching Scryfall data…';
+      const setPref = (importSet && importSet.value || '').trim();
+      const includeImages = !!(importImgs && importImgs.checked);
+      const { out, errors } = await convertDecklist(raw, state.currentPlayer, setPref, includeImages, { textContent: (t)=> { if(importStat) importStat.textContent = t; } });
+
+      lastParsedCards = out.cards;
+      importApply.disabled = false;
+
+      const warn = errors && errors.length ? ` • ${errors.length} could not be matched.` : '';
+      if (importStat) importStat.textContent = `Parsed ${m.size} unique (${[...m.values()].reduce((a,b)=>a+b,0)} total). Resolved ${out.cards.length} objects${warn}.`;
+    } catch(e){
+      if (importStat) importStat.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  function doImportParsed(){
+    if (!lastParsedCards || !lastParsedCards.length){
+      toast('Nothing parsed yet. Click Parse first.');
+      return;
+    }
+    const replace = !!(importRepl && importRepl.checked);
+    applyToDeck(lastParsedCards, replace);
+  }
+
+  if (importParse) importParse.onclick = () => {
+    const raw = (importTA && importTA.value) ? importTA.value : '';
+    doParse(raw);
+  };
+  if (importApply) importApply.onclick = () => doImportParsed();
+
+  if (importFile) importFile.onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    const name = (f.name || '').toLowerCase();
+
+    if (name.endsWith('.json') || text.trim().startsWith('{')){
+      try{
+        const j = JSON.parse(text);
+        if (!Array.isArray(j.cards)) throw new Error('Not a compatible deck JSON (missing "cards" array).');
+        const cards = ensureImages(j.cards);
+        applyToDeck(cards, true);
+        if (importStat) importStat.textContent = `Loaded JSON deck: ${cards.length} cards (replaced).`;
+        return;
+      } catch(err){
+        if (importStat) importStat.textContent = 'Invalid JSON: ' + err.message;
+        return;
+      }
+    }
+    if (importTA) importTA.value = text;
+    try { const m = parseDecklist(text); renderImportPreview(m); } catch {}
+    if (importStat) importStat.textContent = 'TXT loaded. Click “Parse” to resolve via Scryfall, then “Import parsed”.';
+    importApply.disabled = true;
+  };
+
+// --- Deck Statistics toggle wiring ---
+const statsToggle = div.querySelector('#statsToggle');
+const statsCard   = div.querySelector('#deckStatsCard');
+const statsLabel  = div.querySelector('#statsLabel');
+const statsChev   = div.querySelector('#statsChevron');
+
+function openStats(){
+  statsCard.classList.remove('hidden');
+  statsToggle.classList.add('open');
+  statsToggle.setAttribute('aria-expanded','true');
+  if (statsChev) statsChev.textContent = '▾';
+  // render when opened (fresh each time)
+  renderDeckStatsInto('manaCurveDeckChart');
+}
+
+function closeStats(){
+  statsCard.classList.add('hidden');
+  statsToggle.classList.remove('open');
+  statsToggle.setAttribute('aria-expanded','false');
+  if (statsChev) statsChev.textContent = '▸';
+}
+
+if (statsToggle && statsCard){
+  // default closed
+  closeStats();
+
+  statsToggle.onclick = () => {
+    if (statsCard.classList.contains('hidden')) openStats();
+    else closeStats();
+  };
+}
+
+
+  return div;
+}
+
+// GAME BOARD ----------------------------
+// --- Battle-card + Horde engine (top level so the AI autopilot can drive it) ---
+
+function initBattleCard(card){
+  if (!card) return card;
+  if (!('tapped' in card)) card.tapped = false;
+  if (!('pt' in card)) card.pt = { p: 0, t: 0 };
+  if (!('stun' in card)) card.stun = 0;
+  return card;
+}
+
+function isHordeGameActive(){
+  return (state.gameState.mode || state.battleMode) === 'horde';
+}
+
+function recycleHordeDeckIfNeeded(){
+  const hordePlayer = state.gameState.player2;
+  hordePlayer.deck = hordePlayer.deck || [];
+  hordePlayer.graveyard = hordePlayer.graveyard || [];
+  if (hordePlayer.deck.length || !hordePlayer.graveyard.length) return;
+  hordePlayer.deck = shuffleCopy(hordePlayer.graveyard.splice(0).map(card => initBattleCard({ ...card, tapped: false })));
+  showAction('The Horde shuffles its graveyard back into its deck.');
+}
+
+function drawHordeCard(){
+  recycleHordeDeckIfNeeded();
+  const hordePlayer = state.gameState.player2;
+  return hordePlayer.deck.length ? initBattleCard(hordePlayer.deck.shift()) : null;
+}
+
+function placeHordeToken(card){
+  // Fresh tokens are summoning-sick: without this the Horde can reveal a dozen
+  // tokens and swing for lethal on the very first turn.
+  state.gameState.player2.lowerField.push(initBattleCard({ ...card, tapped: false, aiSick: true }));
+}
+
+function resolveHordeAction(card){
+  const hordePlayer = state.gameState.player2;
+  const survivorPlayer = state.gameState.player1;
+  let message = card.name;
+  if (card.hordeEffect === 'drain') {
+    survivorPlayer.health = Math.max(0, survivorPlayer.health - 2);
+    message = 'Gnawing Dread: survivors lose 2 life.';
+  } else if (card.hordeEffect === 'regrow') {
+    const returned = [];
+    for (let i = hordePlayer.graveyard.length - 1; i >= 0 && returned.length < 2; i--) {
+      const candidate = hordePlayer.graveyard[i];
+      if (candidate?.hordeRole === 'token' || candidate?.isToken) {
+        returned.push(hordePlayer.graveyard.splice(i, 1)[0]);
+      }
+    }
+    returned.forEach(placeHordeToken);
+    message = `Graveborn Return: ${returned.length} token${returned.length === 1 ? '' : 's'} returned.`;
+  } else if (card.hordeEffect === 'untap') {
+    [...hordePlayer.upperField, ...hordePlayer.lowerField].forEach(c => { c.tapped = false; });
+    message = 'Endless Moan: the Horde untaps.';
+  } else if (card.hordeEffect === 'surge') {
+    message = 'Mindless Surge: reveal two extra Horde cards.';
+  }
+  hordePlayer.graveyard.push(card);
+  return message;
+}
+
+function revealHorde(){
+  if (!isHordeGameActive()) return;
+  executeGameAction('horde_reveal', {}, () => {
+    let tokens = 0;
+    let actions = [];
+    let extraReveals = 0;
+    let guard = 0;
+
+    while (guard < 40) {
+      guard++;
+      const card = drawHordeCard();
+      if (!card) break;
+      const isToken = card.hordeRole === 'token' || card.isToken || (card.type || '').includes('Token');
+      if (isToken) {
+        placeHordeToken(card);
+        tokens++;
+        if (extraReveals > 0) extraReveals--;
+        continue;
+      }
+
+      const actionMessage = resolveHordeAction(card);
+      actions.push(actionMessage);
+      if (card.hordeEffect === 'surge') {
+        extraReveals += 2;
+        continue;
+      }
+      if (extraReveals > 0) {
+        extraReveals--;
+        continue;
+      }
+      break;
+    }
+
+    checkWinner();
+    return { tokens, actions };
+  }, ({ tokens, actions }) => `Horde reveal: ${tokens} token${tokens === 1 ? '' : 's'}${actions.length ? ' - ' + actions.join(' ') : ''}`);
+}
+
+function hordeAttack(){
+  if (!isHordeGameActive()) return;
+  executeGameAction('horde_attack', {}, () => {
+    const hordePlayer = state.gameState.player2;
+    const survivorPlayer = state.gameState.player1;
+    const attackers = [...hordePlayer.upperField, ...hordePlayer.lowerField]
+      .filter(card => (card.type || '').includes('Creature') || card.isToken)
+      .filter(card => !card.tapped && !card.aiSick);
+    const damage = attackers.reduce((sum, card) => sum + Math.max(0, effectivePT(card).p), 0);
+    attackers.forEach(card => { card.tapped = true; });
+    survivorPlayer.health = Math.max(0, survivorPlayer.health - damage);
+    checkWinner();
+    return { count: attackers.length, damage };
+  }, ({ count, damage }) => `Horde attack: ${count} creature${count === 1 ? '' : 's'} dealt ${damage} damage.`);
+}
+
+// --- Basic Land Game helpers (top level so the AI autopilot can score/win) ---
+
+function basicLandName(card){
+  return BASIC_LAND_NAMES.includes(card?.name) ? card.name : '';
+}
+
+function landGameFieldCards(player){
+  return [...(player.upperField || []), ...(player.lowerField || [])].filter(card => basicLandName(card));
+}
+
+function landGameCounts(player){
+  const counts = Object.fromEntries(BASIC_LAND_NAMES.map(name => [name, 0]));
+  for (const card of landGameFieldCards(player)) counts[card.name] += 1;
+  return counts;
+}
+
+function formatLandGameProgress(player){
+  const counts = landGameCounts(player);
+  const domain = BASIC_LAND_NAMES.filter(name => counts[name] > 0).length;
+  const best = Math.max(...BASIC_LAND_NAMES.map(name => counts[name]));
+  const short = BASIC_LAND_NAMES.map(name => `${name[0]}:${counts[name]}`).join(' ');
+  return `${short} • Domain ${domain}/5 • Pair ${best}/5`;
+}
+
+function checkLandGameVictory(){
+  if ((state.gameState.mode || state.battleMode) !== 'land-game' || state.winner) return;
+  for (const [playerNum, player] of [[1, state.gameState.player1], [2, state.gameState.player2]]) {
+    const counts = landGameCounts(player);
+    const hasDomain = BASIC_LAND_NAMES.every(name => counts[name] > 0);
+    const hasFive = BASIC_LAND_NAMES.some(name => counts[name] >= 5);
+    if (hasDomain || hasFive) {
+      state.winner = playerNum;
+      state.actionMessage = `Player ${playerNum} completes the Basic Land Game goal.`;
+      return;
+    }
+  }
+}
+
+function GameBoard() {
+  const div = document.createElement('div');
+
+  // checkWinner() clears gameStarted, so guard on the winner too — otherwise a
+  // life-based win silently returns players to the pre-game screen and the
+  // victory modal below is never reachable.
+  if (!state.gameStarted && !state.winner) {
+    div.className = 'container screen';
+    let connUI = '';
+    const statusLine = state.connectionStatus
+      ? `<div class="text-xs text-gray mt-2">Connection: ${htmlEscape(state.connectionStatus)}</div>`
+      : '';
+    if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
+      connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to play.</div>';
+    } else if (state.onlineMode && state.waitingForAnswer) {
+      connUI = `
+        <div class="card" style="background: rgba(30, 64, 175, 0.2); border-color: #3b82f6; margin-bottom: 24px;">
+          <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+          <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
+          <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
+          <hr style="border-color: #4b5563; margin: 16px 0;">
+          <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
+          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+          <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+          ${statusLine}
+        </div>
+      `;
+    } else if (state.onlineMode && state.answerCode) {
+      connUI = `
+        <div class="card" style="background: rgba(5, 150, 105, 0.2); border-color: #059669; margin-bottom: 24px;">
+          <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+          <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
+          <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+          <p class="text-green text-sm mt-4">Waiting for host...</p>
+          ${statusLine}
+        </div>
+      `;
+    } else if (state.onlineMode) {
+      connUI = `<div class="card mb-4 text-center p-4">Preparing connection…${statusLine}</div>`;
+    }
+    const mode = currentModeConfig();
+    const rules = getModeRules(mode);
+    applyAutoDeck(mode);
+    const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
+    const sharedStackOwner = (state.decks.player1 || []).length ? 'Player 1' : ((state.decks.player2 || []).length ? 'Player 2' : '');
+    const sharedStackCount = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
+    const sharedStackDeck = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+    const decksReady = rules.sharedLibrary ? sharedStackReady : ((state.decks.player1 || []).length > 0 && (state.decks.player2 || []).length > 0);
+    const waitForHost = state.onlineMode && !state.isHost;
+    const readyMessage = !decksReady
+      ? (rules.sharedLibrary ? 'Build or import a shared stack first.' : 'Both players need decks to start.')
+      : (waitForHost ? 'Waiting for the host to start the game.' : '');
+    const readyValidationHtml = rules.sharedLibrary
+      ? deckValidationPanelHtml(validateDeckForMode(sharedStackDeck, mode), {
+          id: 'readyDeckValidation',
+          title: `${rules.sharedLabel || 'Shared Stack'} Check`,
+          compact: true
+        })
+      : `<div class="grid grid-2" style="gap:12px;margin-top:12px;text-align:left">
+          ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'readyP1DeckValidation', title: 'Player 1 Deck', compact: true })}
+          ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'readyP2DeckValidation', title: 'Player 2 Deck', compact: true })}
+        </div>`;
+    
+    div.innerHTML = `
+      <div style="max-width: 800px; width: 100%;">
+        <div class="header">
+          <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
+          <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
+        </div>
+        ${connUI}
+        <div class="card text-center">
+          <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">⚔️ Ready to Play?</h1>
+          <div class="mode-family" style="margin:0 auto 8px">${htmlEscape(mode.title)}</div>
+          ${mode.note ? `<div class="mode-note mb-4" style="text-align:left">${htmlEscape(mode.note)}</div>` : ''}
+          ${rules.sharedLibrary ? `<div class="mode-note mb-4" style="text-align:left">
+            ${sharedStackReady
+              ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards). Both players draw from that stack.`
+              : `Build, import, or generate a shared center stack before starting ${htmlEscape(mode.title)}.`}
+          </div>` : ''}
+          ${readyValidationHtml}
+          <p class="text-gray mb-8">${state.onlineMode ? 'Waiting for both players to be ready...' : 'Local game - Both players ready!'}</p>
+          <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${(!decksReady || waitForHost) ? 'disabled' : ''}>Start Game</button>
+          ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeReady" class="btn btn-secondary mt-4">Generate Starter Cube Stack</button>' : ''}
+          ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanReady" class="btn btn-secondary mt-4">Generate Dandan Library</button>' : ''}
+          ${readyMessage ? `<p class="${decksReady ? 'text-gray' : 'text-red'} mt-4">⚠️ ${htmlEscape(readyMessage)}</p>` : ''}
+        </div>
+      </div>
+    `;
+    
+    const copyFrom = async (selector, btn, label) => {
+      const el = div.querySelector(selector);
+      if (!el) return;
+      try {
+        await navigator.clipboard.writeText(el.value);
+      } catch {
+        el.select();
+        document.execCommand('copy');     // fallback for non-secure contexts
+      }
+      const original = btn.textContent;
+      btn.textContent = '✓ Copied';
+      setTimeout(() => { btn.textContent = original || label; }, 1200);
+    };
+    if (div.querySelector('#copyOffer')) {
+      const b = div.querySelector('#copyOffer');
+      b.onclick = () => copyFrom('#offerCode', b, 'Copy Code');
+    }
+    if (div.querySelector('#submitAnswer')) {
+      div.querySelector('#submitAnswer').onclick = () => {
+        const val = div.querySelector('#answerInput').value.trim();
+        if (val) completeConnection(val);
+        else alert('Please paste the answer code first!');
+      };
+    }
+    if (div.querySelector('#copyAnswer')) {
+      const b = div.querySelector('#copyAnswer');
+      b.onclick = () => copyFrom('#answerCode', b, 'Copy Answer Code');
+    }
+    const starterCubeReady = div.querySelector('#starterCubeReady');
+    if (starterCubeReady) starterCubeReady.onclick = () => {
+      state.decks.player1 = makeStarterCubeStack(90);
+      toast('Starter cube stack generated.');
+      render();
+    };
+    const starterDandanReady = div.querySelector('#starterDandanReady');
+    if (starterDandanReady) starterDandanReady.onclick = () => {
+      state.decks.player1 = makeDandanLibrary(80);
+      toast('Dandan library generated.');
+      render();
+    };
+    
+    div.querySelector('#backBtn').onclick = () => { 
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu'; 
+      render(); 
+    };
+    div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+    div.querySelector('#startBtn').onclick = () => {
+      // Online: only the host deals, so both peers share the same shuffle.
+      if (state.onlineMode && !state.isHost) return;
+
+      const shuffle = (arr) => {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+
+      const p1 = shuffle(state.decks.player1.map((c, i) => cloneForGame(c, 'p1-' + i)));
+      const p2 = shuffle(state.decks.player2.map((c, i) => cloneForGame(c, 'p2-' + i)));
+
+      state.battleMode = mode.id;
+      state.gameState = buildGameStateForMode(mode, p1, p2);
+      if (mode.commanderZone) {
+        seedCommandZoneFromDeck(state.gameState.player1, mode);
+        seedCommandZoneFromDeck(state.gameState.player2, mode);
+      }
+      // Deal opening hands. Human-vs-human play stays a manual sandbox (draw
+      // when you like); vs-AI games deal 7 so the computer has cards to play
+      // and the human isn't clicking Draw seven times to start.
+      const openingHand = rules.startingHand || (state.vsAI ? 7 : 0);
+      if (openingHand) {
+        const sharedZone = state.gameState.shared;
+        for (const who of ['player1', 'player2']) {
+          const player = state.gameState[who];
+          const drawPile = (sharedZone && sharedZone.enabled) ? sharedZone.deck : player.deck;
+          for (let i = 0; i < openingHand && drawPile.length; i++) {
+            player.hand.push(drawPile.shift());
+          }
+        }
+      }
+      state.activePlayer = 1; 
+      state.gameStarted = true;
+      state.targeting = null;
+      state.gameLog = [];
+      state.gameHistory = [];
+      addGameLog(`${rules.title} started.`);
+      
+      // Show "Your Turn" notification for player 1 at game start
+      if (state.currentPlayer === 1) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+
+      sendGameInit();   // full opening snapshot so the joiner gets both shuffled decks
+      render();
+    };
+    return div;
+  }
+
+  // GAME SCREEN
+  const pKey = 'player' + state.currentPlayer;
+  const oKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+  const me = state.gameState[pKey];
+  const opp = state.gameState[oKey];
+  const mode = getModeConfig(state.gameState.mode || state.battleMode || state.selectedMode);
+  const rules = getModeRules(mode);
+  const sharedGame = isSharedGame();
+  const shared = state.gameState.shared || { enabled:false, label:'Shared Library', deck:[], graveyard:[], exile:[] };
+  if (!state.gameState.shared) state.gameState.shared = shared;
+  me.commanderZone = me.commanderZone || [];
+  opp.commanderZone = opp.commanderZone || [];
+  state.gameState.stack = state.gameState.stack || [];
+  state.gameState.phase = state.gameState.phase || 'Main';
+  shared.deck = shared.deck || [];
+  shared.graveyard = shared.graveyard || [];
+  shared.exile = shared.exile || [];
+  const myDeckCount = sharedGame ? shared.deck.length : me.deck.length;
+  const oppDeckCount = sharedGame ? shared.deck.length : opp.deck.length;
+  const gameStack = state.gameState.stack;
+  const commanderZoneOn = !!rules.commanderZone;
+  const commandMeta = commandZoneMeta(mode);
+  const hordeMode = mode.id === 'horde';
+  const bossMode = mode.id === 'boss';
+  const landGameMode = mode.id === 'land-game';
+  const hordePlayer = state.gameState.player2;
+  const survivorPlayer = state.gameState.player1;
+
+  function isPermanentCard(card){
+    const type = (card?.type || '').toLowerCase();
+    return ['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land'].some(t => type.includes(t));
+  }
+
+  function ownerPlayerFromStackItem(item){
+    return state.gameState['player' + (item?.owner || state.currentPlayer)] || me;
+  }
+
+  function stackCardLabel(item){
+    return item?.card?.name || 'Unknown spell';
+  }
+
+  function castSelectedCardToStack(){
+    const card = me.hand[state.selectedCard];
+    if (!card) return;
+    executeGameAction('cast_to_stack', { cardName: card.name, owner: state.currentPlayer }, () => {
+      me.hand.splice(state.selectedCard, 1);
+      gameStack.push({
+        id: makeId('stack'),
+        owner: state.currentPlayer,
+        card: initBattleCard({ ...card }),
+        phase: state.gameState.phase || 'Main'
+      });
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+    }, `Player ${state.currentPlayer} cast ${card.name} to the stack.`);
+  }
+
+  function resolveTopStack(){
+    if (!gameStack.length) { showAction('The stack is empty.'); return; }
+    const topName = stackCardLabel(gameStack[gameStack.length - 1]);
+    executeGameAction('resolve_stack', { cardName: topName }, () => {
+      const item = gameStack.pop();
+      const owner = ownerPlayerFromStackItem(item);
+      const card = initBattleCard({ ...item.card, tapped: false });
+      if (isPermanentCard(card)) {
+        owner.lowerField.push(card);
+        if (rules.winCondition === 'basic-land-game') checkLandGameVictory();
+      } else {
+        owner.graveyard.push(card);
+      }
+      return card;
+    }, (card) => `Resolved ${card.name}.`);
+  }
+
+  function counterTopStack(){
+    if (!gameStack.length) { showAction('The stack is empty.'); return; }
+    const topName = stackCardLabel(gameStack[gameStack.length - 1]);
+    executeGameAction('counter_stack', { cardName: topName }, () => {
+      const item = gameStack.pop();
+      const owner = ownerPlayerFromStackItem(item);
+      owner.graveyard.push(initBattleCard({ ...item.card, tapped: false }));
+      return item;
+    }, (item) => `Countered ${stackCardLabel(item)}.`);
+  }
+
+  function setTurnPhase(phase){
+    executeGameAction('set_phase', { phase }, () => {
+      state.gameState.phase = phase;
+    }, `Phase: ${phase}.`);
+  }
+
+  function advanceTurnPhase(){
+    const current = state.gameState.phase || 'Main';
+    const idx = TURN_PHASES.indexOf(current);
+    const next = TURN_PHASES[(idx + 1 + TURN_PHASES.length) % TURN_PHASES.length];
+    setTurnPhase(next);
+  }
+
+  function canMoveToCommandZone(player){
+    if (!commandMeta.max) return true;
+    if ((player.commanderZone || []).length < commandMeta.max) return true;
+    toast(`${commandMeta.label} is full (${commandMeta.max} cards).`);
+    return false;
+  }
+
+  function dragTargetLabel(target){
+    const labels = {
+      upperField: 'Upper Field',
+      lowerField: 'Lower Field',
+      hand: 'Hand',
+      graveyard: 'Graveyard',
+      exile: 'Exile',
+      deck: sharedGame ? `${shared.label} bottom` : 'Deck bottom',
+      stack: 'Stack'
+    };
+    return labels[target] || target;
+  }
+
+  function setCardDragData(event, source, idx){
+    const payload = JSON.stringify({ owner: 'me', source, idx });
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/json', payload);
+    event.dataTransfer.setData('text/plain', payload);
+  }
+
+  function readCardDragData(event){
+    try {
+      const raw = event.dataTransfer.getData('application/json') || event.dataTransfer.getData('text/plain');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function removeDraggedCard(payload){
+    if (!payload || payload.owner !== 'me') return null;
+    if (!['hand', 'upperField', 'lowerField'].includes(payload.source)) return null;
+    const idx = Number(payload.idx);
+    const source = me[payload.source];
+    if (!Array.isArray(source) || !Number.isInteger(idx) || idx < 0 || idx >= source.length) return null;
+    return source.splice(idx, 1)[0];
+  }
+
+  function moveDraggedCard(payload, target){
+    if (!payload || !target) return;
+    if (target === 'stack' && payload.source !== 'hand') {
+      showAction('Only cards from hand can be cast to the stack.');
+      return;
+    }
+
+    executeGameAction('move_card', { source: payload.source, target }, () => {
+      const card = removeDraggedCard(payload);
+      if (!card) return null;
+      const battleCard = initBattleCard({ ...card, tapped: false });
+
+      if (target === 'upperField' || target === 'lowerField') {
+        me[target].push(battleCard);
+        checkLandGameVictory();
+      } else if (target === 'hand') {
+        me.hand.push(card);
+      } else if (target === 'graveyard') {
+        me.graveyard.push(battleCard);
+      } else if (target === 'exile') {
+        me.exile.push(battleCard);
+      } else if (target === 'deck') {
+        const targetDeck = sharedGame ? shared.deck : me.deck;
+        targetDeck.push(battleCard);
+      } else if (target === 'stack') {
+        gameStack.push({
+          id: makeId('stack'),
+          owner: state.currentPlayer,
+          card: battleCard,
+          phase: state.gameState.phase || 'Main'
+        });
+      }
+
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      return card;
+    }, (card) => card ? `Moved ${card.name} to ${dragTargetLabel(target)}.` : '');
+  }
+
+  function drawTopTo(player){
+    if (!player.deck.length) return null;
+    const card = initBattleCard(player.deck.shift());
+    player.hand.push(card);
+    return card;
+  }
+
+  function landGameTargetCandidates(landName){
+    if (landName === 'Forest') {
+      return me.graveyard
+        .map((card, idx) => ({ owner: 'me', zone: 'graveyard', idx, card, label: `Return ${card.name}` }))
+        .filter(item => basicLandName(item.card));
+    }
+    if (landName === 'Swamp') {
+      return opp.hand
+        .map((card, idx) => ({ owner: 'opp', zone: 'hand', idx, card, label: `Discard ${card.name}` }))
+        .filter(item => basicLandName(item.card));
+    }
+    if (landName === 'Mountain') {
+      return ['lowerField', 'upperField'].flatMap(zone =>
+        opp[zone].map((card, idx) => ({ owner: 'opp', zone, idx, card, label: `Destroy ${card.name}` }))
+      ).filter(item => basicLandName(item.card));
+    }
+    return [];
+  }
+
+  function landGameTargetPrompt(landName){
+    if (landName === 'Forest') return 'Choose one of your basic lands in the graveyard.';
+    if (landName === 'Swamp') return 'Choose a basic land from the opponent hand to discard.';
+    if (landName === 'Mountain') return 'Choose an opponent basic land in play to destroy.';
+    return '';
+  }
+
+  function beginLandGameEffect(landName){
+    if (!landGameMode) return;
+    if (landName === 'Island') {
+      executeGameAction('land_game_effect', { land: landName }, () => {
+        const drawn = drawTopTo(me);
+        checkLandGameVictory();
+        state.selectedFieldCard = null;
+        return drawn;
+      }, (drawn) => drawn ? `Island: drew ${drawn.name}.` : 'Island: no card left to draw.');
+      return;
+    } else if (landName === 'Plains') {
+      const repeat = landGameFieldCards(me).find(card => card.name !== 'Plains');
+      if (repeat) {
+        beginLandGameEffect(repeat.name);
+        return;
+      }
+      showAction('Plains: no non-Plains land available to repeat.');
+      return;
+    }
+
+    const candidates = landGameTargetCandidates(landName);
+    if (!candidates.length) {
+      const emptyMessage = landName === 'Forest'
+        ? 'Forest: no basic land in your graveyard.'
+        : landName === 'Swamp'
+          ? 'Swamp: opponent has no basic land in hand.'
+          : 'Mountain: opponent has no land in play.';
+      state.selectedFieldCard = null;
+      showAction(emptyMessage);
+      return;
+    }
+    state.targeting = { type: 'land-game-effect', effect: landName };
+    state.selectedFieldCard = null;
+    render();
+  }
+
+  function completeLandGameTarget(index){
+    const targeting = state.targeting;
+    if (!targeting || targeting.type !== 'land-game-effect') return;
+    const landName = targeting.effect;
+    const candidates = landGameTargetCandidates(landName);
+    const target = candidates[index];
+    if (!target) {
+      state.targeting = null;
+      render();
+      return;
+    }
+
+    executeGameAction('land_game_effect', { land: landName, targetZone: target.zone }, () => {
+      let message = '';
+      if (landName === 'Forest') {
+        const card = me.graveyard.splice(target.idx, 1)[0];
+        me.hand.push(card);
+        message = `Forest: returned ${card.name} from graveyard to hand.`;
+      } else if (landName === 'Swamp') {
+        const card = opp.hand.splice(target.idx, 1)[0];
+        opp.graveyard.push(card);
+        message = `Swamp: opponent discarded ${card.name}.`;
+      } else if (landName === 'Mountain') {
+        const card = opp[target.zone].splice(target.idx, 1)[0];
+        opp.graveyard.push(card);
+        message = `Mountain: destroyed opponent's ${card.name}.`;
+      }
+      checkLandGameVictory();
+      state.targeting = null;
+      state.selectedFieldCard = null;
+      return message;
+    }, (message) => message);
+  }
+
+  function gameCardPreviewHtml(card){
+    return cardImageMarkup(card, {
+      height: 120,
+      style: 'width:100%;height:120px;object-fit:cover;border-radius:6px;display:block'
+    });
+  }
+
+  function aiAttackers(){
+    return [...(state.gameState.player2.upperField || []), ...(state.gameState.player2.lowerField || [])]
+      .filter(c => c.aiAttacking);
+  }
+
+  function aiBlockersModalHtml(){
+    if (!state.targeting || state.targeting.type !== 'ai-blockers' || !window.GALDUR_AI) return '';
+    const attackers = aiAttackers();
+    if (!attackers.length) return '';
+    const myBlockers = [...me.upperField, ...me.lowerField]
+      .filter(c => ((c.type || '').toLowerCase().includes('creature') || c.isToken) && !c.tapped);
+    return `
+      <div class="modal">
+        <div class="modal-content" style="max-width:760px">
+          <div class="flex justify-between mb-4">
+            <div>
+              <h3 style="font-weight:800;font-size:18px">🤖 AI attacks!</h3>
+              <div class="text-xs text-gray mt-1">Assign a blocker to each attacker, or let the damage through.</div>
+            </div>
+          </div>
+          <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;max-height:56vh;overflow:auto">
+            ${attackers.map(a => {
+              const apt = effectivePT(a);
+              const legal = myBlockers.filter(b => window.GALDUR_AI.canBlock(a, b));
+              return `
+              <div class="card" style="padding:10px;display:flex;flex-direction:column;gap:6px">
+                <div style="height:120px;overflow:hidden;border-radius:6px;flex:0 0 auto">${gameCardPreviewHtml(a)}</div>
+                <div class="text-xs" style="font-weight:700">${htmlEscape(a.name)} <span class="text-red">${apt.p}/${apt.t}</span></div>
+                ${(a.effect || '') ? `<div class="text-xs text-gray" style="max-height:32px;overflow:hidden">${htmlEscape(a.effect)}</div>` : ''}
+                <select class="input text-xs aiBlockPick" style="margin-top:auto" data-attacker="${htmlEscape(String(a.gameId || a.id))}">
+                  <option value="">— No block (take ${apt.p}) —</option>
+                  ${legal.map(b => {
+                    const bpt = effectivePT(b);
+                    return `<option value="${htmlEscape(String(b.gameId || b.id))}">${htmlEscape(b.name)} (${bpt.p}/${bpt.t})</option>`;
+                  }).join('')}
+                </select>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="flex mt-4" style="gap:8px;justify-content:flex-end">
+            <button id="aiNoBlocks" class="btn btn-secondary text-sm">Take All Damage</button>
+            <button id="aiResolveCombat" class="btn btn-primary text-sm">Resolve Combat</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function targetingModalHtml(){
+    if (!state.targeting || state.targeting.type !== 'land-game-effect') return '';
+    const landName = state.targeting.effect;
+    const candidates = landGameTargetCandidates(landName);
+    return `
+      <div class="modal">
+        <div class="modal-content" style="max-width:720px">
+          <div class="flex justify-between mb-4">
+            <div>
+              <h3 style="font-weight:800;font-size:18px">${htmlEscape(landName)} target</h3>
+              <div class="text-xs text-gray mt-1">${htmlEscape(landGameTargetPrompt(landName))}</div>
+            </div>
+            <button id="cancelTargeting" class="btn btn-secondary text-xs">Cancel</button>
+          </div>
+          <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;max-height:60vh;overflow:auto">
+            ${candidates.map((item, i) => `
+              <button class="targetChoice card" data-i="${i}" style="padding:8px;text-align:left;cursor:pointer">
+                ${gameCardPreviewHtml(item.card)}
+                <div class="text-xs mt-2" style="font-weight:700">${htmlEscape(item.card.name)}</div>
+                <div class="text-xs text-gray">${htmlEscape(item.zone)}</div>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function landGameEffectPanelHtml(card){
+    const land = basicLandName(card);
+    if (!landGameMode || !land) return '';
+    const repeatNames = [...new Set(landGameFieldCards(me).map(c => c.name).filter(name => name !== 'Plains'))];
+    const repeatButtons = repeatNames.map(name => `<button class="repeatLandEffect btn btn-secondary text-xs" data-land="${name}">Repeat ${name}</button>`).join('');
+    return `
+      <div class="card p-3 mb-3" style="background:rgba(5,150,105,.16);border-color:#10b981">
+        <div class="text-xs text-gray mb-2">Basic Land Game effect</div>
+        ${land === 'Plains'
+          ? `<div class="flex" style="gap:8px;flex-wrap:wrap">${repeatButtons || '<span class="text-xs text-gray">No non-Plains land to repeat.</span>'}</div>`
+          : `<button id="resolveLandGameEffect" class="btn btn-green text-sm" style="width:100%">Resolve ${land}</button>`}
+      </div>
+    `;
+  }
+  
+  const createGameCardImg = (c) => {
+    const img = document.createElement('img');
+    return setCardImageElement(img, c, { loading: 'eager', width: 100, height: 140 });
+  };
+  
+  const showCardInfo = (card, target) => {
+    const sidebar = target || div.querySelector('#cardInfo');
+    if (sidebar && card) {
+      const c = card;
+      const countersDisplay = c.counters && c.counters > 0 ? `<div class="text-green text-sm mt-2">✨ +${c.counters}/+${c.counters} Counters</div>` : '';
+      sidebar.innerHTML = `
+        <div class="card-preview">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.isToken ? '🎭 ' : ''}${htmlEscape(c.name || '')}</div>
+            ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${htmlEscape(c.cost)}</div>` : ''}
+          </div>
+          <div class="text-xs text-gray text-center mb-2">${htmlEscape(c.type || '')}${c.isToken ? ' (Token)' : ''}</div>
+          ${cardImageMarkup(c, { style: 'width:100%;border-radius:6px;margin-bottom:8px;display:block' })}
+          ${c.type && (c.type.includes('Creature') || c.isToken) ? `<div class="mb-2 text-xs"><strong>PWR:</strong> ${parseInt(c.power || 0) + (c.counters || 0)} <strong>TGH:</strong> ${parseInt(c.toughness || 0) + (c.counters || 0)}</div>` : ''}
+${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = effectivePT(c); return `<div class="text-xs text-green mt-1">P/T: ${e.p} / ${e.t}</div>`; })() 
+  : ''}
+          <div class="text-xs">${htmlEscape(c.effect || 'No effect')}</div>
+          ${c.tapped ? '<div class="text-xs text-red mt-2">⟳ TAPPED</div>' : ''}
+          ${countersDisplay}
+        </div>
+      `;
+    }
+  };
+  
+  const oppUpperHtml = opp.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="upperField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const oppLowerHtml = opp.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}" data-zone="lowerField" data-owner="opp" data-idx="${i}"></div>`).join('');
+  const myLowerHtml = me.lowerField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'lowerField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="lowerField" data-owner="me" data-idx="${i}"></div>`).join('');
+  const myUpperHtml = me.upperField.map((c, i) => `<div class="field-card${c.tapped ? ' tapped' : ''}${state.selectedFieldCard && state.selectedFieldCard.zone === 'upperField' && state.selectedFieldCard.idx === i ? ' selected' : ''}" data-zone="upperField" data-owner="me" data-idx="${i}"></div>`).join('');
+  
+  // Dynamic sizing classes based on card count
+  const getFieldClass = (cards) => {
+    const count = cards.length;
+    if (count > 10) return ' lots-cards';
+    if (count > 6) return ' many-cards';
+    return '';
+  };
+  
+  div.innerHTML = `
+    <div class="battle-shell" style="display: flex; height: 100vh;">
+      <div class="battle-main" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div class="battle-topbar" style="background: #1f2937; padding: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #374151;">
+          <button id="exitBtn" class="btn btn-secondary text-xs">← Exit</button>
+          <div class="text-center battle-turn-panel">
+            <div class="battle-mode-line">
+              <span class="mode-family">${htmlEscape(mode.title)}</span>
+              <span class="badge">${state.onlineMode ? 'Online' : state.vsAI ? '🤖 vs AI' : 'Local'}</span>
+              ${state.coop ? `<span class="badge">🤝 Co-op • Survivor ${state.coopSeat}</span>` : ''}
+              ${sharedGame ? `<span class="badge">${htmlEscape(shared.label)}</span>` : ''}
+            </div>
+            <span class="text-xs" style="font-weight: bold;">Player ${state.activePlayer}${state.activePlayer === state.currentPlayer ? ' (YOU)' : ''}</span>
+            <div class="text-xs text-gray">Current Turn • ${htmlEscape(state.gameState.phase || 'Main')}</div>
+            <div class="flex battle-phase-row" style="gap:4px;justify-content:center;flex-wrap:wrap;margin-top:4px">
+              ${TURN_PHASES.map(phase => `<button class="phaseBtn btn ${state.gameState.phase === phase ? 'btn-blue' : 'btn-secondary'} text-xs" data-phase="${phase}">${phase}</button>`).join('')}
+              <button id="nextPhase" class="btn btn-purple text-xs">Next</button>
+            </div>
+          </div>
+          <button id="endTurn" class="btn btn-blue text-xs">End Turn →</button>
+        </div>
+        <div class="battle-scroll" style="flex: 1; overflow-y: auto; padding: 16px;">
+          <div class="mb-4 text-center battle-player-card opponent">
+            <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ ${bossMode ? '💀 Boss' : hordeMode ? 'The Horde' : 'Opponent'} - LP: ${opp.health}</div>
+            <div class="text-xs text-gray battle-zone-line">📚 ${sharedGame ? htmlEscape(shared.label) : 'Deck'}: ${oppDeckCount} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}${commanderZoneOn ? ` | 👑 ${htmlEscape(commandMeta.shortLabel)}: ${opp.commanderZone.length}` : ''}${hordeMode ? ` | Horde field: ${hordePlayer.lowerField.length + hordePlayer.upperField.length}` : ''}</div>
+            ${sharedGame ? `<div class="badge mt-2">${htmlEscape(shared.label)} center stack • top-to-bottom draw</div>` : ''}
+            ${landGameMode ? `<div class="badge mt-2">Opponent lands: ${formatLandGameProgress(opp)}</div>` : ''}
+          </div>
+          <div class="game-field mb-4${getFieldClass(opp.upperField)}" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2"> </div>
+            ${oppUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div class="game-field mb-4${getFieldClass(opp.lowerField)}" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2"> </div>
+            ${oppLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div class="battle-divider" style="border-top: 3px dashed #7c3aed; margin: 16px 0;"> </div>
+          <div id="myLowerField" class="game-field player mb-4${getFieldClass(me.lowerField)}" data-drop-target="lowerField" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2">Lower </div>
+            ${myLowerHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div id="myUpperField" class="game-field player mb-4${getFieldClass(me.upperField)}" data-drop-target="upperField" style="min-height: 90px;">
+            <div class="text-xs text-gray text-center mb-2">Upper </div>
+            ${myUpperHtml || '<p class="text-xs text-gray text-center"> </p>'}
+          </div>
+          <div class="mt-4 text-center battle-player-card you">
+            <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ ${state.coop ? `Survivors (Player ${state.coopSeat} acting)` : 'You'} - LP: ${me.health}</div>
+            ${landGameMode ? `<div class="card p-3 mt-3" style="background:rgba(5,150,105,.12);border-color:#10b981">
+              <div style="font-weight:800;font-size:13px">Basic Land Game</div>
+              <div class="text-xs text-gray mt-1">Goal: control all five basic land names, or five copies of one basic.</div>
+              <div class="badge mt-2">Your lands: ${formatLandGameProgress(me)}</div>
+            </div>` : ''}
+            <div class="battle-toolbar" style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${myDeckCount})</button>
+              <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
+              <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
+              <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
+              <button id="viewGY" class="btn btn-secondary text-xs">⚰️ GY (${me.graveyard.length})</button>
+              <button id="viewExile" class="btn btn-secondary text-xs">🚫 Exile (${me.exile.length})</button>
+              <button id="viewDeck" class="btn btn-secondary text-xs">📚 ${sharedGame ? 'Shared' : 'Deck'} (${myDeckCount})</button>
+              ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal Top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn Top</button><button id="shuffleSharedStack" class="btn btn-purple text-xs">Shuffle Stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
+              ${commanderZoneOn ? `<button id="viewCommander" class="btn btn-secondary text-xs">👑 ${htmlEscape(commandMeta.shortLabel)} (${me.commanderZone.length})</button>` : ''}
+              ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-purple text-xs">Horde Reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde Attack</button>' : ''}
+              <button id="viewOppGY" class="btn btn-secondary text-xs">👁️ Opp GY</button>
+              <button id="viewOppExile" class="btn btn-secondary text-xs">👁️ Opp Exile</button>
+              <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
+              <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
+              <button id="mulliganBtn" class="btn btn-blue text-xs" ${rules.noMulligan ? 'disabled' : ''}>🔄 Mulligan</button>
+              ${state.coop ? '<button id="passSeat" class="btn btn-purple text-xs">🤝 Pass to Teammate</button>' : ''}
+            </div>
+            <div class="drop-zone-row" aria-label="Quick card zones">
+              <div id="handDrop" class="drop-zone" data-drop-target="hand">Hand</div>
+              <div id="graveyardDrop" class="drop-zone" data-drop-target="graveyard">Graveyard</div>
+              <div id="exileDrop" class="drop-zone" data-drop-target="exile">Exile</div>
+              <div id="deckDrop" class="drop-zone" data-drop-target="deck">Deck bottom</div>
+            </div>
+          </div>
+        </div>
+        <div id="handContainer" class="battle-hand" data-drop-target="hand" style="background: #1f2937; padding: 8px; height: 120px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; border-top: 2px solid #374151;"></div>
+      </div>
+      <div class="sidebar battle-sidebar">
+        <h3 class="text-sm font-bold mb-2 text-center">Stack</h3>
+        <div id="stackPanel" class="card p-3 mb-4 battle-side-card" data-drop-target="stack" style="background:rgba(59,130,246,.10);border-color:#3b82f6">
+          ${gameStack.length ? (() => {
+            const top = gameStack[gameStack.length - 1];
+            return `
+              <div class="text-xs text-gray mb-2">Top of stack</div>
+              <div style="font-weight:800;font-size:13px">${htmlEscape(top.card?.name || 'Spell')}</div>
+              <div class="text-xs text-gray mt-1">Player ${top.owner} • ${htmlEscape(top.card?.type || '')}</div>
+              <div class="flex mt-3" style="gap:6px;flex-wrap:wrap">
+                <button id="resolveStackTop" class="btn btn-green text-xs">Resolve Top</button>
+                <button id="counterStackTop" class="btn btn-red text-xs">Counter Top</button>
+              </div>
+              ${gameStack.length > 1 ? `<div class="text-xs text-gray mt-2">${gameStack.length - 1} below</div>` : ''}
+            `;
+          })() : '<div class="text-xs text-gray text-center">Stack empty</div>'}
+        </div>
+        <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+        <div id="cardInfo">
+          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>
+        </div>
+        <div class="mt-4" style="border-top:1px solid rgba(255,255,255,.12);padding-top:12px">
+          <h3 class="text-sm font-bold mb-2 text-center">Action Log</h3>
+          <div id="actionLog" class="battle-action-log" style="max-height:220px;overflow:auto">
+            ${(state.gameLog || []).slice(0, 12).map(entry => `
+              <div class="text-xs text-gray" style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+                ${htmlEscape(entry.message)}
+              </div>
+            `).join('') || '<div class="text-xs text-gray text-center">No actions yet.</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+    ${state.showTurnNotification ? `<div class="turn-notification">🎮 Your Turn!</div>` : ''}
+    ${state.actionMessage ? `<div class="turn-notification">${state.actionMessage}</div>` : ''} 
+    ${state.creatingToken ? `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+          <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">🎭 Create Token</h3>
+          <div class="mb-4">
+            <label>Token Name</label>
+            <input id="tokenName" class="input" placeholder="Soldier Token" value="Token">
+          </div>
+          <div class="mb-4">
+            <label>Token Type</label>
+            <input id="tokenType" class="input" placeholder="Creature — Soldier" value="Creature Token">
+          </div>
+          <div class="grid grid-2 mb-4">
+            <div>
+              <label>Power</label>
+              <input id="tokenPower" class="input" type="number" value="1">
+            </div>
+            <div>
+              <label>Toughness</label>
+              <input id="tokenToughness" class="input" type="number" value="1">
+            </div>
+          </div>
+          <div class="mb-4">
+            <label>Effect (Optional)</label>
+            <textarea id="tokenEffect" class="input" rows="2" placeholder="Flying, Haste"></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button id="createTokenUpper" class="btn btn-primary">⬇️ Create Upper</button>
+            <button id="createTokenLower" class="btn btn-primary">⬆️ Create Lower</button>
+          </div>
+          <button id="cancelToken" class="btn btn-secondary mt-3" style="width: 100%;">Cancel</button>
+        </div>
+      </div>
+    ` : ''}
+    
+    ${state.selectedFieldCard !== null ? (() => {
+  const sel = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
+  return `
+  <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #8b5cf6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 360px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);">
+    <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #a78bfa;">${sel.name}</div>
+    ${landGameEffectPanelHtml(sel)}
+
+    <!-- ACTION GRID: always two columns, evenly spaced -->
+    <div class="action-grid" style="display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; align-items: stretch;">
+      <button id="tapCard" class="btn ${sel.tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px; width:100%; text-align:center;">⟳ ${sel.tapped ? 'Untap' : 'Tap'}</button>
+      <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%; text-align:center;">🖐️ To Hand</button>
+
+      <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">⚰️ To GY</button>
+      <button id="toExile" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">🚫 Exile</button>
+
+      <!-- COUNTERS: spans full width so grid stays balanced; collapsed by default -->
+      <details class="counter-panel" style="grid-column: 1 / -1; margin-top: 0;">
+        <summary class="btn btn-secondary text-sm" style="display:block; width: 100%; padding: 14px; text-align:center;">
+          🔘 Counters
+        </summary>
+        <div style="padding: 10px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; margin-top: 8px;">
+          <div class="text-xs mb-1">P/T: <span id="ptNow"></span></div>
+          <div class="flex mb-2">
+            <button id="incP" class="btn btn-secondary text-xs">+P</button>
+            <button id="decP" class="btn btn-secondary text-xs">-P</button>
+            <button id="incT" class="btn btn-secondary text-xs">+T</button>
+            <button id="decT" class="btn btn-secondary text-xs">-T</button>
+          </div>
+
+          <div class="text-xs mb-1">Stun: <span id="stunNow"></span></div>
+          <div class="flex">
+            <button id="incS" class="btn btn-secondary text-xs">+S</button>
+            <button id="decS" class="btn btn-secondary text-xs">-S</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <button id="toBottomDeck" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">📚 To Deck</button>
+    ${commanderZoneOn ? `<button id="fieldToCommand" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">👑 To ${htmlEscape(commandMeta.label)}</button>` : ''}
+    <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">❌ Cancel</button>
+  </div>`;
+})() : ''}
+
+    
+    
+    
+    
+    
+    
+    
+    ${state.viewingZone ? `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+          <div class="flex justify-between mb-4">
+            <h3 style="font-weight: bold; font-size: 18px;">${state.viewingZone.title}</h3>
+            <button id="closeZone" class="btn btn-secondary text-xs">✕ Close</button>
+          </div>
+          ${state.viewingZone.owner === 'me' && state.selectedZoneCard !== null && state.viewingZone.cards[state.selectedZoneCard] ? `
+            <div style="background: #374151; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+              <div class="text-center mb-3" style="font-weight: bold; color: #fbbf24;">${state.viewingZone.cards[state.selectedZoneCard].name}</div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button id="zoneToHand" class="btn btn-primary text-xs">🖐️ To Hand</button>
+                <button id="zoneToUpper" class="btn btn-primary text-xs">⬇️ To Upper</button>
+                <button id="zoneToLower" class="btn btn-primary text-xs">⬆️ To Lower</button>
+                ${state.viewingZone.zone !== 'deck' ? '<button id="zoneToDeck" class="btn btn-secondary text-sm">📚 To Deck</button>' : ''}
+                ${commanderZoneOn && state.viewingZone.zone !== 'commanderZone' ? `<button id="zoneToCommand" class="btn btn-secondary text-xs">👑 ${htmlEscape(commandMeta.shortLabel)}</button>` : ''}
+                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">🚫 Exile</button>' : ''}
+                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">⚰️ To GY</button>' : ''}
+                <button id="cancelZoneSelect" class="btn btn-secondary text-xs">❌ Cancel</button>
+              </div>
+            </div>
+          ` : ''}
+          <div id="zoneCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px; max-height: 60vh; overflow-y: auto;">
+            ${state.viewingZone.cards.length === 0 ? '<p class="text-gray text-center p-4">Empty</p>' : ''}
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
+      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
+        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button class="placeCard btn btn-primary text-sm" data-zone="upper" style="padding: 14px;">⬇️ Upper Field</button>
+          <button class="placeCard btn btn-primary text-sm" data-zone="lower" style="padding: 14px;">⬆️ Lower Field</button>
+          <button id="castToStack" class="btn btn-blue text-sm" style="padding: 14px; grid-column:1 / -1;">Cast to Stack</button>
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">⚰️️ Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
+          ${commanderZoneOn ? `<button id="toCommand" class="btn btn-secondary text-sm" style="padding: 14px; grid-column:1 / -1;">👑 To ${htmlEscape(commandMeta.label)}</button>` : ''}
+        </div>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
+      </div>
+    ` : ''}
+    ${targetingModalHtml()}
+    ${aiBlockersModalHtml()}
+    ${state.winner ? `
+      <div class="modal">
+        <div class="modal-content text-center">
+          <h2 class="mb-4" style="font-size: 48px;">${state.winner === 'draw' ? '🤝' : '🏆'}</h2>
+          <h2 class="mb-4" style="font-size: 32px; font-weight: bold;">${
+            state.winner === 'draw' ? 'Draw!'
+              : state.winner === state.currentPlayer ? '🎉 You Win!' : '😔 You Lose'}</h2>
+          <p class="text-gray mb-8">${state.winner === 'draw'
+            ? 'Both players hit 0 life at the same time.'
+            : `Player ${state.winner} is victorious!`}</p>
+          <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+  
+  const handContainer = div.querySelector('#handContainer');
+
+  div.querySelectorAll('[data-drop-target]').forEach(dropTarget => {
+    dropTarget.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      dropTarget.classList.add('drag-over');
+    });
+    dropTarget.addEventListener('dragleave', (event) => {
+      if (!event.relatedTarget || !dropTarget.contains(event.relatedTarget)) {
+        dropTarget.classList.remove('drag-over');
+      }
+    });
+    dropTarget.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dropTarget.classList.remove('drag-over');
+      moveDraggedCard(readCardDragData(event), dropTarget.dataset.dropTarget);
+    });
+  });
+  
+  
+  if (me.hand.length === 0) {
+    const emptyMsg = document.createElement('span');
+    emptyMsg.className = 'text-gray text-xs';
+    emptyMsg.textContent = '🃏 No cards in hand - Click Draw!';
+    handContainer.appendChild(emptyMsg);
+  } else {
+    me.hand.forEach((card, idx) => {
+      const cardDiv = document.createElement('div');
+      cardDiv.className = 'hand-card' + (state.selectedCard === idx ? ' selected' : '');
+      cardDiv.draggable = true;
+      cardDiv.addEventListener('dragstart', (event) => {
+        cardDiv.classList.add('dragging');
+        setCardDragData(event, 'hand', idx);
+      });
+      cardDiv.addEventListener('dragend', () => {
+        cardDiv.classList.remove('dragging');
+      });
+      cardDiv.appendChild(createGameCardImg(card));
+      
+      cardDiv.onclick = () => {
+        state.selectedCard = state.selectedCard === idx ? null : idx;
+        state.selectedFieldCard = null;
+        render();
+      };
+      
+      cardDiv.onmouseenter = () => {
+        showCardInfo(card);
+      };
+      
+      handContainer.appendChild(cardDiv);
+    });
+  }
+  
+  div.querySelectorAll('.field-card').forEach(fieldCard => {
+    const zone = fieldCard.dataset.zone;
+    const owner = fieldCard.dataset.owner;
+    const idx = parseInt(fieldCard.dataset.idx);
+    const card = owner === 'me' ? me[zone][idx] : opp[zone][idx];
+    
+    if (card) {
+      const img = createGameCardImg(card);
+      img.style.pointerEvents = 'none'; // Critical: let parent handle events
+      fieldCard.appendChild(img);
+      
+      
+      // P/T delta badge (e.g., +1/0, 0/+1, -1/-1)
+if (!card.pt) card.pt = { p: 0, t: 0 };
+if (card.pt.p !== 0 || card.pt.t !== 0) {
+  const badge = document.createElement('div');
+  badge.className = 'counter-badge';
+  const s = (n) => (n >= 0 ? '+' + n : String(n));
+  badge.textContent = `${s(card.pt.p)}/${s(card.pt.t)}`;
+  fieldCard.appendChild(badge);
+}
+
+// Stun badge (e.g., S2)
+if (card.stun && card.stun > 0) {
+  const sBadge = document.createElement('div');
+  sBadge.className = 'stun-badge';
+  sBadge.textContent = 'S' + card.stun;
+  fieldCard.appendChild(sBadge);
+}
+      
+      
+      // Hover handler - works for ALL cards (yours and opponent's)
+      fieldCard.addEventListener('mouseenter', (e) => {
+        showCardInfo(card);
+      });
+      
+      fieldCard.addEventListener('mouseleave', (e) => {
+        // Optional: clear card info when mouse leaves
+      });
+      
+      // Click handler - only for YOUR cards
+      if (owner === 'me') {
+        fieldCard.draggable = true;
+        fieldCard.addEventListener('dragstart', (event) => {
+          fieldCard.classList.add('dragging');
+          setCardDragData(event, zone, idx);
+        });
+        fieldCard.addEventListener('dragend', () => {
+          fieldCard.classList.remove('dragging');
+        });
+        fieldCard.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          state.selectedCard = null;
+          if (state.selectedFieldCard && state.selectedFieldCard.zone === zone && state.selectedFieldCard.idx === idx) {
+            state.selectedFieldCard = null;
+          } else {
+            state.selectedFieldCard = { zone, idx, owner };
+          }
+          render();
+        });
+        
+        // Double-click handler to tap/untap (only for your cards)
+        fieldCard.addEventListener('dblclick', () => {
+          const wasTapped = !!card.tapped;
+          executeGameAction('toggle_tap', { cardName: card.name }, () => {
+            let removedStun = false;
+            if (card.tapped) {
+              if (typeof card.stun === 'number' && card.stun > 0) {
+                card.stun -= 1;
+                removedStun = true;
+              } else {
+                card.tapped = false;
+              }
+            } else {
+              card.tapped = true;
+            }
+            state.selectedFieldCard = null;
+            return { removedStun };
+          }, ({ removedStun }) => removedStun ? `Removed a stun counter from ${card.name}.` : `${wasTapped ? 'Untapped' : 'Tapped'} ${card.name}.`, { ms: 1200 });
+        });
+        
+      }
+    }
+  });
+  
+  const exitBtn = div.querySelector('#exitBtn');
+  const drawBtn = div.querySelector('#drawBtn');
+  const upkeepBtn = div.querySelector('#upkeepBtn');
+  const createTokenBtn = div.querySelector('#createToken');
+  const undoActionBtn = div.querySelector('#undoAction');
+  const gyBtn = div.querySelector('#viewGY');
+  const minusBtn = div.querySelector('#minusLP');
+  const plusBtn = div.querySelector('#plusLP');
+  const endBtn = div.querySelector('#endTurn');
+  const viewDeckBtn = div.querySelector('#viewDeck');
+  const mulliganBtn = div.querySelector('#mulliganBtn');
+  div.querySelectorAll('.phaseBtn').forEach(btn => {
+    btn.onclick = () => setTurnPhase(btn.dataset.phase);
+  });
+  const nextPhaseBtn = div.querySelector('#nextPhase');
+  if (nextPhaseBtn) nextPhaseBtn.onclick = advanceTurnPhase;
+  const resolveStackTopBtn = div.querySelector('#resolveStackTop');
+  if (resolveStackTopBtn) resolveStackTopBtn.onclick = resolveTopStack;
+  const counterStackTopBtn = div.querySelector('#counterStackTop');
+  if (counterStackTopBtn) counterStackTopBtn.onclick = counterTopStack;
+  
+  
+  if (exitBtn) exitBtn.onclick = () => {
+    if (confirm('Exit game? Progress will be lost.')) {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      state.viewingZone = null;
+      state.targeting = null;
+      render();
+    }
+  };
+  
+  
+  if (drawBtn) drawBtn.onclick = () => {
+    const drawPile = sharedGame ? shared.deck : me.deck;
+    if (drawPile.length > 0) {
+      executeGameAction('draw_card', { source: sharedGame ? shared.label : 'deck' }, () => {
+        const card = drawPile.shift();
+        initBattleCard(card);
+        me.hand.push(card);
+        return card;
+      }, `Player ${state.currentPlayer} drew ${sharedGame ? `from ${shared.label}` : 'a card'}.`, { ms: 900 });
+    }
+  };
+
+
+  // Upkeep button - untap all your cards
+  if (upkeepBtn) upkeepBtn.onclick = () => {
+    executeGameAction('upkeep', { player: state.currentPlayer }, () => {
+      let untapped = 0;
+      let stunRemoved = 0;
+      [...me.upperField, ...me.lowerField].forEach(card => {
+        if (!card.tapped) return;
+        if (typeof card.stun === 'number' && card.stun > 0) {
+          card.stun -= 1;
+          stunRemoved += 1;
+        } else {
+          card.tapped = false;
+          untapped += 1;
+        }
+      });
+      return { untapped, stunRemoved };
+    }, ({ untapped, stunRemoved }) => {
+      const stunText = stunRemoved ? `, removed ${stunRemoved} stun counter${stunRemoved === 1 ? '' : 's'}` : '';
+      return `Upkeep: untapped ${untapped} card${untapped === 1 ? '' : 's'}${stunText}.`;
+    }, { ms: 1200 });
+  };
+  
+  if (createTokenBtn) createTokenBtn.onclick = () => {
+    state.creatingToken = true;
+    render();
+  };
+
+  if (undoActionBtn) undoActionBtn.onclick = undoLastGameAction;
+  
+  if (gyBtn) gyBtn.onclick = () => { 
+    state.viewingZone = { title: '⚰️ Your Graveyard', cards: me.graveyard, zone: 'graveyard', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewExileBtn = div.querySelector('#viewExile');
+  if (viewExileBtn) viewExileBtn.onclick = () => {
+    state.viewingZone = { title: '🚫 Your Exile', cards: me.exile, zone: 'exile', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewOppGYBtn = div.querySelector('#viewOppGY');
+  if (viewOppGYBtn) viewOppGYBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Graveyard", cards: opp.graveyard, zone: 'graveyard', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+  const viewOppExileBtn = div.querySelector('#viewOppExile');
+  if (viewOppExileBtn) viewOppExileBtn.onclick = () => {
+    state.viewingZone = { title: "👁️ Opponent's Exile", cards: opp.exile, zone: 'exile', owner: 'opp' };
+    state.selectedZoneCard = null;
+    render();
+  };
+  
+      if (mulliganBtn) mulliganBtn.onclick = () => {
+  if (rules.noMulligan) { toast('This mode has no mulligans.'); return; }
+  const n = me.hand.length;
+  if (n === 0) { toast('No cards in hand to mulligan.'); return; }
+  const targetDeck = sharedGame ? shared.deck : me.deck;
+  executeGameAction('mulligan', { player: state.currentPlayer, count: n, shared: sharedGame }, () => {
+    targetDeck.push(...me.hand);
+    me.hand.length = 0;
+  }, `Mulligan: returned ${n} card${n !== 1 ? 's' : ''} to ${sharedGame ? 'shared stack' : 'deck'}.`);
+};
+  
+  if (viewDeckBtn) viewDeckBtn.onclick = () => {
+  state.viewingZone = sharedGame
+    ? { title: `📚 ${shared.label} (top→bottom)`, cards: shared.deck, zone: 'deck', owner: 'me', shared: true }
+    : { title: '📚 Your Deck (top→bottom)', cards: me.deck, zone: 'deck', owner: 'me' };
+  state.selectedZoneCard = null;
+  render();
+};
+
+  const viewCommanderBtn = div.querySelector('#viewCommander');
+  if (viewCommanderBtn) viewCommanderBtn.onclick = () => {
+    state.viewingZone = { title: `👑 ${commandMeta.label}`, cards: me.commanderZone, zone: 'commanderZone', owner: 'me' };
+    state.selectedZoneCard = null;
+    render();
+  };
+
+  const passSeatBtn = div.querySelector('#passSeat');
+  if (passSeatBtn) passSeatBtn.onclick = () => {
+    state.coopSeat = state.coopSeat === 1 ? 2 : 1;
+    state.selectedCard = null;
+    state.selectedFieldCard = null;
+    state.viewingZone = null;
+    showAction(`Survivor ${state.coopSeat} takes over.`, 1600, true, 'coop_pass', { seat: state.coopSeat });
+  };
+
+  const hordeRevealBtn = div.querySelector('#hordeReveal');
+  if (hordeRevealBtn) hordeRevealBtn.onclick = revealHorde;
+  const hordeAttackBtn = div.querySelector('#hordeAttack');
+  if (hordeAttackBtn) hordeAttackBtn.onclick = hordeAttack;
+
+  const revealSharedTopBtn = div.querySelector('#revealSharedTop');
+  if (revealSharedTopBtn) revealSharedTopBtn.onclick = () => {
+    const top = shared.deck[0];
+    showAction(top ? `${shared.label} top card: ${top.name}` : `${shared.label} is empty.`);
+  };
+  const burnSharedTopBtn = div.querySelector('#burnSharedTop');
+  if (burnSharedTopBtn) burnSharedTopBtn.onclick = () => {
+    if (!shared.deck.length) { showAction(`${shared.label} is empty.`); return; }
+    executeGameAction('shared_burn', { source: shared.label }, () => {
+      const card = shared.deck.shift();
+      shared.graveyard.push(card);
+      return card;
+    }, (card) => `Burned ${card.name} from ${shared.label}.`);
+  };
+  const shuffleSharedStackBtn = div.querySelector('#shuffleSharedStack');
+  if (shuffleSharedStackBtn) shuffleSharedStackBtn.onclick = () => {
+    executeGameAction('shared_shuffle', { source: shared.label }, () => {
+      shared.deck = shuffleCopy(shared.deck);
+      state.gameState.shared = shared;
+    }, `${shared.label} shuffled.`, { ms: 1200 });
+  };
+  const viewSharedGYBtn = div.querySelector('#viewSharedGY');
+  if (viewSharedGYBtn) viewSharedGYBtn.onclick = () => {
+    state.viewingZone = { title: `⚰️ ${shared.label} Graveyard`, cards: shared.graveyard, zone: 'sharedGraveyard', owner: 'me', shared: true };
+    state.selectedZoneCard = null;
+    render();
+  };
+
+  const cancelTargetingBtn = div.querySelector('#cancelTargeting');
+  if (cancelTargetingBtn) cancelTargetingBtn.onclick = () => {
+    state.targeting = null;
+    render();
+  };
+  div.querySelectorAll('.targetChoice').forEach(btn => {
+    btn.onclick = () => completeLandGameTarget(parseInt(btn.dataset.i, 10));
+  });
+
+  // AI combat: collect blocker assignments and hand them back to the AI module.
+  const aiResolveCombatBtn = div.querySelector('#aiResolveCombat');
+  const aiNoBlocksBtn = div.querySelector('#aiNoBlocks');
+  const collectAiBlocks = () => {
+    const assignments = {};
+    const usedBlockers = new Set();
+    div.querySelectorAll('.aiBlockPick').forEach(sel => {
+      const blockerId = sel.value;
+      if (!blockerId || usedBlockers.has(blockerId)) return; // each creature blocks once
+      usedBlockers.add(blockerId);
+      assignments[sel.dataset.attacker] = blockerId;
+    });
+    return assignments;
+  };
+  if (aiResolveCombatBtn) aiResolveCombatBtn.onclick = () => {
+    if (window.GALDUR_AI) window.GALDUR_AI.resolveAiCombat(collectAiBlocks());
+  };
+  if (aiNoBlocksBtn) aiNoBlocksBtn.onclick = () => {
+    if (window.GALDUR_AI) window.GALDUR_AI.resolveAiCombat({});
+  };
+  
+  if (minusBtn) minusBtn.onclick = () => {
+    executeGameAction('life_change', { player: state.currentPlayer, delta: -1 }, () => {
+      me.health = Math.max(0, me.health - 1);
+      checkWinner();
+      return me.health;
+    }, `Player ${state.currentPlayer} loses 1 life.`, { ms: 1200 });
+  };
+  if (plusBtn) plusBtn.onclick = () => {
+    executeGameAction('life_change', { player: state.currentPlayer, delta: 1 }, () => {
+      me.health += 1;
+      return me.health;
+    }, `Player ${state.currentPlayer} gains 1 life.`, { ms: 1200 });
+  };
+  if (endBtn) endBtn.onclick = () => { 
+    const previousPlayer = state.activePlayer;
+    const nextPlayer = state.activePlayer === 1 ? 2 : 1;
+    executeGameAction('end_turn', { from: previousPlayer, to: nextPlayer }, () => {
+      state.activePlayer = nextPlayer;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      if (state.activePlayer === state.currentPlayer) {
+        state.showTurnNotification = true;
+        setTimeout(() => {
+          state.showTurnNotification = false;
+          render();
+        }, 2000);
+      }
+    }, `Turn passed to Player ${nextPlayer}.`, { ms: 1200 });
+  };
+  
+  // Token creation modal
+  if (state.creatingToken) {
+    const cancelTokenBtn = div.querySelector('#cancelToken');
+    const createUpperBtn = div.querySelector('#createTokenUpper');
+    const createLowerBtn = div.querySelector('#createTokenLower');
+    
+    if (cancelTokenBtn) cancelTokenBtn.onclick = () => {
+      state.creatingToken = false;
+      render();
+    };
+    
+    const createToken = (field) => {
+      const name = div.querySelector('#tokenName').value || 'Token';
+      const type = div.querySelector('#tokenType').value || 'Creature Token';
+      const power = div.querySelector('#tokenPower').value || '1';
+      const toughness = div.querySelector('#tokenToughness').value || '1';
+      const effect = div.querySelector('#tokenEffect').value || '';
+      
+      const token = {
+        id: Date.now() + Math.random(),
+        gameId: 'token-' + Date.now(),
+        name: name,
+        type: type,
+        power: power,
+        toughness: toughness,
+        effect: effect,
+        cost: '',
+        colors: [],
+        image: '',
+        imageUrl: '',
+        tapped: false,
+        isToken: true,
+        counters: 0
+      };
+      
+      executeGameAction('create_token', { field, tokenName: token.name }, () => {
+        me[field].push(token);
+        state.creatingToken = false;
+        return token;
+      }, `Created ${token.name} on ${field === 'upperField' ? 'Upper Field' : 'Lower Field'}.`);
+    };
+    
+    if (createUpperBtn) createUpperBtn.onclick = () => createToken('upperField');
+    if (createLowerBtn) createLowerBtn.onclick = () => createToken('lowerField');
+  }
+  
+  // Zone viewer
+  if (state.viewingZone) {
+    const closeZoneBtn = div.querySelector('#closeZone');
+    if (closeZoneBtn) closeZoneBtn.onclick = () => {
+      state.viewingZone = null;
+      state.selectedZoneCard = null;
+      render();
+    };
+    
+    // Ensure a modal-scoped hover box exists so it won't be blurred
+let zoneHover = div.querySelector('#zoneHoverBox');
+if (!zoneHover) {
+  zoneHover = document.createElement('div');
+  zoneHover.id = 'zoneHoverBox';
+  zoneHover.className = 'zone-hover';
+  const modal = div.querySelector('.modal');
+  if (modal) modal.appendChild(zoneHover);
+}
+    
+    const zoneCardsDiv = div.querySelector('#zoneCards');
+    
+    
+    if (zoneCardsDiv && state.viewingZone.cards.length > 0) {
+      state.viewingZone.cards.forEach((card, idx) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'zone-card' + (state.selectedZoneCard === idx ? ' selected' : '');
+        const img = createGameCardImg(card);
+        img.style.pointerEvents = 'none';
+        cardDiv.appendChild(img);
+        
+       cardDiv.onmousemove = (e) => {
+  if (!zoneHover) return;
+  zoneHover.innerHTML = `
+    <div style="font-weight:700;margin-bottom:4px">${htmlEscape(card.name || '')}</div>
+    <div class="text-xs text-gray" style="margin-bottom:6px">${htmlEscape(card.type || '')}</div>
+    ${cardImageMarkup(card, { style: 'width:100%;border-radius:6px;margin-bottom:8px;display:block' })}
+    <div style="font-size:12px;white-space:pre-wrap;line-height:1.3">
+      ${htmlEscape(card.effect || '')}
+    </div>
+  `;
+  const pad = 16;
+  zoneHover.style.left = (e.clientX + pad) + 'px';
+  zoneHover.style.top  = (e.clientY + pad) + 'px';
+  zoneHover.style.display = 'block';
+};
+cardDiv.onmouseleave = () => { if (zoneHover) zoneHover.style.display = 'none'; };
+ 
+        
+        // Only allow interaction with own zones
+        if (state.viewingZone.owner === 'me') {
+          cardDiv.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (state.selectedZoneCard === idx) {
+              state.selectedZoneCard = null;
+            } else {
+              state.selectedZoneCard = idx;
+            }
+            render();
+          });
+        }
+        
+        zoneCardsDiv.appendChild(cardDiv);
+      });
+    }
+    
+    // Zone card action handlers
+    if (state.selectedZoneCard !== null && state.viewingZone.owner === 'me') {
+      const card = state.viewingZone.cards[state.selectedZoneCard];
+      const zoneKey = state.viewingZone.zone;
+      const sourcePlayer = me;
+      const sourceCards = state.viewingZone.cards;
+      
+      const toHandBtn = div.querySelector('#zoneToHand');
+      const toUpperBtn = div.querySelector('#zoneToUpper');
+      const toLowerBtn = div.querySelector('#zoneToLower');
+      const toDeckBtn = div.querySelector('#zoneToDeck');
+      const toCommandBtn = div.querySelector('#zoneToCommand');
+      const toExileBtn = div.querySelector('#zoneToExile');
+      const toGYBtn = div.querySelector('#zoneToGY');
+      const cancelZoneBtn = div.querySelector('#cancelZoneSelect');
+      const moveZoneCard = (target, label, placeCard, options = {}) => {
+        if (!card) return;
+        executeGameAction('zone_move', { cardName: card.name, from: zoneKey, to: target }, () => {
+          const idx = state.selectedZoneCard;
+          const moving = sourceCards[idx];
+          if (!moving) return null;
+          placeCard(moving);
+          sourceCards.splice(idx, 1);
+          state.selectedZoneCard = null;
+          if (sourceCards.length === 0) {
+            state.viewingZone = null;
+          }
+          if (options.checkVictory) checkLandGameVictory();
+          return moving;
+        }, (moving) => moving ? `Moved ${moving.name} to ${label}.` : '');
+      };
+      
+if (toHandBtn) toHandBtn.onclick = () => {
+  moveZoneCard('hand', 'hand', moving => sourcePlayer.hand.push(moving));
+};
+
+      
+      if (toUpperBtn) toUpperBtn.onclick = () => {
+        moveZoneCard('upperField', 'Upper Field', moving => {
+          const cardToPlace = initBattleCard({ ...moving, tapped: false });
+          sourcePlayer.upperField.push(cardToPlace);
+        }, { checkVictory: true });
+      };
+      
+      if (toLowerBtn) toLowerBtn.onclick = () => {
+        moveZoneCard('lowerField', 'Lower Field', moving => {
+          const cardToPlace = initBattleCard({ ...moving, tapped: false });
+          sourcePlayer.lowerField.push(cardToPlace);
+        }, { checkVictory: true });
+      };
+      
+      if (toDeckBtn) toDeckBtn.onclick = () => {
+        const targetDeck = sharedGame ? shared.deck : sourcePlayer.deck;
+        moveZoneCard('deck', sharedGame ? shared.label : 'deck', moving => targetDeck.push(moving));
+      };
+
+      if (toCommandBtn) toCommandBtn.onclick = () => {
+        if (!canMoveToCommandZone(sourcePlayer)) return;
+        moveZoneCard('commanderZone', commandMeta.label, moving => sourcePlayer.commanderZone.push(moving));
+      };
+      
+      if (toExileBtn) toExileBtn.onclick = () => {
+        moveZoneCard('exile', 'exile', moving => sourcePlayer.exile.push(moving));
+      };
+      
+      if (toGYBtn) toGYBtn.onclick = () => {
+        moveZoneCard('graveyard', 'graveyard', moving => sourcePlayer.graveyard.push(moving));
+      };
+      
+      if (cancelZoneBtn) cancelZoneBtn.onclick = () => {
+        state.selectedZoneCard = null;
+        render();
+      };
+    }
+  }
+  
+  // Field card actions
+  if (state.selectedFieldCard) {
+    const tapBtn = div.querySelector('#tapCard');
+    const toHandBtn = div.querySelector('#toHand');
+    const toGYBtn = div.querySelector('#toGraveyard');
+    const toExileBtn = div.querySelector('#toExile');
+    const toBottomDeckBtn = div.querySelector('#toBottomDeck');
+    const fieldToCommandBtn = div.querySelector('#fieldToCommand');
+    const cancelFieldBtn = div.querySelector('#cancelFieldSelect');
+    const card = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
+    
+    if (tapBtn) tapBtn.onclick = () => {
+      const wasTapped = !!card.tapped;
+      executeGameAction('toggle_tap', { cardName: card.name }, () => {
+        let removedStun = false;
+        if (card.tapped) {
+          if (typeof card.stun === 'number' && card.stun > 0) {
+            card.stun -= 1;
+            removedStun = true;
+          } else {
+            card.tapped = false;
+          }
+        } else {
+          card.tapped = true;
+        }
+        state.selectedFieldCard = null;
+        return { removedStun };
+      }, ({ removedStun }) => removedStun ? `Removed a stun counter from ${card.name}.` : `${wasTapped ? 'Untapped' : 'Tapped'} ${card.name}.`, { ms: 1200 });
+    };
+    
+const incP = div.querySelector('#incP');
+const decP = div.querySelector('#decP');
+const incT = div.querySelector('#incT');
+const decT = div.querySelector('#decT');
+const incS = div.querySelector('#incS');
+const decS = div.querySelector('#decS');
+const resolveLandGameEffectBtn = div.querySelector('#resolveLandGameEffect');
+
+const refreshLabels = () => {
+  if (!card.pt) card.pt = { p: 0, t: 0 };
+  if (typeof card.stun !== 'number') card.stun = 0;
+  const s = (n) => (n >= 0 ? '+' + n : String(n));
+  const ptNow = div.querySelector('#ptNow');
+  const stunNow = div.querySelector('#stunNow');
+  if (ptNow) ptNow.textContent = `${s(card.pt.p)}/${s(card.pt.t)}`;
+  if (stunNow) stunNow.textContent = `S${card.stun}`;
+};
+refreshLabels();
+
+const adjustFieldValue = (type, delta) => {
+  executeGameAction('adjust_card_marker', { cardName: card.name, type, delta }, () => {
+    if (type === 'power') {
+      if (!card.pt) card.pt = { p: 0, t: 0 };
+      card.pt.p += delta;
+      return card.pt.p;
+    }
+    if (type === 'toughness') {
+      if (!card.pt) card.pt = { p: 0, t: 0 };
+      card.pt.t += delta;
+      return card.pt.t;
+    }
+    if (typeof card.stun !== 'number') card.stun = 0;
+    card.stun = Math.max(0, card.stun + delta);
+    return card.stun;
+  }, `${card.name}: ${type} ${delta > 0 ? '+' : ''}${delta}.`, { ms: 1000 });
+};
+
+if (incP) incP.onclick = () => adjustFieldValue('power', 1);
+if (decP) decP.onclick = () => adjustFieldValue('power', -1);
+if (incT) incT.onclick = () => adjustFieldValue('toughness', 1);
+if (decT) decT.onclick = () => adjustFieldValue('toughness', -1);
+
+if (incS) incS.onclick = () => adjustFieldValue('stun', 1);
+if (decS) decS.onclick = () => adjustFieldValue('stun', -1);
+if (resolveLandGameEffectBtn) resolveLandGameEffectBtn.onclick = () => beginLandGameEffect(card.name);
+div.querySelectorAll('.repeatLandEffect').forEach(btn => {
+  btn.onclick = () => beginLandGameEffect(btn.dataset.land);
+});
+
+    
+    if (toHandBtn) toHandBtn.onclick = () => {
+      executeGameAction('field_to_hand', { cardName: card.name }, () => {
+        me.hand.push(card);
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+        state.selectedFieldCard = null;
+      }, `Moved ${card.name} to hand.`);
+    };
+    
+    if (toGYBtn) toGYBtn.onclick = () => {
+      executeGameAction('field_to_graveyard', { cardName: card.name }, () => {
+        me.graveyard.push(card);
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+        state.selectedFieldCard = null;
+      }, `Moved ${card.name} to graveyard.`);
+    };
+    
+    if (toExileBtn) toExileBtn.onclick = () => {
+      executeGameAction('field_to_exile', { cardName: card.name }, () => {
+        me.exile.push(card);
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+        state.selectedFieldCard = null;
+      }, `Exiled ${card.name}.`);
+    };
+    
+    if (toBottomDeckBtn) toBottomDeckBtn.onclick = () => {
+      const targetDeck = sharedGame ? shared.deck : me.deck;
+      executeGameAction('field_to_deck', { cardName: card.name, shared: sharedGame }, () => {
+        targetDeck.push(card);
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+        state.selectedFieldCard = null;
+      }, `Moved ${card.name} to ${sharedGame ? shared.label : 'deck'}.`);
+    };
+
+    if (fieldToCommandBtn) fieldToCommandBtn.onclick = () => {
+      if (!canMoveToCommandZone(me)) return;
+      executeGameAction('field_to_command', { cardName: card.name }, () => {
+        me.commanderZone.push(card);
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+        state.selectedFieldCard = null;
+      }, `Moved ${card.name} to ${commandMeta.label}.`);
+    };
+    
+    if (cancelFieldBtn) cancelFieldBtn.onclick = () => {
+      state.selectedFieldCard = null;
+      render();
+    };
+  }
+  
+  // Card action handlers
+  if (state.selectedCard !== null) {
+    const discardBtn = div.querySelector('#discardCard');
+    const toDeckBtn = div.querySelector('#toDeck');
+    const toCommandBtn = div.querySelector('#toCommand');
+    const castToStackBtn = div.querySelector('#castToStack');
+    const cancelBtn = div.querySelector('#cancelSelect');
+    
+    if (discardBtn) discardBtn.onclick = () => {
+      const card = me.hand[state.selectedCard];
+      executeGameAction('hand_to_graveyard', { cardName: card.name }, () => {
+        me.graveyard.push(card);
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        state.selectedFieldCard = null;
+      }, `Discarded ${card.name}.`);
+    };
+    
+    if (toDeckBtn) toDeckBtn.onclick = () => {
+      const card = me.hand[state.selectedCard];
+      const targetDeck = sharedGame ? shared.deck : me.deck;
+      executeGameAction('hand_to_deck', { cardName: card.name, shared: sharedGame }, () => {
+        targetDeck.push(card);
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        state.selectedFieldCard = null;
+      }, `Moved ${card.name} to ${sharedGame ? shared.label : 'deck'}.`);
+    };
+
+    if (toCommandBtn) toCommandBtn.onclick = () => {
+      if (!canMoveToCommandZone(me)) return;
+      const card = me.hand[state.selectedCard];
+      executeGameAction('hand_to_command', { cardName: card.name }, () => {
+        me.commanderZone.push(card);
+        me.hand.splice(state.selectedCard, 1);
+        state.selectedCard = null;
+        state.selectedFieldCard = null;
+      }, `Moved ${card.name} to ${commandMeta.label}.`);
+    };
+
+    if (castToStackBtn) castToStackBtn.onclick = castSelectedCardToStack;
+    
+    if (cancelBtn) cancelBtn.onclick = () => {
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      render();
+    };
+    
+    div.querySelectorAll('.placeCard').forEach(btn => {
+      btn.onclick = () => {
+        const zone = btn.dataset.zone + 'Field';
+        const card = me.hand[state.selectedCard];
+        executeGameAction('hand_to_field', { cardName: card.name, zone }, () => {
+          const cardToPlace = { ...card, tapped: false };
+          if (!('pt' in cardToPlace)) cardToPlace.pt = { p: 0, t: 0 };
+          if (!('stun' in cardToPlace)) cardToPlace.stun = 0;
+          me[zone].push(cardToPlace);
+          me.hand.splice(state.selectedCard, 1);
+          state.selectedCard = null;
+          state.selectedFieldCard = null;
+          checkLandGameVictory();
+        }, `Moved ${card.name} to ${zone === 'upperField' ? 'Upper Field' : 'Lower Field'}.`);
+      };
+    });
+  }
+  
+  if (state.winner && div.querySelector('#returnBtn')) {
+    div.querySelector('#returnBtn').onclick = () => {
+      if (state.onlineMode) disconnectOnline();
+      state.screen = 'menu';
+      state.gameStarted = false;
+      state.winner = null;
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      state.selectedZoneCard = null;
+      state.viewingZone = null;
+      state.targeting = null;
+      render();
+    };
+  }
+  
+  return div;
+}
+
+// --- Bridge for ai.js (loaded after this file) -------------------------------
+// Everything above lives inside this IIFE; the AI module needs a deliberate,
+// documented surface rather than reaching into globals.
+window.GALDUR_APP = {
+  state,
+  render,
+  toast,
+  showAction,
+  executeGameAction,
+  checkWinner,
+  checkLandGameVictory,
+  effectivePT,
+  getCMC,
+  initBattleCard,
+  makeBasicLandCard,
+  shuffleCopy,
+  getModeConfig,
+  getModeRules,
+  hordeReveal: revealHorde,
+  hordeAttack
+};
+
+loadLocal();          // restore saved collection + decks before first paint
+setTimeout(render, 100);
+
+})();
