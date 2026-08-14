@@ -41,6 +41,8 @@ const state = {
   vsAI: false,               // local game where the computer plays player 2
   coop: false,               // two humans share the player-1 board vs the AI
   coopSeat: 1,               // which teammate currently holds the device
+  landArt: {},               // chosen basic-land printing per land name
+  landPicker: null,          // { land, printings, loading } while the picker is open
   bossRound: 0,
   connectionStatus: '',
   leavingOnline: false,
@@ -77,8 +79,6 @@ const state = {
   // live draft state
   picks: 0,
   pool: [],                     // current 3 shown
-  nextPool: [],                 // preloaded next 3 shown after a pick
-  isPreloadingNext: false,
   deck: [],                     // chosen cards
 
   // NEW: dedupe memory across the whole draft
@@ -293,8 +293,6 @@ function resetDraftForMode(modeId, options = {}){
     basicLands: { W:0, U:0, B:0, R:0, G:0 },
     picks: 0,
     pool: [],
-    nextPool: [],
-    isPreloadingNext: false,
     deck: [],
     seenIds: {},
     seenNames: {},
@@ -320,6 +318,10 @@ function routeToMode(modeId, action){
 
 function makeBasicLandCard(name, copyIndex, owner){
   const colorMap = { Plains:'W', Island:'U', Swamp:'B', Mountain:'R', Forest:'G' };
+  // Prefer the printing the player picked (a direct CDN URL). The /cards/named
+  // redirect is the fallback: it works, but dozens of them at once get
+  // rate-limited by Scryfall, which is why some lands rendered blank.
+  const art = chosenLandArt(name);
   return {
     id: `land_${owner}_${name}_${copyIndex}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     name,
@@ -329,7 +331,7 @@ function makeBasicLandCard(name, copyIndex, owner){
     effect: '',
     power: 0,
     toughness: 0,
-    imageUrl: `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(name)}`,
+    imageUrl: art?.imageUrl || `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(name)}`,
     rarity: 'common'
   };
 }
@@ -1106,7 +1108,12 @@ async function scryCachePut(url, response){
 }
 function scryfetch(url, opts){
   const method = (opts?.method || 'GET').toUpperCase();
-  const canCache = method === 'GET' && !String(url).includes('/random');
+  // /random is never cacheable; /cards/search pages are hundreds of KB and are
+  // already held in the in-memory draft pool, so keeping them out of
+  // localStorage leaves the quota for the player's own collection.
+  const canCache = method === 'GET'
+    && !String(url).includes('/random')
+    && !String(url).includes('/cards/search');
   if (canCache) {
     const cached = scryCacheGet(url);
     if (cached) return Promise.resolve(cached);
@@ -1142,6 +1149,210 @@ window.scryfetch = scryfetch;
 // --- Local persistence: keep the custom card collection + built decks across reloads ---
 const SAVE_KEY = 'galdur-save-v1';
 let _saveTimer = null;
+// ---------------------------------------------------------------------------
+// Draft card pool
+//
+// Drafting used to call /cards/random once per candidate card, and scryfetch
+// serialises every request behind a 100ms-spaced queue — so a 9-card pack could
+// mean 20-40 round trips and many seconds of a frozen-looking screen. One
+// /cards/search page returns up to 175 fully-populated cards, so a single
+// request now feeds a whole draft and every subsequent pick is instant.
+// ---------------------------------------------------------------------------
+
+const SCRY_PAGE_SIZE = 175;
+// query -> Promise<{ cards: [...], idx: number }>. The PROMISE is cached, not
+// the entry: the preloader and the live pick run concurrently, and publishing a
+// half-built entry would hand the second caller an empty pool.
+const _draftPools = new Map();
+
+// Scryfall card JSON -> the app's canonical playable-card shape.
+function scryfallToCard(c){
+  const img = c?.image_uris?.normal
+    || c?.card_faces?.[0]?.image_uris?.normal
+    || '';
+  const face = c?.card_faces?.[0];
+  return {
+    id: c.id,
+    name: c.name,
+    type: c.type_line || face?.type_line || '',
+    cost: c.mana_cost || face?.mana_cost || '',
+    colors: c.colors || c.color_identity || [],
+    effect: c.oracle_text || face?.oracle_text || '',
+    power: c.power ?? face?.power ?? 0,
+    toughness: c.toughness ?? face?.toughness ?? 0,
+    imageUrl: img,
+    cmc: typeof c.cmc === 'number' ? c.cmc : undefined,
+    rarity: c.rarity || ''
+  };
+}
+
+function usableDraftCard(c){
+  // Cards with no art are unusable in a visual draft, and lands are never offered.
+  if (!c || !c.imageUrl || !c.name) return false;
+  return !(c.type || '').toLowerCase().includes('land');
+}
+
+// Load (and shuffle) one page of results for a query. Large result sets pull a
+// random page so repeat drafts don't keep seeing the same alphabetical head.
+function poolSearchUrl(query, page){
+  const base = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=cards`;
+  return page > 1 ? `${base}&page=${page}` : base;
+}
+
+// Fetch one page and append its unseen cards to the entry.
+async function addPoolPage(entry, page){
+  if (entry.pages.has(page)) return 0;
+  entry.pages.add(page);
+  try {
+    const r = await scryfetch(poolSearchUrl(entry.query, page), { headers: { Accept: 'application/json' } });
+    if (!r.ok) return 0;
+    const data = await r.json();
+    if (typeof data.total_cards === 'number') entry.total = data.total_cards;
+    const fresh = (Array.isArray(data.data) ? data.data : [])
+      .map(scryfallToCard)
+      .filter(c => usableDraftCard(c) && !entry.ids.has(c.id));
+    fresh.forEach(c => entry.ids.add(c.id));
+    entry.cards.push(...shuffleCopy(fresh));
+    return fresh.length;
+  } catch (e) {
+    console.warn('draft pool page failed', entry.query, page, e);
+    return 0;
+  }
+}
+
+function poolPageCount(entry){
+  if (!entry.total) return 1;
+  return Math.min(Math.ceil(entry.total / SCRY_PAGE_SIZE), 40);   // Scryfall caps deep paging
+}
+
+function loadDraftPool(query){
+  const key = String(query || '').trim();
+  if (_draftPools.has(key)) return _draftPools.get(key);
+
+  const job = (async () => {
+    const entry = { query: key, cards: [], idx: 0, ids: new Set(), pages: new Set(), total: 0 };
+    await addPoolPage(entry, 1);
+    // Large result sets: jump to a random page so repeat drafts don't keep
+    // seeing the same alphabetical head of the results.
+    const pages = poolPageCount(entry);
+    if (pages > 1) await addPoolPage(entry, 1 + Math.floor(Math.random() * pages));
+    return entry;
+  })();
+
+  _draftPools.set(key, job);
+  return job;
+}
+
+// Pull the next card matching `accept`, fetching further pages as the pool runs
+// dry. Returns null only when the query is genuinely exhausted.
+async function drawFromPool(query, accept){
+  const entry = await loadDraftPool(query);
+
+  for (let guard = 0; guard < 8; guard++) {
+    for (let i = entry.idx; i < entry.cards.length; i++) {
+      const card = entry.cards[i];
+      if (accept && !accept(card)) continue;
+      // Swap the taken card to the front of the unconsumed region so repeated
+      // scans stay cheap instead of re-walking every rejected card.
+      entry.cards[i] = entry.cards[entry.idx];
+      entry.cards[entry.idx] = card;
+      entry.idx++;
+      return card;
+    }
+    // Nothing acceptable left — pull another page if one exists.
+    const pages = poolPageCount(entry);
+    if (entry.pages.size >= pages) return null;
+    let added = 0;
+    for (let p = 1; p <= pages && !added; p++) {
+      if (!entry.pages.has(p)) added = await addPoolPage(entry, p);
+    }
+    if (!added) return null;
+  }
+  return null;
+}
+
+function resetDraftPools(){
+  _draftPools.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Basic land art
+//
+// state.landArt holds the printing the player chose for each basic. Resolving
+// art once per land NAME (instead of once per copy) turns a 24-land deck from
+// 24 serialised Scryfall calls into at most 5, and gives every copy a direct
+// CDN image URL rather than a /cards/named redirect that gets rate-limited.
+// ---------------------------------------------------------------------------
+
+const _landArtInflight = new Map();
+
+function chosenLandArt(landName){
+  return (state.landArt && state.landArt[landName]) || null;
+}
+
+// One printing per basic, cached in state so later decks are instant.
+async function resolveLandArt(landName){
+  const chosen = chosenLandArt(landName);
+  if (chosen && chosen.imageUrl) return chosen;
+  if (_landArtInflight.has(landName)) return _landArtInflight.get(landName);
+
+  const job = (async () => {
+    try {
+      const q = `t:basic type:${landName} game:paper`;
+      const r = await scryfetch(
+        `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}&unique=art&order=released&dir=desc`,
+        { headers: { Accept: 'application/json' } }
+      );
+      if (!r.ok) return null;
+      const data = await r.json();
+      const list = (Array.isArray(data.data) ? data.data : []).filter(c => c.image_uris?.normal);
+      if (!list.length) return null;
+      const c = list[Math.floor(Math.random() * Math.min(list.length, 20))];
+      const art = {
+        id: c.id,
+        name: c.name,
+        type: c.type_line || `Basic Land — ${landName}`,
+        imageUrl: c.image_uris.normal,
+        set: (c.set || '').toUpperCase(),
+        setName: c.set_name || '',
+        artist: c.artist || ''
+      };
+      state.landArt = state.landArt || {};
+      if (!state.landArt[landName]) state.landArt[landName] = art;   // don't override a real choice
+      return art;
+    } catch {
+      return null;
+    } finally {
+      _landArtInflight.delete(landName);
+    }
+  })();
+  _landArtInflight.set(landName, job);
+  return job;
+}
+
+// Fetch the printings offered by the land picker.
+async function fetchLandPrintings(landName, limit = 60){
+  const q = `t:basic type:${landName} game:paper`;
+  const r = await scryfetch(
+    `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}&unique=art&order=released&dir=desc`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!r.ok) return [];
+  const data = await r.json();
+  return (Array.isArray(data.data) ? data.data : [])
+    .filter(c => c.image_uris?.normal)
+    .slice(0, limit)
+    .map(c => ({
+      id: c.id,
+      name: c.name,
+      type: c.type_line || `Basic Land — ${landName}`,
+      imageUrl: c.image_uris.normal,
+      set: (c.set || '').toUpperCase(),
+      setName: c.set_name || '',
+      artist: c.artist || ''
+    }));
+}
+
 function saveLocal(){
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -1151,7 +1362,8 @@ function saveLocal(){
       modeSetups: state.modeSetups || {},
       selectedMode: state.selectedMode,
       battleMode: state.battleMode,
-      studioTab: state.studioTab
+      studioTab: state.studioTab,
+      landArt: state.landArt || {}
     }));
   } catch (e) { /* quota exceeded or storage disabled — fail silently */ }
 }
@@ -1170,6 +1382,7 @@ function loadLocal(){
       if (Array.isArray(data.decks.player2)) state.decks.player2 = data.decks.player2;
     }
     if (data.modeSetups && typeof data.modeSetups === 'object') state.modeSetups = data.modeSetups;
+    if (data.landArt && typeof data.landArt === 'object') state.landArt = data.landArt;
     if (data.selectedMode) state.selectedMode = data.selectedMode;
     if (data.battleMode) state.battleMode = data.battleMode;
     if (data.studioTab) state.studioTab = data.studioTab;
@@ -1876,6 +2089,103 @@ function loadDeck(file) {
   reader.readAsText(file);
 }
 
+// --- Basic land picker -------------------------------------------------------
+
+function openLandPicker(landName = 'Plains'){
+  state.landPicker = { land: landName, printings: [], loading: true };
+  render();
+  loadLandPickerArt(landName);
+}
+
+async function loadLandPickerArt(landName){
+  try {
+    const printings = await fetchLandPrintings(landName);
+    if (!state.landPicker || state.landPicker.land !== landName) return;   // user switched
+    state.landPicker.printings = printings;
+  } catch {
+    if (state.landPicker) state.landPicker.printings = [];
+  } finally {
+    if (state.landPicker) state.landPicker.loading = false;
+    render();
+  }
+}
+
+function LandPickerModal(){
+  const P = state.landPicker;
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  const current = chosenLandArt(P.land);
+
+  wrap.innerHTML = `
+    <div class="modal-content" style="max-width:940px">
+      <div class="flex justify-between mb-4" style="align-items:flex-start;gap:12px">
+        <div>
+          <h3 style="font-weight:800;font-size:20px">Choose your basic lands</h3>
+          <div class="text-xs text-gray mt-1">
+            Pick the printing used whenever a ${htmlEscape(P.land)} is added to a deck or draft.
+            Your choice is saved.
+          </div>
+        </div>
+        <button id="closeLandPicker" class="btn btn-secondary text-sm">✕ Close</button>
+      </div>
+
+      <div class="flex mb-4" style="gap:8px;flex-wrap:wrap">
+        ${BASIC_LAND_NAMES.map(n => {
+          const art = chosenLandArt(n);
+          return `<button class="landTab btn ${n === P.land ? 'btn-blue' : 'btn-secondary'} text-sm" data-land="${n}">
+            ${htmlEscape(n)}${art ? ' ✓' : ''}
+          </button>`;
+        }).join('')}
+      </div>
+
+      ${current ? `<div class="text-xs text-gray mb-3">
+        Current ${htmlEscape(P.land)}: ${htmlEscape(current.setName || current.set || 'custom')}${current.artist ? ` — art by ${htmlEscape(current.artist)}` : ''}
+        &nbsp;<button id="clearLandArt" class="btn btn-secondary text-xs">Reset to default</button>
+      </div>` : ''}
+
+      ${P.loading
+        ? '<div class="text-center text-gray p-4">Loading printings…</div>'
+        : (P.printings.length
+          ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;max-height:56vh;overflow:auto">
+              ${P.printings.map((art, i) => `
+                <button class="landArtChoice card" data-i="${i}" title="${htmlEscape(art.setName || '')}"
+                  style="padding:6px;cursor:pointer;text-align:left;${current && current.id === art.id ? 'border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.45)' : ''}">
+                  <img src="${htmlEscape(art.imageUrl)}" alt="${htmlEscape(art.name)}" loading="lazy" decoding="async"
+                       style="width:100%;border-radius:6px;display:block">
+                  <div class="text-xs mt-1" style="font-weight:700">${htmlEscape(art.set || '')}</div>
+                  <div class="text-xs text-gray" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${htmlEscape(art.artist || '')}</div>
+                </button>`).join('')}
+            </div>`
+          : '<div class="text-center text-gray p-4">No printings found (offline?). The default art will be used.</div>')}
+    </div>
+  `;
+
+  wrap.querySelector('#closeLandPicker').onclick = () => { state.landPicker = null; render(); };
+  wrap.addEventListener('click', (e) => {
+    if (e.target === wrap) { state.landPicker = null; render(); }   // click backdrop to close
+  });
+  wrap.querySelectorAll('.landTab').forEach(btn => {
+    btn.onclick = () => openLandPicker(btn.dataset.land);
+  });
+  const clearBtn = wrap.querySelector('#clearLandArt');
+  if (clearBtn) clearBtn.onclick = () => {
+    if (state.landArt) delete state.landArt[P.land];
+    toast(`${P.land} reset to default art.`);
+    render();
+  };
+  wrap.querySelectorAll('.landArtChoice').forEach(btn => {
+    btn.onclick = () => {
+      const art = P.printings[Number(btn.dataset.i)];
+      if (!art) return;
+      state.landArt = state.landArt || {};
+      state.landArt[P.land] = art;
+      toast(`${P.land}: ${art.setName || art.set} art selected.`);
+      render();
+    };
+  });
+  return wrap;
+}
+
 function render() {
   scheduleSave();   // persist collection + decks (debounced) on any state change
   const root = document.getElementById('root');
@@ -1891,6 +2201,9 @@ function render() {
   else if (state.screen === 'game') root.appendChild(GameBoard());
   else if (state.screen === 'battlemenu') root.appendChild(BattleMenu());
   else if (state.screen === 'draft') root.appendChild(DraftScreen());
+
+  // Overlay: available from every screen, so it is mounted after the screen.
+  if (state.landPicker) root.appendChild(LandPickerModal());
 
   // Let the AI module schedule any pending bot moves (AI turns, draft picks).
   if (window.GALDUR_AI) window.GALDUR_AI.onRender();
@@ -2059,6 +2372,7 @@ function MainMenu() {
           <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Collection</h2>
           <p class="text-sm text-gray">${(state.cards || []).length} custom card${(state.cards || []).length === 1 ? '' : 's'} saved.</p>
           <button id="cardCollection" class="btn btn-secondary mt-4">Card Collection</button>
+          <button id="chooseLands" class="btn btn-secondary mt-2">🏞️ Choose Basic Lands</button>
         </div>
       </div>
 
@@ -2083,6 +2397,7 @@ function MainMenu() {
   div.querySelector('#menuPlayer2').onclick = () => { state.currentPlayer = 2; render(); };
   div.querySelector('#chooseMode').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
   div.querySelector('#cardCollection').onclick = () => { state.screen = 'creator'; render(); };
+  div.querySelector('#chooseLands').onclick = () => openLandPicker('Plains');
   div.querySelector('#playlistModeBtn').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
   div.querySelectorAll('[data-open-playlist]').forEach(btn => {
     btn.onclick = () => {
@@ -2580,42 +2895,6 @@ async function fetchThreeChoices(){
   // helper: shuffle in-place
   function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
-  // helper: draw a unique random card from Scryfall /cards/random with a query
-  async function drawRandomCard(q, attempts = 14){
-    const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
-    const seenNameSet = new Set(Object.keys(D.seenNames || {}));
-
-    for (let k=0; k<attempts; k++){
-      const url = `https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`;
-      const r = await scryfetch(url, { headers:{Accept:'application/json'} });
-      if (!r.ok) continue;
-      const c = await r.json();
-
-      // skip if no image or it violates “never lands”
-      const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
-      if (!img) continue;
-      if ((c.type_line || '').toLowerCase().includes('land')) continue;
-
-      // skip if we've seen/suggested/picked this already in this draft
-      if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
-
-      // commander singleton: allow suggesting duplicates but they’ll be blocked on pick; we still try to avoid repeats here
-      return {
-        id: c.id,
-        name: c.name,
-        type: c.type_line || '',
-        cost: c.mana_cost || '',
-        colors: c.colors || [],
-        effect: c.oracle_text || '',
-        power: c.power || 0,
-        toughness: c.toughness || 0,
-        imageUrl: img,
-        rarity: c.rarity || ''
-      };
-    }
-    return null; // fallback handled by caller
-  }
-
   // Build three CMC bands per round (diversity)
   const bands = shuffle([[0,2],[3,4],[5,20]]); // low, mid, high
 
@@ -2628,44 +2907,41 @@ async function fetchThreeChoices(){
   // Optional artifact path (still respect format; artifacts are allowed outside color identity)
   const maybeArtifactQ = wantArtifact ? ['t:artifact', legal, scopeQ, rarityFilter, '-t:land', rarityQ].filter(Boolean).join(' ') : null;
 
+  if (!D.seenIds)   D.seenIds = {};
+  if (!D.seenNames) D.seenNames = {};
+  const unseen = (c) => c && !D.seenIds[c.id] && !D.seenNames[c.name];
+  const inBand = (c, lo, hi) => {
+    const cmc = getCMC(c);
+    return cmc === null || (cmc >= lo && cmc <= hi);
+  };
+
+  // One search page backs the whole draft; the CMC bands and the artifact slot
+  // are applied locally, so a pick costs no network round trips at all.
   const picks = [];
   for (let b = 0; b < bands.length; b++){
     const [lo, hi] = bands[b];
+    const artifactSlot = maybeArtifactQ && b === 0;
+    const poolQ = artifactSlot ? maybeArtifactQ : `${base}${rarityQ}`;
 
-    // prefer color-filtered banded query; if artifact round, do one artifact slot
-    let q;
-    if (maybeArtifactQ && b === 0) {
-      // one slot is artifact in artifact rounds
-      q = `${maybeArtifactQ} cmc>=${lo} cmc<=${hi}`;
-    } else {
-      q = `${base}${rarityQ} cmc>=${lo} cmc<=${hi}`;
-    }
-
-    // Try to draw a unique card for this slot; broaden if necessary
-    let card = await drawRandomCard(q);
+    let card = await drawFromPool(poolQ, c => unseen(c) && inBand(c, lo, hi));
+    // Nothing left in this band — take anything unseen from the same pool.
+    if (!card) card = await drawFromPool(poolQ, unseen);
+    // Pool exhausted or empty (over-narrow query): widen to the bare format.
     if (!card) {
-      // broaden by dropping cmc constraint
-      const broadQ = maybeArtifactQ && b === 0 ? maybeArtifactQ : `${base}${rarityQ}`;
-      card = await drawRandomCard(broadQ);
-    }
-    if (!card) {
-      // ultimate fallback: truly random within format, excluding lands
       const lastResort = [legal, scopeQ, rarityFilter, '-t:land'].filter(Boolean).join(' ');
-      card = await drawRandomCard(lastResort);
+      card = await drawFromPool(lastResort, unseen);
     }
     if (card) {
-      // reserve these to avoid re-offering this round or later
-      if (!D.seenIds)   D.seenIds = {};
-      if (!D.seenNames) D.seenNames = {};
-      D.seenIds[card.id]   = 1;
+      D.seenIds[card.id] = 1;
       D.seenNames[card.name] = 1;
       picks.push(card);
     }
   }
 
-  // If for any reason we got fewer than 3, try to top up with very broad pulls
+  // Top up if a slot came back empty.
+  const lastResort = [legal, scopeQ, rarityFilter, '-t:land'].filter(Boolean).join(' ');
   while (picks.length < 3){
-    const card = await drawRandomCard([legal, scopeQ, rarityFilter, '-t:land'].filter(Boolean).join(' '));
+    const card = await drawFromPool(lastResort, unseen);
     if (!card) break;
     D.seenIds[card.id] = 1;
     D.seenNames[card.name] = 1;
@@ -2741,60 +3017,13 @@ async function fetchCurrentDraftPool(){
   else await fetchThreeChoices();
 }
 
-async function generateNextDraftPool(){
-  const currentPool = Array.isArray(D.pool) ? D.pool.slice() : [];
-  D.pool = [];
-  await fetchCurrentDraftPool();
-  const generated = Array.isArray(D.pool) ? D.pool.slice(0, 3) : [];
-  D.pool = currentPool;
-  return generated;
-}
-
-async function preloadNextPool(){
-  if (D.isPreloadingNext || (D.nextPool && D.nextPool.length > 0)) return;
-  if (D.screen !== 'picks') return;
-  D.isPreloadingNext = true;
-  try {
-    const generated = await generateNextDraftPool();
-    if (generated.length > 0) D.nextPool = generated;
-  } catch (e) {
-    console.warn('Draft preload failed:', e);
-  } finally {
-    D.isPreloadingNext = false;
-  }
-}
-
-async function usePreloadedPoolIfReady(){
-  if (D.nextPool && D.nextPool.length > 0) {
-    D.pool = D.nextPool.slice(0, 3);
-    D.nextPool = [];
-    D.poolError = false;
-    preloadNextPool();
-    return true;
-  }
-
-  if (D.isPreloadingNext) {
-    for (let i = 0; i < 20; i++) {
-      await _delay(100);
-      if (D.nextPool && D.nextPool.length > 0) {
-        D.pool = D.nextPool.slice(0, 3);
-        D.nextPool = [];
-        D.poolError = false;
-        preloadNextPool();
-        return true;
-      }
-      if (!D.isPreloadingNext) break;
-    }
-  }
-  return false;
-}
-
+// The old preload machinery (generateNextDraftPool / preloadNextPool /
+// usePreloadedPoolIfReady) existed to hide per-pick network latency. The shared
+// card pool removed that latency, and the preloader was actively harmful: it
+// blanked D.pool as a side channel while borrowing the fetch path, so a render
+// landing in that window painted an empty draft row that never recovered.
 async function ensurePool(){
-  if (D.pool.length > 0) {
-    preloadNextPool();
-    return;
-  }
-  if (await usePreloadedPoolIfReady()) return;
+  if (D.pool.length > 0) return;
   D.poolError = false;
   // Try a few times before giving up — a single network blip shouldn't end the draft.
   for (let attempt = 0; attempt < 3; attempt++){
@@ -2802,7 +3031,6 @@ async function ensurePool(){
       await fetchCurrentDraftPool();
       if (D.pool.length > 0) {
         D.poolError = false;
-        preloadNextPool();
         return;
       }
     } catch(e){
@@ -2820,49 +3048,26 @@ async function pushBasicLands(){
   // Map draft shorthand → Scryfall type keyword
   const typeName = { W:'Plains', U:'Island', B:'Swamp', R:'Mountain', G:'Forest' };
 
+  // Resolve art once per land NAME, then clone. This used to be one network
+  // request per land COPY, which made finishing a draft take many seconds.
   for (const k of Object.keys(D.basicLands)){
     const n = (D.basicLands[k] | 0);
+    if (n <= 0) continue;
+    const landName = typeName[k];
+    const art = await resolveLandArt(landName);
+
     for (let i = 0; i < n; i++){
-      // random basic land printing with image
-      const q = `t:basic t:land type:${typeName[k]}`;
-      try{
-        const r = await scryfetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers:{Accept:'application/json'} });
-        if (!r.ok) throw new Error();
-        const c = await r.json();
-        const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
-
-        D.deck.push({
-          id: c.id,
-          name: c.name || typeName[k],
-          type: c.type_line || `Basic Land — ${typeName[k]}`,
-          cost: '',
-          colors: [k],
-          effect: '',
-          power: 0, toughness: 0,
-          imageUrl: img,
-          rarity: c.rarity || 'common'
-        });
-
-        // also mark as seen so we never suggest this exact printing again
-        if (!D.seenIds)   D.seenIds = {};
-        if (!D.seenNames) D.seenNames = {};
-        D.seenIds[c.id] = 1;
-        D.seenNames[c.name] = 1;
-
-      }catch(e){
-        // fallback: push a text-only placeholder if Scryfall fails
-        D.deck.push({
-          id: 'land_'+k+'_'+i+'_'+Date.now(),
-          name: typeName[k],
-          type: 'Basic Land — ' + typeName[k],
-          cost: '',
-          colors: [k],
-          effect: '',
-          power: 0, toughness: 0,
-          imageUrl: '',
-          rarity: 'common'
-        });
-      }
+      D.deck.push({
+        id: `land_${k}_${i}_${makeId('bl')}`,
+        name: landName,
+        type: art?.type || `Basic Land — ${landName}`,
+        cost: '',
+        colors: [k],
+        effect: '',
+        power: 0, toughness: 0,
+        imageUrl: art?.imageUrl || '',
+        rarity: 'common'
+      });
     }
   }
 }
@@ -3020,8 +3225,6 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
       D.deck = [];
       D.picks = 0;
       D.pool = [];
-      D.nextPool = [];
-      D.isPreloadingNext = false;
       D.seenIds = {};
       D.seenNames = {};
       D.chosenColors = [];
@@ -3246,9 +3449,10 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
       <div class="grid grid-2">
         <div class="card p-4">
           <div class="grid grid-2" style="gap:12px">${inputs}</div>
-          <div class="mt-4 flex" style="gap:8px">
+          <div class="mt-4 flex" style="gap:8px;flex-wrap:wrap">
             <button id="skip" class="btn btn-secondary">Skip</button>
             <button id="apply" class="btn btn-primary">Continue</button>
+            <button id="pickLandArt" class="btn btn-secondary">🏞️ Choose land art</button>
           </div>
           <p class="text-xs text-gray mt-4">Example: set Islands=14 and continue; the draft will fill the remaining slots to ${D.target}.</p>
         </div>
@@ -3259,6 +3463,10 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
       </div>
     `;
     wrap.querySelector('#back').onclick = () => setScreen('colors');
+    wrap.querySelector('#pickLandArt').onclick = () => {
+      const first = { W:'Plains', U:'Island', B:'Swamp', R:'Mountain', G:'Forest' }[cols[0]] || 'Plains';
+      openLandPicker(first);
+    };
     wrap.querySelector('#skip').onclick = () => { D.basicLands={W:0,U:0,B:0,R:0,G:0}; beginPicks(); };
     wrap.querySelector('#apply').onclick = ()=>{
       const obj = {W:0,U:0,B:0,R:0,G:0};
@@ -3308,13 +3516,17 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
           </div>
         `).join('')}
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="finalize" class="btn btn-primary" ${D.lands.remaining>0?'disabled':''}>
           Finalize Player ${who}
         </button>
+        <button id="pickLandArtFill" class="btn btn-secondary">🏞️ Choose land art</button>
       </div>
     </div>
   `;
+
+  const pickArtBtn = wrap.querySelector('#pickLandArtFill');
+  if (pickArtBtn) pickArtBtn.onclick = () => openLandPicker('Plains');
 
   // Wire +/- and finalize
   wrap.querySelectorAll('button[data-act]').forEach(btn=>{
@@ -3561,22 +3773,27 @@ function DraftOffResults(){
 }
 
  async function beginPicks(){
-   // prefill lands into deck if any (with images)
-   await pushBasicLands();
+   // Show the picks screen in a "dealing" state straight away — fetching the
+   // lands and the first pool used to leave the UI frozen with no feedback.
    D.screen = 'picks';
-   await ensurePool();
+   D.dealing = true;
    render();
+   try {
+     await pushBasicLands();   // prefill lands into deck if any (with images)
+     await ensurePool();
+   } finally {
+     D.dealing = false;
+     render();
+   }
  }
 
   function Picks(){
     const wrap = document.createElement('div');
-    const preloadStatus = (D.nextPool && D.nextPool.length) ? 'Next ready' : (D.isPreloadingNext ? 'Preloading next' : '');
     wrap.innerHTML = `
       <div class="header">
         <button id="back" class="btn btn-secondary text-sm">← Exit</button>
         <h2 style="font-size:20px;font-weight:700">Pick one card • ${deckCount()}/${D.target}</h2>
         <div class="badge">Colors: ${D.chosenColors.join(', ') || '-'}${draftScopeLabel() ? ' • ' + htmlEscape(draftScopeLabel()) : ''}</div>
-        ${preloadStatus ? `<div class="badge">${preloadStatus}</div>` : ''}
       </div>
 
 <!-- Stats toggle for draft deck -->
@@ -3588,13 +3805,18 @@ function DraftOffResults(){
   <div id="manaCurveDraftChart"></div>
 </div>
 
+      ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:rgba(59,130,246,.15);border-color:#3b82f6">
+        <strong>Dealing cards…</strong>
+        <div class="text-xs text-gray mt-1">Fetching a card pool from Scryfall. This happens once per draft.</div>
+      </div>` : ''}
+
       <div class="draft-wrap">
         <div class="draft-stage">
           <div id="draftRow" class="draft-row">
             ${D.pool.map((c,i)=>`
               <div class="draft-choice" data-i="${i}">
-                ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block">`
-                              : `<div style="height:220px;background:#374151;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+                ${c.imageUrl ? cardImageMarkup(c, { loading: 'eager', style: 'width:100%;display:block' })
+                              : `<div style="height:220px;background:#374151;display:flex;align-items:center;justify-content:center">${htmlEscape(c.name)}</div>`}
                 <div style="position:absolute;left:6px;top:6px" class="badge">${(c.rarity||'').toUpperCase()}</div>
                 <div style="position:absolute;right:6px;bottom:6px" class="badge">${c.name}</div>
               </div>
@@ -3616,7 +3838,7 @@ function DraftOffResults(){
           <div id="draftList" style="margin-top:8px">
             ${D.deck.map(c=>`
               <div class="draft-small">
-                ${c.imageUrl ? `<img src="${c.imageUrl}">` : `<div class="badge">${c.name}</div>`}
+                ${c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;display:block' }) : `<div class="badge">${htmlEscape(c.name)}</div>`}
                 <div class="text-xs" style="line-height:1.1">
                   <div><strong>${c.name}</strong></div>
                   <div class="text-gray">${c.type || ''}</div>
@@ -4036,14 +4258,18 @@ const status = D.off.isLocal
       <div class="badge">Pool: Random mix</div>
       <div class="badge">P1: ${D.off.p1.length}/42 • P2: ${D.off.p2.length}/42</div>
     </div>
-    
+
+    ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:rgba(59,130,246,.15);border-color:#3b82f6">
+      <strong>Dealing pack ${D.off.round}…</strong>
+    </div>` : ''}
+
 
     <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
       <div class="card p-4">
         <div id="table" class="grid" style="grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px;">
           ${D.off.table.map((c,i)=>`
             <div class="card" data-i="${i}" style="padding:0;position:relative;cursor:${myTurn?'pointer':'not-allowed'}">
-              ${c.imageUrl ? `<img src="${c.imageUrl}" alt="${c.name}" style="width:100%;display:block;border-radius:8px">`
+              ${c.imageUrl ? cardImageMarkup(c, { loading: 'eager', style: 'width:100%;display:block;border-radius:8px' })
                            : `<div style="height:220px;background:#374151;border-radius:8px;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
               <div class="badge" style="position:absolute;left:6px;top:6px">${(c.rarity||'').toUpperCase()}</div>
               <div class="badge" style="position:absolute;right:6px;bottom:6px">${c.name}</div>
@@ -4450,35 +4676,9 @@ function sendDraftOff(msg){
 }
 
 
-async function draftOffDrawRandomCard(q, attempts = 14){
+async function draftOffDrawRandomCard(q){
   const D = state.draft;
-  const seenIdSet   = new Set(Object.keys(D.seenIds || {}));
-  const seenNameSet = new Set(Object.keys(D.seenNames || {}));
-
-  for (let k = 0; k < attempts; k++){
-    const r = await scryfetch(`https://api.scryfall.com/cards/random?q=${encodeURIComponent(q)}`, { headers:{Accept:'application/json'} });
-    if (!r.ok) continue;   // 404 -> try again
-
-    const c = await r.json();
-    const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
-    if (!img) continue;
-    if ((c.type_line || '').toLowerCase().includes('land')) continue;
-    if (seenIdSet.has(c.id) || seenNameSet.has(c.name)) continue;
-
-    return {
-      id: c.id,
-      name: c.name,
-      type: c.type_line || '',
-      cost: c.mana_cost || '',
-      colors: c.colors || [],
-      effect: c.oracle_text || '',
-      power: c.power || 0,
-      toughness: c.toughness || 0,
-      imageUrl: img,
-      rarity: c.rarity || ''
-    };
-  }
-  return null;
+  return drawFromPool(q, c => !(D.seenIds || {})[c.id] && !(D.seenNames || {})[c.name]);
 }
 
 
@@ -4538,20 +4738,21 @@ async function draftOffStartNewPack(flipStarter = true){
   D.seenIds   = D.seenIds   || {};
   D.seenNames = D.seenNames || {};
 
-  // Build exactly 9 non-land paper cards from anywhere (completely random)
+  // Build the pack from the shared draft pool: one search request backs every
+  // pack in the draft, so dealing is effectively instant after the first.
   D.off.table = [];
-  const q = `-t:land game:paper`;       // fully random (no set), paper, no lands
-  let guard = 0;                         // simple safety valve
+  D.dealing = true;
+  render();                              // show the "dealing" state immediately
 
-  while (D.off.table.length < D.off.packSize && guard < 200){
-    const c = await draftOffDrawRandomCard(q, 10);
-    guard++;
-    if (!c) continue;
-    if (D.seenIds[c.id] || D.seenNames[c.name]) continue;  // avoid repeats
+  const q = `-t:land game:paper`;        // paper cards, no lands
+  while (D.off.table.length < D.off.packSize){
+    const c = await draftOffDrawRandomCard(q);
+    if (!c) break;                       // pool exhausted
     D.off.table.push(c);
     D.seenIds[c.id] = 1;
     D.seenNames[c.name] = 1;
   }
+  D.dealing = false;
 
   if (D.off.table.length < D.off.packSize) {
     toast(`Pack ${D.off.round}: only ${D.off.table.length}/${D.off.packSize} cards could be fetched.`);
@@ -4639,7 +4840,7 @@ function CardCreator() {
         </div>
         <p class="text-xs text-gray">${c.type}</p>
       </div>
-      <div class="card-img">${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
+      <div class="card-img">${c.image || c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;height:100%;object-fit:cover;border-radius:6px' }) : '🃏'}</div>
       ${c.type && c.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
       <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
       <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
@@ -4820,7 +5021,7 @@ function CardCreator() {
       <p class="text-xs text-gray">${c.type || ''}</p>
     </div>
     <div class="card-img">
-      ${c.image || c.imageUrl ? `<img src="${c.image || c.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}
+      ${c.image || c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;height:100%;object-fit:cover;border-radius:6px' }) : '🃏'}
     </div>
     ${c.type && c.type.includes('Creature') ? `
       <div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
@@ -5606,6 +5807,18 @@ async function fetchBasicLandCard(landName){
   D._landCache = D._landCache || {};
   if (D._landCache[landName]) return D._landCache[landName];
 
+  // Honour the printing chosen in the land picker.
+  const art = chosenLandArt(landName);
+  if (art && art.imageUrl) {
+    const picked = {
+      id: art.id, name: art.name || landName, type: art.type || 'Basic Land',
+      cost: '', colors: [], effect: '', power: 0, toughness: 0,
+      imageUrl: art.imageUrl, rarity: 'common'
+    };
+    D._landCache[landName] = picked;
+    return picked;
+  }
+
   const r = await scryfetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(landName)}`);
   if (!r.ok) throw new Error('Land fetch failed: ' + landName);
   const c = await r.json();
@@ -5811,6 +6024,10 @@ function cloneCard(base){
         <span>Export</span>
         <small>Download the current deck.</small>
       </button>
+      <button id="landsCTA" class="action-panel" type="button">
+        <span>🏞️ Lands</span>
+        <small>Choose which basic land printing your decks use.</small>
+      </button>
     </div>
 
 <!-- Stretched toggle bar for Deck Statistics -->
@@ -5915,6 +6132,9 @@ Island x14
 
   const exportCTA = div.querySelector('#exportCTA');
   if (exportCTA) exportCTA.onclick = () => saveDeck();
+
+  const landsCTA = div.querySelector('#landsCTA');
+  if (landsCTA) landsCTA.onclick = () => openLandPicker('Plains');
 
   const importCTA = div.querySelector('#importCTA');
   const importCard = div.querySelector('#importCard');
