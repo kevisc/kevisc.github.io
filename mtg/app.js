@@ -40,7 +40,10 @@ const state = {
   onlineMode: false,
   vsAI: false,               // local game where the computer plays player 2
   coop: false,               // two humans share the player-1 board vs the AI
+  declaringAttack: false,    // attacker-selection modal is open
+  attackSelection: [],       // ids chosen in that modal
   coopSeat: 1,               // which teammate currently holds the device
+  aiDifficulty: 'normal',    // 'easy' | 'normal' | 'hard'
   landArt: {},               // chosen basic-land printing per land name
   landPicker: null,          // { land, printings, loading } while the picker is open
   bossRound: 0,
@@ -1364,6 +1367,7 @@ function saveLocal(){
       selectedMode: state.selectedMode,
       battleMode: state.battleMode,
       studioTab: state.studioTab,
+      aiDifficulty: state.aiDifficulty,
       landArt: state.landArt || {}
     }));
   } catch (e) { /* quota exceeded or storage disabled — fail silently */ }
@@ -1384,6 +1388,7 @@ function loadLocal(){
     }
     if (data.modeSetups && typeof data.modeSetups === 'object') state.modeSetups = data.modeSetups;
     if (data.landArt && typeof data.landArt === 'object') state.landArt = data.landArt;
+    if (data.aiDifficulty) state.aiDifficulty = data.aiDifficulty;
     if (data.selectedMode) state.selectedMode = data.selectedMode;
     if (data.battleMode) state.battleMode = data.battleMode;
     if (data.studioTab) state.studioTab = data.studioTab;
@@ -2335,6 +2340,7 @@ function ModeHubScreen() {
 function MainMenu() {
   const div = document.createElement('div');
   div.className = 'screen';
+  const mode = currentModeConfig();
   const playlists = allModePlaylists(5);
   const playlistHtml = playlists.length ? playlists.map(setup => `
     <div class="playlist-row">
@@ -2347,11 +2353,11 @@ function MainMenu() {
   `).join('') : '<div class="playlist-empty">Saved deck playlists will appear here.</div>';
 
   div.innerHTML = `
-    <div style="max-width: 1100px; width: 100%; padding: 0 16px;">
+    <div class="home-shell">
       <div class="header">
         <div>
           <div class="mode-family">Galdurspjöld</div>
-          <h1 style="font-size:30px;font-weight:900;margin-top:4px">Mode Studio</h1>
+          <h1 class="home-title">Choose your battle</h1>
         </div>
         <div class="flex" style="gap: 10px; align-items: center;">
           <div class="player-switch" aria-label="Player profile">
@@ -2363,27 +2369,53 @@ function MainMenu() {
         </div>
       </div>
 
-      <div class="grid home-grid">
-        <div class="card p-4">
-          <h2 style="font-size:22px;font-weight:900;margin-bottom:8px">Choose a mode first</h2>
-          <p class="text-sm text-gray">Deck building, drafting, validation, and play setup now follow the selected format.</p>
-          <button id="chooseMode" class="btn btn-primary mt-4" style="padding:16px 26px;font-size:16px">Choose Mode</button>
+      <!-- Current format, always visible so nothing is "mode first" guesswork -->
+      <div class="card mode-strip mb-4">
+        <div>
+          <div class="text-xs text-gray" style="letter-spacing:.06em;text-transform:uppercase">Current format</div>
+          <div class="mode-strip-name">${htmlEscape(mode.title)}</div>
+          <div class="text-xs text-gray mt-1">${htmlEscape(mode.summary)}</div>
         </div>
-        <div class="card p-4">
-          <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Collection</h2>
-          <p class="text-sm text-gray">${(state.cards || []).length} custom card${(state.cards || []).length === 1 ? '' : 's'} saved.</p>
-          <button id="cardCollection" class="btn btn-secondary mt-4">Card Collection</button>
-          <button id="chooseLands" class="btn btn-secondary mt-2">🏞️ Choose Basic Lands</button>
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <div class="deck-chip">P1 deck · ${(state.decks.player1 || []).length}</div>
+          <div class="deck-chip">P2 deck · ${(state.decks.player2 || []).length}</div>
+          <button id="chooseMode" class="btn btn-secondary text-sm">Change format</button>
         </div>
+      </div>
+
+      <div class="home-actions">
+        <button id="goPlay" class="action-panel featured">
+          <span>⚔️ Play</span>
+          <small>Solo vs the bot, co-op, a boss fight, or pass-and-play.</small>
+        </button>
+        <button id="goBuild" class="action-panel">
+          <span>🛠️ Deck Builder</span>
+          <small>Search cards, import a list, check the curve.</small>
+        </button>
+        <button id="goDraft" class="action-panel">
+          <span>🎴 Draft</span>
+          <small>Draft solo against a bot, hotseat, or online.</small>
+        </button>
+        <button id="cardCollection" class="action-panel">
+          <span>✨ Card Creator</span>
+          <small>${(state.cards || []).length} custom card${(state.cards || []).length === 1 ? '' : 's'} saved.</small>
+        </button>
+        <button id="chooseLands" class="action-panel">
+          <span>🏞️ Basic Lands</span>
+          <small>Pick the printing your decks use.</small>
+        </button>
+        <button id="playlistModeBtn" class="action-panel">
+          <span>📚 All Formats</span>
+          <small>Browse every mode, from Commander to Dandan.</small>
+        </button>
       </div>
 
       <div class="card p-4 mt-4">
         <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
           <div>
-            <h2 style="font-size:18px;font-weight:900;margin-bottom:6px">Deck Playlists</h2>
-            <p class="text-sm text-gray">Saved mode + deck configurations for quick setup.</p>
+            <h2 style="font-size:17px;font-weight:900;margin-bottom:4px">Deck Playlists</h2>
+            <p class="text-xs text-gray">Saved mode + deck configurations for quick setup.</p>
           </div>
-          <button id="playlistModeBtn" class="btn btn-secondary text-xs">Browse Modes</button>
         </div>
         <div class="playlist-list mt-4">
           ${playlistHtml}
@@ -2400,6 +2432,14 @@ function MainMenu() {
   div.querySelector('#cardCollection').onclick = () => { state.screen = 'creator'; render(); };
   div.querySelector('#chooseLands').onclick = () => openLandPicker('Plains');
   div.querySelector('#playlistModeBtn').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
+  // Straight to the thing you wanted, using the format already selected.
+  div.querySelector('#goPlay').onclick = () => { state.screen = 'battlemenu'; render(); };
+  div.querySelector('#goBuild').onclick = () => { state.screen = 'builder'; render(); };
+  div.querySelector('#goDraft').onclick = () => {
+    resetDraftForMode(state.selectedMode || 'casual', { screen: 'mode' });
+    state.screen = 'draft';
+    render();
+  };
   div.querySelectorAll('[data-open-playlist]').forEach(btn => {
     btn.onclick = () => {
       const setup = loadModeSetup(btn.dataset.mode, btn.dataset.openPlaylist);
@@ -2697,6 +2737,21 @@ function BattleMenu()  {
         </div>
       </div>
 
+      <div class="card p-4 mb-4 difficulty-card">
+        <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-weight:800;font-size:15px">🤖 Bot difficulty</h3>
+            <p class="text-xs text-gray mt-1" id="difficultyBlurb"></p>
+          </div>
+          <div class="segmented" role="group" aria-label="Bot difficulty">
+            ${['easy', 'normal', 'hard'].map(k => `
+              <button class="difficultyBtn${state.aiDifficulty === k ? ' active' : ''}" data-diff="${k}">
+                ${k[0].toUpperCase()}${k.slice(1)}
+              </button>`).join('')}
+          </div>
+        </div>
+      </div>
+
       <div class="action-panel-grid">
         <button id="playLocal" class="action-panel" aria-label="Play Local">
           <span>Play Local</span>
@@ -2784,6 +2839,22 @@ function BattleMenu()  {
   };
   bind('#playAI', () => startVsAI(false));
   bind('#playCoop', () => startVsAI(true));
+
+  const difficultyBlurb = div.querySelector('#difficultyBlurb');
+  const showBlurb = () => {
+    const table = window.GALDUR_AI && window.GALDUR_AI.DIFFICULTY;
+    const entry = table && table[state.aiDifficulty];
+    if (difficultyBlurb) difficultyBlurb.textContent = entry ? entry.blurb : '';
+  };
+  showBlurb();
+  div.querySelectorAll('.difficultyBtn').forEach(btn => {
+    btn.onclick = () => {
+      state.aiDifficulty = btn.dataset.diff;
+      div.querySelectorAll('.difficultyBtn').forEach(b => b.classList.toggle('active', b === btn));
+      showBlurb();
+      scheduleSave();
+    };
+  });
 
   // host online (ID FIX)
   bind('#hostGame', () => {
@@ -7083,6 +7154,63 @@ function GameBoard() {
       .filter(c => c.aiAttacking);
   }
 
+  // Creatures that could attack right now (vs-AI games only).
+  function myReadyAttackers(){
+    return battlefieldCards(me).filter(c => {
+      const type = (c.type || '').toLowerCase();
+      if (!(type.includes('creature') || c.isToken)) return false;
+      if (c.tapped) return false;
+      if ((c.effect || '').toLowerCase().includes('defender')) return false;
+      return effectivePT(c).p > 0;
+    });
+  }
+
+  function attackModalHtml(){
+    if (!state.declaringAttack) return '';
+    const ready = myReadyAttackers();
+    const chosen = state.attackSelection || [];
+    const blockers = window.GALDUR_AI ? window.GALDUR_AI.aiUntappedBlockers().length : 0;
+    const totalPower = ready
+      .filter(c => chosen.includes(c.gameId || c.id))
+      .reduce((s, c) => s + effectivePT(c).p, 0);
+    return `
+      <div class="modal">
+        <div class="modal-content" style="max-width:820px">
+          <div class="flex justify-between mb-4" style="align-items:flex-start;gap:12px">
+            <div>
+              <h3 style="font-weight:800;font-size:18px">⚔️ Declare attackers</h3>
+              <div class="text-xs text-gray mt-1">
+                Pick who swings. The opponent has ${blockers} untapped creature${blockers === 1 ? '' : 's'} and will block on its own.
+              </div>
+            </div>
+            <button id="cancelAttack" class="btn btn-secondary text-sm">Cancel</button>
+          </div>
+          ${ready.length ? `
+            <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;max-height:52vh;overflow:auto">
+              ${ready.map(c => {
+                const id = c.gameId || c.id;
+                const pt = effectivePT(c);
+                const on = chosen.includes(id);
+                return `
+                  <button class="attackPick card${on ? ' picked' : ''}" data-id="${htmlEscape(String(id))}" style="padding:8px;text-align:left;cursor:pointer">
+                    <div style="height:120px;overflow:hidden;border-radius:6px">${gameCardPreviewHtml(c)}</div>
+                    <div class="text-xs mt-2" style="font-weight:700">${htmlEscape(c.name)}</div>
+                    <div class="text-xs text-red">${pt.p}/${pt.t}</div>
+                  </button>`;
+              }).join('')}
+            </div>
+            <div class="flex mt-4" style="gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+              <div class="text-sm">Attacking with <strong>${chosen.length}</strong> · <strong>${totalPower}</strong> damage if unblocked</div>
+              <div class="flex" style="gap:8px">
+                <button id="attackAll" class="btn btn-secondary text-sm">Select all</button>
+                <button id="confirmAttack" class="btn btn-red text-sm" ${chosen.length ? '' : 'disabled'}>Attack!</button>
+              </div>
+            </div>`
+          : '<div class="text-center text-gray p-4">No untapped creatures are able to attack.</div>'}
+        </div>
+      </div>`;
+  }
+
   function aiBlockersModalHtml(){
     if (!state.targeting || state.targeting.type !== 'ai-blockers' || !window.GALDUR_AI) return '';
     const attackers = aiAttackers();
@@ -7311,6 +7439,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${myDeckCount})</button>
               <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
               <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
+              ${state.vsAI ? '<button id="declareAttack" class="btn btn-red text-xs">⚔️ Attack</button>' : ''}
               <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
               ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal Top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn Top</button><button id="shuffleSharedStack" class="btn btn-purple text-xs">Shuffle Stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
               ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-purple text-xs">Horde Reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde Attack</button>' : ''}
@@ -7499,6 +7628,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       </div>
     ` : ''}
     ${targetingModalHtml()}
+    ${attackModalHtml()}
     ${aiBlockersModalHtml()}
     ${state.winner ? `
       <div class="modal">
@@ -7846,6 +7976,43 @@ if (card.stun && card.stun > 0) {
   div.querySelectorAll('.targetChoice').forEach(btn => {
     btn.onclick = () => completeLandGameTarget(parseInt(btn.dataset.i, 10));
   });
+
+  // Human attack: choose attackers, then the bot blocks and damage resolves.
+  const declareAttackBtn = div.querySelector('#declareAttack');
+  if (declareAttackBtn) declareAttackBtn.onclick = () => {
+    if (state.activePlayer !== state.currentPlayer) { toast('Wait for your turn to attack.'); return; }
+    const ready = myReadyAttackers();
+    if (!ready.length) { toast('No untapped creatures can attack.'); return; }
+    state.declaringAttack = true;
+    state.attackSelection = [];
+    render();
+  };
+  div.querySelectorAll('.attackPick').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.id;
+      const sel = state.attackSelection || [];
+      state.attackSelection = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id];
+      render();
+    };
+  });
+  const attackAllBtn = div.querySelector('#attackAll');
+  if (attackAllBtn) attackAllBtn.onclick = () => {
+    state.attackSelection = myReadyAttackers().map(c => String(c.gameId || c.id));
+    render();
+  };
+  const cancelAttackBtn = div.querySelector('#cancelAttack');
+  if (cancelAttackBtn) cancelAttackBtn.onclick = () => {
+    state.declaringAttack = false;
+    state.attackSelection = [];
+    render();
+  };
+  const confirmAttackBtn = div.querySelector('#confirmAttack');
+  if (confirmAttackBtn) confirmAttackBtn.onclick = () => {
+    const ids = (state.attackSelection || []).slice();
+    state.declaringAttack = false;
+    state.attackSelection = [];
+    if (window.GALDUR_AI) window.GALDUR_AI.playerAttack(ids);
+  };
 
   // AI combat: collect blocker assignments and hand them back to the AI module.
   const aiResolveCombatBtn = div.querySelector('#aiResolveCombat');

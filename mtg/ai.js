@@ -30,6 +30,43 @@ function boot(){
   const aiKey = 'player' + AI_SEAT;
   const humanKey = 'player1';
 
+  // --- Difficulty ----------------------------------------------------------
+  // Each knob is "how often the bot plays badly on purpose", so Hard is simply
+  // the bot with no handicaps rather than a bot with secret bonuses.
+  const DIFFICULTY = {
+    easy: {
+      label: 'Easy',
+      blurb: 'Misplays often, attacks carelessly, blocks loosely.',
+      castSkip: 0.35,      // chance to pass on its best play
+      greedyAttack: 0.5,   // chance to attack into a bad block anyway
+      blockSkill: 0.35,    // chance to take a good block it has found
+      bossEvery: 4,        // boss summons a minion every N rounds
+      bossDrainFrom: 12
+    },
+    normal: {
+      label: 'Normal',
+      blurb: 'Plays a reasonable curve and trades sensibly.',
+      castSkip: 0.08,
+      greedyAttack: 0.15,
+      blockSkill: 0.75,
+      bossEvery: 3,
+      bossDrainFrom: 9
+    },
+    hard: {
+      label: 'Hard',
+      blurb: 'Always takes its best line, blocks precisely, boss ramps fast.',
+      castSkip: 0,
+      greedyAttack: 0,
+      blockSkill: 1,
+      bossEvery: 2,
+      bossDrainFrom: 6
+    }
+  };
+
+  function diff(){
+    return DIFFICULTY[state.aiDifficulty] || DIFFICULTY.normal;
+  }
+
   const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
   function aiPlayer(){ return state.gameState[aiKey]; }
@@ -310,6 +347,11 @@ function boot(){
     }
     if (!candidates.length) return false;
     candidates.sort((a, b) => b.score - a.score);
+    // Weaker bots sometimes sit on their best play, or take a worse line.
+    if (Math.random() < diff().castSkip) {
+      if (candidates.length < 2 || Math.random() < 0.5) return false;
+      candidates.push(candidates.shift());      // take the second-best instead
+    }
     const pick = candidates[0];
 
     act('ai_cast', { cardName: pick.card.name }, () => {
@@ -376,6 +418,17 @@ function boot(){
     return true;
   }
 
+  // Would `blocker` kill `attacker` and live to tell about it?
+  function blockIsFavourable(attacker, blocker){
+    const apt = A.effectivePT(attacker);
+    const bpt = A.effectivePT(blocker);
+    const ak = keywordsOf(attacker);
+    const bk = keywordsOf(blocker);
+    const blockerKills = bpt.p >= apt.t || (bk.deathtouch && bpt.p > 0);
+    const blockerSurvives = apt.p < bpt.t && !(ak.deathtouch && apt.p > 0);
+    return { blockerKills, blockerSurvives, trade: blockerKills && !blockerSurvives };
+  }
+
   function chooseAttackers(){
     const me = aiPlayer();
     const human = humanPlayer();
@@ -389,45 +442,88 @@ function boot(){
     const totalPower = ready.reduce((s, c) => s + A.effectivePT(c).p, 0);
     if (totalPower >= human.health) return ready; // potential lethal: all-in
 
+    const greedy = diff().greedyAttack;
     return ready.filter(a => {
-      const apt = A.effectivePT(a);
-      const ak = keywordsOf(a);
       const eligible = blockers.filter(b => canBlock(a, b));
       if (!eligible.length) return true; // evasive
-      // Attack when no eligible blocker both survives and kills it.
-      return !eligible.some(b => {
-        const bpt = A.effectivePT(b);
-        const bk = keywordsOf(b);
-        const killsMe = bpt.p >= apt.t || (bk.deathtouch && bpt.p > 0);
-        const survivesMe = apt.p < bpt.t && !(ak.deathtouch && apt.p > 0);
-        return killsMe && survivesMe;
+      // Hold back only when a blocker both kills it and survives.
+      const badAttack = eligible.some(b => {
+        const v = blockIsFavourable(a, b);
+        return v.blockerKills && v.blockerSurvives;
       });
+      if (!badAttack) return true;
+      return Math.random() < greedy;     // weaker bots swing anyway
     });
   }
 
-  // assignments: { attackerGameId: blockerGameId | '' }
-  function resolveCombatDamage(assignments){
-    act('ai_combat', {}, () => {
-      const me = aiPlayer();
-      const human = humanPlayer();
+  // --- The bot blocking the human's attack ---------------------------------
+
+  function aiUntappedBlockers(){
+    return fieldCards(aiPlayer()).filter(c => isCreatureCard(c) && !c.tapped && !c.aiSick);
+  }
+
+  // Returns { attackerId: blockerCard }. Each blocker is used at most once.
+  function aiChooseBlocks(attackers){
+    const me = aiPlayer();
+    const skill = diff().blockSkill;
+    const available = aiUntappedBlockers();
+    const used = new Set();
+    const assignments = {};
+
+    const incoming = attackers.reduce((s, a) => s + Math.max(0, A.effectivePT(a).p), 0);
+    const lethal = incoming >= me.health;
+
+    // Deal with the scariest attackers first.
+    const ordered = [...attackers].sort((a, b) => creatureValue(b) - creatureValue(a));
+
+    for (const attacker of ordered) {
+      const options = available.filter(b => !used.has(b) && canBlock(attacker, b));
+      if (!options.length) continue;
+
+      // Prefer a block that kills the attacker and survives, then a clean
+      // trade that is worth it, then (only when facing lethal) a chump block.
+      const scored = options.map(b => {
+        const v = blockIsFavourable(attacker, b);
+        let score = -1;
+        if (v.blockerKills && v.blockerSurvives) score = 100 - creatureValue(b);
+        else if (v.trade && creatureValue(attacker) >= creatureValue(b)) score = 60 - creatureValue(b);
+        else if (v.blockerSurvives) score = 30 - creatureValue(b);   // wall it off
+        else if (lethal) score = 5 - creatureValue(b);               // chump to survive
+        return { blocker: b, score };
+      }).filter(o => o.score >= 0).sort((x, y) => y.score - x.score);
+
+      if (!scored.length) continue;
+      if (Math.random() > skill) continue;   // weaker bots miss blocks
+
+      assignments[attacker.gameId || attacker.id] = scored[0].blocker;
+      used.add(scored[0].blocker);
+    }
+    return assignments;
+  }
+
+  // Shared damage resolution. `assignments` maps an attacker's id to either a
+  // blocker id (the human blocking) or a blocker card (the bot blocking).
+  function resolveCombat({ attackerPlayer, defenderPlayer, attackers, assignments, label, hitText }){
+    act('combat', {}, () => {
       const lines = [];
-      const deadAi = [];
-      const deadHuman = [];
-      const attackers = fieldCards(me).filter(c => c.aiAttacking);
+      const deadAttackers = [];
+      const deadBlockers = [];
 
       for (const attacker of attackers) {
         delete attacker.aiAttacking;
+        delete attacker.playerAttacking;
         const apt = A.effectivePT(attacker);
         const ak = keywordsOf(attacker);
-        const blockerId = assignments[attacker.gameId || attacker.id];
-        const blocker = blockerId
-          ? fieldCards(human).find(c => (c.gameId || c.id) === blockerId)
-          : null;
+        const raw = assignments[attacker.gameId || attacker.id];
+        const blocker = !raw ? null
+          : (typeof raw === 'string'
+              ? fieldCards(defenderPlayer).find(c => (c.gameId || c.id) === raw)
+              : raw);
 
         if (!blocker) {
-          human.health = Math.max(0, human.health - apt.p);
-          if (ak.lifelink) me.health += apt.p;
-          lines.push(`${attacker.name} hits you for ${apt.p}.`);
+          defenderPlayer.health = Math.max(0, defenderPlayer.health - apt.p);
+          if (ak.lifelink) attackerPlayer.health += apt.p;
+          lines.push(hitText(attacker, apt.p));
           continue;
         }
 
@@ -447,28 +543,40 @@ function boot(){
         if (blockerDies && ak.trample) {
           const excess = Math.max(0, apt.p - bpt.t);
           if (excess > 0) {
-            human.health = Math.max(0, human.health - excess);
+            defenderPlayer.health = Math.max(0, defenderPlayer.health - excess);
             lines.push(`${attacker.name} tramples over for ${excess}.`);
           }
         }
-        if (ak.lifelink && !(bFirst && bKills)) me.health += apt.p;
+        if (ak.lifelink && !(bFirst && bKills)) attackerPlayer.health += apt.p;
 
-        if (blockerDies) deadHuman.push(blocker);
-        if (attackerDies) deadAi.push(attacker);
+        if (blockerDies) deadBlockers.push(blocker);
+        if (attackerDies) deadAttackers.push(attacker);
         lines.push(`${blocker.name} blocks ${attacker.name}${blockerDies ? ` — ${blocker.name} dies` : ''}${attackerDies ? ` — ${attacker.name} dies` : ''}.`);
       }
 
-      for (const c of deadHuman) {
-        for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(human, z, c)) break;
-        human.graveyard.push({ ...c, tapped: false, aiAttacking: undefined });
+      for (const c of deadBlockers) {
+        for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(defenderPlayer, z, c)) break;
+        defenderPlayer.graveyard.push({ ...c, tapped: false, aiAttacking: undefined, playerAttacking: undefined });
       }
-      for (const c of deadAi) {
-        for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(me, z, c)) break;
-        me.graveyard.push({ ...c, tapped: false, aiAttacking: undefined });
+      for (const c of deadAttackers) {
+        for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(attackerPlayer, z, c)) break;
+        attackerPlayer.graveyard.push({ ...c, tapped: false, aiAttacking: undefined, playerAttacking: undefined });
       }
       A.checkWinner();
-      return lines.length ? 'Combat: ' + lines.join(' ') : 'No combat damage.';
+      return lines.length ? `${label}: ` + lines.join(' ') : 'No combat damage.';
     }, (msg) => msg);
+  }
+
+  // The bot attacked; the human has assigned blockers.
+  function resolveCombatDamage(assignments){
+    resolveCombat({
+      attackerPlayer: aiPlayer(),
+      defenderPlayer: humanPlayer(),
+      attackers: fieldCards(aiPlayer()).filter(c => c.aiAttacking),
+      assignments: assignments || {},
+      label: 'Combat',
+      hitText: (a, dmg) => `${a.name} hits you for ${dmg}.`
+    });
   }
 
   async function resolveAiCombat(assignments){
@@ -482,6 +590,34 @@ function boot(){
       awaitingBlocks = false;
       aiRunning = false;
     }
+  }
+
+  // The human declared attackers; the bot blocks and damage resolves.
+  async function playerAttack(attackerIds){
+    const me = humanPlayer();
+    const attackers = fieldCards(me).filter(c => attackerIds.includes(c.gameId || c.id));
+    if (!attackers.length) return;
+
+    attackers.forEach(c => { if (!keywordsOf(c).vigilance) c.tapped = true; });
+    act('player_attack', { count: attackers.length }, () => {
+      state.gameState.phase = 'Combat';
+    }, `You attack with ${attackers.length} creature${attackers.length === 1 ? '' : 's'}.`);
+    await delay(700);
+
+    const assignments = aiChooseBlocks(attackers);
+    const blocked = Object.keys(assignments).length;
+    if (blocked) {
+      A.showAction(`The opponent blocks with ${blocked} creature${blocked === 1 ? '' : 's'}.`, 1400);
+      await delay(900);
+    }
+    resolveCombat({
+      attackerPlayer: me,
+      defenderPlayer: aiPlayer(),
+      attackers,
+      assignments,
+      label: 'Your attack',
+      hitText: (a, dmg) => `${a.name} hits the opponent for ${dmg}.`
+    });
   }
 
   async function finishAiTurn(){
@@ -511,13 +647,14 @@ function boot(){
     state.bossRound = (state.bossRound || 0) + 1;
     const round = state.bossRound;
 
-    if (round >= 3 && round % 3 === 0) {
-      const size = Math.min(2 + Math.floor(round / 3), 8);
+    const every = diff().bossEvery;
+    if (round >= every && round % every === 0) {
+      const size = Math.min(2 + Math.floor(round / every), 8);
       act('boss_minion', { round }, () => {
         aiPlayer().creatureField.push({
           id: 'minion' + round + Math.random(),
           gameId: 'boss-minion-' + round + '-' + Math.random().toString(36).slice(2),
-          name: `Summoned Horror ${round / 3}`,
+          name: `Summoned Horror ${Math.round(round / every)}`,
           type: 'Creature Token - Horror',
           cost: '', colors: ['B'], effect: round >= 8 ? 'Trample.' : '',
           power: size, toughness: size,
@@ -528,7 +665,7 @@ function boot(){
       if (!await step(900)) return;
     }
 
-    if (round >= 9) {
+    if (round >= diff().bossDrainFrom) {
       act('boss_drain', { round }, () => {
         humanPlayer().health = Math.max(0, humanPlayer().health - 2);
         aiPlayer().health += 2;
@@ -744,6 +881,10 @@ function boot(){
     onRender,
     runAiTurn,
     resolveAiCombat,
+    playerAttack,
+    aiUntappedBlockers,
+    DIFFICULTY,
+    difficulty: diff,
     humanUntappedBlockers,
     canBlock,
     keywordsOf,
