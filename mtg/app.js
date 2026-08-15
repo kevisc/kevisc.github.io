@@ -44,6 +44,9 @@ const state = {
   attackSelection: [],       // ids chosen in that modal
   coopSeat: 1,               // which teammate currently holds the device
   aiDifficulty: 'normal',    // 'easy' | 'normal' | 'hard'
+  strictMana: false,         // enforce paying costs by tapping lands
+  landsPlayedThisTurn: 0,    // strict mode: one land per turn
+  aiActing: false,           // the bot is visibly taking its turn
   landArt: {},               // chosen basic-land printing per land name
   landPicker: null,          // { land, printings, loading } while the picker is open
   bossRound: 0,
@@ -711,6 +714,9 @@ function applyAutoDeck(modeOrId, options = {}){
   if (mode.autoDeck === 'basic-land-game') setupLandGameDecks(options);
   else if (mode.autoDeck === 'horde') setupHordeDecks(options);
   else if (mode.autoDeck === 'boss') setupBossDecks(options);
+  // The generated deck is playable immediately; the real-card version
+  // replaces it as soon as Scryfall answers.
+  scheduleRealDeckUpgrades(mode);
 }
 
 function makeStarterCubeStack(size = 90){
@@ -924,6 +930,49 @@ function seatLabel(n, { capital = true } = {}){
   else if (n === state.currentPlayer) label = 'you';
   else label = 'your opponent';
   return capital ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+}
+
+// --- Strict mana ------------------------------------------------------------
+// Optional rules enforcement: playing a card taps real lands for its cost, and
+// only one land may be played per turn. Off by default — the sandbox stays.
+
+function untappedLandsOf(player){
+  return battlefieldCards(player).filter(c => ((c.type || '') + '').toLowerCase().includes('land') && !c.tapped);
+}
+
+function landColorOf(card){
+  const map = { Plains: 'W', Island: 'U', Swamp: 'B', Mountain: 'R', Forest: 'G' };
+  if (map[card.name]) return map[card.name];
+  const m = ((card.effect || '') + '').match(/add\s*\{?([WUBRG])\}?/i);
+  return m ? m[1].toUpperCase() : '*';
+}
+
+// Which untapped lands would pay this cost? null = cannot pay.
+function planManaPayment(player, cost){
+  const tokens = ((cost || '') + '').match(/\{([^}]+)\}/g) || [];
+  let generic = 0;
+  const colored = [];
+  for (const t of tokens) {
+    const inner = t.slice(1, -1).toUpperCase();
+    const n = parseInt(inner, 10);
+    if (Number.isFinite(n)) { generic += n; continue; }
+    if (inner === 'X') continue;
+    const opts = inner.split('/').filter(ch => 'WUBRG'.includes(ch));
+    if (opts.length) colored.push(opts);
+    else if (inner === 'C' || inner === 'S') generic += 1;
+  }
+  const lands = untappedLandsOf(player).map(c => ({ card: c, color: landColorOf(c) }));
+  const used = new Set();
+  for (const opts of colored) {
+    const hit = lands.find(l => !used.has(l.card) && opts.includes(l.color))
+      || lands.find(l => !used.has(l.card) && l.color === '*');
+    if (!hit) return null;
+    used.add(hit.card);
+  }
+  const rest = lands.filter(l => !used.has(l.card));
+  if (rest.length < generic) return null;
+  for (let i = 0; i < generic; i++) used.add(rest[i].card);
+  return [...used];
 }
 
 function deckSizeSummary(modeOrId){
@@ -1418,6 +1467,190 @@ async function resolveLandArt(landName){
   return job;
 }
 
+// ---------------------------------------------------------------------------
+// Real-card auto decks
+//
+// Auto-built opponents (boss, horde, generic AI, starter pools, jumpstart)
+// used invented placeholder cards. They now draw real cards from Scryfall —
+// with real art and real rules text — through the same pooled search the
+// draft uses, so a whole deck costs one or two requests. The generated decks
+// remain as an instant fallback and for offline play: the sync builders run
+// first, then the real version replaces the deck when the fetch lands.
+// ---------------------------------------------------------------------------
+
+const BASIC_NAME_FOR = { W: 'Plains', U: 'Island', B: 'Swamp', R: 'Mountain', G: 'Forest' };
+
+// Draw `count` distinct cards from one pooled query.
+async function realCardsFrom(query, count, accept){
+  const out = [];
+  const seen = new Set();
+  while (out.length < count) {
+    const c = await drawFromPool(query, x => !seen.has(x.name) && (!accept || accept(x)));
+    if (!c) break;
+    seen.add(c.name);
+    out.push({ ...c, realCard: true });
+  }
+  return out;
+}
+
+async function realBasicsFor(colors, count, owner){
+  const lands = [];
+  for (const col of colors) await resolveLandArt(BASIC_NAME_FOR[col]);   // warm the art cache
+  let i = 0;
+  while (lands.length < count) {
+    const col = colors[i % colors.length];
+    lands.push({ ...makeBasicLandCard(BASIC_NAME_FOR[col], i, owner), realCard: true });
+    i++;
+  }
+  return lands;
+}
+
+const TWO_COLOR_PAIRS = [['W','U'],['U','B'],['B','R'],['R','G'],['G','W'],['W','B'],['U','R'],['B','G'],['R','W'],['G','U']];
+
+const isCreatureCardData = (c) => ((c.type || '') + '').toLowerCase().includes('creature');
+const looksLikeRemoval = (c) => /destroy target|deals? \d+ damage|each opponent loses|target creature gets -/i.test((c.effect || '') + '');
+
+// Build a deck from ONE search. Scryfall rate-limits bursts hard (the edge
+// rejects them without CORS headers), so every builder spends a single
+// request and does its creature/spell split locally.
+async function buildDeckFromPool({ query, colors, owner, creatures, spells, lands, creatureFilter }){
+  const pool = await realCardsFrom(query, creatures + spells + 24);
+  if (pool.length < Math.max(12, creatures)) return null;
+
+  const creaturePool = pool.filter(c => isCreatureCardData(c) && (!creatureFilter || creatureFilter(c)));
+  const spellPool = pool.filter(c => !isCreatureCardData(c));
+  const chosen = [
+    ...creaturePool.slice(0, creatures),
+    ...spellPool.slice(0, spells)
+  ];
+  if (chosen.length < 12) return null;
+
+  const basics = await realBasicsFor(colors, lands, owner);
+  return shuffleCopy([...chosen, ...basics]);
+}
+
+// A generic opponent deck for ordinary formats, scaled by difficulty.
+async function buildRealAiDeck(tier){
+  const pair = TWO_COLOR_PAIRS[Math.floor(Math.random() * TWO_COLOR_PAIRS.length)];
+  const id = pair.join('').toLowerCase();
+  const scope = { easy: 'legal:pauper', normal: 'legal:pioneer', hard: 'legal:commander r>=uncommon' }[tier] || 'legal:pioneer';
+  return buildDeckFromPool({
+    query: `${scope} id<=${id} -t:land game:paper cmc<=6`,
+    colors: pair, owner: 'ai', creatures: 16, spells: 7, lands: 17
+  });
+}
+
+// The boss plays real black/red threats and removal.
+async function buildRealBossDeck(tier){
+  const scope = { easy: 'legal:pauper', normal: 'legal:pioneer', hard: 'legal:commander r>=rare' }[tier] || 'legal:pioneer';
+  const minPower = { easy: 0, normal: 3, hard: 4 }[tier] || 0;
+  return buildDeckFromPool({
+    query: `${scope} id<=br -t:land game:paper cmc<=7`,
+    colors: ['B', 'R'], owner: 'boss',
+    creatures: { easy: 20, normal: 24, hard: 26 }[tier] || 24,
+    spells: { easy: 6, normal: 8, hard: 10 }[tier] || 8,
+    lands: 22,
+    creatureFilter: (c) => (parseInt(c.power, 10) || 0) >= minPower
+  });
+}
+
+// The survivors' starter deck: real white/green creatures and tricks.
+async function buildRealSurvivorDeck(){
+  return buildDeckFromPool({
+    query: 'legal:pioneer id<=gw -t:land game:paper cmc<=5',
+    colors: ['W', 'G'], owner: 'survivor', creatures: 20, spells: 8, lands: 22
+  });
+}
+
+// Real printed token cards for the Horde. The reveal/attack engine keys off
+// "Token" in the type line, which real token cards carry.
+async function buildRealHordeDeck(tier){
+  const counts = { easy: { fodder: 80, giants: 4 }, normal: { fodder: 72, giants: 8 }, hard: { fodder: 62, giants: 14 } }[tier];
+  const arts = await realCardsFrom('is:token t:creature game:paper', 16);
+  if (arts.length < 5) return null;
+  const power = (c) => parseInt(c.power, 10) || 0;
+  const small = arts.filter(c => power(c) <= 3);
+  const big = arts.filter(c => power(c) >= 4);
+  const pickFrom = (list, i) => (list.length ? list[i % list.length] : arts[i % arts.length]);
+  const clone = (base, i) => ({ ...base, id: `${base.id}_h${i}`, isToken: true, hordeRole: 'token', realCard: true });
+  const deck = [];
+  for (let i = 0; i < counts.fodder; i++) deck.push(clone(pickFrom(small, i), i));
+  for (let i = 0; i < counts.giants; i++) deck.push(clone(pickFrom(big, i), 1000 + i));
+  // The action cards are variant instructions, not real Magic cards.
+  const actions = { easy: { surge: 3, regrow: 3, drain: 2, untap: 3 }, normal: { surge: 6, regrow: 5, drain: 5, untap: 4 }, hard: { surge: 9, regrow: 6, drain: 7, untap: 5 } }[tier];
+  for (let i = 0; i < actions.surge; i++) deck.push(makeHordeAction('Mindless Surge', 'Reveal two extra Horde cards.', 'surge'));
+  for (let i = 0; i < actions.regrow; i++) deck.push(makeHordeAction('Graveborn Return', 'Return up to two Horde tokens from the graveyard to the battlefield.', 'regrow'));
+  for (let i = 0; i < actions.drain; i++) deck.push(makeHordeAction('Gnawing Dread', 'Each survivor loses 2 life.', 'drain'));
+  for (let i = 0; i < actions.untap; i++) deck.push(makeHordeAction('Endless Moan', 'Untap all Horde creatures.', 'untap'));
+  return shuffleCopy(deck);
+}
+
+// Real cards for starter cubes and Winston pools.
+async function buildRealStarterPool(size){
+  const cards = await realCardsFrom('legal:pauper -t:land game:paper', size);
+  return cards.length >= Math.min(24, size) ? shuffleCopy(cards) : null;
+}
+
+// Real-card jumpstart packets, themed like the generated ones.
+const JUMPSTART_REAL_QUERIES = {
+  goblins: 'legal:pauper id<=r t:goblin game:paper',
+  flyers: 'legal:pauper id<=u t:creature o:flying game:paper',
+  graveyard: 'legal:pauper id<=b o:graveyard game:paper',
+  'big-green': 'legal:pauper id<=g t:creature pow>=3 game:paper',
+  lifegain: 'legal:pauper id<=w o:"gain" o:"life" game:paper',
+  artifacts: 'legal:pauper t:artifact -t:land game:paper'
+};
+
+async function buildRealJumpstartDeck(themeAId, themeBId){
+  const parts = [];
+  for (const themeId of [themeAId, themeBId]) {
+    const theme = JUMPSTART_THEMES.find(t => t.id === themeId) || JUMPSTART_THEMES[0];
+    const spells = await realCardsFrom(JUMPSTART_REAL_QUERIES[theme.id] || 'legal:pauper -t:land game:paper', 12);
+    if (spells.length < 8) return null;
+    await resolveLandArt(theme.land);
+    const lands = [];
+    for (let i = 0; i < 8; i++) lands.push({ ...makeBasicLandCard(theme.land, `${theme.id}_${i}`, 'jump'), realCard: true });
+    parts.push({ theme, cards: [...spells, ...lands] });
+  }
+  return {
+    name: `${parts[0].theme.title} + ${parts[1].theme.title}`,
+    cards: shuffleCopy(parts.flatMap(p => p.cards))
+  };
+}
+
+// Replace a generated deck slot with its real-card version once fetched.
+// Guards: the game must not have started, and the slot must still hold the
+// same generated deck (kind match, not yet real) — a deck the player built
+// or a newer build always wins.
+const _realBuildTokens = {};
+function upgradeDeckSlot(slotKey, kind, buildFn){
+  const current = state.decks[slotKey] || [];
+  if (current[0] && current[0].realCard) return;         // already real
+  const token = Symbol(kind);
+  _realBuildTokens[slotKey] = token;
+  Promise.resolve().then(buildFn).then(cards => {
+    if (!cards || !cards.length) return;
+    if (_realBuildTokens[slotKey] !== token) return;
+    if (state.gameStarted) return;
+    if (deckAutoKind(state.decks[slotKey]) !== kind) return;
+    state.decks[slotKey] = tagAutoDeck(cards, kind);
+    render();
+  }).catch(() => { /* offline: the generated deck stands */ });
+}
+
+// Kick off real-card upgrades for whatever the current mode auto-built.
+function scheduleRealDeckUpgrades(mode){
+  if (!mode || !navigator.onLine) return;
+  const tier = aiTier();
+  if (mode.autoDeck === 'horde') {
+    upgradeDeckSlot('player1', 'survivor', () => buildRealSurvivorDeck());
+    upgradeDeckSlot('player2', 'horde:' + tier, () => buildRealHordeDeck(tier));
+  } else if (mode.autoDeck === 'boss') {
+    upgradeDeckSlot('player1', 'survivor', () => buildRealSurvivorDeck());
+    upgradeDeckSlot('player2', 'boss:' + tier, () => buildRealBossDeck(tier));
+  }
+}
+
 // Fetch the printings offered by the land picker.
 async function fetchLandPrintings(landName, limit = 60){
   const q = `t:basic type:${landName} game:paper`;
@@ -1452,6 +1685,7 @@ function saveLocal(){
       battleMode: state.battleMode,
       studioTab: state.studioTab,
       aiDifficulty: state.aiDifficulty,
+      strictMana: !!state.strictMana,
       landArt: state.landArt || {}
     }));
   } catch (e) { /* quota exceeded or storage disabled — fail silently */ }
@@ -1473,6 +1707,7 @@ function loadLocal(){
     if (data.modeSetups && typeof data.modeSetups === 'object') state.modeSetups = data.modeSetups;
     if (data.landArt && typeof data.landArt === 'object') state.landArt = data.landArt;
     if (data.aiDifficulty) state.aiDifficulty = data.aiDifficulty;
+    if (typeof data.strictMana === 'boolean') state.strictMana = data.strictMana;
     if (data.selectedMode) state.selectedMode = data.selectedMode;
     if (data.battleMode) state.battleMode = data.battleMode;
     if (data.studioTab) state.studioTab = data.studioTab;
@@ -2720,12 +2955,13 @@ function ModeStudioScreen() {
   bind('#studioJumpstart', () => { state.selectedMode = mode.id; state.screen = 'builder'; render(); });
   bind('#studioStartDraft', () => { resetDraftForMode(mode.id); state.screen = 'draft'; render(); });
   bind('#studioStarterCube', () => {
-    state.decks[myKey] = makeStarterCubeStack(90);
+    state.decks[myKey] = tagAutoDeck(makeStarterCubeStack(90), 'cube');
+    upgradeDeckSlot(myKey, 'cube', () => buildRealStarterPool(90));
     toast('Starter cube stack generated.');
     render();
   });
   bind('#studioStarterDandan', () => {
-    state.decks[myKey] = makeDandanLibrary(80);
+    state.decks[myKey] = tagAutoDeck(makeDandanLibrary(80), 'dandan');
     toast('Dandan library generated.');
     render();
   });
@@ -2754,6 +2990,7 @@ function ModeStudioScreen() {
         const built = buildJumpstartDeck(themes[0], themes[1]);
         state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
         toast(`AI deck generated: ${built.name}.`);
+        upgradeDeckSlot('player2', 'jumpstart', () => buildRealAiDeck(aiTier()));
       }
     }
     state.screen = 'game';
@@ -2849,6 +3086,13 @@ function BattleMenu()  {
               </button>`).join('')}
           </div>
         </div>
+        <div class="flex mt-3" style="align-items:center;gap:10px;flex-wrap:wrap">
+          <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input id="strictManaToggle" type="checkbox" ${state.strictMana ? 'checked' : ''}>
+            <strong>Strict mana</strong>
+          </label>
+          <span class="text-xs text-gray">Playing a card taps lands for its cost; one land per turn. Off = free-form sandbox.</span>
+        </div>
       </div>
 
       <div class="action-panel-grid">
@@ -2898,12 +3142,13 @@ function BattleMenu()  {
   bind('#logoutBtn', () => { state.currentPlayer = null; state.screen = 'login'; render(); });
   bind('#changeMode', () => { state.modeIntent = 'play'; state.screen = 'modes'; render(); });
   bind('#starterCubeBattle', () => {
-    state.decks.player1 = makeStarterCubeStack(90);
+    state.decks.player1 = tagAutoDeck(makeStarterCubeStack(90), 'cube');
+    upgradeDeckSlot('player1', 'cube', () => buildRealStarterPool(90));
     toast('Starter cube stack generated.');
     render();
   });
   bind('#starterDandanBattle', () => {
-    state.decks.player1 = makeDandanLibrary(80);
+    state.decks.player1 = tagAutoDeck(makeDandanLibrary(80), 'dandan');
     toast('Dandan library generated.');
     render();
   });
@@ -2932,6 +3177,7 @@ function BattleMenu()  {
       const built = buildJumpstartDeck(themes[0], themes[1]);
       state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
       toast(`AI deck generated: ${built.name}.`);
+      upgradeDeckSlot('player2', 'jumpstart', () => buildRealAiDeck(aiTier()));
     }
     state.screen = 'game';
     render();
@@ -2946,6 +3192,11 @@ function BattleMenu()  {
     if (difficultyBlurb) difficultyBlurb.textContent = entry ? entry.blurb : '';
   };
   showBlurb();
+  const strictToggle = div.querySelector('#strictManaToggle');
+  if (strictToggle) strictToggle.onchange = () => {
+    state.strictMana = strictToggle.checked;
+    scheduleSave();
+  };
   div.querySelectorAll('.difficultyBtn').forEach(btn => {
     btn.onclick = () => {
       state.aiDifficulty = btn.dataset.diff;
@@ -4008,13 +4259,13 @@ function DraftOffResults(){
             <div><strong>Draft List</strong></div>
             <div class="text-xs badge">Left: ${leftCount()}</div>
           </div>
-          <div id="draftList" style="margin-top:8px">
-            ${D.deck.map(c=>`
-              <div class="draft-small">
+          <div id="draftList" style="margin-top:8px;max-height:56vh;overflow-y:auto;padding-right:4px">
+            ${D.deck.map((c, di)=>`
+              <div class="draft-small" data-di="${di}">
                 ${c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;display:block' }) : `<div class="badge">${htmlEscape(c.name)}</div>`}
                 <div class="text-xs" style="line-height:1.1">
-                  <div><strong>${c.name}</strong></div>
-                  <div class="text-gray">${c.type || ''}</div>
+                  <div><strong>${htmlEscape(c.name)}</strong></div>
+                  <div class="text-gray">${htmlEscape(c.type || '')}</div>
                 </div>
               </div>
             `).join('')}
@@ -4037,6 +4288,34 @@ function DraftOffResults(){
   el.onclick = ()=> pickCard(+el.dataset.i);
 });
     wrap.querySelector('#finishNow').onclick = ()=> setScreen('done');
+
+    // Hover a drafted card in the list to see it full size next to the cursor.
+    let draftHover = wrap.querySelector('#draftHoverBox');
+    if (!draftHover) {
+      draftHover = document.createElement('div');
+      draftHover.id = 'draftHoverBox';
+      draftHover.className = 'zone-hover';
+      wrap.appendChild(draftHover);
+    }
+    wrap.querySelectorAll('.draft-small').forEach(row => {
+      const card = D.deck[Number(row.dataset.di)];
+      if (!card) return;
+      row.onmousemove = (e) => {
+        draftHover.innerHTML = `
+          <div style="font-weight:700;margin-bottom:4px">${htmlEscape(card.name)}</div>
+          <div class="text-xs text-gray" style="margin-bottom:6px">${htmlEscape(card.type || '')}${card.cost ? ' · ' + htmlEscape(card.cost) : ''}</div>
+          ${cardImageMarkup(card, { style: 'width:100%;border-radius:6px;margin-bottom:6px;display:block' })}
+          ${card.effect ? `<div style="font-size:12px;white-space:pre-wrap;line-height:1.3">${htmlEscape(card.effect)}</div>` : ''}
+        `;
+        const pad = 16;
+        const x = Math.min(e.clientX + pad, window.innerWidth - 280);
+        const y = Math.min(e.clientY + pad, window.innerHeight - 380);
+        draftHover.style.left = x + 'px';
+        draftHover.style.top = y + 'px';
+        draftHover.style.display = 'block';
+      };
+      row.onmouseleave = () => { draftHover.style.display = 'none'; };
+    });
     const retryBtn = wrap.querySelector('#retryPool');
     if (retryBtn) retryBtn.onclick = async ()=>{ retryBtn.disabled = true; retryBtn.textContent = 'Loading…'; await ensurePool(); render(); };
 
@@ -4657,7 +4936,13 @@ function WinstonSetup(){
   wrap.querySelector('#useCollectionPool').onclick = () => startWinstonDraft(state.cards, poolSize(), { vsBot: vsBot() });
   wrap.querySelector('#useP1Pool').onclick = () => startWinstonDraft(state.decks.player1, poolSize(), { vsBot: vsBot() });
   wrap.querySelector('#useP2Pool').onclick = () => startWinstonDraft(state.decks.player2, poolSize(), { vsBot: vsBot() });
-  wrap.querySelector('#useStarterPool').onclick = () => startWinstonDraft(makeWinstonStarterPool(poolSize()), poolSize(), { vsBot: vsBot() });
+  wrap.querySelector('#useStarterPool').onclick = async () => {
+    const btn = wrap.querySelector('#useStarterPool');
+    btn.disabled = true; btn.textContent = 'Fetching cards…';
+    let pool = null;
+    try { pool = await buildRealStarterPool(poolSize()); } catch {}
+    startWinstonDraft(pool || makeWinstonStarterPool(poolSize()), poolSize(), { vsBot: vsBot() });
+  };
 
   const status = wrap.querySelector('#winstonPoolStatus');
   const startUploaded = wrap.querySelector('#startUploadedWinston');
@@ -6365,9 +6650,13 @@ Island x14
     jumpB.value = (themes[1] || themes[0]).id;
   }
   if (randomJumpstart) randomJumpstart.onclick = randomizeJumpstart;
-  if (buildJumpstart) buildJumpstart.onclick = () => {
-    const deck = buildJumpstartDeck(jumpA?.value, jumpB?.value);
-    state.decks[key] = deck.cards;
+  if (buildJumpstart) buildJumpstart.onclick = async () => {
+    buildJumpstart.disabled = true;
+    buildJumpstart.textContent = 'Fetching cards…';
+    let deck = null;
+    try { deck = await buildRealJumpstartDeck(jumpA?.value, jumpB?.value); } catch {}
+    if (!deck) deck = buildJumpstartDeck(jumpA?.value, jumpB?.value);   // offline fallback
+    state.decks[key] = tagAutoDeck(deck.cards, 'jumpstart');
     toast(`Jumpstart deck built: ${deck.name}`);
     render();
   };
@@ -6376,7 +6665,8 @@ Island x14
   if (buildCubeStack) buildCubeStack.onclick = () => {
     const sizeInput = div.querySelector('#cubeStackSize');
     const size = Math.max(40, Math.min(180, parseInt(sizeInput?.value || '90', 10)));
-    state.decks[key] = makeStarterCubeStack(size);
+    state.decks[key] = tagAutoDeck(makeStarterCubeStack(size), 'cube');
+    upgradeDeckSlot(key, 'cube', () => buildRealStarterPool(size));
     toast(`Starter cube stack built: ${size} cards`);
     render();
   };
@@ -6385,7 +6675,7 @@ Island x14
   if (buildDandanLibrary) buildDandanLibrary.onclick = () => {
     const sizeInput = div.querySelector('#dandanLibrarySize');
     const size = Math.max(40, Math.min(160, parseInt(sizeInput?.value || '80', 10)));
-    state.decks[key] = makeDandanLibrary(size);
+    state.decks[key] = tagAutoDeck(makeDandanLibrary(size), 'dandan');
     toast(`Dandan library built: ${size} cards`);
     render();
   };
@@ -6855,6 +7145,7 @@ function GameBoard() {
               <li><strong>Opening hand:</strong> ${rules.startingHand || rules.openingHand || 7} cards dealt to each player.</li>
               <li><strong>Starting life:</strong> ${rules.health}${rules.opponentHealth ? ` — opponent starts at ${rules.opponentHealth}` : ''}.</li>
               <li><strong>Each turn:</strong> you untap and draw automatically when the turn passes to you.</li>
+              ${state.strictMana ? '<li><strong>Strict mana:</strong> cards tap lands for their cost; one land per turn.</li>' : ''}
               <li><strong>Deck:</strong> ${htmlEscape(deckSizeSummary(mode))}.</li>
               ${rules.botOpponent ? '<li><strong>Opponent:</strong> played automatically by the computer. Its deck and life scale with the chosen difficulty.</li>' : ''}
               ${state.vsAI ? `<li><strong>Bot difficulty:</strong> ${htmlEscape((window.GALDUR_AI && window.GALDUR_AI.difficulty().label) || 'Normal')}.</li>` : ''}
@@ -6915,13 +7206,14 @@ function GameBoard() {
     }
     const starterCubeReady = div.querySelector('#starterCubeReady');
     if (starterCubeReady) starterCubeReady.onclick = () => {
-      state.decks.player1 = makeStarterCubeStack(90);
+      state.decks.player1 = tagAutoDeck(makeStarterCubeStack(90), 'cube');
+    upgradeDeckSlot('player1', 'cube', () => buildRealStarterPool(90));
       toast('Starter cube stack generated.');
       render();
     };
     const starterDandanReady = div.querySelector('#starterDandanReady');
     if (starterDandanReady) starterDandanReady.onclick = () => {
-      state.decks.player1 = makeDandanLibrary(80);
+      state.decks.player1 = tagAutoDeck(makeDandanLibrary(80), 'dandan');
       toast('Dandan library generated.');
       render();
     };
@@ -7035,9 +7327,33 @@ function GameBoard() {
     return item?.card?.name || 'Unknown spell';
   }
 
+  // Strict mode gatekeeper: returns false (with a toast) when the card cannot
+  // be paid for, otherwise taps the lands used and lets the play proceed.
+  function payStrictCost(card){
+    if (!state.strictMana) return true;
+    const isLandPlay = ((card.type || '') + '').toLowerCase().includes('land');
+    if (isLandPlay) {
+      if ((state.landsPlayedThisTurn || 0) >= 1) {
+        toast('Strict mana: one land per turn.');
+        return false;
+      }
+      state.landsPlayedThisTurn = (state.landsPlayedThisTurn || 0) + 1;
+      return true;
+    }
+    if (!card.cost) return true;             // tokens / free effects
+    const payment = planManaPayment(me, card.cost);
+    if (!payment) {
+      toast(`Not enough untapped mana for ${card.cost}.`);
+      return false;
+    }
+    payment.forEach(land => { land.tapped = true; });
+    return true;
+  }
+
   function castSelectedCardToStack(){
     const card = me.hand[state.selectedCard];
     if (!card) return;
+    if (!payStrictCost(card)) return;
     executeGameAction('cast_to_stack', { cardName: card.name, owner: state.currentPlayer }, () => {
       me.hand.splice(state.selectedCard, 1);
       gameStack.push({
@@ -7147,6 +7463,11 @@ function GameBoard() {
     }
     // Check before removing the card, or a rejected move would delete it.
     if (target === 'commanderZone' && !canMoveToCommandZone(me)) return;
+    // Playing from hand onto the battlefield or stack costs mana in strict mode.
+    if (payload.source === 'hand' && (BATTLE_ZONE_KEYS.includes(target) || target === 'stack')) {
+      const dragCard = me.hand[Number(payload.idx)];
+      if (dragCard && !payStrictCost(dragCard)) return;
+    }
 
     executeGameAction('move_card', { source: payload.source, target }, () => {
       const card = removeDraggedCard(payload);
@@ -7553,7 +7874,8 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               ${sharedGame ? `<span class="badge">${htmlEscape(shared.label)}</span>` : ''}
             </div>
             <span class="turn-pill ${state.activePlayer === state.currentPlayer ? 'yours' : 'theirs'}">${
-              state.activePlayer === state.currentPlayer ? 'Your turn'
+              state.aiActing ? '🤖 Bot is playing…'
+                : state.activePlayer === state.currentPlayer ? 'Your turn'
                 : state.vsAI ? "Bot's turn" : "Opponent's turn"}</span>
             <div class="text-xs text-gray">${htmlEscape(state.gameState.phase || 'Main')} phase</div>
             <div class="flex battle-phase-row" style="gap:4px;justify-content:center;flex-wrap:wrap;margin-top:4px">
@@ -7593,6 +7915,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <button id="mulliganBtn" class="btn btn-blue text-xs" ${rules.noMulligan ? 'disabled' : ''}>🔄 Mulligan</button>
               ${state.coop ? '<button id="passSeat" class="btn btn-purple text-xs">🤝 Pass to Teammate</button>' : ''}
             </div>
+            <div class="text-xs text-gray mt-2">Space = end turn · A = attack · D = draw · double-click a hand card to play it</div>
             <div class="drop-zone-row" aria-label="Quick card zones">
               <div id="handDrop" class="drop-zone" data-drop-target="hand">Hand</div>
               <div id="graveyardDrop" class="drop-zone" data-drop-target="graveyard">Graveyard</div>
@@ -7842,6 +8165,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       cardDiv.title = 'Click for options · double-click to play';
       cardDiv.ondblclick = () => {
         const zone = defaultZoneForCard(card);
+        if (!payStrictCost(card)) return;
         executeGameAction('hand_to_field', { cardName: card.name, zone }, () => {
           const cardToPlace = initBattleCard({ ...card, tapped: false });
           me[zone].push(cardToPlace);
@@ -8061,7 +8385,13 @@ if (card.stun && card.stun > 0) {
   executeGameAction('mulligan', { player: state.currentPlayer, count: n, shared: sharedGame }, () => {
     targetDeck.push(...me.hand);
     me.hand.length = 0;
-  }, `Mulligan: returned ${n} card${n !== 1 ? 's' : ''} to ${sharedGame ? 'shared stack' : 'deck'}.`);
+    // Proper mulligan: shuffle, then draw one fewer than you put back.
+    const shuffled = shuffleCopy(targetDeck.splice(0));
+    targetDeck.push(...shuffled);
+    for (let i = 0; i < n - 1 && targetDeck.length; i++) {
+      me.hand.push(initBattleCard(targetDeck.shift()));
+    }
+  }, `Mulligan: drew a fresh hand of ${Math.max(0, n - 1)}.`);
 };
   
   if (viewDeckBtn) viewDeckBtn.onclick = () => {
@@ -8216,6 +8546,7 @@ if (card.stun && card.stun > 0) {
       state.selectedCard = null;
       state.selectedFieldCard = null;
       state.selectedZoneCard = null;
+      state.landsPlayedThisTurn = 0;
 
       // Untap and draw for whoever is taking over, so a turn starts ready to
       // play instead of needing two manual clicks. The AI runs its own upkeep.
@@ -8618,6 +8949,7 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
       btn.onclick = () => {
         const zone = btn.dataset.zone;
         const card = me.hand[state.selectedCard];
+        if (!payStrictCost(card)) return;
         executeGameAction('hand_to_field', { cardName: card.name, zone }, () => {
           const cardToPlace = { ...card, tapped: false };
           if (!('pt' in cardToPlace)) cardToPlace.pt = { p: 0, t: 0 };
@@ -8674,6 +9006,22 @@ window.GALDUR_APP = {
   battlefieldCards,
   defaultZoneForCard
 };
+
+// Keyboard shortcuts on the battlefield. Registered once; modal states and
+// text inputs are respected.
+document.addEventListener('keydown', (e) => {
+  if (state.screen !== 'game' || !state.gameStarted || state.winner) return;
+  if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+  if (state.targeting || state.declaringAttack || state.viewingZone || state.creatingToken || state.landPicker) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    document.getElementById('endTurn')?.click();
+  } else if (e.key === 'a' || e.key === 'A') {
+    document.getElementById('declareAttack')?.click();
+  } else if (e.key === 'd' || e.key === 'D') {
+    document.getElementById('drawBtn')?.click();
+  }
+});
 
 loadLocal();          // restore saved collection + decks before first paint
 setTimeout(render, 100);

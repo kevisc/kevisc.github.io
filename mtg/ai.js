@@ -215,6 +215,7 @@ function boot(){
   async function runAiTurn(){
     if (aiRunning || awaitingBlocks || !aiGameActive() || state.activePlayer !== AI_SEAT) return;
     aiRunning = true;
+    state.aiActing = true;
     try {
       const mode = state.gameState.mode || state.battleMode;
       if (mode === 'horde') { await runHordeTurn(); return; }
@@ -223,7 +224,7 @@ function boot(){
       await runStandardTurn();
     } finally {
       // Keep the lock held across the blocker prompt; resolveAiCombat frees it.
-      if (!awaitingBlocks) aiRunning = false;
+      if (!awaitingBlocks) { aiRunning = false; state.aiActing = false; }
     }
   }
 
@@ -305,6 +306,7 @@ function boot(){
         // Hand control to the human: GameBoard shows the blocker modal and
         // calls resolveAiCombat() when they confirm.
         awaitingBlocks = true;
+        state.aiActing = false;
         state.targeting = { type: 'ai-blockers' };
         A.render();
         return; // turn resumes in resolveAiCombat -> finishAiTurn
@@ -582,6 +584,7 @@ function boot(){
   async function resolveAiCombat(assignments){
     if (!awaitingBlocks) return;          // ignore stray/double clicks
     state.targeting = null;
+    state.aiActing = true;
     try {
       resolveCombatDamage(assignments || {});
       await delay(900);
@@ -589,6 +592,7 @@ function boot(){
     } finally {
       awaitingBlocks = false;
       aiRunning = false;
+      state.aiActing = false;
     }
   }
 
@@ -866,6 +870,7 @@ function boot(){
     // Leaving/ending a game while the blocker prompt is open must not leave the
     // AI locked out of every future game.
     if (!aiGameActive() && awaitingBlocks) { awaitingBlocks = false; aiRunning = false; }
+    if (!aiGameActive() && state.aiActing) state.aiActing = false;
     // AI battle turn
     if (aiGameActive() && state.activePlayer === AI_SEAT && !aiRunning && !state.targeting) {
       if (!aiTurnTimer) {
