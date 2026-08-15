@@ -108,6 +108,24 @@
     .action-panel.featured span { font-size: 19px; }
     @media (max-width: 640px) { .action-panel.featured { grid-column: span 1; } }
 
+    /* Turn indicator + End Turn emphasis */
+    .turn-pill {
+      display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .03em;
+      padding: 3px 12px; border-radius: 999px; border: 1px solid var(--line);
+      color: var(--text-dim); background: rgba(15, 23, 42, .6);
+    }
+    .turn-pill.yours {
+      color: #d1fae5; border-color: rgba(16, 185, 129, .55);
+      background: rgba(16, 185, 129, .16);
+      box-shadow: 0 0 12px rgba(16, 185, 129, .25);
+    }
+    .turn-pill.theirs { color: #fecaca; border-color: rgba(239, 68, 68, .4); background: rgba(239, 68, 68, .1); }
+    @keyframes endTurnPulse {
+      0%, 100% { box-shadow: 0 6px 18px rgba(99, 102, 241, .32); }
+      50% { box-shadow: 0 6px 26px rgba(168, 85, 247, .6); }
+    }
+    .end-turn-ready { animation: endTurnPulse 2.2s ease-in-out infinite; }
+
     /* Pre-game setup + rules summary */
     .setup-card { text-align: left; background: rgba(15, 23, 42, .55); border: 1px solid var(--line);
       border-radius: var(--r-md); padding: 16px 18px; }

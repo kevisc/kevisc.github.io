@@ -558,7 +558,20 @@ function makeHordeAction(name, effect, hordeEffect){
   );
 }
 
-function makeHordeDeck(){
+// The chosen bot difficulty, readable before ai.js has necessarily booted.
+function aiTier(){
+  const t = state.aiDifficulty;
+  return t === 'easy' || t === 'hard' ? t : 'normal';
+}
+
+// Horde composition scales with difficulty: Easy is mostly small fodder,
+// Hard runs more surges, drains and giant tokens.
+function makeHordeDeck(tier = aiTier()){
+  const counts = {
+    easy:   { fodder: 80, surge: 3, regrow: 3, drain: 2, untap: 3, giants: 4 },
+    normal: { fodder: 72, surge: 6, regrow: 5, drain: 5, untap: 4, giants: 8 },
+    hard:   { fodder: 62, surge: 9, regrow: 6, drain: 7, untap: 5, giants: 14 }
+  }[tier];
   const deck = [];
   const tokenMix = [
     () => makeHordeToken('Zombie Horde Token', 2, 2),
@@ -566,12 +579,12 @@ function makeHordeDeck(){
     () => makeHordeToken('Rotting Brute Token', 3, 3),
     () => makeHordeToken('Shambling Mass Token', 1, 1, 'When many of these appear, the horde gets wide quickly.')
   ];
-  for (let i = 0; i < 72; i++) deck.push(tokenMix[i % tokenMix.length]());
-  for (let i = 0; i < 6; i++) deck.push(makeHordeAction('Mindless Surge', 'Reveal two extra Horde cards.', 'surge'));
-  for (let i = 0; i < 5; i++) deck.push(makeHordeAction('Graveborn Return', 'Return up to two Horde tokens from the graveyard to the battlefield.', 'regrow'));
-  for (let i = 0; i < 5; i++) deck.push(makeHordeAction('Gnawing Dread', 'Each survivor loses 2 life.', 'drain'));
-  for (let i = 0; i < 4; i++) deck.push(makeHordeAction('Endless Moan', 'Untap all Horde creatures.', 'untap'));
-  for (let i = 0; i < 8; i++) deck.push(makeHordeToken('Zombie Giant Token', 4, 4, 'Trample.'));
+  for (let i = 0; i < counts.fodder; i++) deck.push(tokenMix[i % tokenMix.length]());
+  for (let i = 0; i < counts.surge; i++) deck.push(makeHordeAction('Mindless Surge', 'Reveal two extra Horde cards.', 'surge'));
+  for (let i = 0; i < counts.regrow; i++) deck.push(makeHordeAction('Graveborn Return', 'Return up to two Horde tokens from the graveyard to the battlefield.', 'regrow'));
+  for (let i = 0; i < counts.drain; i++) deck.push(makeHordeAction('Gnawing Dread', 'Each survivor loses 2 life.', 'drain'));
+  for (let i = 0; i < counts.untap; i++) deck.push(makeHordeAction('Endless Moan', 'Untap all Horde creatures.', 'untap'));
+  for (let i = 0; i < counts.giants; i++) deck.push(makeHordeToken('Zombie Giant Token', 4, 4, 'Trample.'));
   return shuffleCopy(deck);
 }
 
@@ -637,8 +650,9 @@ function setupHordeDecks(options = {}){
   if (options.forceSurvivor || deckReplaceableBy(state.decks.player1, 'survivor')) {
     state.decks.player1 = tagAutoDeck(makeStarterSurvivorDeck('player1'), 'survivor');
   }
-  if (options.forceHorde || deckReplaceableBy(state.decks.player2, 'horde')) {
-    state.decks.player2 = tagAutoDeck(makeHordeDeck(), 'horde');
+  const hordeKind = 'horde:' + aiTier();
+  if (options.forceHorde || deckReplaceableBy(state.decks.player2, hordeKind)) {
+    state.decks.player2 = tagAutoDeck(makeHordeDeck(), hordeKind);
   }
 }
 
@@ -660,10 +674,19 @@ function makeBossDeck(){
     ['Shadow Stalker', 'Creature - Nightstalker', '{2}{B}', ['B'], 3, 3, 'Deathtouch.'],
     ['Infernal Bolt', 'Instant', '{R}', ['R'], 0, 0, 'Deal 2 damage to target creature or player.']
   ];
-  for (let cycle = 0; cycle < 3; cycle++) {
+  // Easy runs two threat cycles and no bombs doubled; Hard triples the top
+  // threats so its late game genuinely bites.
+  const tier = aiTier();
+  const cycles = { easy: 2, normal: 3, hard: 3 }[tier];
+  for (let cycle = 0; cycle < cycles; cycle++) {
     for (const [name, type, cost, colors, power, toughness, effect] of threats) {
       deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness,
         { rarity: cycle === 0 ? 'rare' : 'uncommon' }));
+    }
+  }
+  if (tier === 'hard') {
+    for (const [name, type, cost, colors, power, toughness, effect] of threats.filter(t => t[4] >= 5 || /destroy|deal 3/i.test(t[6]))) {
+      deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness, { rarity: 'rare' }));
     }
   }
   for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Swamp', `boss_s_${i}`, 'boss'));
@@ -675,8 +698,9 @@ function setupBossDecks(options = {}){
   if (options.forceSurvivor || deckReplaceableBy(state.decks.player1, 'survivor')) {
     state.decks.player1 = tagAutoDeck(makeStarterSurvivorDeck('player1'), 'survivor');
   }
-  if (options.forceBoss || deckReplaceableBy(state.decks.player2, 'boss')) {
-    state.decks.player2 = tagAutoDeck(makeBossDeck(), 'boss');
+  const bossKind = 'boss:' + aiTier();
+  if (options.forceBoss || deckReplaceableBy(state.decks.player2, bossKind)) {
+    state.decks.player2 = tagAutoDeck(makeBossDeck(), bossKind);
   }
 }
 
@@ -781,7 +805,11 @@ function buildGameStateForMode(mode, p1Deck, p2Deck){
         : (p1Deck.length ? p1Deck : p2Deck)).slice()
     : [];
   const bossState = emptyPlayerState(shared ? [] : p2Deck, rules);
-  if (rules.opponentHealth) bossState.health = rules.opponentHealth;
+  if (rules.opponentHealth) {
+    // Boss life scales with difficulty: 75% on Easy, 125% on Hard.
+    const factor = { easy: 0.75, normal: 1, hard: 1.25 }[aiTier()];
+    bossState.health = Math.round(rules.opponentHealth * factor);
+  }
   return {
     player1: emptyPlayerState(shared ? [] : p1Deck, rules),
     player2: bossState,
@@ -888,6 +916,16 @@ function getModeRules(modeOrId){
 }
 
 // Human-readable deck requirement, e.g. "exactly 100 cards, singleton".
+// User-facing name for a seat. "Player 1 / Player 2" only ever mattered to the
+// engine; people think in terms of you, the bot, or your opponent.
+function seatLabel(n, { capital = true } = {}){
+  let label;
+  if (state.vsAI && n === 2) label = 'the Bot';
+  else if (n === state.currentPlayer) label = 'you';
+  else label = 'your opponent';
+  return capital ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+}
+
 function deckSizeSummary(modeOrId){
   const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : modeOrId;
   const policy = deckSizePolicy(mode);
@@ -2279,7 +2317,7 @@ function LoginScreen() {
  Made by KS. 2025. 
 </p>
       <div class="card enter-card">
-        <p class="text-sm text-gray mb-4">Enter the table, then choose a player profile when preparing decks or games.</p>
+        <p class="text-sm text-gray mb-4">Enter the table. Build your own deck — the bot brings its own, or you can craft your opponent's too.</p>
         <button id="enterApp" class="btn btn-primary" style="padding: 18px 42px; font-size: 18px;">Enter</button>
       </div>
     </div>
@@ -2405,14 +2443,7 @@ function MainMenu() {
           <div class="mode-family">Galdurspjöld</div>
           <h1 class="home-title">Choose your battle</h1>
         </div>
-        <div class="flex" style="gap: 10px; align-items: center;">
-          <div class="player-switch" aria-label="Player profile">
-            <span class="player-switch-label">Profile</span>
-            <button id="menuPlayer1" class="${state.currentPlayer === 1 ? 'active' : ''}" type="button">P1</button>
-            <button id="menuPlayer2" class="${state.currentPlayer === 2 ? 'active' : ''}" type="button">P2</button>
-          </div>
-          <button id="logoutBtn" class="btn btn-secondary text-sm">Exit</button>
-        </div>
+        <button id="logoutBtn" class="btn btn-secondary text-sm">Exit</button>
       </div>
 
       <!-- Current format, always visible so nothing is "mode first" guesswork -->
@@ -2423,8 +2454,8 @@ function MainMenu() {
           <div class="text-xs text-gray mt-1">${htmlEscape(mode.summary)}</div>
         </div>
         <div class="flex" style="gap:8px;flex-wrap:wrap">
-          <div class="deck-chip">P1 deck · ${(state.decks.player1 || []).length}</div>
-          <div class="deck-chip">P2 deck · ${(state.decks.player2 || []).length}</div>
+          <div class="deck-chip">Your deck · ${(state.decks.player1 || []).length}</div>
+          <div class="deck-chip">Opponent · ${(state.decks.player2 || []).length}</div>
           <button id="chooseMode" class="btn btn-secondary text-sm">Change format</button>
         </div>
       </div>
@@ -2472,8 +2503,9 @@ function MainMenu() {
 
   // actions
   div.querySelector('#logoutBtn').onclick  = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
-  div.querySelector('#menuPlayer1').onclick = () => { state.currentPlayer = 1; render(); };
-  div.querySelector('#menuPlayer2').onclick = () => { state.currentPlayer = 2; render(); };
+  // You always act as seat 1 outside online play; the old P1/P2 profile
+  // switcher confused far more than it helped.
+  if (!state.onlineMode) state.currentPlayer = 1;
   div.querySelector('#chooseMode').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
   div.querySelector('#cardCollection').onclick = () => { state.screen = 'creator'; render(); };
   div.querySelector('#chooseLands').onclick = () => openLandPicker('Plains');
@@ -2511,8 +2543,8 @@ function ModeStudioScreen() {
   const rules = getModeRules(mode);
   const myKey = 'player' + state.currentPlayer;
   const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
-  const sharedStackOwner = (state.decks.player1 || []).length ? 'Player 1' : ((state.decks.player2 || []).length ? 'Player 2' : '');
-  const sharedStackDeck = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+  const sharedStackOwner = (state.decks.player1 || []).length ? 'your' : ((state.decks.player2 || []).length ? "the opponent's" : '');
+  const sharedStackDeck = sharedStackOwner === 'your' ? (state.decks.player1 || []) : (state.decks.player2 || []);
   const sharedStackCount = sharedStackDeck.length;
   const p1Validation = validateDeckForMode(state.decks.player1 || [], mode);
   const p2Validation = validateDeckForMode(state.decks.player2 || [], mode);
@@ -2529,8 +2561,8 @@ function ModeStudioScreen() {
         compact: true
       })
     : `<div class="grid grid-2" style="gap:12px">
-        ${deckValidationPanelHtml(p1Validation, { id: 'studioP1Validation', title: 'Player 1 Deck', compact: true })}
-        ${deckValidationPanelHtml(p2Validation, { id: 'studioP2Validation', title: 'Player 2 Deck', compact: true })}
+        ${deckValidationPanelHtml(p1Validation, { id: 'studioP1Validation', title: 'Your Deck', compact: true })}
+        ${deckValidationPanelHtml(p2Validation, { id: 'studioP2Validation', title: 'Opponent Deck', compact: true })}
       </div>`;
   const availableTabs = [
     ...(mode.build ? ['build'] : []),
@@ -2609,7 +2641,7 @@ function ModeStudioScreen() {
         </div>
         ${rules.sharedLibrary ? `<div class="mode-note mt-4">
           ${sharedStackReady
-            ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards).`
+            ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner} deck as one center stack (${sharedStackCount} cards).`
             : `No ${htmlEscape(rules.sharedLabel || 'shared library')} loaded yet.`}
         </div>` : ''}
         <div class="card p-3 mt-4 playlist-card">
@@ -2762,9 +2794,9 @@ function BattleMenu()  {
   const mode = currentModeConfig();
   const rules = getModeRules(mode);
   const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
-  const sharedStackOwner = (state.decks.player1 || []).length ? 'Player 1' : ((state.decks.player2 || []).length ? 'Player 2' : '');
-  const sharedStackCount = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
-  const sharedStackDeck = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+  const sharedStackOwner = (state.decks.player1 || []).length ? 'your' : ((state.decks.player2 || []).length ? "the opponent's" : '');
+  const sharedStackCount = sharedStackOwner === 'your' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
+  const sharedStackDeck = sharedStackOwner === 'your' ? (state.decks.player1 || []) : (state.decks.player2 || []);
   const battleValidationHtml = rules.sharedLibrary
     ? deckValidationPanelHtml(validateDeckForMode(sharedStackDeck, mode), {
         id: 'battleDeckValidation',
@@ -2772,8 +2804,8 @@ function BattleMenu()  {
         compact: true
       })
     : `<div class="grid grid-2" style="gap:12px;margin-top:12px">
-        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'p1DeckValidation', title: 'Player 1 Deck', compact: true })}
-        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'p2DeckValidation', title: 'Player 2 Deck', compact: true })}
+        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'p1DeckValidation', title: 'Your Deck', compact: true })}
+        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'p2DeckValidation', title: state.vsAI ? 'Bot Deck' : 'Opponent Deck', compact: true })}
       </div>`;
 
   div.innerHTML = `
@@ -2793,7 +2825,7 @@ function BattleMenu()  {
             ${mode.note ? `<p class="mode-note mt-4">${htmlEscape(mode.note)}</p>` : ''}
             ${rules.sharedLibrary ? `<p class="mode-note mt-4">
               ${sharedStackReady
-                ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards).`
+                ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner} deck as one center stack (${sharedStackCount} cards).`
                 : `No shared center stack loaded yet. Build, import, or generate one before starting ${htmlEscape(mode.title)}.`}
             </p>` : ''}
             ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeBattle" class="btn btn-secondary text-sm mt-4">Generate Starter Cube Stack</button>' : ''}
@@ -2917,9 +2949,11 @@ function BattleMenu()  {
   div.querySelectorAll('.difficultyBtn').forEach(btn => {
     btn.onclick = () => {
       state.aiDifficulty = btn.dataset.diff;
-      div.querySelectorAll('.difficultyBtn').forEach(b => b.classList.toggle('active', b === btn));
-      showBlurb();
+      // Auto-built opponents (Horde, Boss) are composed per difficulty, so
+      // rebuild them now rather than surprising the player at game start.
+      applyAutoDeck(mode);
       scheduleSave();
+      render();
     };
   });
 
@@ -4386,7 +4420,9 @@ function DraftOffRoom(){
   const me = state.currentPlayer;
 const myTurn = D.off.isLocal ? true : (D.off.currentPicker === me);
 const status = D.off.isLocal
-  ? (D.off.currentPicker === 1 ? 'Player 1 pick' : 'Player 2 pick')
+  ? (D.off.vsBot
+        ? (D.off.currentPicker === 1 ? 'Your pick' : 'Bot is picking…')
+        : (D.off.currentPicker === 1 ? 'Player 1 pick' : 'Player 2 pick'))
   : (myTurn ? 'Your pick' : 'Waiting for opponent…');
 
   const wrap = document.createElement('div');
@@ -4598,8 +4634,8 @@ function WinstonSetup(){
         <input id="winstonPoolSize" class="input mb-3" type="number" min="24" max="180" value="90">
         <div class="flex" style="gap:8px;flex-wrap:wrap">
           <button id="useCollectionPool" class="btn btn-secondary" ${collectionCount < 24 ? 'disabled' : ''}>Use Collection (${collectionCount})</button>
-          <button id="useP1Pool" class="btn btn-secondary" ${p1Count < 24 ? 'disabled' : ''}>Use P1 Deck (${p1Count})</button>
-          <button id="useP2Pool" class="btn btn-secondary" ${p2Count < 24 ? 'disabled' : ''}>Use P2 Deck (${p2Count})</button>
+          <button id="useP1Pool" class="btn btn-secondary" ${p1Count < 24 ? 'disabled' : ''}>Use Your Deck (${p1Count})</button>
+          <button id="useP2Pool" class="btn btn-secondary" ${p2Count < 24 ? 'disabled' : ''}>Use Opponent Deck (${p2Count})</button>
           <button id="useStarterPool" class="btn btn-primary">Generated Starter Cube</button>
         </div>
         <p class="text-xs text-gray mt-4">Winston uses three piles. Skip a pile to add a facedown card to it, or take the pile and pass the turn.</p>
@@ -6129,6 +6165,15 @@ function cloneCard(base){
       <button id="changeMode" class="btn btn-secondary h-9 px-3 text-sm">Change Format</button>
     </div>
 
+    <div class="flex mb-4" style="gap:10px;align-items:center;flex-wrap:wrap">
+      <span class="text-xs text-gray" style="letter-spacing:.06em;text-transform:uppercase">Editing</span>
+      <div class="segmented" role="group" aria-label="Which deck to edit">
+        <button id="editDeck1" class="${state.currentPlayer === 1 ? 'active' : ''}">Your deck · ${(state.decks.player1 || []).length}</button>
+        <button id="editDeck2" class="${state.currentPlayer === 2 ? 'active' : ''}">Opponent deck · ${(state.decks.player2 || []).length}</button>
+      </div>
+      ${state.currentPlayer === 2 ? '<span class="text-xs text-gray">The bot plays this deck in vs-AI games.</span>' : ''}
+    </div>
+
     <div class="card p-4 mb-4">
       <div class="flex justify-between" style="align-items:flex-start;gap:12px;">
         <div>
@@ -6268,6 +6313,12 @@ Island x14
 
   const changeModeBtn = div.querySelector('#changeMode');
   if (changeModeBtn) changeModeBtn.onclick = () => { state.modeIntent = 'build'; state.screen = 'modes'; render(); };
+
+  // Which deck the builder edits (replaces the old P1/P2 profile switcher).
+  const editDeck1 = div.querySelector('#editDeck1');
+  const editDeck2 = div.querySelector('#editDeck2');
+  if (editDeck1) editDeck1.onclick = () => { state.currentPlayer = 1; render(); };
+  if (editDeck2) editDeck2.onclick = () => { state.currentPlayer = 2; render(); };
 
   const exportCTA = div.querySelector('#exportCTA');
   if (exportCTA) exportCTA.onclick = () => saveDeck();
@@ -6767,9 +6818,9 @@ function GameBoard() {
     const rules = getModeRules(mode);
     applyAutoDeck(mode);
     const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
-    const sharedStackOwner = (state.decks.player1 || []).length ? 'Player 1' : ((state.decks.player2 || []).length ? 'Player 2' : '');
-    const sharedStackCount = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
-    const sharedStackDeck = sharedStackOwner === 'Player 1' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+    const sharedStackOwner = (state.decks.player1 || []).length ? 'your' : ((state.decks.player2 || []).length ? "the opponent's" : '');
+    const sharedStackCount = sharedStackOwner === 'your' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
+    const sharedStackDeck = sharedStackOwner === 'your' ? (state.decks.player1 || []) : (state.decks.player2 || []);
     const decksReady = rules.sharedLibrary ? sharedStackReady : ((state.decks.player1 || []).length > 0 && (state.decks.player2 || []).length > 0);
     const waitForHost = state.onlineMode && !state.isHost;
     const readyMessage = !decksReady
@@ -6782,8 +6833,8 @@ function GameBoard() {
           compact: true
         })
       : `<div class="grid grid-2" style="gap:12px;margin-top:12px;text-align:left">
-          ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'readyP1DeckValidation', title: 'Player 1 Deck', compact: true })}
-          ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'readyP2DeckValidation', title: 'Player 2 Deck', compact: true })}
+          ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'readyP1DeckValidation', title: 'Your Deck', compact: true })}
+          ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'readyP2DeckValidation', title: state.vsAI ? 'Bot Deck' : 'Opponent Deck', compact: true })}
         </div>`;
     
     div.innerHTML = `
@@ -6805,7 +6856,7 @@ function GameBoard() {
               <li><strong>Starting life:</strong> ${rules.health}${rules.opponentHealth ? ` — opponent starts at ${rules.opponentHealth}` : ''}.</li>
               <li><strong>Each turn:</strong> you untap and draw automatically when the turn passes to you.</li>
               <li><strong>Deck:</strong> ${htmlEscape(deckSizeSummary(mode))}.</li>
-              ${rules.botOpponent ? '<li><strong>Opponent:</strong> played automatically by the computer.</li>' : ''}
+              ${rules.botOpponent ? '<li><strong>Opponent:</strong> played automatically by the computer. Its deck and life scale with the chosen difficulty.</li>' : ''}
               ${state.vsAI ? `<li><strong>Bot difficulty:</strong> ${htmlEscape((window.GALDUR_AI && window.GALDUR_AI.difficulty().label) || 'Normal')}.</li>` : ''}
             </ul>
             ${(rules.modeRules || []).length ? `
@@ -6817,7 +6868,7 @@ function GameBoard() {
           </div>
           ${rules.sharedLibrary ? `<div class="mode-note mb-4" style="text-align:left">
             ${sharedStackReady
-              ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards). Both players draw from that stack.`
+              ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner} deck as one center stack (${sharedStackCount} cards). Both players draw from that stack.`
               : `Build, import, or generate a shared center stack before starting ${htmlEscape(mode.title)}.`}
           </div>` : ''}
           ${readyValidationHtml}
@@ -7501,14 +7552,16 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               ${state.coop ? `<span class="badge">🤝 Co-op • Survivor ${state.coopSeat}</span>` : ''}
               ${sharedGame ? `<span class="badge">${htmlEscape(shared.label)}</span>` : ''}
             </div>
-            <span class="text-xs" style="font-weight: bold;">Player ${state.activePlayer}${state.activePlayer === state.currentPlayer ? ' (YOU)' : ''}</span>
-            <div class="text-xs text-gray">Current Turn • ${htmlEscape(state.gameState.phase || 'Main')}</div>
+            <span class="turn-pill ${state.activePlayer === state.currentPlayer ? 'yours' : 'theirs'}">${
+              state.activePlayer === state.currentPlayer ? 'Your turn'
+                : state.vsAI ? "Bot's turn" : "Opponent's turn"}</span>
+            <div class="text-xs text-gray">${htmlEscape(state.gameState.phase || 'Main')} phase</div>
             <div class="flex battle-phase-row" style="gap:4px;justify-content:center;flex-wrap:wrap;margin-top:4px">
               ${TURN_PHASES.map(phase => `<button class="phaseBtn btn ${state.gameState.phase === phase ? 'btn-blue' : 'btn-secondary'} text-xs" data-phase="${phase}">${phase}</button>`).join('')}
               <button id="nextPhase" class="btn btn-purple text-xs">Next</button>
             </div>
           </div>
-          <button id="endTurn" class="btn btn-blue text-xs">End Turn →</button>
+          <button id="endTurn" class="btn ${state.activePlayer === state.currentPlayer ? 'btn-primary end-turn-ready' : 'btn-secondary'} text-xs">End Turn →</button>
         </div>
         <div class="battle-scroll" style="flex: 1; overflow-y: auto; padding: 16px;">
           <div class="mb-4 text-center battle-player-card opponent">
@@ -7782,6 +7835,21 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         state.selectedCard = state.selectedCard === idx ? null : idx;
         state.selectedFieldCard = null;
         render();
+      };
+
+      // Double-click: play straight to the card's natural zone. The click
+      // handler fires first, but the action's re-render supersedes it.
+      cardDiv.title = 'Click for options · double-click to play';
+      cardDiv.ondblclick = () => {
+        const zone = defaultZoneForCard(card);
+        executeGameAction('hand_to_field', { cardName: card.name, zone }, () => {
+          const cardToPlace = initBattleCard({ ...card, tapped: false });
+          me[zone].push(cardToPlace);
+          me.hand.splice(idx, 1);
+          state.selectedCard = null;
+          state.selectedFieldCard = null;
+          checkLandGameVictory();
+        }, `Played ${card.name} to ${battleZoneLabel(zone)}.`);
       };
       
       cardDiv.onmouseenter = () => {
@@ -8176,8 +8244,9 @@ if (card.stun && card.stun > 0) {
         }, 2000);
       }
     }, () => {
-      const drew = state.turnDrewName ? ` Player ${nextPlayer} untaps and draws.` : '';
-      return `Turn passed to Player ${nextPlayer}.${drew}`;
+      const who = seatLabel(nextPlayer);
+      const drew = state.turnDrewName ? ` ${who} untap${who === 'You' ? '' : 's'} and draw${who === 'You' ? '' : 's'}.` : '';
+      return `Turn passed to ${seatLabel(nextPlayer, { capital: false })}.${drew}`;
     }, { ms: 1200 });
   };
   
