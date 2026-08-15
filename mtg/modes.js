@@ -230,8 +230,15 @@ const MTG_MODE_LIBRARY = [
     target: 100,
     sizePolicy: { kind: 'min', count: 40 },
     autoDeck: 'horde',
+    botOpponent: true,        // player 2 is always machine-driven
     coop: true,
-    note: 'Player 2 is the automated Horde deck. Start it with Play vs AI and the Horde takes its own turns; Horde Reveal and Horde Attack still work manually.'
+    openingHand: 7,
+    rules: [
+      'You are the survivors. Player 2 is an automated Horde deck.',
+      'Each Horde turn it reveals cards until a non-token, then attacks with everything that is not summoning sick.',
+      'Survivors win by emptying the Horde library; the Horde wins by reducing you to 0 life.'
+    ],
+    note: 'Player 2 is the automated Horde deck and takes its own turns. Horde Reveal and Horde Attack still work manually if you want to step through it.'
   },
   {
     id: 'boss',
@@ -244,10 +251,17 @@ const MTG_MODE_LIBRARY = [
     target: 60,
     sizePolicy: { kind: 'min', count: 40 },
     autoDeck: 'boss',
+    botOpponent: true,        // player 2 is always machine-driven
     coop: true,
+    openingHand: 7,
+    rules: [
+      'One or two survivors share a board against an AI boss with 40 life.',
+      'The boss plays its own turns and summons a growing Horror as the rounds pass.',
+      'Use the Attack button to swing; the boss assigns its own blockers.'
+    ],
     health: 30,             // survivors start higher; the boss out-scales them
     opponentHealth: 40,
-    note: 'Start with Play vs AI. The boss plays its own turns and grows stronger each round. In co-op, two survivors share one board and pass the device with the Pass to Teammate button.'
+    note: 'The boss plays its own turns and grows stronger each round. In co-op, two survivors share one board and pass the device with the Pass to Teammate button.'
   }
 ];
 

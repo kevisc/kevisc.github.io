@@ -611,9 +611,35 @@ function makeDandanLibrary(size = 80){
   })));
 }
 
+// Generated decks are tagged so a later mode can tell "this is leftover Horde
+// filler" from "this is the deck the player actually built".
+function tagAutoDeck(cards, kind){
+  (cards || []).forEach(c => { c.autoDeckKind = kind; });
+  return cards;
+}
+
+function deckAutoKind(deck){
+  const cards = deck || [];
+  if (!cards.length) return '';
+  const kind = cards[0].autoDeckKind || '';
+  return kind && cards.every(c => c.autoDeckKind === kind) ? kind : '';
+}
+
+// Replaceable when empty, or when it is a generated deck for a different mode.
+function deckReplaceableBy(deck, kind){
+  const cards = deck || [];
+  if (!cards.length) return true;
+  const existing = deckAutoKind(cards);
+  return !!existing && existing !== kind;
+}
+
 function setupHordeDecks(options = {}){
-  if (options.forceSurvivor || !(state.decks.player1 || []).length) state.decks.player1 = makeStarterSurvivorDeck('player1');
-  if (options.forceHorde || !(state.decks.player2 || []).length) state.decks.player2 = makeHordeDeck();
+  if (options.forceSurvivor || deckReplaceableBy(state.decks.player1, 'survivor')) {
+    state.decks.player1 = tagAutoDeck(makeStarterSurvivorDeck('player1'), 'survivor');
+  }
+  if (options.forceHorde || deckReplaceableBy(state.decks.player2, 'horde')) {
+    state.decks.player2 = tagAutoDeck(makeHordeDeck(), 'horde');
+  }
 }
 
 // The boss plays a real deck (lands + threats) so the standard AI turn logic
@@ -646,8 +672,12 @@ function makeBossDeck(){
 }
 
 function setupBossDecks(options = {}){
-  if (options.forceSurvivor || !(state.decks.player1 || []).length) state.decks.player1 = makeStarterSurvivorDeck('player1');
-  if (options.forceBoss || !(state.decks.player2 || []).length) state.decks.player2 = makeBossDeck();
+  if (options.forceSurvivor || deckReplaceableBy(state.decks.player1, 'survivor')) {
+    state.decks.player1 = tagAutoDeck(makeStarterSurvivorDeck('player1'), 'survivor');
+  }
+  if (options.forceBoss || deckReplaceableBy(state.decks.player2, 'boss')) {
+    state.decks.player2 = tagAutoDeck(makeBossDeck(), 'boss');
+  }
 }
 
 // Single dispatch point so every entry into an auto-deck mode seeds the same way.
@@ -710,9 +740,9 @@ function setupLandGameDecks(options = {}){
     }
     return cards;
   };
-  const replaceable = (deck) => !(deck || []).length || isBasicLandGameDeck(deck);
-  if (options.force || replaceable(state.decks.player1)) state.decks.player1 = makeDeck('p1');
-  if (options.force || replaceable(state.decks.player2)) state.decks.player2 = makeDeck('p2');
+  const replaceable = (deck) => !(deck || []).length || isBasicLandGameDeck(deck) || deckReplaceableBy(deck, 'land-game');
+  if (options.force || replaceable(state.decks.player1)) state.decks.player1 = tagAutoDeck(makeDeck('p1'), 'land-game');
+  if (options.force || replaceable(state.decks.player2)) state.decks.player2 = tagAutoDeck(makeDeck('p2'), 'land-game');
 }
 
 function cloneForGame(card, gameId){
@@ -836,6 +866,9 @@ function getModeRules(modeOrId){
     startingHand: mode.startingHand || 0,
     noMulligan: !!mode.noMulligan,
     autoDeck: mode.autoDeck || '',
+    botOpponent: !!mode.botOpponent,    // player 2 is machine-driven in this mode
+    openingHand: mode.openingHand || 0,
+    modeRules: Array.isArray(mode.rules) ? mode.rules : [],
     health: mode.health || 20,          // starting life; emptyPlayerState reads this
     opponentHealth: mode.opponentHealth || 0,   // asymmetric modes (boss)
     sharedLibrary,
@@ -852,6 +885,19 @@ function getModeRules(modeOrId){
       ...(mode.id === 'horde' ? ['horde'] : [])
     ]
   };
+}
+
+// Human-readable deck requirement, e.g. "exactly 100 cards, singleton".
+function deckSizeSummary(modeOrId){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : modeOrId;
+  const policy = deckSizePolicy(mode);
+  const kindText = policy.kind === 'exact' ? `exactly ${policy.count}`
+    : policy.kind === 'min' ? `at least ${policy.count}`
+    : `around ${policy.count}`;
+  const extras = [];
+  if (mode.singleton) extras.push('singleton');
+  else if (mode.maxCopies) extras.push(`max ${mode.maxCopies} copies`);
+  return `${kindText} cards${extras.length ? ', ' + extras.join(', ') : ''}`;
 }
 
 function isBasicLandDeckCard(card){
@@ -2527,7 +2573,11 @@ function ModeStudioScreen() {
       <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Match Readiness</h2>
       ${matchValidationHtml}
       <div class="flex mt-4" style="gap:10px;flex-wrap:wrap">
-        <button id="studioPlayLocal" class="btn btn-green" aria-label="Play Local">Play Local</button>
+        ${rules.botOpponent
+          ? `<button id="studioPlayAI" class="btn btn-primary" aria-label="Start">${mode.id === 'horde' ? 'Fight the Horde' : 'Fight the Boss'}</button>`
+          : `<button id="studioPlayAI" class="btn btn-primary" aria-label="Play vs AI">🤖 Play vs AI</button>`}
+        ${mode.coop ? '<button id="studioPlayCoop" class="btn btn-purple" aria-label="Co-op vs AI">🤝 Co-op vs AI</button>' : ''}
+        <button id="studioPlayLocal" class="btn btn-green" aria-label="Play Local">${rules.botOpponent ? 'Manual (no bot)' : 'Play Local (2 players)'}</button>
         <button id="studioHost" class="btn btn-blue" aria-label="Host Game">Host Online</button>
         <button id="studioJoin" class="btn btn-secondary" aria-label="Join Game">Join Online</button>
       </div>
@@ -2657,12 +2707,29 @@ function ModeStudioScreen() {
     toast('Basic Land Game decks regenerated.');
     render();
   });
-  bind('#studioPlayLocal', () => {
+  const studioStart = (opts = {}) => {
     ensureAutoDecks();
     state.onlineMode = false;
+    state.vsAI = !!opts.vsAI;
+    state.coop = !!opts.coop;
+    state.coopSeat = 1;
+    state.bossRound = 0;
+    if (opts.vsAI) {
+      state.currentPlayer = 1;             // the human always sits in seat 1
+      // Generate an opponent deck for ordinary formats that have none.
+      if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, 'jumpstart')) {
+        const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
+        const built = buildJumpstartDeck(themes[0], themes[1]);
+        state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
+        toast(`AI deck generated: ${built.name}.`);
+      }
+    }
     state.screen = 'game';
     render();
-  });
+  };
+  bind('#studioPlayAI', () => studioStart({ vsAI: true }));
+  bind('#studioPlayCoop', () => studioStart({ vsAI: true, coop: true }));
+  bind('#studioPlayLocal', () => studioStart({}));
   bind('#studioHost', () => {
     ensureAutoDecks();
     const deck = (state.decks && state.decks[myKey]) || [];
@@ -2828,10 +2895,10 @@ function BattleMenu()  {
     state.bossRound = 0;
     state.currentPlayer = 1;            // the human always sits in seat 1 vs the AI
     applyAutoDeck(mode);
-    if (!mode.autoDeck && !(state.decks.player2 || []).length) {
+    if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, 'jumpstart')) {
       const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
       const built = buildJumpstartDeck(themes[0], themes[1]);
-      state.decks.player2 = built.cards;
+      state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
       toast(`AI deck generated: ${built.name}.`);
     }
     state.screen = 'game';
@@ -6446,7 +6513,7 @@ if (statsToggle && statsCard){
 // ---------------------------------------------------------------------------
 
 const BATTLE_ZONES = [
-  { key: 'creatureField', label: 'Creatures, Etc.',         short: 'Creatures' },
+  { key: 'creatureField', label: 'Creatures',               short: 'Creatures' },
   { key: 'supportField',  label: 'Artifacts, Enchantments', short: 'Artifacts' },
   { key: 'landField',     label: 'Lands & Rocks',           short: 'Lands' }
 ];
@@ -6729,14 +6796,36 @@ function GameBoard() {
         <div class="card text-center">
           <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">⚔️ Ready to Play?</h1>
           <div class="mode-family" style="margin:0 auto 8px">${htmlEscape(mode.title)}</div>
-          ${mode.note ? `<div class="mode-note mb-4" style="text-align:left">${htmlEscape(mode.note)}</div>` : ''}
+
+          <!-- Game setup + a short how-to-play for this format -->
+          <div class="setup-card mb-4">
+            <div class="setup-title">How this game is set up</div>
+            <ul class="setup-list">
+              <li><strong>Opening hand:</strong> ${rules.startingHand || rules.openingHand || 7} cards dealt to each player.</li>
+              <li><strong>Starting life:</strong> ${rules.health}${rules.opponentHealth ? ` — opponent starts at ${rules.opponentHealth}` : ''}.</li>
+              <li><strong>Each turn:</strong> you untap and draw automatically when the turn passes to you.</li>
+              <li><strong>Deck:</strong> ${htmlEscape(deckSizeSummary(mode))}.</li>
+              ${rules.botOpponent ? '<li><strong>Opponent:</strong> played automatically by the computer.</li>' : ''}
+              ${state.vsAI ? `<li><strong>Bot difficulty:</strong> ${htmlEscape((window.GALDUR_AI && window.GALDUR_AI.difficulty().label) || 'Normal')}.</li>` : ''}
+            </ul>
+            ${(rules.modeRules || []).length ? `
+              <div class="setup-title mt-3">Rules of ${htmlEscape(mode.title)}</div>
+              <ul class="setup-list">
+                ${rules.modeRules.map(r => `<li>${htmlEscape(r)}</li>`).join('')}
+              </ul>` : ''}
+            ${mode.note ? `<div class="text-xs text-gray mt-3">${htmlEscape(mode.note)}</div>` : ''}
+          </div>
           ${rules.sharedLibrary ? `<div class="mode-note mb-4" style="text-align:left">
             ${sharedStackReady
               ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner}'s deck as one center stack (${sharedStackCount} cards). Both players draw from that stack.`
               : `Build, import, or generate a shared center stack before starting ${htmlEscape(mode.title)}.`}
           </div>` : ''}
           ${readyValidationHtml}
-          <p class="text-gray mb-8">${state.onlineMode ? 'Waiting for both players to be ready...' : 'Local game - Both players ready!'}</p>
+          <p class="text-gray mb-8">${
+            state.onlineMode ? 'Waiting for both players to be ready…'
+              : state.coop ? 'Co-op: two survivors share one board against the computer.'
+              : state.vsAI ? 'The computer plays the opposing seat and takes its own turns.'
+              : 'Local game — two players share this device.'}</p>
           <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${(!decksReady || waitForHost) ? 'disabled' : ''}>Start Game</button>
           ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeReady" class="btn btn-secondary mt-4">Generate Starter Cube Stack</button>' : ''}
           ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanReady" class="btn btn-secondary mt-4">Generate Dandan Library</button>' : ''}
@@ -6809,15 +6898,18 @@ function GameBoard() {
       const p2 = shuffle(state.decks.player2.map((c, i) => cloneForGame(c, 'p2-' + i)));
 
       state.battleMode = mode.id;
+      // Horde and Boss always have a machine-driven player 2, however the game
+      // was started — otherwise "Play Local" leaves nobody to run them and the
+      // turn just stalls after you pass.
+      if (rules.botOpponent && !state.onlineMode) state.vsAI = true;
       state.gameState = normalizeGameStateZones(buildGameStateForMode(mode, p1, p2));
       if (mode.commanderZone) {
         seedCommandZoneFromDeck(state.gameState.player1, mode);
         seedCommandZoneFromDeck(state.gameState.player2, mode);
       }
-      // Deal opening hands. Human-vs-human play stays a manual sandbox (draw
-      // when you like); vs-AI games deal 7 so the computer has cards to play
-      // and the human isn't clicking Draw seven times to start.
-      const openingHand = rules.startingHand || (state.vsAI ? 7 : 0);
+      // Deal opening hands for every mode. Modes may override the size
+      // (the Basic Land Game opens on five); everything else opens on seven.
+      const openingHand = rules.startingHand || rules.openingHand || 7;
       if (openingHand) {
         const sharedZone = state.gameState.shared;
         for (const who of ['player1', 'player2']) {
@@ -8048,7 +8140,7 @@ if (card.stun && card.stun > 0) {
       return me.health;
     }, `Player ${state.currentPlayer} gains 1 life.`, { ms: 1200 });
   };
-  if (endBtn) endBtn.onclick = () => { 
+  if (endBtn) endBtn.onclick = () => {
     const previousPlayer = state.activePlayer;
     const nextPlayer = state.activePlayer === 1 ? 2 : 1;
     executeGameAction('end_turn', { from: previousPlayer, to: nextPlayer }, () => {
@@ -8056,6 +8148,26 @@ if (card.stun && card.stun > 0) {
       state.selectedCard = null;
       state.selectedFieldCard = null;
       state.selectedZoneCard = null;
+
+      // Untap and draw for whoever is taking over, so a turn starts ready to
+      // play instead of needing two manual clicks. The AI runs its own upkeep.
+      const takingOver = state.gameState['player' + nextPlayer];
+      let drewName = '';
+      if (takingOver && !(state.vsAI && nextPlayer === 2)) {
+        battlefieldCards(takingOver).forEach(c => {
+          if (!c.tapped) return;
+          if (typeof c.stun === 'number' && c.stun > 0) c.stun -= 1;
+          else c.tapped = false;
+        });
+        const drawPile = sharedGame ? shared.deck : takingOver.deck;
+        if (drawPile.length) {
+          const card = initBattleCard(drawPile.shift());
+          takingOver.hand.push(card);
+          drewName = card.name;
+        }
+      }
+      state.turnDrewName = drewName;
+
       if (state.activePlayer === state.currentPlayer) {
         state.showTurnNotification = true;
         setTimeout(() => {
@@ -8063,7 +8175,10 @@ if (card.stun && card.stun > 0) {
           render();
         }, 2000);
       }
-    }, `Turn passed to Player ${nextPlayer}.`, { ms: 1200 });
+    }, () => {
+      const drew = state.turnDrewName ? ` Player ${nextPlayer} untaps and draws.` : '';
+      return `Turn passed to Player ${nextPlayer}.${drew}`;
+    }, { ms: 1200 });
   };
   
   // Token creation modal
