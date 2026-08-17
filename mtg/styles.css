@@ -126,6 +126,16 @@
     }
     .end-turn-ready { animation: endTurnPulse 2.2s ease-in-out infinite; }
 
+    /* Saved deck shelf */
+    .deck-shelf { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .deck-shelf-item {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+      background: rgba(15, 23, 42, .55); transition: border-color .16s ease, transform .16s ease;
+    }
+    .deck-shelf-item:hover { border-color: rgba(99, 102, 241, .5); transform: translateY(-1px); }
+    .deck-shelf-name { font-weight: 750; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
     .conn-warn {
       text-align: left; font-size: 12px; line-height: 1.5;
       background: rgba(251, 191, 36, .12); border: 1px solid rgba(251, 191, 36, .45);

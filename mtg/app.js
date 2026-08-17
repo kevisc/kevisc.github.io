@@ -47,6 +47,7 @@ const state = {
   strictMana: false,         // enforce paying costs by tapping lands
   landsPlayedThisTurn: 0,    // strict mode: one land per turn
   aiActing: false,           // the bot is visibly taking its turn
+  deckLibrary: [],           // named saved decks: { id, name, modeId, cards, savedAt }
   landArt: {},               // chosen basic-land printing per land name
   landPicker: null,          // { land, printings, loading } while the picker is open
   bossRound: 0,
@@ -923,6 +924,57 @@ function getModeRules(modeOrId){
 }
 
 // Human-readable deck requirement, e.g. "exactly 100 cards, singleton".
+// ---------------------------------------------------------------------------
+// Deck library
+//
+// Named decks the player owns, independent of which seat they occupy. This is
+// what replaces the old "P1 deck / P2 deck" mental model: you keep a shelf of
+// decks and choose which one to bring to a game.
+// ---------------------------------------------------------------------------
+
+function saveDeckToLibrary(name, cards, modeId){
+  const clean = (cards || []).filter(Boolean);
+  if (!clean.length) { toast('Nothing to save — the deck is empty.'); return null; }
+  const entry = {
+    id: makeId('deck'),
+    name: (name || '').trim() || `Untitled deck (${clean.length})`,
+    modeId: modeId || state.selectedMode || 'casual',
+    cards: cloneCards(clean),
+    savedAt: Date.now()
+  };
+  state.deckLibrary = state.deckLibrary || [];
+  // Overwrite a deck of the same name rather than silently accumulating copies.
+  const existing = state.deckLibrary.findIndex(d => d.name.toLowerCase() === entry.name.toLowerCase());
+  if (existing >= 0) state.deckLibrary[existing] = entry;
+  else state.deckLibrary.unshift(entry);
+  state.deckLibrary = state.deckLibrary.slice(0, 40);
+  scheduleSave();
+  return entry;
+}
+
+function loadDeckFromLibrary(deckId, slotKey){
+  const entry = (state.deckLibrary || []).find(d => d.id === deckId);
+  if (!entry) { toast('Deck not found.'); return null; }
+  state.decks[slotKey || ('player' + state.currentPlayer)] = cloneCards(entry.cards);
+  if (entry.modeId && entry.modeId !== state.selectedMode) {
+    state.selectedMode = entry.modeId;
+    state.battleMode = entry.modeId;
+  }
+  scheduleSave();
+  return entry;
+}
+
+function deleteDeckFromLibrary(deckId){
+  state.deckLibrary = (state.deckLibrary || []).filter(d => d.id !== deckId);
+  scheduleSave();
+}
+
+function libraryDeckSummary(entry){
+  const mode = getModeConfig(entry.modeId);
+  const lands = entry.cards.filter(c => ((c.type || '') + '').toLowerCase().includes('land')).length;
+  return `${entry.cards.length} cards · ${lands} lands · ${mode.title}`;
+}
+
 // User-facing name for a seat. "Player 1 / Player 2" only ever mattered to the
 // engine; people think in terms of you, the bot, or your opponent.
 function seatLabel(n, { capital = true } = {}){
@@ -1686,6 +1738,7 @@ function saveLocal(){
       battleMode: state.battleMode,
       studioTab: state.studioTab,
       aiDifficulty: state.aiDifficulty,
+      deckLibrary: state.deckLibrary || [],
       strictMana: !!state.strictMana,
       landArt: state.landArt || {}
     }));
@@ -1708,6 +1761,7 @@ function loadLocal(){
     if (data.modeSetups && typeof data.modeSetups === 'object') state.modeSetups = data.modeSetups;
     if (data.landArt && typeof data.landArt === 'object') state.landArt = data.landArt;
     if (data.aiDifficulty) state.aiDifficulty = data.aiDifficulty;
+    if (Array.isArray(data.deckLibrary)) state.deckLibrary = data.deckLibrary;
     if (typeof data.strictMana === 'boolean') state.strictMana = data.strictMana;
     if (data.selectedMode) state.selectedMode = data.selectedMode;
     if (data.battleMode) state.battleMode = data.battleMode;
@@ -2027,7 +2081,14 @@ function setupDataChannel(channel) {
   state.dataChannel = channel;
   state.dataChannel.onopen = () => {
     console.log('Connected!');
-    state.dataChannel.send(JSON.stringify({ type: 'deckSync', decks: state.decks }));
+    // Send my deck tagged with my seat. Sending the whole slot map fails now
+    // that everyone builds into the same local slot: both sides would look for
+    // the opponent under a slot name the sender never used.
+    state.dataChannel.send(JSON.stringify({
+      type: 'deckSync',
+      from: state.currentPlayer,
+      deck: state.decks['player' + state.currentPlayer] || []
+    }));
 
     // Auto-enter the Draft-off room and start the first pack (host only)
 if (state.screen === 'draft' && state.draft && state.draft.mode === 'draftoff') {
@@ -2061,9 +2122,12 @@ state.dataChannel.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
     if (data.type === 'deckSync') {
-      const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
-      if (data.decks && data.decks[oppKey]) {
-        state.decks[oppKey] = data.decks[oppKey];
+      if (typeof data.from === 'number' && Array.isArray(data.deck)) {
+        state.decks['player' + data.from] = data.deck;          // file under the sender's seat
+      } else if (data.decks) {
+        // Back-compat with peers on the previous build.
+        const oppKey = 'player' + (state.currentPlayer === 1 ? 2 : 1);
+        if (data.decks[oppKey]) state.decks[oppKey] = data.decks[oppKey];
       }
       render();
 
@@ -2315,6 +2379,12 @@ async function joinOnlineRoom(offerStr) {
     state.onlineMode = true;
     state.isHost = false;
     state.currentPlayer = 2; // joiner = player 2
+    // Everyone builds into slot 1 locally, so move this player's deck to the
+    // seat they actually occupy online — otherwise their own side looks empty.
+    if ((state.decks.player1 || []).length && !(state.decks.player2 || []).length) {
+      state.decks.player2 = state.decks.player1;
+      state.decks.player1 = [];
+    }
     state.connectionStatus = 'gathering';
     watchConnection(pc);
     pc.ondatachannel = (e) => setupDataChannel(e.channel);
@@ -2430,6 +2500,12 @@ async function completeConnection(answerStr) {
 }
 
 function disconnectOnline() {
+  // Coming back offline, the player is seat 1 again — bring their deck along.
+  if (state.currentPlayer === 2 && (state.decks.player2 || []).length) {
+    state.decks.player1 = state.decks.player2;
+    state.decks.player2 = [];
+  }
+  state.currentPlayer = 1;
   state.leavingOnline = true;             // suppress our own onclose alert
   if (state.dataChannel) state.dataChannel.close();
   if (state.peerConnection) state.peerConnection.close();
@@ -3129,6 +3205,23 @@ function BattleMenu()  {
         </div>
       </div>
 
+      ${(state.deckLibrary || []).length ? `
+      <div class="card p-4 mb-4">
+        <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-weight:800;font-size:15px">📚 Bring a deck</h3>
+            <p class="text-xs text-gray mt-1">Load one of your saved decks into ${state.vsAI ? 'your seat' : 'a seat'} before starting.</p>
+          </div>
+          <div class="flex" style="gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="bringDeckSelect" class="input" style="width:220px">
+              ${state.deckLibrary.map(d => `<option value="${d.id}">${htmlEscape(d.name)} (${d.cards.length})</option>`).join('')}
+            </select>
+            <button id="bringDeckMine" class="btn btn-secondary text-sm">→ My deck</button>
+            <button id="bringDeckOpp" class="btn btn-secondary text-sm">→ Opponent</button>
+          </div>
+        </div>
+      </div>` : ''}
+
       <div class="card p-4 mb-4 difficulty-card">
         <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
           <div>
@@ -3248,6 +3341,17 @@ function BattleMenu()  {
     if (difficultyBlurb) difficultyBlurb.textContent = entry ? entry.blurb : '';
   };
   showBlurb();
+  const bringSel = div.querySelector('#bringDeckSelect');
+  const bringInto = (slot) => {
+    if (!bringSel) return;
+    const entry = loadDeckFromLibrary(bringSel.value, slot);
+    if (entry) { toast(`${entry.name} → ${slot === 'player1' ? 'your deck' : 'opponent deck'}.`); render(); }
+  };
+  const bringMine = div.querySelector('#bringDeckMine');
+  if (bringMine) bringMine.onclick = () => bringInto('player' + state.currentPlayer);
+  const bringOpp = div.querySelector('#bringDeckOpp');
+  if (bringOpp) bringOpp.onclick = () => bringInto('player' + (state.currentPlayer === 1 ? 2 : 1));
+
   const strictToggle = div.querySelector('#strictManaToggle');
   if (strictToggle) strictToggle.onchange = () => {
     state.strictMana = strictToggle.checked;
@@ -6506,13 +6610,43 @@ function cloneCard(base){
       <button id="changeMode" class="btn btn-secondary h-9 px-3 text-sm">Change Format</button>
     </div>
 
-    <div class="flex mb-4" style="gap:10px;align-items:center;flex-wrap:wrap">
-      <span class="text-xs text-gray" style="letter-spacing:.06em;text-transform:uppercase">Editing</span>
-      <div class="segmented" role="group" aria-label="Which deck to edit">
-        <button id="editDeck1" class="${state.currentPlayer === 1 ? 'active' : ''}">Your deck · ${(state.decks.player1 || []).length}</button>
-        <button id="editDeck2" class="${state.currentPlayer === 2 ? 'active' : ''}">Opponent deck · ${(state.decks.player2 || []).length}</button>
+    <div class="card p-4 mb-4 deck-library">
+      <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <h3 style="font-weight:800;font-size:15px">📚 My Decks</h3>
+          <p class="text-xs text-gray mt-1">Save the deck you are building, then load it into any game.</p>
+        </div>
+        <div class="flex" style="gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="deckNameInput" class="input" style="width:200px" placeholder="Deck name"
+                 value="${htmlEscape(state.lastDeckName || '')}">
+          <button id="saveDeckToLib" class="btn btn-primary text-sm">Save deck</button>
+        </div>
       </div>
-      ${state.currentPlayer === 2 ? '<span class="text-xs text-gray">The bot plays this deck in vs-AI games.</span>' : ''}
+
+      <div class="flex mt-3" style="gap:10px;align-items:center;flex-wrap:wrap">
+        <span class="text-xs text-gray" style="letter-spacing:.06em;text-transform:uppercase">Editing</span>
+        <div class="segmented" role="group" aria-label="Which deck to edit">
+          <button id="editDeck1" class="${state.currentPlayer === 1 ? 'active' : ''}">Your deck · ${(state.decks.player1 || []).length}</button>
+          <button id="editDeck2" class="${state.currentPlayer === 2 ? 'active' : ''}">Opponent deck · ${(state.decks.player2 || []).length}</button>
+        </div>
+        ${state.currentPlayer === 2 ? '<span class="text-xs text-gray">The bot plays this deck in vs-AI games.</span>' : ''}
+      </div>
+
+      ${(state.deckLibrary || []).length ? `
+        <div class="deck-shelf mt-3">
+          ${state.deckLibrary.map(d => `
+            <div class="deck-shelf-item">
+              <div style="min-width:0">
+                <div class="deck-shelf-name">${htmlEscape(d.name)}</div>
+                <div class="text-xs text-gray">${htmlEscape(libraryDeckSummary(d))}</div>
+              </div>
+              <div class="flex" style="gap:6px">
+                <button class="btn btn-secondary text-xs libLoad" data-id="${d.id}">Load</button>
+                <button class="btn btn-red text-xs libDelete" data-id="${d.id}" aria-label="Delete ${htmlEscape(d.name)}">✕</button>
+              </div>
+            </div>`).join('')}
+        </div>`
+      : '<div class="text-xs text-gray mt-3">No saved decks yet — name this one and press Save.</div>'}
     </div>
 
     <div class="card p-4 mb-4">
@@ -6656,6 +6790,31 @@ Island x14
   if (changeModeBtn) changeModeBtn.onclick = () => { state.modeIntent = 'build'; state.screen = 'modes'; render(); };
 
   // Which deck the builder edits (replaces the old P1/P2 profile switcher).
+  const saveDeckBtn = div.querySelector('#saveDeckToLib');
+  if (saveDeckBtn) saveDeckBtn.onclick = () => {
+    const nameInput = div.querySelector('#deckNameInput');
+    const entry = saveDeckToLibrary(nameInput?.value, state.decks[key], state.selectedMode);
+    if (entry) {
+      state.lastDeckName = entry.name;
+      toast(`Saved "${entry.name}".`);
+      render();
+    }
+  };
+  div.querySelectorAll('.libLoad').forEach(btn => {
+    btn.onclick = () => {
+      const entry = loadDeckFromLibrary(btn.dataset.id, key);
+      if (entry) { state.lastDeckName = entry.name; toast(`Loaded "${entry.name}".`); render(); }
+    };
+  });
+  div.querySelectorAll('.libDelete').forEach(btn => {
+    btn.onclick = () => {
+      const entry = (state.deckLibrary || []).find(d => d.id === btn.dataset.id);
+      if (entry && !confirm(`Delete "${entry.name}"?`)) return;
+      deleteDeckFromLibrary(btn.dataset.id);
+      render();
+    };
+  });
+
   const editDeck1 = div.querySelector('#editDeck1');
   const editDeck2 = div.querySelector('#editDeck2');
   if (editDeck1) editDeck1.onclick = () => { state.currentPlayer = 1; render(); };
