@@ -126,6 +126,13 @@
     }
     .end-turn-ready { animation: endTurnPulse 2.2s ease-in-out infinite; }
 
+    .conn-warn {
+      text-align: left; font-size: 12px; line-height: 1.5;
+      background: rgba(251, 191, 36, .12); border: 1px solid rgba(251, 191, 36, .45);
+      border-radius: var(--r-sm); padding: 10px 12px; color: #fde68a;
+    }
+    .conn-warn strong { display: block; margin-bottom: 4px; color: #fcd34d; }
+
     /* Pre-game setup + rules summary */
     .setup-card { text-align: left; background: rgba(15, 23, 42, .55); border: 1px solid var(--line);
       border-radius: var(--r-md); padding: 16px 18px; }

@@ -51,6 +51,7 @@ const state = {
   landPicker: null,          // { land, printings, loading } while the picker is open
   bossRound: 0,
   connectionStatus: '',
+  localOnlyCode: false,      // the generated code carries no public address
   leavingOnline: false,
   peerConnection: null,
   dataChannel: null,
@@ -2199,21 +2200,67 @@ state.dataChannel.onclose = () => {
   }
 
 const ICE_SERVERS = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+  { urls: [
+    'stun:stun.l.google.com:19302',
+    'stun:stun1.l.google.com:19302',
+    'stun:stun2.l.google.com:19302',
+    'stun:stun.cloudflare.com:3478'
+  ] }
 ];
 
-// ICE gathering can hang indefinitely on restrictive networks. Resolve on
-// 'complete' or after a cap — the candidates gathered so far are usually enough.
-function waitForIceGathering(pc, timeoutMs = 4000){
+const ICE_HARD_CAP_MS = 20000;   // never hang forever
+const ICE_GRACE_MS = 1200;       // after STUN answers, allow a moment for more
+
+// Wait for ICE gathering before handing the player a code to copy.
+//
+// This MUST NOT be cut short on a fixed timer. With manual copy-paste
+// signalling the SDP is the ONLY chance to exchange candidates, and the
+// server-reflexive (srflx) candidates that STUN discovers — the ones that let
+// two people on different networks connect — arrive later than the local host
+// candidates. Truncating gathering ships a code containing only LAN addresses,
+// which then works on one Wi-Fi and nowhere else.
+//
+// So: resolve on 'complete'; allow an early finish only once STUN has actually
+// answered (plus a short grace for more candidates); otherwise wait out the cap.
+function waitForIceGathering(pc){
   return new Promise(resolve => {
-    if (pc.iceGatheringState === 'complete') return resolve();
+    if (pc.iceGatheringState === 'complete') return resolve({ srflx: true, complete: true });
+
     let done = false;
-    const finish = () => { if (done) return; done = true; clearTimeout(timer); resolve(); };
-    const timer = setTimeout(finish, timeoutMs);
+    let sawSrflx = false;
+    let graceTimer = null;
+
+    const finish = (complete) => {
+      if (done) return;
+      done = true;
+      clearTimeout(hardCap);
+      clearTimeout(graceTimer);
+      resolve({ srflx: sawSrflx, complete: !!complete });
+    };
+
+    const hardCap = setTimeout(() => finish(false), ICE_HARD_CAP_MS);
+
+    pc.addEventListener('icecandidate', (e) => {
+      const cand = e.candidate && e.candidate.candidate;
+      if (!cand) return;                       // null candidate = gathering done
+      // "typ srflx" (STUN) or "typ relay" (TURN) means an internet-routable
+      // address made it in; host-only codes are LAN-only.
+      if (/ typ (srflx|relay)/.test(cand) && !sawSrflx) {
+        sawSrflx = true;
+        clearTimeout(graceTimer);
+        graceTimer = setTimeout(() => finish(false), ICE_GRACE_MS);
+      }
+    });
+
     pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') finish();
+      if (pc.iceGatheringState === 'complete') finish(true);
     });
   });
+}
+
+// True when a code carries an address reachable from outside the local network.
+function sdpHasPublicCandidate(sdp){
+  return / typ (srflx|relay)/.test(String(sdp || ''));
 }
 
 // Surface connection progress/failure; the manual-signaling flow otherwise
@@ -2223,7 +2270,7 @@ function watchConnection(pc){
     const s = pc.connectionState || pc.iceConnectionState;
     state.connectionStatus = s;
     if (s === 'failed') {
-      toast('Connection failed. Your networks may need a TURN server — try the same Wi-Fi, or a hotspot.', 5000);
+      toast('Connection failed. Re-copy a fresh code from the host and try again — codes expire once a connection attempt fails.', 6000);
     } else if (s === 'disconnected') {
       toast('Connection lost — trying to recover…', 3000);
     }
@@ -2246,10 +2293,14 @@ async function createOnlineRoom() {
   setupDataChannel(pc.createDataChannel('game'));
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  await waitForIceGathering(pc);
-  state.roomCode = btoa(JSON.stringify({ offer: pc.localDescription }));
+  const gather = await waitForIceGathering(pc);
+  const sdp = pc.localDescription;
+  state.roomCode = btoa(JSON.stringify({ offer: sdp }));
+  state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp) && !gather.srflx;
   state.waitingForAnswer = true;
-  state.connectionStatus = 'waiting for answer';
+  state.connectionStatus = state.localOnlyCode
+    ? 'local network only — see the warning below'
+    : 'waiting for the answer code';
   render();
 }
 
@@ -2270,9 +2321,13 @@ async function joinOnlineRoom(offerStr) {
     await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    await waitForIceGathering(pc);
-    state.answerCode = btoa(JSON.stringify({ answer: pc.localDescription }));
-    state.connectionStatus = 'send the answer code back';
+    const gather = await waitForIceGathering(pc);
+    const sdp = pc.localDescription;
+    state.answerCode = btoa(JSON.stringify({ answer: sdp }));
+    state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp) && !gather.srflx;
+    state.connectionStatus = state.localOnlyCode
+      ? 'local network only — see the warning below'
+      : 'send the answer code back';
     render();
   } catch(e) {
     alert('Invalid code: ' + e.message);
@@ -2385,6 +2440,7 @@ function disconnectOnline() {
   state.isHost = false;
   state.waitingForAnswer = false;
   state.answerCode = null;
+  state.localOnlyCode = false;
   setTimeout(() => { state.leavingOnline = false; }, 500);
 }
 
@@ -7076,6 +7132,15 @@ function GameBoard() {
     const statusLine = state.connectionStatus
       ? `<div class="text-xs text-gray mt-2">Connection: ${htmlEscape(state.connectionStatus)}</div>`
       : '';
+    // If STUN never answered, the code only contains LAN addresses and will
+    // fail across networks. Say so before it gets shared, not after.
+    const localOnlyWarning = state.localOnlyCode ? `
+      <div class="conn-warn mt-3">
+        <strong>⚠ This code only works on your local network.</strong>
+        Your browser could not reach a STUN server, so the code contains no
+        internet-routable address. Check that a VPN, firewall or strict
+        network policy is not blocking UDP, then press Back and host again.
+      </div>` : '';
     if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
       connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to play.</div>';
     } else if (state.onlineMode && state.waitingForAnswer) {
@@ -7089,6 +7154,7 @@ function GameBoard() {
           <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
           <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
           ${statusLine}
+          ${localOnlyWarning}
         </div>
       `;
     } else if (state.onlineMode && state.answerCode) {
@@ -7099,10 +7165,15 @@ function GameBoard() {
           <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
           <p class="text-green text-sm mt-4">Waiting for host...</p>
           ${statusLine}
+          ${localOnlyWarning}
         </div>
       `;
     } else if (state.onlineMode) {
-      connUI = `<div class="card mb-4 text-center p-4">Preparing connection…${statusLine}</div>`;
+      connUI = `<div class="card mb-4 text-center p-4">
+        <strong>Preparing connection…</strong>
+        <div class="text-xs text-gray mt-1">Finding a network route. This can take a few seconds — wait for the code before sharing it.</div>
+        ${statusLine}
+      </div>`;
     }
     const mode = currentModeConfig();
     const rules = getModeRules(mode);
@@ -9004,7 +9075,12 @@ window.GALDUR_APP = {
   hordeAttack,
   BATTLE_ZONE_KEYS,
   battlefieldCards,
-  defaultZoneForCard
+  defaultZoneForCard,
+  // Online handshake, exposed so the connection flow can be driven in tests.
+  createOnlineRoom,
+  joinOnlineRoom,
+  completeConnection,
+  sdpHasPublicCandidate
 };
 
 // Keyboard shortcuts on the battlefield. Registered once; modal states and
