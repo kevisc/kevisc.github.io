@@ -136,6 +136,20 @@
     .deck-shelf-item:hover { border-color: rgba(99, 102, 241, .5); transform: translateY(-1px); }
     .deck-shelf-name { font-weight: 750; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    /* Hand zoom: scale the cards without reflowing the bar */
+    .battle-hand { --hand-zoom: 1; }
+    .battle-hand .hand-card img {
+      width: calc(80px * var(--hand-zoom));
+      height: calc(112px * var(--hand-zoom));
+      transition: width .12s ease, height .12s ease;
+    }
+
+    /* Draft side preview */
+    .draft-preview {
+      background: rgba(15, 23, 42, .55); border: 1px solid var(--line);
+      border-radius: var(--r-md); padding: 10px; min-height: 120px;
+    }
+
     .conn-warn {
       text-align: left; font-size: 12px; line-height: 1.5;
       background: rgba(251, 191, 36, .12); border: 1px solid rgba(251, 191, 36, .45);

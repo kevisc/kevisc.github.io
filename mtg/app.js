@@ -44,7 +44,8 @@ const state = {
   attackSelection: [],       // ids chosen in that modal
   coopSeat: 1,               // which teammate currently holds the device
   aiDifficulty: 'normal',    // 'easy' | 'normal' | 'hard'
-  strictMana: false,         // enforce paying costs by tapping lands
+  strictMana: false,         // enforce paying costs by tapping lands (bot games)
+  handZoom: 1,               // hand card scale, 0.7 - 1.8
   landsPlayedThisTurn: 0,    // strict mode: one land per turn
   aiActing: false,           // the bot is visibly taking its turn
   deckLibrary: [],           // named saved decks: { id, name, modeId, cards, savedAt }
@@ -975,6 +976,26 @@ function libraryDeckSummary(entry){
   return `${entry.cards.length} cards · ${lands} lands · ${mode.title}`;
 }
 
+// Position a floating hover preview so it is always fully on screen: flip to
+// the other side of the cursor when it would overflow, then clamp.
+function placeHoverBox(box, evt, pad = 16){
+  if (!box) return;
+  box.style.display = 'block';
+  box.style.left = '0px';
+  box.style.top = '0px';
+  const rect = box.getBoundingClientRect();
+  const w = rect.width || 360;
+  const h = rect.height || 420;
+  let x = evt.clientX + pad;
+  let y = evt.clientY + pad;
+  if (x + w > window.innerWidth - 8) x = evt.clientX - w - pad;    // flip left
+  if (y + h > window.innerHeight - 8) y = evt.clientY - h - pad;   // flip up
+  x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
+  y = Math.max(8, Math.min(y, window.innerHeight - h - 8));
+  box.style.left = x + 'px';
+  box.style.top = y + 'px';
+}
+
 // User-facing name for a seat. "Player 1 / Player 2" only ever mattered to the
 // engine; people think in terms of you, the bot, or your opponent.
 function seatLabel(n, { capital = true } = {}){
@@ -1740,6 +1761,7 @@ function saveLocal(){
       aiDifficulty: state.aiDifficulty,
       deckLibrary: state.deckLibrary || [],
       strictMana: !!state.strictMana,
+      handZoom: state.handZoom || 1,
       landArt: state.landArt || {}
     }));
   } catch (e) { /* quota exceeded or storage disabled — fail silently */ }
@@ -1763,6 +1785,7 @@ function loadLocal(){
     if (data.aiDifficulty) state.aiDifficulty = data.aiDifficulty;
     if (Array.isArray(data.deckLibrary)) state.deckLibrary = data.deckLibrary;
     if (typeof data.strictMana === 'boolean') state.strictMana = data.strictMana;
+    if (typeof data.handZoom === 'number') state.handZoom = data.handZoom;
     if (data.selectedMode) state.selectedMode = data.selectedMode;
     if (data.battleMode) state.battleMode = data.battleMode;
     if (data.studioTab) state.studioTab = data.studioTab;
@@ -2643,10 +2666,38 @@ function LandPickerModal(){
   return wrap;
 }
 
+// Containers whose scroll position must survive a re-render. render() rebuilds
+// the whole screen, so without this every remote update in an online game
+// yanked the other player's view back to the top mid-read.
+const SCROLL_KEEP = ['.battle-scroll', '#draftList', '#deckContainer', '#availContainer', '#zoneCards', '.mode-grid'];
+
+function captureScroll(){
+  const saved = [];
+  for (const sel of SCROLL_KEEP) {
+    document.querySelectorAll(sel).forEach((el, i) => {
+      if (el.scrollTop || el.scrollLeft) saved.push({ sel, i, top: el.scrollTop, left: el.scrollLeft });
+    });
+  }
+  return saved;
+}
+
+function restoreScroll(saved){
+  if (!saved.length) return;
+  for (const { sel, i, top, left } of saved) {
+    const el = document.querySelectorAll(sel)[i];
+    if (!el) continue;
+    el.scrollTop = top;
+    el.scrollLeft = left;
+  }
+}
+
 function render() {
   scheduleSave();   // persist collection + decks (debounced) on any state change
   const root = document.getElementById('root');
   if (!root) return;
+  const scroll = captureScroll();
+  const activeId = document.activeElement && document.activeElement.id;
+  const selStart = document.activeElement && document.activeElement.selectionStart;
   root.innerHTML = '';
 
   if (state.screen === 'login') root.appendChild(LoginScreen());
@@ -2661,6 +2712,19 @@ function render() {
 
   // Overlay: available from every screen, so it is mounted after the screen.
   if (state.landPicker) root.appendChild(LandPickerModal());
+
+  restoreScroll(scroll);
+  // Keep the caret in a text field the player was typing in (deck names,
+  // import box) — a remote update used to steal focus mid-word.
+  if (activeId) {
+    const again = document.getElementById(activeId);
+    if (again && typeof again.focus === 'function') {
+      again.focus();
+      if (selStart != null && again.setSelectionRange) {
+        try { again.setSelectionRange(selStart, selStart); } catch {}
+      }
+    }
+  }
 
   // Let the AI module schedule any pending bot moves (AI turns, draft picks).
   if (window.GALDUR_AI) window.GALDUR_AI.onRender();
@@ -3238,9 +3302,9 @@ function BattleMenu()  {
         <div class="flex mt-3" style="align-items:center;gap:10px;flex-wrap:wrap">
           <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input id="strictManaToggle" type="checkbox" ${state.strictMana ? 'checked' : ''}>
-            <strong>Strict mana</strong>
+            <strong>Strict mana (bot games only)</strong>
           </label>
-          <span class="text-xs text-gray">Playing a card taps lands for its cost; one land per turn. Off = free-form sandbox.</span>
+          <span class="text-xs text-gray">Against a bot, playing a card taps lands for its cost and limits you to one land per turn. Games against people always stay self-enforced.</span>
         </div>
       </div>
 
@@ -4415,7 +4479,10 @@ function DraftOffResults(){
         </div>
 
         <div class="draft-side">
-          <div style="display:flex;justify-content:space-between;align-items:center">
+          <div id="draftPreview" class="draft-preview">
+            <div class="text-xs text-gray text-center" style="padding:18px">Hover a card to read it here</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
             <div><strong>Draft List</strong></div>
             <div class="text-xs badge">Left: ${leftCount()}</div>
           </div>
@@ -4444,9 +4511,23 @@ function DraftOffResults(){
       state.screen='builder'; render();
     };
       
+      const draftPreview = wrap.querySelector('#draftPreview');
+      const showInPreview = (card) => {
+        if (!draftPreview || !card) return;
+        draftPreview.innerHTML = `
+          ${cardImageMarkup(card, { loading: 'eager', style: 'width:100%;border-radius:8px;display:block' })}
+          <div style="font-weight:800;margin-top:8px">${htmlEscape(card.name)}</div>
+          <div class="text-xs text-gray">${htmlEscape(card.type || '')}${card.cost ? ' · ' + htmlEscape(card.cost) : ''}</div>
+          ${card.effect ? `<div class="text-xs mt-2" style="white-space:pre-wrap;line-height:1.35">${htmlEscape(card.effect)}</div>` : ''}
+        `;
+      };
       wrap.querySelectorAll('.draft-choice').forEach(el=>{
-  el.onclick = ()=> pickCard(+el.dataset.i);
-});
+        const card = D.pool[+el.dataset.i];
+        el.onclick = ()=> pickCard(+el.dataset.i);
+        // Hovering a choice reads it in the side panel, so the card can be
+        // studied without a floating box covering the other two.
+        el.onmouseenter = ()=> showInPreview(card);
+      });
     wrap.querySelector('#finishNow').onclick = ()=> setScreen('done');
 
     // Hover a drafted card in the list to see it full size next to the cursor.
@@ -4460,6 +4541,7 @@ function DraftOffResults(){
     wrap.querySelectorAll('.draft-small').forEach(row => {
       const card = D.deck[Number(row.dataset.di)];
       if (!card) return;
+      row.onmouseenter = () => showInPreview(card);
       row.onmousemove = (e) => {
         draftHover.innerHTML = `
           <div style="font-weight:700;margin-bottom:4px">${htmlEscape(card.name)}</div>
@@ -4467,12 +4549,7 @@ function DraftOffResults(){
           ${cardImageMarkup(card, { style: 'width:100%;border-radius:6px;margin-bottom:6px;display:block' })}
           ${card.effect ? `<div style="font-size:12px;white-space:pre-wrap;line-height:1.3">${htmlEscape(card.effect)}</div>` : ''}
         `;
-        const pad = 16;
-        const x = Math.min(e.clientX + pad, window.innerWidth - 280);
-        const y = Math.min(e.clientY + pad, window.innerHeight - 380);
-        draftHover.style.left = x + 'px';
-        draftHover.style.top = y + 'px';
-        draftHover.style.display = 'block';
+        placeHoverBox(draftHover, e);
       };
       row.onmouseleave = () => { draftHover.style.display = 'none'; };
     });
@@ -7375,7 +7452,8 @@ function GameBoard() {
               <li><strong>Opening hand:</strong> ${rules.startingHand || rules.openingHand || 7} cards dealt to each player.</li>
               <li><strong>Starting life:</strong> ${rules.health}${rules.opponentHealth ? ` — opponent starts at ${rules.opponentHealth}` : ''}.</li>
               <li><strong>Each turn:</strong> you untap and draw automatically when the turn passes to you.</li>
-              ${state.strictMana ? '<li><strong>Strict mana:</strong> cards tap lands for their cost; one land per turn.</li>' : ''}
+              ${state.strictMana && state.vsAI ? '<li><strong>Strict mana:</strong> cards tap lands for their cost; one land per turn.</li>' : ''}
+              ${!state.vsAI ? '<li><strong>Rules:</strong> self-enforced — play your own legal moves.</li>' : ''}
               <li><strong>Deck:</strong> ${htmlEscape(deckSizeSummary(mode))}.</li>
               ${rules.botOpponent ? '<li><strong>Opponent:</strong> played automatically by the computer. Its deck and life scale with the chosen difficulty.</li>' : ''}
               ${state.vsAI ? `<li><strong>Bot difficulty:</strong> ${htmlEscape((window.GALDUR_AI && window.GALDUR_AI.difficulty().label) || 'Normal')}.</li>` : ''}
@@ -7560,7 +7638,10 @@ function GameBoard() {
   // Strict mode gatekeeper: returns false (with a toast) when the card cannot
   // be paid for, otherwise taps the lands used and lets the play proceed.
   function payStrictCost(card){
-    if (!state.strictMana) return true;
+    // Rules enforcement applies to bot games only. Human games — local or
+    // online — stay a friendly sandbox where each player polices their own
+    // legal moves, which is how this app is meant to be played.
+    if (!state.strictMana || !state.vsAI) return true;
     const isLandPlay = ((card.type || '') + '').toLowerCase().includes('land');
     if (isLandPlay) {
       if ((state.landsPlayedThisTurn || 0) >= 1) {
@@ -8145,7 +8226,13 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <button id="mulliganBtn" class="btn btn-blue text-xs" ${rules.noMulligan ? 'disabled' : ''}>🔄 Mulligan</button>
               ${state.coop ? '<button id="passSeat" class="btn btn-purple text-xs">🤝 Pass to Teammate</button>' : ''}
             </div>
-            <div class="text-xs text-gray mt-2">Space = end turn · A = attack · D = draw · double-click a hand card to play it</div>
+            <div class="flex mt-2" style="gap:12px;align-items:center;justify-content:center;flex-wrap:wrap">
+              <label class="text-xs text-gray" style="display:flex;align-items:center;gap:6px">
+                🔍 Hand size
+                <input id="handZoom" type="range" min="0.7" max="1.8" step="0.1" value="${state.handZoom || 1}" style="width:120px">
+              </label>
+              <span class="text-xs text-gray">Space = end turn · A = attack · D = draw · double-click a hand card to play it</span>
+            </div>
             <div class="drop-zone-row" aria-label="Quick card zones">
               <div id="handDrop" class="drop-zone" data-drop-target="hand">Hand</div>
               <div id="graveyardDrop" class="drop-zone" data-drop-target="graveyard">Graveyard</div>
@@ -8345,6 +8432,14 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
   `;
   
   const handContainer = div.querySelector('#handContainer');
+  if (handContainer) handContainer.style.setProperty('--hand-zoom', String(state.handZoom || 1));
+  const handZoomInput = div.querySelector('#handZoom');
+  if (handZoomInput) handZoomInput.oninput = () => {
+    state.handZoom = parseFloat(handZoomInput.value) || 1;
+    // Apply live without a re-render so the slider keeps its grab.
+    if (handContainer) handContainer.style.setProperty('--hand-zoom', String(state.handZoom));
+    scheduleSave();
+  };
 
   div.querySelectorAll('[data-drop-target]').forEach(dropTarget => {
     dropTarget.addEventListener('dragover', (event) => {
@@ -8897,10 +8992,7 @@ if (!zoneHover) {
       ${htmlEscape(card.effect || '')}
     </div>
   `;
-  const pad = 16;
-  zoneHover.style.left = (e.clientX + pad) + 'px';
-  zoneHover.style.top  = (e.clientY + pad) + 'px';
-  zoneHover.style.display = 'block';
+  placeHoverBox(zoneHover, e);
 };
 cardDiv.onmouseleave = () => { if (zoneHover) zoneHover.style.display = 'none'; };
  
