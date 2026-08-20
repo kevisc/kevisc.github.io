@@ -907,6 +907,60 @@ test('Space ends the turn from the keyboard', async ({ page }) => {
 });
 
 
+
+test('The Deck Editor holds both deck building and card design', async ({ page }) => {
+  await enter(page);
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP, s = A.state;
+    s.selectedMode = 'casual'; s.battleMode = 'casual';
+    s.builderTab = 'deck'; s.screen = 'builder'; A.render();
+  });
+  await expect(page.locator('h1')).toContainText('Deck Editor');
+  await expect(page.locator('#deckContainer')).toBeVisible();
+
+  // The card designer lives behind a tab rather than on its own screen.
+  await page.locator('#tabCards').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#cardType')).toBeVisible();
+  // Embedded, so it must not bring its own back/logout header.
+  expect(await page.evaluate(() => !!document.querySelector('#builderBody .header'))).toBe(false);
+
+  await page.locator('#tabDeck').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#deckContainer')).toBeVisible();
+});
+
+test('The battlefield keeps a card exactly where it is dropped', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playLocal').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(400);
+
+  const pos = await page.evaluate(() => {
+    const from = document.querySelector('#handContainer .hand-card');
+    const to = document.querySelector('.battle-canvas.mine');
+    const box = to.getBoundingClientRect();
+    const dt = new DataTransfer();
+    const fire = (el, ty, x, y) => el.dispatchEvent(
+      new DragEvent(ty, { dataTransfer: dt, bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    fire(from, 'dragstart', 0, 0);
+    const x = box.left + box.width * 0.6, y = box.top + box.height * 0.5;
+    fire(to, 'dragover', x, y);
+    fire(to, 'drop', x, y);
+    fire(from, 'dragend', 0, 0);
+    const A = window.GALDUR_APP;
+    const placed = A.battlefieldCards(A.state.gameState.player1).find(c => c.pos);
+    return placed ? placed.pos : null;
+  });
+  expect(pos).not.toBeNull();
+  // Dropped around 60% across, so it should be stored near there — not snapped
+  // into a fixed zone.
+  expect(pos.x).toBeGreaterThan(40);
+  expect(pos.x).toBeLessThan(80);
+});
+
 // --- online connection ------------------------------------------------------
 
 test('The shared code contains an internet-routable STUN candidate', async ({ page }) => {

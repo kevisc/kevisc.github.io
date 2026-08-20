@@ -45,6 +45,8 @@ const state = {
   coopSeat: 1,               // which teammate currently holds the device
   aiDifficulty: 'normal',    // 'easy' | 'normal' | 'hard'
   strictMana: false,         // enforce paying costs by tapping lands (bot games)
+  builderTab: 'deck',        // Deck Editor section: 'deck' | 'cards'
+  embedCreator: false,       // CardCreator rendered inside the Deck Editor
   handZoom: 1,               // hand card scale, 0.7 - 1.8
   landsPlayedThisTurn: 0,    // strict mode: one land per turn
   aiActing: false,           // the bot is visibly taking its turn
@@ -2905,7 +2907,7 @@ function MainMenu() {
           <small>Solo vs the bot, co-op, a boss fight, or pass-and-play.</small>
         </button>
         <button id="goBuild" class="action-panel">
-          <span>🛠️ Deck Builder</span>
+          <span>🛠️ Deck Editor</span>
           <small>Search cards, import a list, check the curve.</small>
         </button>
         <button id="goDraft" class="action-panel">
@@ -2913,8 +2915,8 @@ function MainMenu() {
           <small>Draft solo against a bot, hotseat, or online.</small>
         </button>
         <button id="cardCollection" class="action-panel">
-          <span>✨ Card Creator</span>
-          <small>${(state.cards || []).length} custom card${(state.cards || []).length === 1 ? '' : 's'} saved.</small>
+          <span>✨ Design Cards</span>
+          <small>Make your own cards in the Deck Editor. ${(state.cards || []).length} saved.</small>
         </button>
         <button id="chooseLands" class="action-panel">
           <span>🏞️ Basic Lands</span>
@@ -2946,12 +2948,16 @@ function MainMenu() {
   // switcher confused far more than it helped.
   if (!state.onlineMode) state.currentPlayer = 1;
   div.querySelector('#chooseMode').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
-  div.querySelector('#cardCollection').onclick = () => { state.screen = 'creator'; render(); };
+  div.querySelector('#cardCollection').onclick = () => {
+    state.builderTab = 'cards';                 // straight to card design
+    state.screen = 'builder';
+    render();
+  };
   div.querySelector('#chooseLands').onclick = () => openLandPicker('Plains');
   div.querySelector('#playlistModeBtn').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
   // Straight to the thing you wanted, using the format already selected.
   div.querySelector('#goPlay').onclick = () => { state.screen = 'battlemenu'; render(); };
-  div.querySelector('#goBuild').onclick = () => { state.screen = 'builder'; render(); };
+  div.querySelector('#goBuild').onclick = () => { state.builderTab = 'deck'; state.screen = 'builder'; render(); };
   div.querySelector('#goDraft').onclick = () => {
     resetDraftForMode(state.selectedMode || 'casual', { screen: 'mode' });
     state.screen = 'draft';
@@ -5555,12 +5561,13 @@ function CardCreator() {
     </div>
   `).join('');
   
+  const embedded = !!state.embedCreator;   // rendered inside the Deck Editor
   div.innerHTML = `
-    <div class="header">
+    ${embedded ? '' : `<div class="header">
       <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
       <h1 style="font-size: 24px; font-weight: bold;"></h1>
       <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
-    </div>
+    </div>`}
     
     <div class="card mb-4">
       <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">🔍 Search Scryfall Cards</h2>
@@ -5648,8 +5655,10 @@ function CardCreator() {
     </div>
   `;
   
-  div.querySelector('#backBtn').onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
-  div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  const ccBack = div.querySelector('#backBtn');
+  if (ccBack) ccBack.onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
+  const ccLogout = div.querySelector('#logoutBtn');
+  if (ccLogout) ccLogout.onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
   div.querySelector('#cardType').value = form.type;
   
   const updatePreview = () => {
@@ -6691,9 +6700,18 @@ function cloneCard(base){
   div.innerHTML = `
     <div class="header flex items-center justify-between gap-3">
       <button id="backBtn" class="btn btn-secondary h-9 px-3 text-sm">← Back</button>
-      <h1 class="text-xl font-bold">Deck Builder • ${htmlEscape(mode.title)}</h1>
+      <h1 class="text-xl font-bold">Deck Editor • ${htmlEscape(mode.title)}</h1>
       <button id="changeMode" class="btn btn-secondary h-9 px-3 text-sm">Change Format</button>
     </div>
+
+    <div class="flex mb-4" style="gap:8px;flex-wrap:wrap">
+      <div class="segmented" role="group" aria-label="Deck Editor section">
+        <button id="tabDeck" class="${state.builderTab !== 'cards' ? 'active' : ''}">🛠️ Build deck</button>
+        <button id="tabCards" class="${state.builderTab === 'cards' ? 'active' : ''}">✨ Create cards</button>
+      </div>
+    </div>
+
+    <div id="builderBody">
 
     <div class="card p-4 mb-4 deck-library">
       <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
@@ -6858,11 +6876,15 @@ Island x14
         </div>
       </div>
     </div>
+    </div>
   `;
 
   // ---------- mount dynamic containers ----------
-  div.querySelector('#deckContainer').appendChild(deckContainer);
-  div.querySelector('#availContainer').appendChild(availContainer);
+  // (skipped when the Create-cards tab has replaced the body)
+  const deckMount = div.querySelector('#deckContainer');
+  if (deckMount) deckMount.appendChild(deckContainer);
+  const availMount = div.querySelector('#availContainer');
+  if (availMount) availMount.appendChild(availContainer);
 
   // ---------- header / tiles wiring ----------
   const backBtn   = div.querySelector('#backBtn');
@@ -6875,6 +6897,23 @@ Island x14
   if (changeModeBtn) changeModeBtn.onclick = () => { state.modeIntent = 'build'; state.screen = 'modes'; render(); };
 
   // Which deck the builder edits (replaces the old P1/P2 profile switcher).
+  const tabDeck = div.querySelector('#tabDeck');
+  const tabCards = div.querySelector('#tabCards');
+  if (tabDeck) tabDeck.onclick = () => { state.builderTab = 'deck'; render(); };
+  if (tabCards) tabCards.onclick = () => { state.builderTab = 'cards'; render(); };
+
+  // "Create cards" swaps the deck panels for the card creator, so both halves
+  // of deck editing live behind one door instead of two separate screens.
+  if (state.builderTab === 'cards') {
+    const body = div.querySelector('#builderBody');
+    if (body) {
+      body.innerHTML = '';
+      state.embedCreator = true;
+      try { body.appendChild(CardCreator()); }
+      finally { state.embedCreator = false; }
+    }
+  }
+
   const saveDeckBtn = div.querySelector('#saveDeckToLib');
   if (saveDeckBtn) saveDeckBtn.onclick = () => {
     const nameInput = div.querySelector('#deckNameInput');
