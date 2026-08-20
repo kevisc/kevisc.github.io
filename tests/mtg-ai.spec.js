@@ -961,6 +961,112 @@ test('The battlefield keeps a card exactly where it is dropped', async ({ page }
   expect(pos.x).toBeLessThan(80);
 });
 
+
+// --- replays and relay ------------------------------------------------------
+
+test('A game records a scrubable, read-only replay', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playLocal').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(400);
+
+  for (let i = 0; i < 4; i++) { await page.locator('#drawBtn').click(); await page.waitForTimeout(120); }
+  await page.locator('#minusLP').click();
+  await page.waitForTimeout(250);
+
+  const data = await page.evaluate(() => {
+    const r = window.GALDUR_APP.state.replay;
+    return { format: 'galdur-replay-1', mode: r.mode, recordedAt: r.startedAt, frames: r.frames };
+  });
+  expect(data.frames.length).toBeGreaterThan(3);
+
+  await page.evaluate(d => window.GALDUR_APP.enterReplay(d), data);
+  await page.waitForTimeout(400);
+  await expect(page.locator('.replay-bar')).toBeVisible();
+
+  // Scrubbing rewinds the board.
+  await page.locator('#replayFirst').click();
+  await page.waitForTimeout(300);
+  const start = await page.evaluate(() => ({
+    i: window.GALDUR_APP.state.replayIndex,
+    hand: window.GALDUR_APP.state.gameState.player1.hand.length
+  }));
+  await page.locator('#replayLast').click();
+  await page.waitForTimeout(300);
+  const end = await page.evaluate(() => ({
+    i: window.GALDUR_APP.state.replayIndex,
+    hand: window.GALDUR_APP.state.gameState.player1.hand.length
+  }));
+  expect(start.i).toBe(0);
+  expect(end.i).toBe(data.frames.length - 1);
+  expect(end.hand).toBeGreaterThan(start.hand);
+
+  // Watching must never mutate the board.
+  const before = await page.evaluate(() => window.GALDUR_APP.state.gameState.player1.health);
+  await page.evaluate(() => window.GALDUR_APP.executeGameAction(
+    'probe', {}, () => { window.GALDUR_APP.state.gameState.player1.health = 999; }, 'x'));
+  expect(await page.evaluate(() => window.GALDUR_APP.state.gameState.player1.health)).toBe(before);
+
+  await page.locator('#replayExit').click();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.GALDUR_APP.state.screen)).toBe('menu');
+});
+
+test('Replay frames stay small by storing library counts, not contents', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page, 60);
+  await page.locator('#playLocal').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(400);
+  for (let i = 0; i < 4; i++) { await page.locator('#drawBtn').click(); await page.waitForTimeout(120); }
+
+  const perFrame = await page.evaluate(() => {
+    const r = window.GALDUR_APP.state.replay;
+    return JSON.stringify(r.frames).length / r.frames.length;
+  });
+  expect(perFrame).toBeLessThan(8000);   // full snapshots were ~15KB each
+
+  // ...but the visible counts still survive the round trip.
+  const data = await page.evaluate(() => {
+    const r = window.GALDUR_APP.state.replay;
+    return { format: 'galdur-replay-1', mode: r.mode, recordedAt: r.startedAt, frames: r.frames };
+  });
+  const liveDeck = await page.evaluate(() => window.GALDUR_APP.state.gameState.player1.deck.length);
+  await page.evaluate(d => window.GALDUR_APP.enterReplay(d), data);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.GALDUR_APP.state.gameState.player1.deck.length)).toBe(liveDeck);
+});
+
+test('A relay can be configured, persisted and honestly tested', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await page.evaluate(() => document.querySelector('.relay-card')?.setAttribute('open', ''));
+  await page.locator('#turnUrls').fill('turn:relay.invalid:3478');
+  await page.locator('#turnUser').fill('u');
+  await page.locator('#turnPass').fill('p');
+  await page.locator('#saveTurn').click();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.GALDUR_APP.state.turnServer.urls)).toBe('turn:relay.invalid:3478');
+
+  // An unreachable relay must report failure rather than quietly "succeeding".
+  await page.evaluate(() => document.querySelector('.relay-card')?.setAttribute('open', ''));
+  await page.locator('#testTurn').click();
+  await page.waitForFunction(
+    () => { const t = document.querySelector('#turnStatus'); return t && t.textContent && !/Testing/.test(t.textContent); },
+    { timeout: 20000 });
+  expect(await page.locator('#turnStatus').textContent()).toContain('No relay candidate');
+
+  // Hosting still works — STUN carries it when the relay does not answer.
+  await page.evaluate(() => window.GALDUR_APP.createOnlineRoom());
+  await page.waitForFunction(
+    () => { const s = window.GALDUR_APP.state; return s.roomCode && s.roomCode !== 'waiting'; },
+    { timeout: 30000 });
+  expect(await page.evaluate(() => window.GALDUR_APP.state.localOnlyCode)).toBe(false);
+});
+
 // --- online connection ------------------------------------------------------
 
 test('The shared code contains an internet-routable STUN candidate', async ({ page }) => {

@@ -55,6 +55,13 @@ const state = {
   landPicker: null,          // { land, printings, loading } while the picker is open
   bossRound: 0,
   connectionStatus: '',
+  turnServer: null,          // optional { urls, username, credential } relay
+  candidateSummary: '',      // what the generated code can reach
+  replay: null,              // { frames, mode, startedAt } while playing
+  replayMode: false,         // watching a replay (board is read-only)
+  replayData: null,
+  replayIndex: 0,
+  replayPlaying: null,       // interval handle while auto-playing
   localOnlyCode: false,      // the generated code carries no public address
   leavingOnline: false,
   peerConnection: null,
@@ -1769,6 +1776,7 @@ function saveLocal(){
       battleMode: state.battleMode,
       studioTab: state.studioTab,
       aiDifficulty: state.aiDifficulty,
+      turnServer: state.turnServer || null,
       deckLibrary: state.deckLibrary || [],
       strictMana: !!state.strictMana,
       handZoom: state.handZoom || 1,
@@ -1793,6 +1801,7 @@ function loadLocal(){
     if (data.modeSetups && typeof data.modeSetups === 'object') state.modeSetups = data.modeSetups;
     if (data.landArt && typeof data.landArt === 'object') state.landArt = data.landArt;
     if (data.aiDifficulty) state.aiDifficulty = data.aiDifficulty;
+    if (data.turnServer && typeof data.turnServer === 'object') state.turnServer = data.turnServer;
     if (Array.isArray(data.deckLibrary)) state.deckLibrary = data.deckLibrary;
     if (typeof data.strictMana === 'boolean') state.strictMana = data.strictMana;
     if (typeof data.handZoom === 'number') state.handZoom = data.handZoom;
@@ -2010,7 +2019,143 @@ function restoreGameSnapshot(snapshot){
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Replays
+//
+// Every game action already produces a clean state transition, so recording a
+// snapshot per action gives a scrubable replay for free. Frames are capped so
+// a long game cannot grow without bound, and a replay is a plain JSON file the
+// player can save and re-open — which doubles as spectating after the fact.
+// ---------------------------------------------------------------------------
+
+const REPLAY_MAX_FRAMES = 400;
+
+// A frame keeps everything a viewer can see, but libraries are stored as a
+// COUNT rather than their contents — the deck is most of the bytes and none of
+// it is visible in a replay. This is the difference between a ~15KB frame and
+// a ~2KB one.
+function compressGameState(gs){
+  const slimPlayer = (p) => ({
+    creatureField: p.creatureField, supportField: p.supportField, landField: p.landField,
+    hand: p.hand, graveyard: p.graveyard, exile: p.exile, commanderZone: p.commanderZone,
+    health: p.health, deckCount: (p.deck || []).length
+  });
+  return cloneJSON({
+    player1: slimPlayer(gs.player1),
+    player2: slimPlayer(gs.player2),
+    shared: gs.shared ? { ...gs.shared, deck: [], deckCount: (gs.shared.deck || []).length } : null,
+    stack: gs.stack, phase: gs.phase, mode: gs.mode
+  });
+}
+
+// Rebuild a playable-looking state: libraries become face-down filler so the
+// counts on screen are right.
+function expandGameState(slim){
+  const filler = (n) => Array.from({ length: n || 0 }, (_, i) => ({
+    id: 'replay-hidden-' + i, name: 'Card', type: '', cost: '', colors: [], effect: '',
+    power: 0, toughness: 0, imageUrl: ''
+  }));
+  const fat = (p) => ({ ...p, deck: filler(p.deckCount) });
+  return {
+    player1: fat(slim.player1),
+    player2: fat(slim.player2),
+    shared: slim.shared ? { ...slim.shared, deck: filler(slim.shared.deckCount) } : { enabled: false, label: '', deck: [], graveyard: [], exile: [] },
+    stack: slim.stack || [], phase: slim.phase, mode: slim.mode
+  };
+}
+
+function recordReplayFrame(actionType, message){
+  if (!state.gameStarted || state.replayMode) return;
+  state.replay = state.replay || { frames: [], mode: null, startedAt: Date.now() };
+  const frames = state.replay.frames;
+  frames.push({
+    n: frames.length,
+    actionType,
+    message: message || '',
+    at: Date.now(),
+    activePlayer: state.activePlayer,
+    winner: state.winner || null,
+    gameState: compressGameState(state.gameState)
+  });
+  // Drop the oldest frames rather than the newest: the end of a game is the
+  // interesting part.
+  if (frames.length > REPLAY_MAX_FRAMES) frames.splice(0, frames.length - REPLAY_MAX_FRAMES);
+}
+
+function startReplayRecording(modeId){
+  state.replay = { frames: [], mode: modeId, startedAt: Date.now() };
+}
+
+function replayToFile(){
+  const rep = state.replay;
+  if (!rep || !rep.frames.length) { toast('Nothing recorded yet.'); return; }
+  const payload = {
+    format: 'galdur-replay-1',
+    mode: rep.mode || state.battleMode,
+    recordedAt: rep.startedAt,
+    frames: rep.frames
+  };
+  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `galdur-replay-${new Date(rep.startedAt).toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Replay saved — ${rep.frames.length} moments.`);
+}
+
+function enterReplay(data){
+  if (!data || data.format !== 'galdur-replay-1' || !Array.isArray(data.frames) || !data.frames.length) {
+    toast('That is not a Galdur replay file.');
+    return false;
+  }
+  state.replayMode = true;
+  state.replayData = data;
+  state.replayIndex = data.frames.length - 1;
+  state.battleMode = data.mode || state.battleMode;
+  state.gameStarted = true;
+  state.screen = 'game';
+  showReplayFrame(state.replayIndex);
+  return true;
+}
+
+function showReplayFrame(i){
+  const data = state.replayData;
+  if (!data) return;
+  const idx = Math.max(0, Math.min(i, data.frames.length - 1));
+  const frame = data.frames[idx];
+  state.replayIndex = idx;
+  state.gameState = normalizeGameStateZones(expandGameState(frame.gameState));
+  state.activePlayer = frame.activePlayer;
+  state.winner = frame.winner;
+  state.selectedCard = null;
+  state.selectedFieldCard = null;
+  state.viewingZone = null;
+  state.targeting = null;
+  render();
+}
+
+function stopReplayPlayback(){
+  if (state.replayPlaying) { clearInterval(state.replayPlaying); state.replayPlaying = null; }
+}
+
+function exitReplay(){
+  stopReplayPlayback();
+  state.replayMode = false;
+  state.replayData = null;
+  state.replayIndex = 0;
+  state.gameStarted = false;
+  state.winner = null;
+  state.screen = 'menu';
+  render();
+}
+
 function executeGameAction(type, payload, mutator, message, options = {}){
+  // Replays are read-only: nothing may mutate the board while watching.
+  if (state.replayMode) return null;
   pushGameHistory(type);
   const result = typeof mutator === 'function' ? mutator() : null;
   const resolvedMessage = typeof message === 'function' ? message(result) : message;
@@ -2018,6 +2163,7 @@ function executeGameAction(type, payload, mutator, message, options = {}){
   // describes the action being sent and the peer's log loses it forever.
   if (resolvedMessage) showAction(resolvedMessage, options.ms || 2000, options.log !== false, type, payload);
   if (options.sync !== false) sendGameUpdate();
+  recordReplayFrame(type, resolvedMessage);
   if (!resolvedMessage) render();
   return result;
 }
@@ -2296,7 +2442,7 @@ state.dataChannel.onclose = () => {
     
   }
 
-const ICE_SERVERS = [
+const STUN_SERVERS = [
   { urls: [
     'stun:stun.l.google.com:19302',
     'stun:stun1.l.google.com:19302',
@@ -2304,6 +2450,22 @@ const ICE_SERVERS = [
     'stun:stun.cloudflare.com:3478'
   ] }
 ];
+
+// STUN alone cannot get through symmetric NAT — some corporate networks and a
+// few mobile carriers. That needs a TURN relay, which needs a server this
+// static site has no way to host. So the player can supply their own: any
+// TURN service works, and several have free tiers. Stored locally, never sent
+// anywhere except to the browser's own WebRTC stack.
+function iceServers(){
+  const t = state.turnServer;
+  if (t && t.urls) {
+    const entry = { urls: t.urls.split(',').map(u => u.trim()).filter(Boolean) };
+    if (t.username) entry.username = t.username;
+    if (t.credential) entry.credential = t.credential;
+    if (entry.urls.length) return [...STUN_SERVERS, entry];
+  }
+  return STUN_SERVERS;
+}
 
 const ICE_HARD_CAP_MS = 20000;   // never hang forever
 const ICE_GRACE_MS = 1200;       // after STUN answers, allow a moment for more
@@ -2360,6 +2522,46 @@ function sdpHasPublicCandidate(sdp){
   return / typ (srflx|relay)/.test(String(sdp || ''));
 }
 
+function sdpHasRelayCandidate(sdp){
+  return / typ relay/.test(String(sdp || ''));
+}
+
+// Human-readable summary of what the generated code can actually reach.
+function describeCandidates(sdp){
+  const text = String(sdp || '');
+  const relay = / typ relay/.test(text);
+  const srflx = / typ srflx/.test(text);
+  if (relay) return 'relay ready — works on restrictive networks';
+  if (srflx) return 'direct connection — works across most networks';
+  return 'local network only';
+}
+
+// Verify a TURN config by gathering candidates against it and looking for a
+// relay candidate. Answers the only question that matters: does it work?
+async function testRelay(turn){
+  const entry = { urls: turn.urls.split(',').map(u => u.trim()).filter(Boolean) };
+  if (turn.username) entry.username = turn.username;
+  if (turn.credential) entry.credential = turn.credential;
+  let pc;
+  try {
+    pc = new RTCPeerConnection({ iceServers: [entry], iceTransportPolicy: 'relay' });
+    pc.createDataChannel('probe');
+    await pc.setLocalDescription(await pc.createOffer());
+    return await new Promise(resolve => {
+      const done = setTimeout(() => resolve(false), 8000);
+      pc.addEventListener('icecandidate', e => {
+        if (e.candidate && / typ relay/.test(e.candidate.candidate)) {
+          clearTimeout(done); resolve(true);
+        }
+      });
+    });
+  } catch {
+    return false;
+  } finally {
+    try { pc && pc.close(); } catch {}
+  }
+}
+
 // Surface connection progress/failure; the manual-signaling flow otherwise
 // leaves both players staring at a screen that never changes.
 function watchConnection(pc){
@@ -2382,7 +2584,7 @@ async function createOnlineRoom() {
   state.onlineMode = true;
   state.roomCode = 'waiting';
   state.connectionStatus = 'gathering';
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const pc = new RTCPeerConnection({ iceServers: iceServers() });
   state.peerConnection = pc;
   state.currentPlayer = 1;  // host = player 1
   watchConnection(pc);
@@ -2394,6 +2596,7 @@ async function createOnlineRoom() {
   const sdp = pc.localDescription;
   state.roomCode = btoa(JSON.stringify({ offer: sdp }));
   state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp) && !gather.srflx;
+  state.candidateSummary = describeCandidates(sdp && sdp.sdp);
   state.waitingForAnswer = true;
   state.connectionStatus = state.localOnlyCode
     ? 'local network only — see the warning below'
@@ -2407,7 +2610,7 @@ async function joinOnlineRoom(offerStr) {
   state.roomCode = 'connecting';
   try {
     const data = JSON.parse(atob(offerStr));
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: iceServers() });
     state.peerConnection = pc;
     state.onlineMode = true;
     state.isHost = false;
@@ -2428,6 +2631,7 @@ async function joinOnlineRoom(offerStr) {
     const sdp = pc.localDescription;
     state.answerCode = btoa(JSON.stringify({ answer: sdp }));
     state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp) && !gather.srflx;
+    state.candidateSummary = describeCandidates(sdp && sdp.sdp);
     state.connectionStatus = state.localOnlyCode
       ? 'local network only — see the warning below'
       : 'send the answer code back';
@@ -2926,6 +3130,11 @@ function MainMenu() {
           <span>📚 All Formats</span>
           <small>Browse every mode, from Commander to Dandan.</small>
         </button>
+        <button id="watchReplay" class="action-panel">
+          <span>🎬 Watch a Replay</span>
+          <small>Open a saved game and scrub through it move by move.</small>
+        </button>
+        <input id="replayFile" type="file" accept=".json" class="hidden">
       </div>
 
       <div class="card p-4 mt-4">
@@ -2956,6 +3165,18 @@ function MainMenu() {
   div.querySelector('#chooseLands').onclick = () => openLandPicker('Plains');
   div.querySelector('#playlistModeBtn').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
   // Straight to the thing you wanted, using the format already selected.
+  const watchReplayBtn = div.querySelector('#watchReplay');
+  const replayFileInput = div.querySelector('#replayFile');
+  if (watchReplayBtn && replayFileInput) {
+    watchReplayBtn.onclick = () => replayFileInput.click();
+    replayFileInput.onchange = async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try { enterReplay(JSON.parse(await file.text())); }
+      catch (err) { toast('Could not read that replay file.'); }
+    };
+  }
+
   div.querySelector('#goPlay').onclick = () => { state.screen = 'battlemenu'; render(); };
   div.querySelector('#goBuild').onclick = () => { state.builderTab = 'deck'; state.screen = 'builder'; render(); };
   div.querySelector('#goDraft').onclick = () => {
@@ -3322,6 +3543,33 @@ function BattleMenu()  {
         </div>
       </div>
 
+      <details class="card p-4 mb-4 relay-card"${state.turnServer && state.turnServer.urls ? ' open' : ''}>
+        <summary style="cursor:pointer;font-weight:800;font-size:14px">
+          🛰️ Relay server for online play (optional)
+          ${state.turnServer && state.turnServer.urls ? '<span class="badge" style="margin-left:8px">configured</span>' : ''}
+        </summary>
+        <p class="text-xs text-gray mt-3">
+          Most connections work without this. If you and your opponent are on networks that block
+          direct connections — some workplaces, some mobile carriers — you need a TURN relay.
+          This site is static and cannot host one, so bring your own: several providers have a free
+          tier (Metered, Twilio, Cloudflare Calls). Stored only in this browser.
+        </p>
+        <div class="grid mt-3" style="grid-template-columns:2fr 1fr 1fr;gap:8px">
+          <input id="turnUrls" class="input" placeholder="turn:relay.example.com:3478"
+                 value="${htmlEscape((state.turnServer && state.turnServer.urls) || '')}">
+          <input id="turnUser" class="input" placeholder="username"
+                 value="${htmlEscape((state.turnServer && state.turnServer.username) || '')}">
+          <input id="turnPass" class="input" type="password" placeholder="credential"
+                 value="${htmlEscape((state.turnServer && state.turnServer.credential) || '')}">
+        </div>
+        <div class="flex mt-3" style="gap:8px;flex-wrap:wrap;align-items:center">
+          <button id="saveTurn" class="btn btn-secondary text-sm">Save relay</button>
+          <button id="testTurn" class="btn btn-secondary text-sm">Test it</button>
+          <button id="clearTurn" class="btn btn-secondary text-sm">Clear</button>
+          <span id="turnStatus" class="text-xs text-gray"></span>
+        </div>
+      </details>
+
       <div class="action-panel-grid">
         <button id="playLocal" class="action-panel" aria-label="Play Local">
           <span>Play Local</span>
@@ -3429,6 +3677,39 @@ function BattleMenu()  {
   if (bringMine) bringMine.onclick = () => bringInto('player' + state.currentPlayer);
   const bringOpp = div.querySelector('#bringDeckOpp');
   if (bringOpp) bringOpp.onclick = () => bringInto('player' + (state.currentPlayer === 1 ? 2 : 1));
+
+  const turnStatus = div.querySelector('#turnStatus');
+  const readTurn = () => ({
+    urls: (div.querySelector('#turnUrls')?.value || '').trim(),
+    username: (div.querySelector('#turnUser')?.value || '').trim(),
+    credential: (div.querySelector('#turnPass')?.value || '').trim()
+  });
+  const saveTurnBtn = div.querySelector('#saveTurn');
+  if (saveTurnBtn) saveTurnBtn.onclick = () => {
+    const t = readTurn();
+    state.turnServer = t.urls ? t : null;
+    scheduleSave();
+    toast(t.urls ? 'Relay saved.' : 'Relay cleared.');
+    render();
+  };
+  const clearTurnBtn = div.querySelector('#clearTurn');
+  if (clearTurnBtn) clearTurnBtn.onclick = () => {
+    state.turnServer = null; scheduleSave(); toast('Relay cleared.'); render();
+  };
+  const testTurnBtn = div.querySelector('#testTurn');
+  if (testTurnBtn) testTurnBtn.onclick = async () => {
+    const t = readTurn();
+    if (!t.urls) { if (turnStatus) turnStatus.textContent = 'Enter a TURN url first.'; return; }
+    testTurnBtn.disabled = true;
+    if (turnStatus) turnStatus.textContent = 'Testing…';
+    const ok = await testRelay(t);
+    if (turnStatus) {
+      turnStatus.textContent = ok
+        ? '✅ Relay reachable — restrictive networks will work.'
+        : '❌ No relay candidate. Check the url, username and credential.';
+    }
+    testTurnBtn.disabled = false;
+  };
 
   const strictToggle = div.querySelector('#strictManaToggle');
   if (strictToggle) strictToggle.onchange = () => {
@@ -7433,7 +7714,8 @@ function GameBoard() {
     div.className = 'container screen';
     let connUI = '';
     const statusLine = state.connectionStatus
-      ? `<div class="text-xs text-gray mt-2">Connection: ${htmlEscape(state.connectionStatus)}</div>`
+      ? `<div class="text-xs text-gray mt-2">Connection: ${htmlEscape(state.connectionStatus)}${
+          state.candidateSummary ? ` · ${htmlEscape(state.candidateSummary)}` : ''}</div>`
       : '';
     // If STUN never answered, the code only contains LAN addresses and will
     // fail across networks. Say so before it gets shared, not after.
@@ -7643,6 +7925,7 @@ function GameBoard() {
       state.targeting = null;
       state.gameLog = [];
       state.gameHistory = [];
+      startReplayRecording(mode.id);
       addGameLog(`${rules.title} started.`);
       
       // Show "Your Turn" notification for player 1 at game start
@@ -8353,6 +8636,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
               ${state.vsAI ? '<button id="declareAttack" class="btn btn-red text-xs">⚔️ Attack</button>' : ''}
               <button id="tidyField" class="btn btn-secondary text-xs" title="Arrange your battlefield into tidy rows">🧹 Tidy</button>
+              <button id="saveReplay" class="btn btn-secondary text-xs" title="Save this game as a replay file">🎬 Replay</button>
               <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
               ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal Top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn Top</button><button id="shuffleSharedStack" class="btn btn-purple text-xs">Shuffle Stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
               ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-purple text-xs">Horde Reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde Attack</button>' : ''}
@@ -8547,6 +8831,26 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
       </div>
     ` : ''}
+    ${state.replayMode ? (() => {
+      const frames = (state.replayData && state.replayData.frames) || [];
+      const f = frames[state.replayIndex] || {};
+      return `
+      <div class="replay-bar">
+        <div class="flex" style="gap:10px;align-items:center;flex-wrap:wrap">
+          <span class="badge">▶ Replay</span>
+          <button id="replayFirst" class="btn btn-secondary text-xs">⏮</button>
+          <button id="replayPrev" class="btn btn-secondary text-xs">◀ Prev</button>
+          <button id="replayPlay" class="btn btn-primary text-xs">${state.replayPlaying ? '⏸ Pause' : '▶ Play'}</button>
+          <button id="replayNext" class="btn btn-secondary text-xs">Next ▶</button>
+          <button id="replayLast" class="btn btn-secondary text-xs">⏭</button>
+          <input id="replayScrub" type="range" min="0" max="${Math.max(0, frames.length - 1)}"
+                 value="${state.replayIndex}" style="flex:1;min-width:180px">
+          <span class="text-xs text-gray">${state.replayIndex + 1} / ${frames.length}</span>
+          <button id="replayExit" class="btn btn-red text-xs">Close</button>
+        </div>
+        <div class="text-xs text-gray mt-2">${htmlEscape(f.message || f.actionType || '')}</div>
+      </div>`;
+    })() : ''}
     ${targetingModalHtml()}
     ${attackModalHtml()}
     ${aiBlockersModalHtml()}
@@ -8560,12 +8864,38 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
           <p class="text-gray mb-8">${state.winner === 'draw'
             ? 'Both players hit 0 life at the same time.'
             : `Player ${state.winner} is victorious!`}</p>
-          <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
+          <div class="flex" style="gap:10px;justify-content:center;flex-wrap:wrap">
+            ${state.replayMode ? '' : '<button id="saveReplayEnd" class="btn btn-secondary" style="padding:16px 24px">🎬 Save replay</button>'}
+            <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
+          </div>
         </div>
       </div>
     ` : ''}
   `;
   
+  if (state.replayMode) {
+    const frames = (state.replayData && state.replayData.frames) || [];
+    const go = (i) => { stopReplayPlayback(); showReplayFrame(i); };
+    div.querySelector('#replayFirst').onclick = () => go(0);
+    div.querySelector('#replayPrev').onclick = () => go(state.replayIndex - 1);
+    div.querySelector('#replayNext').onclick = () => go(state.replayIndex + 1);
+    div.querySelector('#replayLast').onclick = () => go(frames.length - 1);
+    div.querySelector('#replayExit').onclick = () => { stopReplayPlayback(); exitReplay(); };
+    const scrub = div.querySelector('#replayScrub');
+    if (scrub) scrub.oninput = () => go(parseInt(scrub.value, 10) || 0);
+    div.querySelector('#replayPlay').onclick = () => {
+      if (state.replayPlaying) { stopReplayPlayback(); render(); return; }
+      state.replayPlaying = setInterval(() => {
+        if (state.replayIndex >= frames.length - 1) { stopReplayPlayback(); render(); return; }
+        showReplayFrame(state.replayIndex + 1);
+      }, 1100);
+      render();
+    };
+    // Nothing on the board itself is interactive while watching.
+    const shell = div.querySelector('.battle-scroll');
+    if (shell) shell.style.pointerEvents = 'none';
+  }
+
   const handContainer = div.querySelector('#handContainer');
   if (handContainer) handContainer.style.setProperty('--hand-zoom', String(state.handZoom || 1));
   const handZoomInput = div.querySelector('#handZoom');
@@ -8891,6 +9221,8 @@ if (card.stun && card.stun > 0) {
 
   const tidyBtn = div.querySelector('#tidyField');
   if (tidyBtn) tidyBtn.onclick = tidyBattlefield;
+  const saveReplayBtn = div.querySelector('#saveReplay');
+  if (saveReplayBtn) saveReplayBtn.onclick = replayToFile;
 
   const passSeatBtn = div.querySelector('#passSeat');
   if (passSeatBtn) passSeatBtn.onclick = () => {
@@ -9437,6 +9769,8 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
     });
   }
   
+  const saveReplayEnd = div.querySelector('#saveReplayEnd');
+  if (saveReplayEnd) saveReplayEnd.onclick = replayToFile;
   if (state.winner && div.querySelector('#returnBtn')) {
     div.querySelector('#returnBtn').onclick = () => {
       if (state.onlineMode) disconnectOnline();
@@ -9476,6 +9810,11 @@ window.GALDUR_APP = {
   hordeReveal: revealHorde,
   hordeAttack,
   checkHordeVictory,
+  // Replays, exposed so they can be driven and tested.
+  enterReplay,
+  exitReplay,
+  showReplayFrame,
+  replayToFile,
   BATTLE_ZONE_KEYS,
   battlefieldCards,
   defaultZoneForCard,

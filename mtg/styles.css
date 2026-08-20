@@ -186,6 +186,13 @@
       border-radius: var(--r-md); padding: 10px; min-height: 120px;
     }
 
+    /* Replay scrubber */
+    .replay-bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 9998;
+      background: rgba(11, 16, 32, .96); border-top: 2px solid var(--accent);
+      padding: 10px 16px; backdrop-filter: blur(8px);
+    }
+
     .conn-warn {
       text-align: left; font-size: 12px; line-height: 1.5;
       background: rgba(251, 191, 36, .12); border: 1px solid rgba(251, 191, 36, .45);
