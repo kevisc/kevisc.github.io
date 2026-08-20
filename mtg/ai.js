@@ -565,6 +565,7 @@ function boot(){
         attackerPlayer.graveyard.push({ ...c, tapped: false, aiAttacking: undefined, playerAttacking: undefined });
       }
       A.checkWinner();
+      if (A.checkHordeVictory) A.checkHordeVictory();
       return lines.length ? `${label}: ` + lines.join(' ') : 'No combat damage.';
     }, (msg) => msg);
   }
@@ -588,7 +589,9 @@ function boot(){
     try {
       resolveCombatDamage(assignments || {});
       await delay(900);
-      await finishAiTurn();
+      const mode = state.gameState.mode || state.battleMode;
+      if (mode === 'horde') endHordeTurn();
+      else await finishAiTurn();
     } finally {
       awaitingBlocks = false;
       aiRunning = false;
@@ -691,8 +694,34 @@ function boot(){
     if (!await step(700)) return;
     A.hordeReveal();
     if (!await step(1400)) return;
-    A.hordeAttack();
-    if (!await step(1200)) return;
+
+    // The Horde swings with everything that is awake — but the survivors get
+    // to block it, exactly like any other attack. Previously the damage was
+    // applied straight to the life total with no blocking step, which is the
+    // main reason the mode felt unwinnable.
+    const attackers = fieldCards(aiPlayer()).filter(c =>
+      isCreatureCard(c) && !c.tapped && !c.aiSick);
+    if (attackers.length) {
+      act('horde_attack_declare', { count: attackers.length }, () => {
+        attackers.forEach(c => { c.tapped = true; c.aiAttacking = true; });
+      }, `The Horde attacks with ${attackers.length} creature${attackers.length === 1 ? '' : 's'}.`);
+      if (!await step(800)) return;
+
+      if (humanUntappedBlockers().length) {
+        awaitingBlocks = true;
+        state.aiActing = false;
+        state.targeting = { type: 'ai-blockers' };
+        A.render();
+        return;                       // resumes in resolveAiCombat
+      }
+      resolveCombatDamage({});
+      if (!await step(1000)) return;
+    }
+
+    await endHordeTurn();
+  }
+
+  function endHordeTurn(){
     act('ai_end_turn', {}, () => {
       state.activePlayer = 1;
       state.showTurnNotification = true;

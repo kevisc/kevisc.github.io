@@ -573,10 +573,12 @@ function aiTier(){
 // Horde composition scales with difficulty: Easy is mostly small fodder,
 // Hard runs more surges, drains and giant tokens.
 function makeHordeDeck(tier = aiTier()){
+  // Survivors win by emptying this library, so its SIZE is the clock: a short
+  // Easy deck is a winnable game, a long Hard deck is a grind.
   const counts = {
-    easy:   { fodder: 80, surge: 3, regrow: 3, drain: 2, untap: 3, giants: 4 },
-    normal: { fodder: 72, surge: 6, regrow: 5, drain: 5, untap: 4, giants: 8 },
-    hard:   { fodder: 62, surge: 9, regrow: 6, drain: 7, untap: 5, giants: 14 }
+    easy:   { fodder: 24, surge: 1, regrow: 1, drain: 1, untap: 2, giants: 2 },
+    normal: { fodder: 58, surge: 4, regrow: 4, drain: 5, untap: 4, giants: 8 },
+    hard:   { fodder: 78, surge: 8, regrow: 6, drain: 8, untap: 5, giants: 16 }
   }[tier];
   const deck = [];
   const tokenMix = [
@@ -814,13 +816,19 @@ function buildGameStateForMode(mode, p1Deck, p2Deck){
         : (p1Deck.length ? p1Deck : p2Deck)).slice()
     : [];
   const bossState = emptyPlayerState(shared ? [] : p2Deck, rules);
+  const tier = aiTier();
   if (rules.opponentHealth) {
     // Boss life scales with difficulty: 75% on Easy, 125% on Hard.
-    const factor = { easy: 0.75, normal: 1, hard: 1.25 }[aiTier()];
+    const factor = { easy: 0.75, normal: 1, hard: 1.25 }[tier];
     bossState.health = Math.round(rules.opponentHealth * factor);
   }
+  // Survivors get a cushion on the easier settings of the co-op modes, so the
+  // fight is winnable rather than a race the board state always wins.
+  const survivorBonus = rules.botOpponent ? ({ easy: 20, normal: 8, hard: 0 }[tier] || 0) : 0;
+  const survivorState = emptyPlayerState(shared ? [] : p1Deck, rules);
+  survivorState.health += survivorBonus;
   return {
-    player1: emptyPlayerState(shared ? [] : p1Deck, rules),
+    player1: survivorState,
     player2: bossState,
     shared: {
       enabled: shared,
@@ -1639,7 +1647,7 @@ async function buildRealSurvivorDeck(){
 // Real printed token cards for the Horde. The reveal/attack engine keys off
 // "Token" in the type line, which real token cards carry.
 async function buildRealHordeDeck(tier){
-  const counts = { easy: { fodder: 80, giants: 4 }, normal: { fodder: 72, giants: 8 }, hard: { fodder: 62, giants: 14 } }[tier];
+  const counts = { easy: { fodder: 24, giants: 2 }, normal: { fodder: 58, giants: 8 }, hard: { fodder: 78, giants: 16 } }[tier];
   const arts = await realCardsFrom('is:token t:creature game:paper', 16);
   if (arts.length < 5) return null;
   const power = (c) => parseInt(c.power, 10) || 0;
@@ -1651,7 +1659,7 @@ async function buildRealHordeDeck(tier){
   for (let i = 0; i < counts.fodder; i++) deck.push(clone(pickFrom(small, i), i));
   for (let i = 0; i < counts.giants; i++) deck.push(clone(pickFrom(big, i), 1000 + i));
   // The action cards are variant instructions, not real Magic cards.
-  const actions = { easy: { surge: 3, regrow: 3, drain: 2, untap: 3 }, normal: { surge: 6, regrow: 5, drain: 5, untap: 4 }, hard: { surge: 9, regrow: 6, drain: 7, untap: 5 } }[tier];
+  const actions = { easy: { surge: 1, regrow: 1, drain: 1, untap: 2 }, normal: { surge: 4, regrow: 4, drain: 5, untap: 4 }, hard: { surge: 8, regrow: 6, drain: 8, untap: 5 } }[tier];
   for (let i = 0; i < actions.surge; i++) deck.push(makeHordeAction('Mindless Surge', 'Reveal two extra Horde cards.', 'surge'));
   for (let i = 0; i < actions.regrow; i++) deck.push(makeHordeAction('Graveborn Return', 'Return up to two Horde tokens from the graveyard to the battlefield.', 'regrow'));
   for (let i = 0; i < actions.drain; i++) deck.push(makeHordeAction('Gnawing Dread', 'Each survivor loses 2 life.', 'drain'));
@@ -7216,14 +7224,27 @@ function isHordeGameActive(){
   return (state.gameState.mode || state.battleMode) === 'horde';
 }
 
+// The Horde library deliberately does NOT recycle. Survivors win by emptying
+// it, so shuffling the graveyard back made the win condition unreachable — the
+// game could only ever end with the survivors dead.
 function recycleHordeDeckIfNeeded(){
   const hordePlayer = state.gameState.player2;
   hordePlayer.deck = hordePlayer.deck || [];
   hordePlayer.graveyard = hordePlayer.graveyard || [];
-  if (hordePlayer.deck.length || !hordePlayer.graveyard.length) return;
-  hordePlayer.deck = shuffleCopy(hordePlayer.graveyard.splice(0).map(card => initBattleCard({ ...card, tapped: false })));
-  showAction('The Horde shuffles its graveyard back into its deck.');
 }
+
+// Survivors win once the Horde has no library and nothing left on the board.
+function checkHordeVictory(){
+  if (!isHordeGameActive() || state.winner) return;
+  const horde = state.gameState.player2;
+  if ((horde.deck || []).length) return;
+  if (battlefieldCards(horde).length) return;
+  state.winner = 1;
+  state.gameStarted = false;
+  state.actionMessage = 'The Horde is spent — the survivors win!';
+}
+
+function hordePlayerRef(){ return state.gameState.player2; }
 
 function drawHordeCard(){
   recycleHordeDeckIfNeeded();
@@ -7268,38 +7289,44 @@ function revealHorde(){
   if (!isHordeGameActive()) return;
   executeGameAction('horde_reveal', {}, () => {
     let tokens = 0;
+    let stumbled = 0;
     let actions = [];
-    let extraReveals = 0;
     let guard = 0;
 
-    while (guard < 40) {
+    // Two separate dials, which is what makes the mode tunable:
+    //  - revealPerTurn is the CLOCK. Survivors win by emptying the library, so
+    //    this decides how long the game runs, the same on every difficulty.
+    //  - tokenCap is the THREAT. Only this many revealed tokens actually join
+    //    the battlefield; the rest stumble into the graveyard. Capping reveals
+    //    instead would have slowed the clock as well, which is why Easy used
+    //    to be both gentle AND unwinnable.
+    const tier = aiTier();
+    const revealPerTurn = 5;
+    const tokenCap = { easy: 1, normal: 2, hard: 4 }[tier] ?? 2;
+    let toReveal = revealPerTurn;
+
+    while (guard < 60 && toReveal > 0) {
       guard++;
       const card = drawHordeCard();
       if (!card) break;
+      toReveal--;
       const isToken = card.hordeRole === 'token' || card.isToken || (card.type || '').includes('Token');
       if (isToken) {
-        placeHordeToken(card);
-        tokens++;
-        if (extraReveals > 0) extraReveals--;
+        if (tokens < tokenCap) { placeHordeToken(card); tokens++; }
+        else { hordePlayerRef().graveyard.push(card); stumbled++; }
         continue;
       }
 
       const actionMessage = resolveHordeAction(card);
       actions.push(actionMessage);
-      if (card.hordeEffect === 'surge') {
-        extraReveals += 2;
-        continue;
-      }
-      if (extraReveals > 0) {
-        extraReveals--;
-        continue;
-      }
-      break;
+      if (card.hordeEffect === 'surge') toReveal += 2;
     }
 
     checkWinner();
-    return { tokens, actions };
-  }, ({ tokens, actions }) => `Horde reveal: ${tokens} token${tokens === 1 ? '' : 's'}${actions.length ? ' - ' + actions.join(' ') : ''}`);
+    checkHordeVictory();
+    return { tokens, stumbled, actions };
+  }, ({ tokens, stumbled, actions }) =>
+    `Horde reveal: ${tokens} token${tokens === 1 ? '' : 's'} joined${stumbled ? `, ${stumbled} stumbled` : ''}${actions.length ? ' - ' + actions.join(' ') : ''}`);
 }
 
 function hordeAttack(){
@@ -7314,6 +7341,7 @@ function hordeAttack(){
     attackers.forEach(card => { card.tapped = true; });
     survivorPlayer.health = Math.max(0, survivorPlayer.health - damage);
     checkWinner();
+    checkHordeVictory();
     return { count: attackers.length, damage };
   }, ({ count, damage }) => `Horde attack: ${count} creature${count === 1 ? '' : 's'} dealt ${damage} damage.`);
 }
@@ -7450,7 +7478,7 @@ function GameBoard() {
             <div class="setup-title">How this game is set up</div>
             <ul class="setup-list">
               <li><strong>Opening hand:</strong> ${rules.startingHand || rules.openingHand || 7} cards dealt to each player.</li>
-              <li><strong>Starting life:</strong> ${rules.health}${rules.opponentHealth ? ` — opponent starts at ${rules.opponentHealth}` : ''}.</li>
+              <li><strong>Starting life:</strong> ${rules.botOpponent ? rules.health + ({ easy: 20, normal: 8, hard: 0 }[aiTier()] || 0) : rules.health}${rules.opponentHealth ? ` — opponent starts at ${Math.round(rules.opponentHealth * ({ easy: 0.75, normal: 1, hard: 1.25 }[aiTier()] || 1))}` : ''}.</li>
               <li><strong>Each turn:</strong> you untap and draw automatically when the turn passes to you.</li>
               ${state.strictMana && state.vsAI ? '<li><strong>Strict mana:</strong> cards tap lands for their cost; one land per turn.</li>' : ''}
               ${!state.vsAI ? '<li><strong>Rules:</strong> self-enforced — play your own legal moves.</li>' : ''}
@@ -7764,6 +7792,47 @@ function GameBoard() {
     const source = me[payload.source];
     if (!Array.isArray(source) || !Number.isInteger(idx) || idx < 0 || idx >= source.length) return null;
     return source.splice(idx, 1)[0];
+  }
+
+  // Drop onto the open battlefield: the card keeps its exact spot, and the
+  // underlying zone array is chosen from its type so the rules engine and the
+  // bot still see a normal board.
+  function dropOntoCanvas(payload, pos){
+    if (!payload || payload.owner !== 'me') return;
+
+    // Moving a card already on the battlefield: just reposition it.
+    if (BATTLE_ZONE_KEYS.includes(payload.source)) {
+      const card = me[payload.source] && me[payload.source][Number(payload.idx)];
+      if (!card) return;
+      executeGameAction('move_on_field', { cardName: card.name }, () => {
+        card.pos = pos;
+        state.selectedFieldCard = null;
+      }, '', { ms: 500, log: false });
+      return;
+    }
+
+    if (payload.source !== 'hand') return;
+    const card = me.hand[Number(payload.idx)];
+    if (!card) return;
+    if (!payStrictCost(card)) return;
+    const zone = defaultZoneForCard(card);
+    executeGameAction('hand_to_field', { cardName: card.name, zone }, () => {
+      const placed = initBattleCard({ ...card, tapped: false, pos });
+      me[zone].push(placed);
+      me.hand.splice(Number(payload.idx), 1);
+      state.selectedCard = null;
+      state.selectedFieldCard = null;
+      checkLandGameVictory();
+    }, `Played ${card.name}.`);
+  }
+
+  // Re-flow every permanent into tidy rows by type.
+  function tidyBattlefield(){
+    executeGameAction('tidy_field', {}, () => {
+      BATTLE_ZONE_KEYS.forEach(zoneKey => {
+        (me[zoneKey] || []).forEach((c, i) => { c.pos = autoPosFor(me, zoneKey, i, 'me'); });
+      });
+    }, 'Tidied the battlefield.', { ms: 900 });
   }
 
   function moveDraggedCard(payload, target){
@@ -8117,14 +8186,47 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     return `<div class="field-card${c.tapped ? ' tapped' : ''}${sel ? ' selected' : ''}" data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"></div>`;
   }).join('');
 
-  // One battlefield zone box. Only the local player's zones accept drops.
-  const zoneBox = (player, zoneKey, owner, extraClass = '') => {
-    const cards = player[zoneKey] || [];
-    const drop = owner === 'me' ? ` data-drop-target="${zoneKey}"` : '';
+  // --- Free-placement battlefield -----------------------------------------
+  //
+  // One open canvas per player instead of separate typed boxes: cards sit
+  // wherever they are dropped. The three zone ARRAYS remain the data model
+  // (the bot, horde, land-game rules, sync and undo all key off them) — free
+  // placement is purely a card.pos = {x,y} percentage carried alongside.
+  const canvasCardsHtml = (player, owner) => BATTLE_ZONE_KEYS.flatMap(zoneKey =>
+    (player[zoneKey] || []).map((c, i) => {
+      const sel = owner === 'me'
+        && state.selectedFieldCard
+        && state.selectedFieldCard.zone === zoneKey
+        && state.selectedFieldCard.idx === i;
+      const pos = c.pos || autoPosFor(player, zoneKey, i, owner);
+      return `<div class="field-card canvas-card${c.tapped ? ' tapped' : ''}${sel ? ' selected' : ''}"
+        data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"
+        style="left:${pos.x}%;top:${pos.y}%"></div>`;
+    })).join('');
+
+  // Cards that have never been placed get a sensible default spot, grouped by
+  // type in three lanes. A card is about a third of the canvas tall, so the
+  // lanes are spaced accordingly, and a crowded lane fans its cards closer
+  // together rather than spilling out of the canvas.
+  const LANE_Y = {
+    me:  { supportField: 3, creatureField: 35, landField: 67 },
+    opp: { landField: 3, creatureField: 35, supportField: 67 }
+  };
+  function autoPosFor(player, zoneKey, i, owner){
+    const y = (LANE_Y[owner === 'opp' ? 'opp' : 'me'])[zoneKey] ?? 34;
+    const count = (player[zoneKey] || []).length || 1;
+    const step = Math.min(8.2, 90 / Math.max(1, count));   // fan when crowded
+    return { x: 1.5 + i * step, y };
+  }
+
+  const canvasBox = (player, owner) => {
+    const count = battlefieldCards(player).length;
+    const drop = owner === 'me' ? ' data-drop-target="canvas"' : '';
     return `
-      <div class="battle-zone ${extraClass}${getFieldClass(cards)}"${drop}>
-        <span class="zone-title">${htmlEscape(battleZoneLabel(zoneKey))}${cards.length ? ` · ${cards.length}` : ''}</span>
-        ${zoneCardsHtml(player, zoneKey, owner)}
+      <div class="battle-canvas ${owner === 'me' ? 'mine' : 'theirs'}"${drop} data-canvas-owner="${owner}">
+        <span class="canvas-label">${owner === 'me' ? 'Your battlefield' : 'Opponent battlefield'}${count ? ` · ${count}` : ''}</span>
+        ${canvasCardsHtml(player, owner)}
+        ${count ? '' : `<span class="canvas-hint">${owner === 'me' ? 'Drag cards here — place them anywhere you like' : ''}</span>`}
       </div>`;
   };
 
@@ -8142,7 +8244,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       : `<div class="battle-zone pile is-static"${drop}>${body}</div>`;
   };
 
-  const backRow = (player, owner) => {
+  const pilesRow = (player, owner) => {
     const isMe = owner === 'me';
     const deckCount = sharedGame ? shared.deck.length : (player.deck || []).length;
     const piles = [
@@ -8158,19 +8260,12 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       pileBox(isMe ? 'viewExile' : 'viewOppExile', '🚫', 'Exile',
         (player.exile || []).length, true, isMe ? 'exile' : '')
     ].filter(Boolean).join('');
-    return `<div class="zone-row back">${zoneBox(player, 'landField', owner, 'lands')}${piles}</div>`;
+    return `<div class="pile-row">${piles}</div>`;
   };
 
-  const frontRow = (player, owner) => `
-    <div class="zone-row front">
-      ${zoneBox(player, 'creatureField', owner, 'creatures')}
-      ${zoneBox(player, 'supportField', owner, 'support')}
-    </div>`;
-
-  // The opponent's half is mirrored: their back row sits furthest away, so the
-  // two creature rows face each other across the divider, like a real table.
-  const opponentHalf = `<div class="battle-half opponent">${backRow(opp, 'opp')}${frontRow(opp, 'opp')}</div>`;
-  const myHalf = `<div class="battle-half you">${frontRow(me, 'me')}${backRow(me, 'me')}</div>`;
+  // Each half is one open canvas plus the library/graveyard/exile piles.
+  const opponentHalf = `<div class="battle-half opponent">${pilesRow(opp, 'opp')}${canvasBox(opp, 'opp')}</div>`;
+  const myHalf = `<div class="battle-half you">${canvasBox(me, 'me')}${pilesRow(me, 'me')}</div>`;
 
   div.innerHTML = `
     <div class="battle-shell" style="display: flex; height: 100vh;">
@@ -8218,6 +8313,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
               <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
               ${state.vsAI ? '<button id="declareAttack" class="btn btn-red text-xs">⚔️ Attack</button>' : ''}
+              <button id="tidyField" class="btn btn-secondary text-xs" title="Arrange your battlefield into tidy rows">🧹 Tidy</button>
               <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
               ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal Top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn Top</button><button id="shuffleSharedStack" class="btn btn-purple text-xs">Shuffle Stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
               ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-purple text-xs">Horde Reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde Attack</button>' : ''}
@@ -8455,7 +8551,20 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     dropTarget.addEventListener('drop', (event) => {
       event.preventDefault();
       dropTarget.classList.remove('drag-over');
-      moveDraggedCard(readCardDragData(event), dropTarget.dataset.dropTarget);
+      const payload = readCardDragData(event);
+      const target = dropTarget.dataset.dropTarget;
+      if (target === 'canvas') {
+        // Where on the battlefield did it land? Store as percentages so the
+        // layout survives resizing and travels intact over the network.
+        const box = dropTarget.getBoundingClientRect();
+        const pos = {
+          x: Math.max(0, Math.min(92, ((event.clientX - box.left - 34) / box.width) * 100)),
+          y: Math.max(0, Math.min(88, ((event.clientY - box.top - 24) / box.height) * 100))
+        };
+        dropOntoCanvas(payload, pos);
+        return;
+      }
+      moveDraggedCard(payload, target);
     });
   });
   
@@ -8740,6 +8849,9 @@ if (card.stun && card.stun > 0) {
     state.selectedZoneCard = null;
     render();
   };
+
+  const tidyBtn = div.querySelector('#tidyField');
+  if (tidyBtn) tidyBtn.onclick = tidyBattlefield;
 
   const passSeatBtn = div.querySelector('#passSeat');
   if (passSeatBtn) passSeatBtn.onclick = () => {
@@ -9324,6 +9436,7 @@ window.GALDUR_APP = {
   getModeRules,
   hordeReveal: revealHorde,
   hordeAttack,
+  checkHordeVictory,
   BATTLE_ZONE_KEYS,
   battlefieldCards,
   defaultZoneForCard,
