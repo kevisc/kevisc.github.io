@@ -73,7 +73,10 @@ function boot(){
   function humanPlayer(){ return state.gameState[humanKey]; }
 
   function aiGameActive(){
-    return !!(state.vsAI && !state.onlineMode && state.gameStarted && !state.winner && state.screen === 'game');
+    // replayMode also sets gameStarted/screen, so it must be excluded or the
+    // bot would try to take turns on top of a replay being watched.
+    return !!(state.vsAI && !state.onlineMode && !state.replayMode
+      && state.gameStarted && !state.winner && state.screen === 'game');
   }
 
   function fieldCards(player){
@@ -298,6 +301,8 @@ function boot(){
       act('ai_attack_declare', { count: attackers.length }, () => {
         state.gameState.phase = 'Combat';
         attackers.forEach(c => { if (!keywordsOf(c).vigilance) c.tapped = true; c.aiAttacking = true; });
+        const rules = window.GALDUR_RULES;
+        if (rules) attackers.forEach(c => rules.onAttacks(c, aiPlayer()));
       }, `AI attacks with ${attackers.length} creature${attackers.length === 1 ? '' : 's'}.`);
       if (!await step()) return;
 
@@ -367,11 +372,13 @@ function boot(){
       if (pick.kind === 'creature') {
         if (!keywordsOf(battleCard).haste) battleCard.aiSick = true;
         me2[A.defaultZoneForCard(battleCard)].push(battleCard);
-        return `AI casts ${battleCard.name}.`;
+        const note = window.GALDUR_RULES ? window.GALDUR_RULES.onEnter(battleCard, me2) : '';
+        return `AI casts ${battleCard.name}.${note ? ' ' + note : ''}`;
       }
       if (pick.kind === 'permanent') {
         me2[A.defaultZoneForCard(battleCard)].push(battleCard);
-        return `AI casts ${battleCard.name}.`;
+        const note = window.GALDUR_RULES ? window.GALDUR_RULES.onEnter(battleCard, me2) : '';
+        return `AI casts ${battleCard.name}.${note ? ' ' + note : ''}`;
       }
       // instants / sorceries the AI understands
       const human = humanPlayer();
@@ -556,13 +563,16 @@ function boot(){
         lines.push(`${blocker.name} blocks ${attacker.name}${blockerDies ? ` — ${blocker.name} dies` : ''}${attackerDies ? ` — ${attacker.name} dies` : ''}.`);
       }
 
+      const rules = window.GALDUR_RULES;
       for (const c of deadBlockers) {
         for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(defenderPlayer, z, c)) break;
         defenderPlayer.graveyard.push({ ...c, tapped: false, aiAttacking: undefined, playerAttacking: undefined });
+        if (rules) { const n = rules.onDies(c, defenderPlayer); if (n) lines.push(n); }
       }
       for (const c of deadAttackers) {
         for (const z of A.BATTLE_ZONE_KEYS) if (removeFromZone(attackerPlayer, z, c)) break;
         attackerPlayer.graveyard.push({ ...c, tapped: false, aiAttacking: undefined, playerAttacking: undefined });
+        if (rules) { const n = rules.onDies(c, attackerPlayer); if (n) lines.push(n); }
       }
       A.checkWinner();
       if (A.checkHordeVictory) A.checkHordeVictory();

@@ -962,6 +962,102 @@ test('The battlefield keeps a card exactly where it is dropped', async ({ page }
 });
 
 
+
+// --- rules engine (bot games only) -----------------------------------------
+
+test('Card text is parsed into anthems, triggers and effects', async ({ page }) => {
+  await enter(page);
+  const parsed = await page.evaluate(() => {
+    const R = window.GALDUR_RULES;
+    return {
+      anthem: R.parseAnthem({ effect: 'Other creatures you control get +1/+1.' }),
+      tribal: R.parseAnthem({ effect: 'Goblins you control get +2/+0.' }),
+      notAnthem: R.parseAnthem({ effect: 'Flying, lifelink.' }),
+      damage: R.parseEffects('When this enters the battlefield, it deals 3 damage to any target.'),
+      token: R.parseEffects('When this enters the battlefield, create a 1/1 white Soldier creature token.'),
+      drain: R.parseEffects('When this dies, each opponent loses 2 life.')
+    };
+  });
+  expect(parsed.anthem).toEqual({ othersOnly: true, tribe: null, p: 1, t: 1 });
+  expect(parsed.tribal.tribe).toBe('goblin');
+  expect(parsed.notAnthem).toBeNull();
+  expect(parsed.damage[0]).toMatchObject({ kind: 'damage', n: 3 });
+  expect(parsed.token[0]).toMatchObject({ kind: 'token', p: 1, t: 1 });
+  expect(parsed.drain[0]).toMatchObject({ kind: 'drain', n: 2 });
+});
+
+test('An anthem buffs other creatures but not itself', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(400);
+
+  const pt = await page.evaluate(() => {
+    const A = window.GALDUR_APP, p1 = A.state.gameState.player1;
+    const mk = (n, t, pw, tg, e) => A.initBattleCard({ id: n, gameId: n, name: n, type: t,
+      cost: '', colors: [], effect: e || '', power: pw, toughness: tg });
+    p1.creatureField = [mk('Bear', 'Creature — Bear', 2, 2), mk('Gob', 'Creature — Goblin', 1, 1)];
+    p1.supportField = []; p1.landField = [];
+    const before = A.effectivePT(p1.creatureField[0]);
+    p1.supportField.push(mk('Banner', 'Enchantment', 0, 0, 'Other creatures you control get +1/+1.'));
+    return {
+      before,
+      bear: A.effectivePT(p1.creatureField[0]),
+      gob: A.effectivePT(p1.creatureField[1])
+    };
+  });
+  expect(pt.before).toEqual({ p: 2, t: 2 });
+  expect(pt.bear).toEqual({ p: 3, t: 3 });
+  expect(pt.gob).toEqual({ p: 2, t: 2 });
+});
+
+test('An enter trigger resolves when the card is played', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(400);
+
+  const result = await page.evaluate(() => {
+    const A = window.GALDUR_APP, s = A.state, p1 = s.gameState.player1;
+    p1.creatureField = []; p1.supportField = []; p1.landField = [];
+    p1.hand = [A.initBattleCard({ id: 'z', gameId: 'z', name: 'Flame Herald',
+      type: 'Creature — Shaman', cost: '', colors: ['R'],
+      effect: 'When this enters the battlefield, it deals 3 damage to any target.',
+      power: 2, toughness: 2 })];
+    const before = s.gameState.player2.health;
+    A.render();
+    document.querySelector('#handContainer .hand-card')
+      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    return { before, after: s.gameState.player2.health };
+  });
+  expect(result.after).toBe(result.before - 3);
+});
+
+test('Rules enforcement never applies to a game between people', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playLocal').click();     // people, not a bot
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(400);
+
+  const result = await page.evaluate(() => {
+    const A = window.GALDUR_APP, s = A.state, p1 = s.gameState.player1;
+    p1.creatureField = [A.initBattleCard({ id: 'b', gameId: 'b', name: 'Bear',
+      type: 'Creature — Bear', cost: '', colors: [], effect: '', power: 2, toughness: 2 })];
+    p1.supportField = [A.initBattleCard({ id: 'a', gameId: 'a', name: 'Banner',
+      type: 'Enchantment', cost: '', colors: [], effect: 'Other creatures you control get +1/+1.',
+      power: 0, toughness: 0 })];
+    return { active: window.GALDUR_RULES.active(), bear: A.effectivePT(p1.creatureField[0]) };
+  });
+  expect(result.active).toBe(false);
+  expect(result.bear).toEqual({ p: 2, t: 2 });   // untouched: players adjudicate
+});
+
 // --- replays and relay ------------------------------------------------------
 
 test('A game records a scrubable, read-only replay', async ({ page }) => {
@@ -1038,6 +1134,42 @@ test('Replay frames stay small by storing library counts, not contents', async (
   await page.evaluate(d => window.GALDUR_APP.enterReplay(d), data);
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.GALDUR_APP.state.gameState.player1.deck.length)).toBe(liveDeck);
+});
+
+test('The relay badge never claims a url the connection would discard', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+
+  // Missing scheme: iceServers() drops it, so the UI must not say "configured".
+  await page.evaluate(() => document.querySelector('.relay-card')?.setAttribute('open', ''));
+  await page.locator('#turnUrls').fill('relay.example.com');
+  await page.locator('#saveTurn').click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('.relay-card .badge')).toHaveText('unusable url');
+
+  await page.evaluate(() => document.querySelector('.relay-card')?.setAttribute('open', ''));
+  await page.locator('#turnUrls').fill('turn:relay.example.com:3478');
+  await page.locator('#saveTurn').click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('.relay-card .badge')).toHaveText('configured');
+});
+
+test('The LAN-only warning is decided by the shared code itself', async ({ page }) => {
+  // Regression: waitForIceGathering's fast path asserted srflx without
+  // evidence, and that flag then suppressed the warning regardless of what the
+  // SDP actually contained.
+  await enter(page);
+  await page.evaluate(() => window.GALDUR_APP.createOnlineRoom());
+  await page.waitForFunction(
+    () => { const s = window.GALDUR_APP.state; return s.roomCode && s.roomCode !== 'waiting'; },
+    { timeout: 30000 });
+
+  const agree = await page.evaluate(() => {
+    const s = window.GALDUR_APP.state;
+    const sdp = JSON.parse(atob(s.roomCode)).offer.sdp;
+    return window.GALDUR_APP.sdpHasPublicCandidate(sdp) === !s.localOnlyCode;
+  });
+  expect(agree).toBe(true);
 });
 
 test('A relay can be configured, persisted and honestly tested', async ({ page }) => {

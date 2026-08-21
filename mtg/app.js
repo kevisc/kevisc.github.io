@@ -1066,6 +1066,21 @@ function planManaPayment(player, cost){
   return [...used];
 }
 
+// Fire a card's enter-the-battlefield trigger (bot games only) and surface it.
+function fireEnterTrigger(card, controller){
+  const rules = window.GALDUR_RULES;
+  if (!rules) return;
+  const note = rules.onEnter(card, controller);
+  if (note) addGameLog(note, 'trigger', { cardName: card.name });
+}
+
+function fireDeathTrigger(card, controller){
+  const rules = window.GALDUR_RULES;
+  if (!rules) return;
+  const note = rules.onDies(card, controller);
+  if (note) addGameLog(note, 'trigger', { cardName: card.name });
+}
+
 function deckSizeSummary(modeOrId){
   const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : modeOrId;
   const policy = deckSizePolicy(mode);
@@ -1960,7 +1975,30 @@ function effectivePT(card) {
   const dP = (card && card.pt && typeof card.pt.p === 'number') ? card.pt.p : (card?.counters || 0);
   const dT = (card && card.pt && typeof card.pt.t === 'number') ? card.pt.t : (card?.counters || 0);
 
-  return { p: baseP + dP, t: baseT + dT };
+  // Static anthems ("Other creatures you control get +1/+1") in bot games.
+  let sP = 0, sT = 0;
+  const rules = window.GALDUR_RULES;
+  if (rules && rules.active() && !_inStaticBonus) {
+    _inStaticBonus = true;                       // staticBonus calls back here
+    try {
+      const owner = _ownerOfCard(card);
+      if (owner) { const b = rules.staticBonus(card, owner); sP = b.p; sT = b.t; }
+    } finally { _inStaticBonus = false; }
+  }
+
+  return { p: baseP + dP + sP, t: baseT + dT + sT };
+}
+
+// Guard against the mutual recursion between effectivePT and staticBonus.
+let _inStaticBonus = false;
+
+function _ownerOfCard(card){
+  const gs = state.gameState;
+  if (!gs || !card) return null;
+  for (const key of ['player1', 'player2']) {
+    if (battlefieldCards(gs[key]).includes(card)) return gs[key];
+  }
+  return null;
 }
 
 function addGameLog(message, type = 'note', payload = {}){
@@ -2456,13 +2494,28 @@ const STUN_SERVERS = [
 // static site has no way to host. So the player can supply their own: any
 // TURN service works, and several have free tiers. Stored locally, never sent
 // anywhere except to the browser's own WebRTC stack.
+// One validator, used by both the ICE config and the UI badge, so the badge can
+// never claim a relay the connection would silently discard.
+function validTurnUrls(raw){
+  return String(raw || '').split(',').map(u => u.trim())
+    .filter(u => /^(turns?|stun):\S+$/i.test(u));
+}
+
 function iceServers(){
   const t = state.turnServer;
-  if (t && t.urls) {
-    const entry = { urls: t.urls.split(',').map(u => u.trim()).filter(Boolean) };
-    if (t.username) entry.username = t.username;
-    if (t.credential) entry.credential = t.credential;
-    if (entry.urls.length) return [...STUN_SERVERS, entry];
+  try {
+    if (t && t.urls) {
+      const urls = validTurnUrls(t.urls);
+      if (urls.length) {
+        const entry = { urls };
+        if (t.username) entry.username = String(t.username);
+        if (t.credential) entry.credential = String(t.credential);
+        return [...STUN_SERVERS, entry];
+      }
+      console.warn('Ignoring malformed TURN url(s):', t.urls);
+    }
+  } catch (e) {
+    console.warn('Ignoring unusable TURN config:', e);
   }
   return STUN_SERVERS;
 }
@@ -2483,7 +2536,9 @@ const ICE_GRACE_MS = 1200;       // after STUN answers, allow a moment for more
 // answered (plus a short grace for more candidates); otherwise wait out the cap.
 function waitForIceGathering(pc){
   return new Promise(resolve => {
-    if (pc.iceGatheringState === 'complete') return resolve({ srflx: true, complete: true });
+    // Do NOT claim srflx here: gathering may already be complete having found
+    // only host candidates. The caller reads the finished SDP instead.
+    if (pc.iceGatheringState === 'complete') return resolve({ srflx: false, complete: true });
 
     let done = false;
     let sawSrflx = false;
@@ -2595,7 +2650,9 @@ async function createOnlineRoom() {
   const gather = await waitForIceGathering(pc);
   const sdp = pc.localDescription;
   state.roomCode = btoa(JSON.stringify({ offer: sdp }));
-  state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp) && !gather.srflx;
+  // The generated SDP is the only thing the other player receives, so it — not
+  // the gathering bookkeeping — decides whether this code can leave the LAN.
+  state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp);
   state.candidateSummary = describeCandidates(sdp && sdp.sdp);
   state.waitingForAnswer = true;
   state.connectionStatus = state.localOnlyCode
@@ -2630,7 +2687,7 @@ async function joinOnlineRoom(offerStr) {
     const gather = await waitForIceGathering(pc);
     const sdp = pc.localDescription;
     state.answerCode = btoa(JSON.stringify({ answer: sdp }));
-    state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp) && !gather.srflx;
+    state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp);
     state.candidateSummary = describeCandidates(sdp && sdp.sdp);
     state.connectionStatus = state.localOnlyCode
       ? 'local network only — see the warning below'
@@ -3465,6 +3522,7 @@ function BattleMenu()  {
   const sharedStackOwner = (state.decks.player1 || []).length ? 'your' : ((state.decks.player2 || []).length ? "the opponent's" : '');
   const sharedStackCount = sharedStackOwner === 'your' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
   const sharedStackDeck = sharedStackOwner === 'your' ? (state.decks.player1 || []) : (state.decks.player2 || []);
+  const turnConfigured = !!(state.turnServer && validTurnUrls(state.turnServer.urls).length);
   const battleValidationHtml = rules.sharedLibrary
     ? deckValidationPanelHtml(validateDeckForMode(sharedStackDeck, mode), {
         id: 'battleDeckValidation',
@@ -3546,7 +3604,11 @@ function BattleMenu()  {
       <details class="card p-4 mb-4 relay-card"${state.turnServer && state.turnServer.urls ? ' open' : ''}>
         <summary style="cursor:pointer;font-weight:800;font-size:14px">
           🛰️ Relay server for online play (optional)
-          ${state.turnServer && state.turnServer.urls ? '<span class="badge" style="margin-left:8px">configured</span>' : ''}
+          ${turnConfigured
+            ? '<span class="badge" style="margin-left:8px">configured</span>'
+            : (state.turnServer && state.turnServer.urls
+                ? '<span class="badge" style="margin-left:8px;border-color:rgba(251,191,36,.6);color:#fcd34d">unusable url</span>'
+                : '')}
         </summary>
         <p class="text-xs text-gray mt-3">
           Most connections work without this. If you and your opponent are on networks that block
@@ -3689,7 +3751,10 @@ function BattleMenu()  {
     const t = readTurn();
     state.turnServer = t.urls ? t : null;
     scheduleSave();
-    toast(t.urls ? 'Relay saved.' : 'Relay cleared.');
+    if (!t.urls) toast('Relay cleared.');
+    else if (!validTurnUrls(t.urls).length) {
+      toast('Saved, but that is not a usable TURN url — it must start with turn: or turns:.', 4500);
+    } else toast('Relay saved.');
     render();
   };
   const clearTurnBtn = div.querySelector('#clearTurn');
@@ -8037,6 +8102,7 @@ function GameBoard() {
       const card = initBattleCard({ ...item.card, tapped: false });
       if (isPermanentCard(card)) {
         owner[defaultZoneForCard(card)].push(card);
+        fireEnterTrigger(card, owner);
         if (rules.winCondition === 'basic-land-game') checkLandGameVictory();
       } else {
         owner.graveyard.push(card);
@@ -8144,6 +8210,7 @@ function GameBoard() {
       me.hand.splice(Number(payload.idx), 1);
       state.selectedCard = null;
       state.selectedFieldCard = null;
+      fireEnterTrigger(placed, me);
       checkLandGameVictory();
     }, `Played ${card.name}.`);
   }
@@ -8975,6 +9042,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
           me.hand.splice(idx, 1);
           state.selectedCard = null;
           state.selectedFieldCard = null;
+          fireEnterTrigger(cardToPlace, me);
           checkLandGameVictory();
         }, `Played ${card.name} to ${battleZoneLabel(zone)}.`);
       };
@@ -9763,6 +9831,7 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
           me.hand.splice(state.selectedCard, 1);
           state.selectedCard = null;
           state.selectedFieldCard = null;
+          fireEnterTrigger(cardToPlace, me);
           checkLandGameVictory();
         }, `Moved ${card.name} to ${battleZoneLabel(zone)}.`);
       };
