@@ -59,9 +59,10 @@ test('AI and app bridges are exposed once the scripts load', async ({ page }) =>
 test('Boss Battle starts asymmetric life totals and offers co-op', async ({ page }) => {
   await enter(page);
   await openBattleMenu(page, 'boss');
-  await expect(page.locator('#playCoop')).toBeVisible();
+  await expect(page.locator('#coopToggle')).toBeVisible();
 
-  await page.locator('#playCoop').click();
+  await page.locator('#coopToggle').check();
+  await page.locator('#playAI').click();
   await page.locator('#startBtn').click();
   await page.waitForTimeout(600);
 
@@ -204,7 +205,7 @@ test('Starting a new draft clears the previous run', async ({ page }) => {
     s.draft.screen = 'setup';
     A.render();
   });
-  await page.locator('[data-f="modern"]').first().click();
+  await page.locator('#startDraft').click();
   await page.waitForTimeout(400);
 
   const d = await page.evaluate(() => {
@@ -385,7 +386,7 @@ async function startTraditionalDraft(page) {
     s.currentPlayer = 1; s.screen = 'draft'; s.draft.active = true;
     s.draft.mode = 'traditional'; s.draft.screen = 'setup'; A.render();
   });
-  await page.locator('[data-f="modern"]').first().click();
+  await page.locator('#startDraft').click();
   await page.evaluate(() => {
     const D = window.GALDUR_APP.state.draft;
     D.chosenColors = ['U']; D.screen = 'lands'; window.GALDUR_APP.render();
@@ -445,7 +446,7 @@ test('Basic lands are resolved once per land name, with real art', async ({ page
     s.currentPlayer = 1; s.screen = 'draft'; s.draft.active = true;
     s.draft.mode = 'traditional'; s.draft.screen = 'setup'; A.render();
   });
-  await page.locator('[data-f="modern"]').first().click();
+  await page.locator('#startDraft').click();
   await page.evaluate(() => {
     const D = window.GALDUR_APP.state.draft;
     D.chosenColors = ['U', 'R']; D.screen = 'lands'; window.GALDUR_APP.render();
@@ -481,7 +482,7 @@ test('Basic lands are resolved once per land name, with real art', async ({ page
 async function openStudioViaMenu(page, modeName) {
   await page.locator('#playlistModeBtn').click();
   await page.locator('.mode-card', { has: page.getByRole('heading', { name: modeName }) })
-    .getByRole('button', { name: 'Open Studio' }).click();
+    .getByRole('button', { name: 'Details' }).click();
   await expect(page.locator('#studioPlayAI')).toBeVisible();
 }
 
@@ -1336,7 +1337,8 @@ test('Decks can be saved to and loaded from the library', async ({ page }) => {
 
   // Clearing the working deck and loading the saved one restores it.
   await page.evaluate(() => { window.GALDUR_APP.state.decks.player1 = []; window.GALDUR_APP.render(); });
-  await page.locator('.libLoad').first().click();
+  await page.locator('#deckShelfToggle').click();
+  await page.locator('.editorLibLoad').first().click();
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.GALDUR_APP.state.decks.player1.length)).toBe(30);
 

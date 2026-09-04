@@ -16,6 +16,13 @@ const state = {
   modeFamily: 'all',
   battleMode: 'casual',
   studioTab: 'play',
+  quickPlayBusy: false,      // Quick play is fetching a real-card deck
+  deckDeleteConfirm: null,   // deck library id awaiting an inline delete confirm
+  deckRenaming: null,        // deck library id being renamed inline
+  deckLibraryTarget: null,   // which seat a library Load fills next
+  builderScryQuery: '',      // last Scryfall query typed in the Deck Editor
+  builderPanel: null,        // panel to open after switching back to the deck tab
+  deckShelfOpen: false,      // saved-deck shelf left open in the Deck Editor
   editingCard: null,
   activePlayer: 1,
   gameState: {
@@ -318,6 +325,7 @@ function resetDraftForMode(modeId, options = {}){
     deck: [],
     seenIds: {},
     seenNames: {},
+    confirmLeave: false,
     customPool: [],
     customParams: { filterByColors: true },
     off: freshDraftOffState(),
@@ -331,10 +339,20 @@ function routeToMode(modeId, action){
   state.battleMode = mode.id;
   if (action === 'build') state.studioTab = 'build';
   else if (action === 'draft') state.studioTab = 'draft';
-  else if (action === 'play') state.studioTab = 'play';
   else state.studioTab = mode.play ? 'play' : (mode.build ? 'build' : 'draft');
   applyAutoDeck(mode);
-  state.screen = 'mode-studio';
+  // "Play" goes straight where the mode is actually played. Limited modes have
+  // no constructed deck to bring, so they open the draft flow instead.
+  if (action === 'play') {
+    if (!mode.play && mode.draft) {
+      resetDraftForMode(mode.id, { screen: 'setup' });
+      state.screen = 'draft';
+    } else {
+      state.screen = 'battlemenu';
+    }
+  } else {
+    state.screen = 'mode-studio';
+  }
   render();
 }
 
@@ -956,7 +974,7 @@ function getModeRules(modeOrId){
 
 function saveDeckToLibrary(name, cards, modeId){
   const clean = (cards || []).filter(Boolean);
-  if (!clean.length) { toast('Nothing to save — the deck is empty.'); return null; }
+  if (!clean.length) { toast('Nothing to save. The deck is empty.'); return null; }
   const entry = {
     id: makeId('deck'),
     name: (name || '').trim() || `Untitled deck (${clean.length})`,
@@ -993,8 +1011,22 @@ function deleteDeckFromLibrary(deckId){
 
 function libraryDeckSummary(entry){
   const mode = getModeConfig(entry.modeId);
-  const lands = entry.cards.filter(c => ((c.type || '') + '').toLowerCase().includes('land')).length;
-  return `${entry.cards.length} cards · ${lands} lands · ${mode.title}`;
+  return `${entry.cards.length} cards · ${deckColorSummary(entry.cards)} · ${mode.title}`;
+}
+
+// Which colours a deck actually plays, read from the card colours and the
+// mana symbols in the costs.
+const COLOR_WORDS = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
+function deckColorSummary(cards){
+  const seen = new Set();
+  (cards || []).forEach(card => {
+    (card.colors || []).forEach(c => { if (COLOR_WORDS[c]) seen.add(c); });
+    ((card.cost || '') + '').toUpperCase().replace(/[^WUBRG]/g, '').split('').forEach(c => seen.add(c));
+  });
+  const list = ['W', 'U', 'B', 'R', 'G'].filter(c => seen.has(c));
+  if (!list.length) return 'colourless';
+  if (list.length === 5) return 'five colours';
+  return list.map(c => COLOR_WORDS[c]).join(', ');
 }
 
 // Position a floating hover preview so it is always fully on screen: flip to
@@ -1145,7 +1177,9 @@ function validateDeckForMode(deck, modeOrId){
   if (mode.commanderZone) facts.push(mode.commandZoneLabel || 'command zone');
 
   if (!cards.length) {
-    errors.push(mode.sharedLibrary ? 'Load a shared stack or pool before starting this mode.' : 'Add cards to this deck before starting.');
+    errors.push(mode.sharedLibrary
+      ? 'No shared stack loaded yet. Import a list or generate one.'
+      : 'No cards yet. Generate a deck, load a saved one, or build one in the Deck Editor.');
   }
 
   if (cards.length) {
@@ -1200,7 +1234,10 @@ function validateDeckForMode(deck, modeOrId){
   }
 
   const status = errors.length ? 'blocked' : (warnings.length ? 'warning' : 'ready');
-  return { status, errors, warnings, facts, mode };
+  // An empty deck is a starting point, not a rule violation. It keeps the
+  // "Needs work" label but drops the red styling, and the caller offers the
+  // actions that fill it.
+  return { status, empty: !cards.length, errors, warnings, facts, mode };
 }
 
 function deckValidationPanelHtml(validation, options = {}){
@@ -1212,7 +1249,7 @@ function deckValidationPanelHtml(validation, options = {}){
   ];
   const emptyText = validation.status === 'ready' ? 'Deck matches the selected mode rules the app can verify.' : '';
   return `
-    <div id="${options.id || 'deckValidation'}" class="deck-validation deck-validation-${validation.status}${options.compact ? ' compact' : ''}">
+    <div id="${options.id || 'deckValidation'}" class="deck-validation deck-validation-${validation.status}${validation.empty ? ' is-empty' : ''}${options.compact ? ' compact' : ''}">
       <div class="deck-validation-head">
         <div>
           <div class="text-xs text-gray">${htmlEscape(title)}</div>
@@ -1224,8 +1261,9 @@ function deckValidationPanelHtml(validation, options = {}){
         ${validation.facts.map(fact => `<span>${htmlEscape(fact)}</span>`).join('')}
       </div>
       <div class="validation-issues">
-        ${issueRows.map(item => `<div class="${item.kind}">${htmlEscape(item.message)}</div>`).join('') || `<div class="ok">${htmlEscape(emptyText)}</div>`}
+        ${issueRows.map(item => `<div class="${validation.empty ? 'note' : item.kind}">${htmlEscape(item.message)}</div>`).join('') || `<div class="ok">${htmlEscape(emptyText)}</div>`}
       </div>
+      ${options.actionsHtml || ''}
     </div>
   `;
 }
@@ -2146,7 +2184,7 @@ function replayToFile(){
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  toast(`Replay saved — ${rep.frames.length} moments.`);
+  toast(`Replay saved. ${rep.frames.length} moments.`);
 }
 
 function enterReplay(data){
@@ -2475,7 +2513,7 @@ state.dataChannel.onclose = () => {
   // A channel we closed ourselves also fires onclose — don't alarm the player
   // who chose to leave.
   if (state.leavingOnline) return;
-  toast('Connection closed — the other player disconnected.', 3200);
+  toast('Connection closed. The other player disconnected.', 3200);
   disconnectOnline();
   state.screen = 'menu';
   render();
@@ -2590,8 +2628,8 @@ function describeCandidates(sdp){
   const text = String(sdp || '');
   const relay = / typ relay/.test(text);
   const srflx = / typ srflx/.test(text);
-  if (relay) return 'relay ready — works on restrictive networks';
-  if (srflx) return 'direct connection — works across most networks';
+  if (relay) return 'relay ready, works on restrictive networks';
+  if (srflx) return 'direct connection, works across most networks';
   return 'local network only';
 }
 
@@ -2628,9 +2666,9 @@ function watchConnection(pc){
     const s = pc.connectionState || pc.iceConnectionState;
     state.connectionStatus = s;
     if (s === 'failed') {
-      toast('Connection failed. Re-copy a fresh code from the host and try again — codes expire once a connection attempt fails.', 6000);
+      toast('Connection failed. Re-copy a fresh code from the host and try again. Codes expire once a connection attempt fails.', 6000);
     } else if (s === 'disconnected') {
-      toast('Connection lost — trying to recover…', 3000);
+      toast('Connection lost. Trying to recover.', 3000);
     }
     render();
   };
@@ -2660,7 +2698,7 @@ async function createOnlineRoom() {
   state.candidateSummary = describeCandidates(sdp && sdp.sdp);
   state.waitingForAnswer = true;
   state.connectionStatus = state.localOnlyCode
-    ? 'local network only — see the warning below'
+    ? 'local network only, see the warning below'
     : 'waiting for the answer code';
   render();
 }
@@ -2694,7 +2732,7 @@ async function joinOnlineRoom(offerStr) {
     state.localOnlyCode = !sdpHasPublicCandidate(sdp && sdp.sdp);
     state.candidateSummary = describeCandidates(sdp && sdp.sdp);
     state.connectionStatus = state.localOnlyCode
-      ? 'local network only — see the warning below'
+      ? 'local network only, see the warning below'
       : 'send the answer code back';
     render();
   } catch(e) {
@@ -2881,25 +2919,25 @@ function LandPickerModal(){
             Your choice is saved.
           </div>
         </div>
-        <button id="closeLandPicker" class="btn btn-secondary text-sm">✕ Close</button>
+        <button id="closeLandPicker" class="btn btn-secondary text-sm">Close</button>
       </div>
 
       <div class="flex mb-4" style="gap:8px;flex-wrap:wrap">
         ${BASIC_LAND_NAMES.map(n => {
           const art = chosenLandArt(n);
           return `<button class="landTab btn ${n === P.land ? 'btn-blue' : 'btn-secondary'} text-sm" data-land="${n}">
-            ${htmlEscape(n)}${art ? ' ✓' : ''}
+            ${htmlEscape(n)}${art ? ' (chosen)' : ''}
           </button>`;
         }).join('')}
       </div>
 
       ${current ? `<div class="text-xs text-gray mb-3">
-        Current ${htmlEscape(P.land)}: ${htmlEscape(current.setName || current.set || 'custom')}${current.artist ? ` — art by ${htmlEscape(current.artist)}` : ''}
+        Current ${htmlEscape(P.land)}: ${htmlEscape(current.setName || current.set || 'custom')}${current.artist ? `, art by ${htmlEscape(current.artist)}` : ''}
         &nbsp;<button id="clearLandArt" class="btn btn-secondary text-xs">Reset to default</button>
       </div>` : ''}
 
       ${P.loading
-        ? '<div class="text-center text-gray p-4">Loading printings…</div>'
+        ? '<div class="text-center text-gray p-4">Loading printings</div>'
         : (P.printings.length
           ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;max-height:56vh;overflow:auto">
               ${P.printings.map((art, i) => `
@@ -3056,6 +3094,199 @@ function restoreScroll(saved){
   }
 }
 
+// One top bar for every screen: back on the left, title in the middle, a single
+// context action on the right. Pass action:null for screens that need none.
+function topBarHtml({ title, backLabel = 'Back', backId = 'topBack', actionLabel = '', actionId = 'topAction', subtitle = '' }){
+  return `
+    <div class="topbar">
+      <div class="topbar-side">
+        ${backId ? `<button id="${backId}" class="btn btn-secondary text-sm">${htmlEscape(backLabel)}</button>` : ''}
+      </div>
+      <div class="topbar-title">
+        <h1>${htmlEscape(title)}</h1>
+        ${subtitle ? `<div class="topbar-sub">${htmlEscape(subtitle)}</div>` : ''}
+      </div>
+      <div class="topbar-side end">
+        ${actionLabel ? `<button id="${actionId}" class="btn btn-secondary text-sm">${htmlEscape(actionLabel)}</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// Colour pairs the deck generator offers. Names are the plain guild colours,
+// no jargon, so the picker reads the same to a new player and a veteran.
+const DECK_COLOR_CHOICES = [
+  { id: 'gw', colors: ['G', 'W'], label: 'Green and white' },
+  { id: 'ur', colors: ['U', 'R'], label: 'Blue and red' },
+  { id: 'br', colors: ['B', 'R'], label: 'Black and red' },
+  { id: 'wu', colors: ['W', 'U'], label: 'White and blue' },
+  { id: 'bg', colors: ['B', 'G'], label: 'Black and green' }
+];
+
+// Build a playable real-card deck for one seat from a single Scryfall search.
+// Falls back to the generated Jumpstart deck when the network is unavailable,
+// so the button never dead-ends.
+async function generateDeckForSlot(slotKey, choiceId, modeOrId = currentModeConfig()){
+  const mode = typeof modeOrId === 'string' ? getModeConfig(modeOrId) : (modeOrId || currentModeConfig());
+  const choice = DECK_COLOR_CHOICES.find(c => c.id === choiceId) || DECK_COLOR_CHOICES[0];
+  const id = choice.colors.join('').toLowerCase();
+  // Build to the size the mode asks for, so the new deck reads as Ready and
+  // not as a deck that already needs work.
+  const policy = deckSizePolicy(mode);
+  const size = Math.max(40, Math.min(100, policy.count || mode.target || 60));
+  const lands = Math.round(size * 0.4);
+  const spells = Math.round((size - lands) * 0.3);
+  const creatures = size - lands - spells;
+  let cards = null;
+  try {
+    cards = await buildDeckFromPool({
+      query: `legal:pioneer id<=${id} -t:land game:paper cmc<=6`,
+      colors: choice.colors, owner: slotKey, creatures, spells, lands
+    });
+  } catch { cards = null; }
+  if (!cards || !cards.length) {
+    const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
+    cards = buildJumpstartDeck(themes[0], themes[1]).cards;
+  }
+  state.decks[slotKey] = tagAutoDeck(cards, 'generated');
+  scheduleSave();
+  return cards;
+}
+
+// Inline actions for an empty deck slot. Three ways out, all one click deep.
+function deckActionsHtml(prefix, options = {}){
+  const colorOptions = DECK_COLOR_CHOICES
+    .map(c => `<option value="${c.id}">${htmlEscape(c.label)}</option>`).join('');
+  const hasSaved = (state.deckLibrary || []).length > 0;
+  return `
+    <div class="validation-actions" data-deck-actions="${htmlEscape(prefix)}">
+      <select id="${prefix}GenColors" class="input" aria-label="Deck colours">${colorOptions}</select>
+      <button id="${prefix}Generate" class="btn btn-primary" type="button">Generate a deck</button>
+      <button id="${prefix}LoadSaved" class="btn btn-secondary" type="button" ${hasSaved ? '' : 'disabled'}>Load a saved deck</button>
+      ${options.importId ? `<button id="${htmlEscape(options.importId)}" class="btn btn-secondary" type="button">Import a list</button>` : ''}
+      ${options.hideBuilder ? '' : `<button id="${prefix}OpenBuilder" class="btn btn-secondary" type="button">Build in Deck Editor</button>`}
+    </div>
+  `;
+}
+
+function bindDeckActions(root, prefix, slotKey, options = {}){
+  const genBtn = root.querySelector('#' + prefix + 'Generate');
+  if (genBtn) genBtn.onclick = async () => {
+    const choice = root.querySelector('#' + prefix + 'GenColors')?.value;
+    genBtn.disabled = true;
+    genBtn.textContent = 'Building';
+    try { await generateDeckForSlot(slotKey, choice); }
+    finally { genBtn.disabled = false; }
+    toast('Deck generated.');
+    render();
+  };
+  const loadBtn = root.querySelector('#' + prefix + 'LoadSaved');
+  if (loadBtn) loadBtn.onclick = () => {
+    state.deckLibraryTarget = slotKey;
+    if (typeof options.onLoadSaved === 'function') options.onLoadSaved();
+    else render();
+  };
+  const buildBtn = root.querySelector('#' + prefix + 'OpenBuilder');
+  if (buildBtn) buildBtn.onclick = () => {
+    state.currentPlayer = slotKey === 'player2' ? 2 : 1;
+    state.builderTab = 'deck';
+    state.screen = 'builder';
+    render();
+  };
+}
+
+// The saved-deck shelf. Delete asks for confirmation in the row itself, so the
+// page never hands control to a browser dialog.
+function deckLibraryHtml(prefix){
+  const decks = state.deckLibrary || [];
+  if (!decks.length) return '<div class="text-xs text-gray">No saved decks yet. Save one from the Deck Editor.</div>';
+  return decks.map(d => {
+    const confirming = state.deckDeleteConfirm === d.id;
+    const renaming = state.deckRenaming === d.id;
+    return `
+      <div class="deck-row${confirming ? ' confirming' : ''}" data-deck-id="${d.id}">
+        <div class="deck-row-main">
+          ${renaming
+            ? `<input class="input ${prefix}RenameInput" data-id="${d.id}" value="${htmlEscape(d.name)}" style="width:200px">`
+            : `<div class="deck-row-name">${htmlEscape(d.name)}</div>`}
+          <div class="deck-row-meta">${htmlEscape(libraryDeckSummary(d))}</div>
+        </div>
+        <div class="deck-row-actions">
+          ${confirming
+            ? `<span class="text-xs text-gray">Delete this deck?</span>
+               <button class="btn btn-red ${prefix}DelYes" data-id="${d.id}">Delete</button>
+               <button class="btn btn-secondary ${prefix}DelNo" data-id="${d.id}">Keep</button>`
+            : renaming
+              ? `<button class="btn btn-primary ${prefix}RenameSave" data-id="${d.id}">Save name</button>
+                 <button class="btn btn-secondary ${prefix}RenameCancel" data-id="${d.id}">Cancel</button>`
+              : `<button class="btn btn-secondary ${prefix}Load" data-id="${d.id}">Load</button>
+                 <button class="btn btn-secondary ${prefix}Rename" data-id="${d.id}">Rename</button>
+                 <button class="btn btn-secondary ${prefix}Delete" data-id="${d.id}" aria-label="Delete ${htmlEscape(d.name)}">Delete</button>`}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function bindDeckLibrary(root, prefix, defaultSlot){
+  const each = (cls, fn) => root.querySelectorAll('.' + prefix + cls).forEach(el => { el.onclick = () => fn(el.dataset.id, el); });
+  each('Load', (id) => {
+    const slot = state.deckLibraryTarget || defaultSlot || ('player' + state.currentPlayer);
+    const entry = loadDeckFromLibrary(id, slot);
+    if (entry) {
+      state.lastDeckName = entry.name;
+      state.deckLibraryTarget = null;
+      toast(`Loaded "${entry.name}".`);
+      render();
+    }
+  });
+  each('Rename', (id) => { state.deckRenaming = id; state.deckDeleteConfirm = null; render(); });
+  each('RenameCancel', () => { state.deckRenaming = null; render(); });
+  each('RenameSave', (id) => {
+    const input = root.querySelector('.' + prefix + 'RenameInput[data-id="' + id + '"]');
+    const name = (input?.value || '').trim();
+    const entry = (state.deckLibrary || []).find(d => d.id === id);
+    if (entry && name) { entry.name = name; scheduleSave(); }
+    state.deckRenaming = null;
+    render();
+  });
+  each('Delete', (id) => { state.deckDeleteConfirm = id; state.deckRenaming = null; render(); });
+  each('DelNo', () => { state.deckDeleteConfirm = null; render(); });
+  each('DelYes', (id) => {
+    deleteDeckFromLibrary(id);
+    state.deckDeleteConfirm = null;
+    toast('Deck deleted.');
+    render();
+  });
+}
+
+// Screen registry. Legacy and shorthand keys alias onto the real screen, and
+// anything unknown falls back to the menu instead of an empty page.
+const SCREEN_BUILDERS = {
+  login: () => LoginScreen(),
+  menu: () => MainMenu(),
+  modes: () => ModeHubScreen(),
+  'mode-studio': () => ModeStudioScreen(),
+  creator: () => CardCreator(),
+  builder: () => DeckBuilder(),
+  game: () => GameBoard(),
+  battlemenu: () => BattleMenu(),
+  draft: () => DraftScreen()
+};
+const SCREEN_ALIASES = {
+  mode: 'mode-studio',
+  studio: 'mode-studio',
+  'mode-hub': 'modes',
+  battle: 'battlemenu',
+  deck: 'builder',
+  cards: 'creator',
+  home: 'menu'
+};
+function normalizeScreenKey(key){
+  const raw = typeof key === 'string' ? key : '';
+  const resolved = SCREEN_ALIASES[raw] || raw;
+  return SCREEN_BUILDERS[resolved] ? resolved : 'menu';
+}
+
 function render() {
   scheduleSave();   // persist collection + decks (debounced) on any state change
   const root = document.getElementById('root');
@@ -3065,15 +3296,11 @@ function render() {
   const selStart = document.activeElement && document.activeElement.selectionStart;
   root.innerHTML = '';
 
-  if (state.screen === 'login') root.appendChild(LoginScreen());
-  else if (state.screen === 'menu') root.appendChild(MainMenu());
-  else if (state.screen === 'modes') root.appendChild(ModeHubScreen());
-  else if (state.screen === 'mode-studio') root.appendChild(ModeStudioScreen());
-  else if (state.screen === 'creator') root.appendChild(CardCreator());
-  else if (state.screen === 'builder') root.appendChild(DeckBuilder());
-  else if (state.screen === 'game') root.appendChild(GameBoard());
-  else if (state.screen === 'battlemenu') root.appendChild(BattleMenu());
-  else if (state.screen === 'draft') root.appendChild(DraftScreen());
+  // One screen key, one builder. An unknown key used to render nothing at all,
+  // so any stale or aliased name (state.screen = 'mode') left a blank page.
+  const screen = normalizeScreenKey(state.screen);
+  state.screen = screen;
+  root.appendChild(SCREEN_BUILDERS[screen]());
 
   // Overlay: available from every screen, so it is mounted after the screen.
   if (state.landPicker) root.appendChild(LandPickerModal());
@@ -3113,7 +3340,7 @@ function LoginScreen() {
  Made by KS. 2025. 
 </p>
       <div class="card enter-card">
-        <p class="text-sm text-gray mb-4">Enter the table. Build your own deck — the bot brings its own, or you can craft your opponent's too.</p>
+        <p class="text-sm text-gray mb-4">Enter the table. Build your own deck. The bot brings its own, or you can craft your opponent's too.</p>
         <button id="enterApp" class="btn btn-primary" style="padding: 18px 42px; font-size: 18px;">Enter</button>
       </div>
     </div>
@@ -3140,12 +3367,43 @@ function ModeHubScreen() {
     </button>
   `).join('');
 
-  div.innerHTML = `
-    <div class="header">
-      <button id="backBtn" class="btn btn-secondary text-sm">← Menu</button>
-      <h1 style="font-size:24px;font-weight:800">Choose Mode</h1>
-      <button id="collectionBtn" class="btn btn-secondary text-sm">Card Collection</button>
+  const cardHtml = (mode) => `
+    <div class="mode-card ${mode.id === state.selectedMode ? 'active' : ''}" data-mode-card data-mode-id="${htmlEscape(mode.id)}" data-family="${htmlEscape(mode.family)}" data-search="${htmlEscape([mode.title, mode.family, mode.summary, mode.format, mode.note].filter(Boolean).join(' ').toLowerCase())}">
+      <div class="flex" style="gap:8px;align-items:center;justify-content:space-between">
+        <span class="mode-family">${htmlEscape(mode.family)}</span>
+        <span class="mode-selected-chip">Selected</span>
+      </div>
+      <h3>${htmlEscape(mode.title)}</h3>
+      <p class="mode-summary">${htmlEscape(mode.summary)}</p>
+      <div class="text-xs text-gray">
+        ${mode.target ? `Deck ${mode.target}` : 'Open deck size'}
+        ${mode.singleton ? ' · Singleton' : ''}
+        ${mode.rarity === 'common' ? ' · Commons only' : ''}
+        ${mode.sharedLibrary ? ' · Shared library' : ''}
+      </div>
+      ${mode.note ? `<div class="mode-note-plain">${htmlEscape(mode.note)}</div>` : ''}
+      <div class="mode-actions">
+        <button class="btn btn-primary" data-action="play" data-mode="${mode.id}">Play</button>
+        <button class="btn btn-secondary" data-action="details" data-mode="${mode.id}">Details</button>
+      </div>
     </div>
+  `;
+
+  // Grouped by category, so the list reads as a shelf rather than one long run.
+  const groups = families.filter(f => f !== 'all').map(family => {
+    const inGroup = modes.filter(m => m.family === family);
+    return `
+      <section class="mode-group" data-group="${htmlEscape(family)}">
+        <div class="mode-group-head">
+          <h2>${htmlEscape(family)}</h2>
+          <span>${inGroup.length} mode${inGroup.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="mode-grid">${inGroup.map(cardHtml).join('')}</div>
+      </section>`;
+  }).join('');
+
+  div.innerHTML = `
+    ${topBarHtml({ title: 'Choose Mode', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Card Collection', actionId: 'collectionBtn' })}
 
     <div class="mode-filter-bar">
       <div class="mode-filter-head">
@@ -3157,25 +3415,7 @@ function ModeHubScreen() {
       </div>
     </div>
 
-    <div class="mode-grid">
-      ${modes.map(mode => `
-        <div class="mode-card ${mode.id === state.selectedMode ? 'active' : ''}" data-mode-card data-mode-id="${htmlEscape(mode.id)}" data-family="${htmlEscape(mode.family)}" data-search="${htmlEscape([mode.title, mode.family, mode.summary, mode.format, mode.note].filter(Boolean).join(' ').toLowerCase())}">
-          <span class="mode-family">${htmlEscape(mode.family)}</span>
-          <h3>${htmlEscape(mode.title)}</h3>
-          <p class="mode-summary">${htmlEscape(mode.summary)}</p>
-          <div class="text-xs text-gray">
-            ${mode.target ? `Deck ${mode.target}` : 'Open deck size'}
-            ${mode.singleton ? ' • Singleton' : ''}
-            ${mode.rarity === 'common' ? ' • Commons only' : ''}
-            ${mode.sharedLibrary ? ' • Shared library' : ''}
-          </div>
-          ${mode.note ? `<div class="mode-note">${htmlEscape(mode.note)}</div>` : ''}
-          <div class="mode-actions">
-            <button class="btn btn-primary" data-action="open" data-mode="${mode.id}">Open Studio</button>
-          </div>
-        </div>
-      `).join('')}
-    </div>
+    ${groups}
     <div id="modeEmpty" class="mode-empty" hidden>No matching modes.</div>
   `;
 
@@ -3196,6 +3436,9 @@ function ModeHubScreen() {
       const show = matchesFamily && matchesQuery;
       card.hidden = !show;
       if (show) visible += 1;
+    });
+    div.querySelectorAll('.mode-group').forEach(group => {
+      group.hidden = !group.querySelector('[data-mode-card]:not([hidden])');
     });
     if (countEl) countEl.textContent = `${visible}/${modes.length}`;
     if (emptyEl) emptyEl.hidden = visible > 0;
@@ -3221,28 +3464,24 @@ function MainMenu() {
   const div = document.createElement('div');
   div.className = 'screen';
   const mode = currentModeConfig();
+  const myDeck = state.decks['player' + (state.currentPlayer || 1)] || [];
   const playlists = allModePlaylists(5);
   const playlistHtml = playlists.length ? playlists.map(setup => `
     <div class="playlist-row">
       <div>
         <div class="playlist-title">${htmlEscape(setup.name)}</div>
-        <div class="playlist-meta">${htmlEscape(setup.mode.title)} • P1 ${setup.p1Count} cards • P2 ${setup.p2Count} cards</div>
+        <div class="playlist-meta">${htmlEscape(setup.mode.title)} · you ${setup.p1Count} cards · opponent ${setup.p2Count} cards</div>
       </div>
       <button class="btn btn-secondary text-xs" data-open-playlist="${setup.id}" data-mode="${setup.modeId}">Open</button>
     </div>
-  `).join('') : '<div class="playlist-empty">Saved deck playlists will appear here.</div>';
+  `).join('') : '<div class="playlist-empty">Saved deck playlists appear here.</div>';
+
+  const quickBusy = state.quickPlayBusy;
 
   div.innerHTML = `
     <div class="home-shell">
-      <div class="header">
-        <div>
-          <div class="mode-family">Galdurspjöld</div>
-          <h1 class="home-title">Choose your battle</h1>
-        </div>
-        <button id="logoutBtn" class="btn btn-secondary text-sm">Exit</button>
-      </div>
+      ${topBarHtml({ title: 'Galdurspjöld', backId: '', actionLabel: 'Exit to title', actionId: 'exitBtn' })}
 
-      <!-- Current format, always visible so nothing is "mode first" guesswork -->
       <div class="card mode-strip mb-4">
         <div>
           <div class="text-xs text-gray" style="letter-spacing:.06em;text-transform:uppercase">Current format</div>
@@ -3250,51 +3489,53 @@ function MainMenu() {
           <div class="text-xs text-gray mt-1">${htmlEscape(mode.summary)}</div>
         </div>
         <div class="flex" style="gap:8px;flex-wrap:wrap">
-          <div class="deck-chip">Your deck · ${(state.decks.player1 || []).length}</div>
-          <div class="deck-chip">Opponent · ${(state.decks.player2 || []).length}</div>
+          <div class="deck-chip">Your deck ${myDeck.length}</div>
+          <div class="deck-chip">Opponent ${(state.decks.player2 || []).length}</div>
           <button id="chooseMode" class="btn btn-secondary text-sm">Change format</button>
         </div>
       </div>
 
       <div class="home-actions">
-        <button id="goPlay" class="action-panel featured">
-          <span>⚔️ Play</span>
-          <small>Solo vs the bot, co-op, a boss fight, or pass-and-play.</small>
+        <button id="quickPlay" class="action-panel featured" ${quickBusy ? 'disabled' : ''}>
+          <span>${quickBusy ? 'Building a deck' : 'Quick play'}</span>
+          <small id="quickPlayNote">${quickBusy
+            ? 'Fetching cards from Scryfall. This takes a moment.'
+            : 'Casual against the bot at Normal. A deck is built for you if you have none.'}</small>
+        </button>
+        <button id="goPlay" class="action-panel">
+          <span>Play</span>
+          <small>Choose the mode, decks and opponent yourself.</small>
         </button>
         <button id="goBuild" class="action-panel">
-          <span>🛠️ Deck Editor</span>
+          <span>Deck Editor</span>
           <small>Search cards, import a list, check the curve.</small>
         </button>
         <button id="goDraft" class="action-panel">
-          <span>🎴 Draft</span>
-          <small>Draft solo against a bot, hotseat, or online.</small>
+          <span>Draft</span>
+          <small>Draft solo against bots, hotseat, or online.</small>
         </button>
         <button id="cardCollection" class="action-panel">
-          <span>✨ Design Cards</span>
-          <small>Make your own cards in the Deck Editor. ${(state.cards || []).length} saved.</small>
+          <span>Design cards</span>
+          <small>Make your own cards. ${(state.cards || []).length} saved.</small>
         </button>
         <button id="chooseLands" class="action-panel">
-          <span>🏞️ Basic Lands</span>
+          <span>Basic lands</span>
           <small>Pick the printing your decks use.</small>
         </button>
         <button id="playlistModeBtn" class="action-panel">
-          <span>📚 All Formats</span>
+          <span>All formats</span>
           <small>Browse every mode, from Commander to Dandan.</small>
         </button>
         <button id="watchReplay" class="action-panel">
-          <span>🎬 Watch a Replay</span>
-          <small>Open a saved game and scrub through it move by move.</small>
+          <span>Watch a replay</span>
+          <small>Open a saved game and step through it.</small>
         </button>
         <input id="replayFile" type="file" accept=".json" class="hidden">
       </div>
 
       <div class="card p-4 mt-4">
-        <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
-          <div>
-            <h2 style="font-size:17px;font-weight:900;margin-bottom:4px">Deck Playlists</h2>
-            <p class="text-xs text-gray">Saved mode + deck configurations for quick setup.</p>
-          </div>
-        </div>
+        <h2 style="font-size:17px;font-weight:900;margin-bottom:4px">Deck playlists</h2>
+        <p class="text-xs text-gray">Saved mode and deck combinations for quick setup.</p>
         <div class="playlist-list mt-4">
           ${playlistHtml}
         </div>
@@ -3302,8 +3543,7 @@ function MainMenu() {
     </div>
   `;
 
-  // actions
-  div.querySelector('#logoutBtn').onclick  = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  div.querySelector('#exitBtn').onclick  = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
   // You always act as seat 1 outside online play; the old P1/P2 profile
   // switcher confused far more than it helped.
   if (!state.onlineMode) state.currentPlayer = 1;
@@ -3315,7 +3555,6 @@ function MainMenu() {
   };
   div.querySelector('#chooseLands').onclick = () => openLandPicker('Plains');
   div.querySelector('#playlistModeBtn').onclick = () => { state.modeIntent = 'all'; state.screen = 'modes'; render(); };
-  // Straight to the thing you wanted, using the format already selected.
   const watchReplayBtn = div.querySelector('#watchReplay');
   const replayFileInput = div.querySelector('#replayFile');
   if (watchReplayBtn && replayFileInput) {
@@ -3328,10 +3567,31 @@ function MainMenu() {
     };
   }
 
+  // Two clicks to a game: Enter, then Quick play.
+  div.querySelector('#quickPlay').onclick = async () => {
+    if (state.quickPlayBusy) return;
+    state.selectedMode = 'casual';
+    state.battleMode = 'casual';
+    state.aiDifficulty = 'normal';
+    const seat = 'player1';
+    state.currentPlayer = 1;
+    if (!(state.decks[seat] || []).length) {
+      state.quickPlayBusy = true;
+      render();
+      const pick = DECK_COLOR_CHOICES[Math.floor(Math.random() * DECK_COLOR_CHOICES.length)];
+      try { await generateDeckForSlot(seat, pick.id); }
+      finally { state.quickPlayBusy = false; }
+    }
+    startVsBot(getModeConfig('casual'));
+  };
+
   div.querySelector('#goPlay').onclick = () => { state.screen = 'battlemenu'; render(); };
   div.querySelector('#goBuild').onclick = () => { state.builderTab = 'deck'; state.screen = 'builder'; render(); };
   div.querySelector('#goDraft').onclick = () => {
-    resetDraftForMode(state.selectedMode || 'casual', { screen: 'mode' });
+    // A mode that cannot draft (Boss Battle, say) would scope the pool to
+    // itself, so fall back to a plain set draft.
+    const current = getModeConfig(state.selectedMode || 'casual');
+    resetDraftForMode(current.draft ? current.id : 'set-draft', { screen: 'setup' });
     state.screen = 'draft';
     render();
   };
@@ -3351,6 +3611,26 @@ function MainMenu() {
   });
 
   return div;
+}
+
+// Start a local game against the bot in the given mode. Shared by Quick play,
+// the Battle menu and the Mode Studio so they cannot drift apart.
+function startVsBot(mode, opts = {}){
+  state.onlineMode = false;
+  state.vsAI = true;
+  state.coop = !!opts.coop;
+  state.coopSeat = 1;
+  state.bossRound = 0;
+  state.currentPlayer = 1;              // the human always sits in seat 1
+  applyAutoDeck(mode);
+  if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, 'jumpstart')) {
+    const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
+    const built = buildJumpstartDeck(themes[0], themes[1]);
+    state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
+    upgradeDeckSlot('player2', 'jumpstart', () => buildRealAiDeck(aiTier()));
+  }
+  state.screen = 'game';
+  render();
 }
 
 function ModeStudioScreen() {
@@ -3378,8 +3658,19 @@ function ModeStudioScreen() {
         compact: true
       })
     : `<div class="grid grid-2" style="gap:12px">
-        ${deckValidationPanelHtml(p1Validation, { id: 'studioP1Validation', title: 'Your Deck', compact: true })}
-        ${deckValidationPanelHtml(p2Validation, { id: 'studioP2Validation', title: 'Opponent Deck', compact: true })}
+        ${deckValidationPanelHtml(p1Validation, { id: 'studioP1Validation', title: 'Your deck', compact: true })}
+        ${rules.botOpponent
+          ? `<div class="deck-validation compact is-empty" id="studioP2Validation">
+               <div class="deck-validation-head">
+                 <div>
+                   <div class="text-xs text-gray">Opponent deck</div>
+                   <div class="deck-validation-title">${htmlEscape(mode.title)}</div>
+                 </div>
+                 <span class="validation-status">Ready</span>
+               </div>
+               <div class="validation-issues"><div class="note">Bot brings its own deck.</div></div>
+             </div>`
+          : deckValidationPanelHtml(p2Validation, { id: 'studioP2Validation', title: 'Opponent deck', compact: true })}
       </div>`;
   const availableTabs = [
     ...(mode.build ? ['build'] : []),
@@ -3387,7 +3678,12 @@ function ModeStudioScreen() {
     ...(mode.play ? ['play'] : [])
   ];
   if (!availableTabs.length) availableTabs.push('play');
-  const currentTab = availableTabs.includes(state.studioTab) ? state.studioTab : availableTabs[0];
+  // A tab left over from another mode may not exist here. Fall back to what
+  // the mode is for, not to whatever happens to sit first in the list.
+  const preferredTab = mode.play ? 'play' : (mode.draft ? 'draft' : 'build');
+  const currentTab = availableTabs.includes(state.studioTab)
+    ? state.studioTab
+    : (availableTabs.includes(preferredTab) ? preferredTab : availableTabs[0]);
   state.studioTab = currentTab;
   const tabLabel = { build: 'Build', draft: 'Draft', play: 'Play' };
   const tabButtons = availableTabs.map(tab => `
@@ -3413,42 +3709,42 @@ function ModeStudioScreen() {
       <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">${htmlEscape(mode.title)} Draft</h2>
       <p class="text-sm text-gray">${mode.draft ? 'Draft and pool tools are scoped to this mode.' : 'This mode does not use a draft flow.'}</p>
       <div class="flex mt-4" style="gap:8px;flex-wrap:wrap">
-        ${mode.draft ? '<button id="studioStartDraft" class="btn btn-blue">Start Draft / Pool Builder</button>' : ''}
+        ${mode.draft ? '<button id="studioStartDraft" class="btn btn-primary">Start draft</button>' : ''}
       </div>
     </div>
   `;
   const playPanelHtml = `
     <div class="studio-panel-card">
-      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Match Readiness</h2>
+      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Match readiness</h2>
       ${matchValidationHtml}
       <div class="flex mt-4" style="gap:10px;flex-wrap:wrap">
         ${rules.botOpponent
           ? `<button id="studioPlayAI" class="btn btn-primary" aria-label="Start">${mode.id === 'horde' ? 'Fight the Horde' : 'Fight the Boss'}</button>`
-          : `<button id="studioPlayAI" class="btn btn-primary" aria-label="Play vs AI">🤖 Play vs AI</button>`}
-        ${mode.coop ? '<button id="studioPlayCoop" class="btn btn-purple" aria-label="Co-op vs AI">🤝 Co-op vs AI</button>' : ''}
-        <button id="studioPlayLocal" class="btn btn-green" aria-label="Play Local">${rules.botOpponent ? 'Manual (no bot)' : 'Play Local (2 players)'}</button>
-        <button id="studioHost" class="btn btn-blue" aria-label="Host Game">Host Online</button>
-        <button id="studioJoin" class="btn btn-secondary" aria-label="Join Game">Join Online</button>
+          : `<button id="studioPlayAI" class="btn btn-primary" aria-label="Play vs AI">Play vs AI</button>`}
+        ${mode.coop ? '<button id="studioPlayCoop" class="btn btn-secondary" aria-label="Co-op vs AI">Co-op vs AI</button>' : ''}
+        <button id="studioPlayLocal" class="btn btn-secondary" aria-label="Play Local">${rules.botOpponent ? 'Manual, no bot' : 'Play local'}</button>
+        <button id="studioHost" class="btn btn-secondary" aria-label="Host Game">Host online</button>
+        <button id="studioJoin" class="btn btn-secondary" aria-label="Join Game">Join online</button>
       </div>
     </div>
   `;
   const panelHtml = currentTab === 'build' ? buildPanelHtml : currentTab === 'draft' ? draftPanelHtml : playPanelHtml;
 
   div.innerHTML = `
-    <div class="header">
-      <button id="studioBack" class="btn btn-secondary text-sm">← Modes</button>
-      <div>
-        <div class="mode-family">${htmlEscape(mode.family)}</div>
-        <h1 style="font-size:26px;font-weight:900;margin-top:4px">${htmlEscape(mode.title)} Studio</h1>
-      </div>
-      <button id="studioMenu" class="btn btn-secondary text-sm">Menu</button>
-    </div>
+    ${topBarHtml({
+      title: mode.title + ' Studio',
+      subtitle: mode.family,
+      backLabel: 'Back',
+      backId: 'studioBack',
+      actionLabel: 'Menu',
+      actionId: 'studioMenu'
+    })}
 
     <div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(320px,1.35fr);gap:16px;align-items:start">
       <div class="card p-4">
-        <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode Requirements</h2>
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode requirements</h2>
         <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
-        ${mode.note ? `<div class="mode-note mt-4">${htmlEscape(mode.note)}</div>` : ''}
+        ${mode.note ? `<div class="mode-note-plain mt-4">${htmlEscape(mode.note)}</div>` : ''}
         <div class="validation-facts" style="margin-top:14px">
           <span>${mode.target ? `${mode.target} card target` : 'open size'}</span>
           ${mode.singleton ? '<span>singleton</span>' : ''}
@@ -3456,18 +3752,18 @@ function ModeStudioScreen() {
           ${mode.sharedLibrary ? '<span>shared library</span>' : ''}
           ${mode.commanderZone ? `<span>${htmlEscape(mode.commandZoneShortLabel || 'command zone')}</span>` : ''}
         </div>
-        ${rules.sharedLibrary ? `<div class="mode-note mt-4">
+        ${rules.sharedLibrary ? `<div class="mode-note-plain mt-4">
           ${sharedStackReady
             ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner} deck as one center stack (${sharedStackCount} cards).`
             : `No ${htmlEscape(rules.sharedLabel || 'shared library')} loaded yet.`}
         </div>` : ''}
         <div class="card p-3 mt-4 playlist-card">
-          <h3 style="font-size:14px;font-weight:800;margin-bottom:6px">Deck Playlists</h3>
+          <h3 style="font-size:14px;font-weight:800;margin-bottom:6px">Deck playlists</h3>
           <p class="text-xs text-gray mb-2">Save the current Player 1 / Player 2 decks for this mode.</p>
           <div class="grid" style="gap:8px">
             <input id="setupName" class="input" placeholder="${htmlEscape(defaultSetupName(mode))}">
             <div class="flex" style="gap:8px;flex-wrap:wrap">
-              <button id="saveSetup" class="btn btn-primary text-xs">Save List</button>
+              <button id="saveSetup" class="btn btn-primary text-xs">Save list</button>
               <select id="setupSelect" class="input" style="min-width:180px;flex:1" ${savedSetups.length ? '' : 'disabled'}>
                 ${setupOptions || '<option>No saved playlists</option>'}
               </select>
@@ -3481,10 +3777,10 @@ function ModeStudioScreen() {
       <div class="card p-4">
         <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
           <div>
-            <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode Workspace</h2>
+            <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode workspace</h2>
             <p class="text-sm text-gray">${htmlEscape(mode.title)} tools and readiness.</p>
           </div>
-          <button id="studioChangeMode" class="btn btn-secondary text-sm">Change Mode</button>
+          <button id="studioChangeMode" class="btn btn-secondary text-sm">Change mode</button>
         </div>
         <div class="studio-tabs mt-4" role="tablist">
           ${tabButtons}
@@ -3609,168 +3905,185 @@ function ModeStudioScreen() {
 
 function BattleMenu()  {
   const div = document.createElement('div');
-  div.className = 'screen';
+  div.className = 'container';
   const mode = currentModeConfig();
   const rules = getModeRules(mode);
-  const sharedStackReady = rules.sharedLibrary && (((state.decks.player1 || []).length > 0) || ((state.decks.player2 || []).length > 0));
+  const mySlot = 'player' + (state.currentPlayer || 1);
+  const oppSlot = mySlot === 'player1' ? 'player2' : 'player1';
+  const myDeck = state.decks[mySlot] || [];
+  const oppDeck = state.decks[oppSlot] || [];
+  const sharedStackReady = rules.sharedLibrary && ((state.decks.player1 || []).length > 0 || (state.decks.player2 || []).length > 0);
   const sharedStackOwner = (state.decks.player1 || []).length ? 'your' : ((state.decks.player2 || []).length ? "the opponent's" : '');
   const sharedStackCount = sharedStackOwner === 'your' ? (state.decks.player1 || []).length : (state.decks.player2 || []).length;
   const sharedStackDeck = sharedStackOwner === 'your' ? (state.decks.player1 || []) : (state.decks.player2 || []);
   const turnConfigured = !!(state.turnServer && validTurnUrls(state.turnServer.urls).length);
-  const battleValidationHtml = rules.sharedLibrary
-    ? deckValidationPanelHtml(validateDeckForMode(sharedStackDeck, mode), {
-        id: 'battleDeckValidation',
-        title: `${rules.sharedLabel || 'Shared Stack'} Check`,
-        compact: true
-      })
-    : `<div class="grid grid-2" style="gap:12px;margin-top:12px">
-        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player1 || [], mode), { id: 'p1DeckValidation', title: 'Your Deck', compact: true })}
-        ${deckValidationPanelHtml(validateDeckForMode(state.decks.player2 || [], mode), { id: 'p2DeckValidation', title: state.vsAI ? 'Bot Deck' : 'Opponent Deck', compact: true })}
+  const botMode = !!rules.botOpponent || !rules.sharedLibrary;
+  const coopMode = !!mode.coop;
+
+  const myValidation = validateDeckForMode(myDeck, mode);
+  const oppValidation = validateDeckForMode(oppDeck, mode);
+  const botBringsDeck = rules.botOpponent || mode.autoDeck;
+  // An empty opponent seat is only a problem for a game against a person: the
+  // bot builds its own deck when the game starts.
+  const oppIsBotSeat = botBringsDeck || (botMode && oppValidation.empty);
+
+  const decksHtml = rules.sharedLibrary
+    ? `<div class="card p-4">
+        ${deckValidationPanelHtml(validateDeckForMode(sharedStackDeck, mode), {
+          id: 'battleDeckValidation',
+          title: `${rules.sharedLabel || 'Shared Stack'} Check`,
+          compact: true,
+          actionsHtml: sharedStackReady ? '' : deckActionsHtml('battleShared')
+        })}
+        <p class="text-xs text-gray mt-3">${sharedStackReady
+          ? `${htmlEscape(rules.sharedLabel || 'Shared library')} uses ${sharedStackOwner} deck as one center stack (${sharedStackCount} cards).`
+          : 'No shared center stack loaded yet.'}</p>
+        ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeBattle" class="btn btn-secondary text-sm mt-3">Generate a starter cube stack</button>' : ''}
+        ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanBattle" class="btn btn-secondary text-sm mt-3">Generate a Dandan library</button>' : ''}
+      </div>`
+    : `<div class="seat-grid">
+        <div class="card p-4">
+          ${deckValidationPanelHtml(myValidation, {
+            id: 'p1DeckValidation',
+            title: 'Your deck',
+            compact: true,
+            actionsHtml: myValidation.empty ? deckActionsHtml('battleMine') : ''
+          })}
+        </div>
+        <div class="card p-4">
+          ${oppIsBotSeat
+            ? `<div class="deck-validation compact is-empty" id="p2DeckValidation">
+                 <div class="deck-validation-head">
+                   <div>
+                     <div class="text-xs text-gray">Opponent deck</div>
+                     <div class="deck-validation-title">${htmlEscape(mode.title)}</div>
+                   </div>
+                   <span class="validation-status">Ready</span>
+                 </div>
+                 <div class="validation-issues"><div class="note">Bot brings its own deck.${
+                   botBringsDeck ? '' : ' A local game against a person needs a deck here.'}</div></div>
+                 ${botBringsDeck ? '' : deckActionsHtml('battleOpp')}
+               </div>`
+            : deckValidationPanelHtml(oppValidation, {
+                id: 'p2DeckValidation',
+                title: state.vsAI ? 'Bot deck' : 'Opponent deck',
+                compact: true,
+                actionsHtml: oppValidation.empty ? deckActionsHtml('battleOpp') : ''
+              })}
+        </div>
+      </div>`;
+
+  const startRow = coopMode
+    ? `<div class="start-row">
+        <button id="playAI" class="btn btn-primary" aria-label="Play vs AI">${mode.id === 'horde' ? 'Fight the Horde' : 'Fight the Boss'}</button>
+        <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input id="coopToggle" type="checkbox" ${state.coop ? 'checked' : ''}>
+          Co-op: two survivors share one board
+        </label>
+      </div>`
+    : `<div class="start-row">
+        <button id="playAI" class="btn ${botMode ? 'btn-primary' : 'btn-secondary'}" aria-label="Play vs AI" ${rules.sharedLibrary ? 'disabled' : ''}>Play vs AI</button>
+        <button id="playLocal" class="btn btn-secondary" aria-label="Play Local">Play local</button>
+        <button id="hostGame" class="btn btn-secondary" aria-label="Host Game">Host online</button>
+        <button id="joinGame" class="btn btn-secondary" aria-label="Join Game">Join online</button>
       </div>`;
 
   div.innerHTML = `
-    <div style="max-width: 900px; width:100%; padding: 0 16px;">
-      <div class="header">
-        <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-        <h2 style="font-size: 24px; font-weight: bold;"></h2>
-        <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
-      </div>
+    <div class="battle-flow">
+      ${topBarHtml({ title: 'Play', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck Editor', actionId: 'editorBtn' })}
 
-      <div class="card p-4 mb-4">
-        <div class="flex justify-between" style="align-items:flex-start;gap:12px;">
-          <div>
-            <div class="mode-family">${htmlEscape(mode.family)}</div>
-            <h3 style="font-size:20px;font-weight:800;margin:8px 0 4px">${htmlEscape(mode.title)}</h3>
-            <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
-            ${mode.note ? `<p class="mode-note mt-4">${htmlEscape(mode.note)}</p>` : ''}
-            ${rules.sharedLibrary ? `<p class="mode-note mt-4">
-              ${sharedStackReady
-                ? `${htmlEscape(rules.sharedLabel || 'Shared Library')} will use ${sharedStackOwner} deck as one center stack (${sharedStackCount} cards).`
-                : `No shared center stack loaded yet. Build, import, or generate one before starting ${htmlEscape(mode.title)}.`}
-            </p>` : ''}
-            ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeBattle" class="btn btn-secondary text-sm mt-4">Generate Starter Cube Stack</button>' : ''}
-            ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanBattle" class="btn btn-secondary text-sm mt-4">Generate Dandan Library</button>' : ''}
-            ${battleValidationHtml}
-          </div>
+      <section class="flow-step">
+        <div class="flow-step-head">
+          <h3>1. Mode</h3>
           <button id="changeMode" class="btn btn-secondary text-sm">Change</button>
         </div>
-      </div>
+        <div class="card p-4">
+          <div class="mode-family">${htmlEscape(mode.family)}</div>
+          <h3 style="font-size:20px;font-weight:800;margin:8px 0 4px">${htmlEscape(mode.title)}</h3>
+          <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
+          ${mode.note ? `<p class="mode-note-plain mt-4">${htmlEscape(mode.note)}</p>` : ''}
+        </div>
+      </section>
 
-      ${(state.deckLibrary || []).length ? `
-      <div class="card p-4 mb-4">
-        <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <h3 style="font-weight:800;font-size:15px">📚 Bring a deck</h3>
-            <p class="text-xs text-gray mt-1">Load one of your saved decks into ${state.vsAI ? 'your seat' : 'a seat'} before starting.</p>
-          </div>
-          <div class="flex" style="gap:8px;align-items:center;flex-wrap:wrap">
-            <select id="bringDeckSelect" class="input" style="width:220px">
-              ${state.deckLibrary.map(d => `<option value="${d.id}">${htmlEscape(d.name)} (${d.cards.length})</option>`).join('')}
-            </select>
-            <button id="bringDeckMine" class="btn btn-secondary text-sm">→ My deck</button>
-            <button id="bringDeckOpp" class="btn btn-secondary text-sm">→ Opponent</button>
-          </div>
-        </div>
-      </div>` : ''}
+      <section class="flow-step">
+        <div class="flow-step-head"><h3>2. Decks</h3></div>
+        ${decksHtml}
+        <details class="card p-4" id="battleDeckLibrary"${state.deckLibraryTarget ? ' open' : ''}>
+          <summary style="cursor:pointer;font-weight:800;font-size:14px">Saved decks (${(state.deckLibrary || []).length})</summary>
+          <div class="mt-3">${deckLibraryHtml('battleLib')}</div>
+        </details>
+      </section>
 
-      <div class="card p-4 mb-4 difficulty-card">
-        <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <h3 style="font-weight:800;font-size:15px">🤖 Bot difficulty</h3>
-            <p class="text-xs text-gray mt-1" id="difficultyBlurb"></p>
+      <section class="flow-step">
+        <div class="flow-step-head"><h3>3. Options</h3></div>
+        <div class="card p-4 difficulty-card">
+          <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
+            <div>
+              <h3 style="font-weight:800;font-size:15px">Bot difficulty</h3>
+              <p class="text-xs text-gray mt-1" id="difficultyBlurb"></p>
+            </div>
+            <div class="segmented" role="group" aria-label="Bot difficulty">
+              ${['easy', 'normal', 'hard'].map(k => `
+                <button class="difficultyBtn${state.aiDifficulty === k ? ' active' : ''}" data-diff="${k}">
+                  ${k[0].toUpperCase()}${k.slice(1)}
+                </button>`).join('')}
+            </div>
           </div>
-          <div class="segmented" role="group" aria-label="Bot difficulty">
-            ${['easy', 'normal', 'hard'].map(k => `
-              <button class="difficultyBtn${state.aiDifficulty === k ? ' active' : ''}" data-diff="${k}">
-                ${k[0].toUpperCase()}${k.slice(1)}
-              </button>`).join('')}
+          <div class="flex mt-3" style="align-items:center;gap:10px;flex-wrap:wrap">
+            <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input id="strictManaToggle" type="checkbox" ${state.strictMana ? 'checked' : ''}>
+              <strong>Strict mana (bot games only)</strong>
+            </label>
+            <span class="text-xs text-gray">Against a bot, playing a card taps lands for its cost and limits you to one land per turn. Games against people stay self-enforced.</span>
           </div>
         </div>
-        <div class="flex mt-3" style="align-items:center;gap:10px;flex-wrap:wrap">
-          <label class="text-sm" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input id="strictManaToggle" type="checkbox" ${state.strictMana ? 'checked' : ''}>
-            <strong>Strict mana (bot games only)</strong>
-          </label>
-          <span class="text-xs text-gray">Against a bot, playing a card taps lands for its cost and limits you to one land per turn. Games against people always stay self-enforced.</span>
-        </div>
-      </div>
 
-      <details class="card p-4 mb-4 relay-card"${state.turnServer && state.turnServer.urls ? ' open' : ''}>
-        <summary style="cursor:pointer;font-weight:800;font-size:14px">
-          🛰️ Relay server for online play (optional)
-          ${turnConfigured
-            ? '<span class="badge" style="margin-left:8px">configured</span>'
-            : (state.turnServer && state.turnServer.urls
-                ? '<span class="badge" style="margin-left:8px;border-color:rgba(251,191,36,.6);color:#fcd34d">unusable url</span>'
-                : '')}
-        </summary>
-        <p class="text-xs text-gray mt-3">
-          Most connections work without this. If you and your opponent are on networks that block
-          direct connections — some workplaces, some mobile carriers — you need a TURN relay.
-          This site is static and cannot host one, so bring your own: several providers have a free
-          tier (Metered, Twilio, Cloudflare Calls). Stored only in this browser.
-        </p>
-        <div class="grid mt-3" style="grid-template-columns:2fr 1fr 1fr;gap:8px">
-          <input id="turnUrls" class="input" placeholder="turn:relay.example.com:3478"
-                 value="${htmlEscape((state.turnServer && state.turnServer.urls) || '')}">
-          <input id="turnUser" class="input" placeholder="username"
-                 value="${htmlEscape((state.turnServer && state.turnServer.username) || '')}">
-          <input id="turnPass" class="input" type="password" placeholder="credential"
-                 value="${htmlEscape((state.turnServer && state.turnServer.credential) || '')}">
-        </div>
-        <div class="flex mt-3" style="gap:8px;flex-wrap:wrap;align-items:center">
-          <button id="saveTurn" class="btn btn-secondary text-sm">Save relay</button>
-          <button id="testTurn" class="btn btn-secondary text-sm">Test it</button>
-          <button id="clearTurn" class="btn btn-secondary text-sm">Clear</button>
-          <span id="turnStatus" class="text-xs text-gray"></span>
-        </div>
-      </details>
+        <details class="card p-4 relay-card"${state.turnServer && state.turnServer.urls ? ' open' : ''}>
+          <summary style="cursor:pointer;font-weight:800;font-size:14px">
+            Relay server for online play (optional)
+            ${turnConfigured
+              ? '<span class="badge" style="margin-left:8px">configured</span>'
+              : (state.turnServer && state.turnServer.urls
+                  ? '<span class="badge" style="margin-left:8px;border-color:rgba(251,191,36,.6);color:#fcd34d">unusable url</span>'
+                  : '')}
+          </summary>
+          <p class="text-xs text-gray mt-3">
+            Most connections work without this. If you and your opponent sit on networks that block
+            direct connections, you need a TURN relay. This site is static and cannot host one, so
+            bring your own. Several providers have a free tier. Stored only in this browser.
+          </p>
+          <div class="grid mt-3" style="grid-template-columns:2fr 1fr 1fr;gap:8px">
+            <input id="turnUrls" class="input" placeholder="turn:relay.example.com:3478"
+                   value="${htmlEscape((state.turnServer && state.turnServer.urls) || '')}">
+            <input id="turnUser" class="input" placeholder="username"
+                   value="${htmlEscape((state.turnServer && state.turnServer.username) || '')}">
+            <input id="turnPass" class="input" type="password" placeholder="credential"
+                   value="${htmlEscape((state.turnServer && state.turnServer.credential) || '')}">
+          </div>
+          <div class="flex mt-3" style="gap:8px;flex-wrap:wrap;align-items:center">
+            <button id="saveTurn" class="btn btn-secondary text-sm">Save relay</button>
+            <button id="testTurn" class="btn btn-secondary text-sm">Test it</button>
+            <button id="clearTurn" class="btn btn-secondary text-sm">Clear</button>
+            <span id="turnStatus" class="text-xs text-gray"></span>
+          </div>
+        </details>
+      </section>
 
-      <div class="action-panel-grid">
-        <button id="playLocal" class="action-panel" aria-label="Play Local">
-          <span>Play Local</span>
-          <small>Start a local game using this mode setup.</small>
-        </button>
-        <button id="playAI" class="action-panel" aria-label="Play vs AI" ${rules.sharedLibrary && mode.id !== 'horde' ? 'disabled' : ''}>
-          <span>${mode.id === 'horde' ? 'Fight the Horde (Auto)' : mode.id === 'boss' ? 'Fight the Boss' : 'Play vs AI'}</span>
-          <small>${mode.id === 'horde'
-            ? 'The Horde runs itself each turn: reveal, attack, pass.'
-            : mode.id === 'boss'
-              ? 'An escalating AI boss with 40 life takes its own turns.'
-              : rules.sharedLibrary
-                ? 'Not available for shared-stack modes yet.'
-                : 'The computer plays Player 2. No deck? One is generated.'}</small>
-        </button>
-        ${mode.coop ? `
-        <button id="playCoop" class="action-panel" aria-label="Co-op vs AI">
-          <span>🤝 Co-op vs AI</span>
-          <small>Two survivors share one board and pass the device between turns.</small>
-        </button>` : ''}
-        <button id="hostGame" class="action-panel" aria-label="Host Game">
-          <span>Host Online</span>
-          <small>Create a connection code for a friend.</small>
-        </button>
-        <button id="joinGame" class="action-panel" aria-label="Join Game">
-          <span>Join Online</span>
-          <small>Paste a host code to connect.</small>
-        </button>
-      </div>
+      <section class="flow-step">
+        <div class="flow-step-head"><h3>4. Start</h3></div>
+        ${startRow}
+      </section>
     </div>
   `;
 
-  // helper for keyboard activation on tiles
   const bind = (sel, fn) => {
     const el = div.querySelector(sel);
     if (!el) return;
     el.onclick = fn;
-    el.onkeydown = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
-    };
   };
 
-  // nav
   bind('#backBtn',   () => { state.screen = 'menu';  render(); });
-  bind('#logoutBtn', () => { state.currentPlayer = null; state.screen = 'login'; render(); });
+  bind('#editorBtn', () => { state.builderTab = 'deck'; state.screen = 'builder'; render(); });
   bind('#changeMode', () => { state.modeIntent = 'play'; state.screen = 'modes'; render(); });
   bind('#starterCubeBattle', () => {
     state.decks.player1 = tagAutoDeck(makeStarterCubeStack(90), 'cube');
@@ -3784,7 +4097,15 @@ function BattleMenu()  {
     render();
   });
 
-  // local play
+  const openLibrary = () => {
+    const details = div.querySelector('#battleDeckLibrary');
+    if (details) { details.open = true; details.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  };
+  bindDeckActions(div, 'battleMine', mySlot, { onLoadSaved: openLibrary });
+  bindDeckActions(div, 'battleOpp', oppSlot, { onLoadSaved: openLibrary });
+  bindDeckActions(div, 'battleShared', mySlot, { onLoadSaved: openLibrary });
+  bindDeckLibrary(div, 'battleLib', mySlot);
+
   bind('#playLocal', () => {
     state.onlineMode = false;
     state.vsAI = false;
@@ -3793,28 +4114,12 @@ function BattleMenu()  {
     render();
   });
 
-  // vs AI: computer plays player 2 locally
-  const startVsAI = (coop) => {
-    if (rules.sharedLibrary && mode.id !== 'horde') { toast('AI needs its own deck — shared-stack modes are PvP for now.'); return; }
-    state.onlineMode = false;
-    state.vsAI = true;
-    state.coop = !!coop;
-    state.coopSeat = 1;
-    state.bossRound = 0;
-    state.currentPlayer = 1;            // the human always sits in seat 1 vs the AI
-    applyAutoDeck(mode);
-    if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, 'jumpstart')) {
-      const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
-      const built = buildJumpstartDeck(themes[0], themes[1]);
-      state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
-      toast(`AI deck generated: ${built.name}.`);
-      upgradeDeckSlot('player2', 'jumpstart', () => buildRealAiDeck(aiTier()));
-    }
-    state.screen = 'game';
-    render();
-  };
-  bind('#playAI', () => startVsAI(false));
-  bind('#playCoop', () => startVsAI(true));
+  const coopToggle = div.querySelector('#coopToggle');
+  if (coopToggle) coopToggle.onchange = () => { state.coop = coopToggle.checked; };
+  bind('#playAI', () => {
+    if (rules.sharedLibrary) { toast('The bot needs its own deck. Shared-stack modes are two-player for now.'); return; }
+    startVsBot(mode, { coop: coopMode ? !!(coopToggle && coopToggle.checked) : false });
+  });
 
   const difficultyBlurb = div.querySelector('#difficultyBlurb');
   const showBlurb = () => {
@@ -3823,16 +4128,6 @@ function BattleMenu()  {
     if (difficultyBlurb) difficultyBlurb.textContent = entry ? entry.blurb : '';
   };
   showBlurb();
-  const bringSel = div.querySelector('#bringDeckSelect');
-  const bringInto = (slot) => {
-    if (!bringSel) return;
-    const entry = loadDeckFromLibrary(bringSel.value, slot);
-    if (entry) { toast(`${entry.name} → ${slot === 'player1' ? 'your deck' : 'opponent deck'}.`); render(); }
-  };
-  const bringMine = div.querySelector('#bringDeckMine');
-  if (bringMine) bringMine.onclick = () => bringInto('player' + state.currentPlayer);
-  const bringOpp = div.querySelector('#bringDeckOpp');
-  if (bringOpp) bringOpp.onclick = () => bringInto('player' + (state.currentPlayer === 1 ? 2 : 1));
 
   const turnStatus = div.querySelector('#turnStatus');
   const readTurn = () => ({
@@ -3847,7 +4142,7 @@ function BattleMenu()  {
     scheduleSave();
     if (!t.urls) toast('Relay cleared.');
     else if (!validTurnUrls(t.urls).length) {
-      toast('Saved, but that is not a usable TURN url — it must start with turn: or turns:.', 4500);
+      toast('Saved, but that is not a usable TURN url. It must start with turn: or turns:.', 4500);
     } else toast('Relay saved.');
     render();
   };
@@ -3860,12 +4155,12 @@ function BattleMenu()  {
     const t = readTurn();
     if (!t.urls) { if (turnStatus) turnStatus.textContent = 'Enter a TURN url first.'; return; }
     testTurnBtn.disabled = true;
-    if (turnStatus) turnStatus.textContent = 'Testing…';
+    if (turnStatus) turnStatus.textContent = 'Testing.';
     const ok = await testRelay(t);
     if (turnStatus) {
       turnStatus.textContent = ok
-        ? '✅ Relay reachable — restrictive networks will work.'
-        : '❌ No relay candidate. Check the url, username and credential.';
+        ? 'Relay reachable. Restrictive networks will work.'
+        : 'No relay candidate. Check the url, username and credential.';
     }
     testTurnBtn.disabled = false;
   };
@@ -3886,11 +4181,10 @@ function BattleMenu()  {
     };
   });
 
-  // host online (ID FIX)
   bind('#hostGame', () => {
-    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
+    const deck = state.decks[mySlot] || [];
     const hasSharedStack = rules.sharedLibrary && ((state.decks.player1 || []).length || (state.decks.player2 || []).length);
-    if (!deck.length && !hasSharedStack) { alert(rules.sharedLibrary ? 'Build or import the shared stack first.' : 'Build a deck first!'); return; }
+    if (!deck.length && !hasSharedStack) { toast(rules.sharedLibrary ? 'Load the shared stack first.' : 'Add a deck first.'); return; }
     state.onlineMode = true;
     state.vsAI = false;
     if (typeof createOnlineRoom === 'function') createOnlineRoom();
@@ -3898,10 +4192,9 @@ function BattleMenu()  {
     render();
   });
 
-  // join online (ID FIX)
   bind('#joinGame', () => {
-    const deck = (state.decks && state.decks['player' + state.currentPlayer]) || [];
-    if (!deck.length && !rules.sharedLibrary) { alert('Build a deck first!'); return; }
+    const deck = state.decks[mySlot] || [];
+    if (!deck.length && !rules.sharedLibrary) { toast('Add a deck first.'); return; }
     const code = prompt('Paste connection code:');
     if (code && code.trim()) {
       state.onlineMode = true;
@@ -3928,7 +4221,7 @@ function DraftScreen(){
 
   // helpers ---------------------------------------------------------------
   const colorNames = {W:'Plains',U:'Island',B:'Swamp',R:'Mountain',G:'Forest'};
-  const manaSym = {W:'⚪',U:'🔵',B:'⚫',R:'🔴',G:'🟢'};
+  const colorWords = {W:'White', U:'Blue', B:'Black', R:'Red', G:'Green'};
 
   function formatToScryfallLegal(format){
     // The format the player just picked wins. The entry mode's scryfall scope is
@@ -4206,120 +4499,101 @@ D.seenNames[card.name] = 1;
   function deckCount(){ return D.deck.length; }
   function leftCount(){ return Math.max(0, D.target - deckCount()); }
 
-function Mode(){
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `
-    <div class="header">
-      <button id="back" class="btn btn-secondary text-sm">← Builder</button>
-      <h1 style="font-size:24px;font-weight:800">Choose Draft Mode</h1>
-      <div></div>
-    </div>
+// One draft entry form. Pick a type, pick who plays, set the source and the
+// pack count, then press Start. No hub screen in between.
+const DRAFT_TYPES = [
+  { id: 'set', title: 'Set draft', blurb: 'Packs come from one set code. You pick one card at a time until the deck is full.', source: 'set', format: 'set' },
+  { id: 'cube', title: 'Cube draft', blurb: 'Draft from a custom pool: a cube file you upload, your collection, or a generated starter cube.', source: 'cube', format: 'cube' },
+  { id: 'jumpstart', title: 'Jumpstart', blurb: 'No drafting. Two themed packets shuffle together into a ready 40-card deck.', source: 'none', format: 'jumpstart' },
+  { id: 'winston', title: 'Winston draft', blurb: 'Two players share one pool and three piles. Take a pile or skip it and pass.', source: 'cube', format: 'winston' },
+  { id: 'pauper', title: 'Pauper draft', blurb: 'Commons only. Same pick flow as a set draft, with a cheaper card pool.', source: 'set', format: 'pauper' }
+];
+const DRAFT_PLAYER_MODES = [
+  { id: 'solo', label: 'Solo vs bots' },
+  { id: 'hotseat', label: 'Hotseat (two players, one device)' },
+  { id: 'online', label: 'Online (two players, two devices)' }
+];
 
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
-      <div class="card p-4" id="goTraditional" style="cursor:pointer">
-        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Traditional Draft</h3>
-        <p class="text-xs text-gray">Random three-card offers from Scryfall, color-filtered by your choice; 60-card or 100-card Commander singleton.</p>
-      </div>
-      <div class="card p-4" id="goCustom" style="cursor:pointer">
-        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Custom Draft</h3>
-        <p class="text-xs text-gray">Upload a JSON decklist (export format) to act as the draft pool. Optional color filtering. Same pick flow.</p>
-      </div>
-      <div class="card p-4" id="goWinston" style="cursor:pointer">
-        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Winston Draft</h3>
-        <p class="text-xs text-gray">Local hotseat two-player pile draft from a cube, collection, deck, or generated starter pool.</p>
-      </div>
-        <div class="card p-4" id="goDraftOff" style="cursor:pointer">
-    <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Draft-off (2-Player Online)</h3>
-    <p class="text-xs text-gray">
-      Both players connect online. Each round, 9 random non-land cards from a random set appear.
-      Players alternate picks until 3 remain; the starting player alternates each round. Repeat until both reach 42 cards, then add lands to 60.
-    </p>
-  </div>
-
-      
-    </div>
-  `;
-  wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
-  wrap.querySelector('#goTraditional').onclick = ()=>{
-    D.mode='traditional';
-    D.screen='setup';
-    render();
-  };
-  wrap.querySelector('#goCustom').onclick = ()=>{
-    D.mode='custom';
-    D.screen='custom-setup';
-    render();
-  };
-  wrap.querySelector('#goWinston').onclick = ()=>{
-    D.mode='winston';
-    D.screen='winston-setup';
-    render();
-  };
-wrap.querySelector('#goDraftOff').onclick = ()=>{
-  D.mode = 'draftoff';
-  D.screen = 'draftoff-setup';   // <-- switch the main Draft sub-screen
-  state.screen = 'draft';
-  render();
-};
-  return wrap;
-}
+function Mode(){ return Setup(); }
 
   // setup steps -----------------------------------------------------------
   function Setup(){
     const wrap = document.createElement('div');
-    const mode = getModeConfig(D.modeId || state.selectedMode || 'standard-draft');
+    const mode = getModeConfig(D.modeId || state.selectedMode || 'casual');
+    const guessType = () => {
+      if (D.entryType) return D.entryType;
+      if (mode.id === 'winston') return 'winston';
+      if (mode.id === 'cube') return 'cube';
+      if (mode.id === 'jumpstart') return 'jumpstart';
+      if (mode.rarity === 'common') return 'pauper';
+      return 'set';
+    };
+    const typeId = guessType();
+    D.entryType = typeId;
+    const type = DRAFT_TYPES.find(t => t.id === typeId) || DRAFT_TYPES[0];
+    const players = D.entryPlayers || (typeId === 'winston' ? 'hotseat' : 'solo');
+    D.entryPlayers = players;
+    const packs = D.entryPacks || 3;
+
     wrap.innerHTML = `
-      <div class="header">
-        <button id="back" class="btn btn-secondary text-sm">← Back</button>
-        <h1 style="font-size:24px;font-weight:700">Draft Setup</h1>
-        <div class="badge">${htmlEscape(mode.title)}</div>
-      </div>
-
-      <div class="grid grid-2">
-      <div class="card p-4">
-        <div class="mb-4">
-          <label>Format preset</label>
-          <div class="flex" style="gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary" data-f="standard">Standard (60)</button>
-            <button class="btn btn-secondary" data-f="pioneer">Pioneer (60)</button>
-            <button class="btn btn-secondary" data-f="modern">Modern (60)</button>
-            <button class="btn btn-secondary" data-f="premodern">Premodern (60)</button>
-            <button class="btn btn-secondary" data-f="pauper" data-rarity="common">Pauper (60)</button>
-            <button class="btn btn-secondary" data-f="commander">Commander (100, singleton)</button>
+      <div class="draft-setup">
+        <div class="card p-4">
+          <h2 style="font-size:16px;font-weight:800;margin-bottom:10px">Draft type</h2>
+          <div class="draft-type-list">
+            ${DRAFT_TYPES.map(t => `
+              <label class="draft-type-row ${t.id === typeId ? 'active' : ''}" data-type-row="${t.id}">
+                <input type="radio" name="draftType" value="${t.id}" ${t.id === typeId ? 'checked' : ''}>
+                <span>
+                  <strong>${htmlEscape(t.title)}</strong>
+                  <p>${htmlEscape(t.blurb)}</p>
+                </span>
+              </label>`).join('')}
           </div>
         </div>
-        <button id="useModePreset" class="btn btn-primary">Use ${htmlEscape(mode.title)} Preset</button>
-        <p class="text-xs text-gray mt-4">After choosing a format, you get a color scheme, optional basics, then three-card picks until the deck is full.</p>
-      </div>
 
-      <div class="card p-4">
-        <label>Set or period scope</label>
-        <div class="grid grid-2" style="gap:10px">
-          <div>
-            <label class="text-xs">Set code</label>
-            <input id="draftSetCode" class="input" placeholder="e.g. ltr, mh3, dmu" value="${htmlEscape(D.setCode || '')}">
-          </div>
-          <div>
-            <label class="text-xs">Period</label>
-            <select id="draftEra" class="input">
-              <option value="" ${!D.era ? 'selected' : ''}>Any</option>
-              <option value="oldschool" ${D.era === 'oldschool' ? 'selected' : ''}>Old School</option>
-              <option value="premodern" ${D.era === 'premodern' ? 'selected' : ''}>Premodern</option>
-              <option value="modern-era" ${D.era === 'modern-era' ? 'selected' : ''}>Modern era</option>
-              <option value="recent" ${D.era === 'recent' ? 'selected' : ''}>Recent sets</option>
-            </select>
-          </div>
+        <div class="card p-4">
+          <h2 style="font-size:16px;font-weight:800;margin-bottom:10px">Players</h2>
+          <select id="draftPlayers" class="input">
+            ${DRAFT_PLAYER_MODES.map(m => `<option value="${m.id}" ${m.id === players ? 'selected' : ''}>${htmlEscape(m.label)}</option>`).join('')}
+          </select>
         </div>
-        <label class="text-xs flex mt-4" style="gap:6px;align-items:center;cursor:pointer">
-          <input id="draftCommonsOnly" type="checkbox" ${D.rarity === 'common' ? 'checked' : ''}>
-          Commons only
-        </label>
-        <button id="useScopedDraft" class="btn btn-blue mt-4">Use Set / Period Scope</button>
-        <p class="text-xs text-gray mt-4">Leave set code blank to draft from the selected period. Set code wins if both are filled.</p>
-      </div>
+
+        <div class="card p-4">
+          <h2 style="font-size:16px;font-weight:800;margin-bottom:10px">Source and size</h2>
+          <div class="draft-field-row">
+            <div id="setCodeField" ${type.source === 'set' ? '' : 'hidden'}>
+              <label class="text-xs">Set code (optional)</label>
+              <input id="draftSetCode" class="input" placeholder="e.g. ltr, mh3, dmu" value="${htmlEscape(D.setCode || '')}">
+            </div>
+            <div id="cubeSourceField" ${type.source === 'cube' ? '' : 'hidden'}>
+              <label class="text-xs">Cube source</label>
+              <select id="draftCubeSource" class="input">
+                <option value="generated">Generated starter cube</option>
+                <option value="collection">Your card collection (${(state.cards || []).length})</option>
+                <option value="deck1">Your deck (${(state.decks.player1 || []).length})</option>
+              </select>
+            </div>
+            <div id="packField" ${type.source === 'none' ? 'hidden' : ''}>
+              <label class="text-xs">Packs (15 cards each)</label>
+              <input id="draftPacks" class="input" type="number" min="1" max="6" value="${packs}">
+            </div>
+          </div>
+          <p class="text-xs text-gray mt-4" id="draftSetupHint">${htmlEscape(type.blurb)}</p>
+        </div>
+
+        <div class="flex" style="gap:10px;flex-wrap:wrap">
+          <button id="startDraft" class="btn btn-primary">Start draft</button>
+        </div>
       </div>
     `;
-    wrap.querySelector('#back').onclick = () => { D.screen='mode'; render(); };
+
+    wrap.querySelectorAll('[data-type-row] input').forEach(input => {
+      input.onchange = () => { D.entryType = input.value; render(); };
+    });
+    const playersSel = wrap.querySelector('#draftPlayers');
+    playersSel.onchange = () => { D.entryPlayers = playersSel.value; };
+    const packsInput = wrap.querySelector('#draftPacks');
+    if (packsInput) packsInput.onchange = () => { D.entryPacks = Math.max(1, Math.min(6, parseInt(packsInput.value, 10) || 3)); };
 
     function beginDraft(format, opts = {}){
       // Fresh draft: clear the previous run's picks, or the first pick of the
@@ -4329,6 +4603,7 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
       D.pool = [];
       D.seenIds = {};
       D.seenNames = {};
+      D.confirmLeave = false;
       D.chosenColors = [];
       D.basicLands = { W:0, U:0, B:0, R:0, G:0 };
       D.format = format;
@@ -4342,44 +4617,67 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
       setScreen('colors');
     }
 
-    wrap.querySelector('#useModePreset').onclick = () => {
-      beginDraft(mode.format || 'standard', {
-        target: mode.target || (mode.format === 'commander' ? 100 : 60),
-        allowDuplicates: !mode.singleton,
-        rarity: mode.rarity || '',
-        queryExtra: mode.queryExtra || ''
+    wrap.querySelector('#startDraft').onclick = async () => {
+      const chosen = DRAFT_TYPES.find(t => t.id === D.entryType) || DRAFT_TYPES[0];
+      const packCount = Math.max(1, Math.min(6, parseInt(packsInput?.value || '3', 10) || 3));
+      const target = packCount * 15;
+
+      if (D.entryPlayers === 'online') {
+        D.mode = 'draftoff';
+        D.screen = 'draftoff-setup';
+        render();
+        return;
+      }
+
+      if (chosen.id === 'jumpstart') {
+        state.selectedMode = 'jumpstart';
+        state.battleMode = 'jumpstart';
+        state.builderTab = 'deck';
+        state.screen = 'builder';
+        render();
+        return;
+      }
+
+      if (chosen.id === 'winston') {
+        D.mode = 'winston';
+        D.screen = 'winston-setup';
+        render();
+        return;
+      }
+
+      if (chosen.id === 'cube') {
+        const source = wrap.querySelector('#draftCubeSource')?.value || 'generated';
+        const btn = wrap.querySelector('#startDraft');
+        btn.disabled = true;
+        btn.textContent = 'Building the pool';
+        let pool = source === 'collection' ? (state.cards || [])
+          : source === 'deck1' ? (state.decks.player1 || [])
+          : null;
+        if (!pool || pool.length < 24) {
+          try { pool = await buildRealStarterPool(90); } catch { pool = null; }
+          if (!pool || !pool.length) pool = makeStarterCubeStack(90);
+        }
+        D.mode = 'custom';
+        D.customPool = cloneCards(pool);
+        beginDraft('cube', { target });
+        return;
+      }
+
+      D.mode = 'traditional';
+      const setCode = (wrap.querySelector('#draftSetCode')?.value || '').trim().toLowerCase();
+      beginDraft(chosen.id === 'pauper' ? 'pauper' : (setCode ? 'set' : 'modern'), {
+        target,
+        rarity: chosen.id === 'pauper' ? 'common' : '',
+        setCode
       });
     };
 
-    wrap.querySelector('#useScopedDraft').onclick = () => {
-      const setCode = (wrap.querySelector('#draftSetCode').value || '').trim().toLowerCase();
-      const era = wrap.querySelector('#draftEra').value || '';
-      const commonsOnly = !!wrap.querySelector('#draftCommonsOnly').checked;
-      beginDraft(setCode ? 'set' : (era === 'premodern' ? 'premodern' : 'set'), {
-        target: 60,
-        rarity: commonsOnly ? 'common' : '',
-        setCode,
-        era
-      });
-    };
-
-    wrap.querySelectorAll('[data-f]').forEach(b=>{
-      b.onclick = ()=>{
-        beginDraft(b.dataset.f, { rarity: b.dataset.rarity || '' });
-      };
-    });
     return wrap;
   }
-  
+
   function CustomSetup(){
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <div class="header">
-      <button id="back" class="btn btn-secondary text-sm">← Back</button>
-      <h2 style="font-size:20px;font-weight:700">Custom Draft — Pool & Settings</h2>
-      <div></div>
-    </div>
-
     <div class="grid grid-2">
       <div class="card p-4">
         <label>Upload custom pool (.json)</label>
@@ -4421,12 +4719,11 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
 
       <div class="card p-4">
         <strong>Pool preview</strong>
-        <div id="customPoolPreview" class="text-xs text-gray" style="margin-top:6px">—</div>
+        <div id="customPoolPreview" class="text-xs text-gray" style="margin-top:6px">No pool loaded yet.</div>
       </div>
     </div>
   `;
 
-  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
 
   // format choose
   wrap.querySelectorAll('[data-f]').forEach(b=>{
@@ -4505,24 +4802,17 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
     const offers = D.offeredColorSets;
     const wrap = document.createElement('div');
     wrap.innerHTML = `
-      <div class="header">
-        <button id="back" class="btn btn-secondary text-sm">← Back</button>
-        <h2 style="font-size:20px;font-weight:700">Choose a color scheme</h2>
-        <div></div>
-      </div>
-
       <div class="card p-4">
         <div class="flex" style="gap:10px;flex-wrap:wrap">
           ${offers.map((set,i)=>`
             <button class="btn btn-secondary" data-i="${i}">
-              ${set.map(c=>`${manaSym[c]} ${c}`).join(' ')}
+              ${set.map(c=>colorWords[c] || c).join(' and ')}
             </button>
           `).join('')}
         </div>
-        <p class="text-xs text-gray mt-4">Choices include mono / double / triple colors at random. Draft pool will be filtered to these colors when possible.</p>
+        <p class="text-xs text-gray mt-4">The offers mix mono, two and three colour sets at random. The draft pool stays inside your choice where it can.</p>
       </div>
     `;
-    wrap.querySelector('#back').onclick = () => setScreen('setup');
     wrap.querySelectorAll('[data-i]').forEach(b=>{
       b.onclick = ()=>{
         D.chosenColors = offers[+b.dataset.i];
@@ -4542,19 +4832,13 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
       </div>`).join('');
 
     wrap.innerHTML = `
-      <div class="header">
-        <button id="back" class="btn btn-secondary text-sm">← Back</button>
-        <h2 style="font-size:20px;font-weight:700">Optional: pre-fill basic lands</h2>
-        <div></div>
-      </div>
-
       <div class="grid grid-2">
         <div class="card p-4">
           <div class="grid grid-2" style="gap:12px">${inputs}</div>
           <div class="mt-4 flex" style="gap:8px;flex-wrap:wrap">
             <button id="skip" class="btn btn-secondary">Skip</button>
             <button id="apply" class="btn btn-primary">Continue</button>
-            <button id="pickLandArt" class="btn btn-secondary">🏞️ Choose land art</button>
+            <button id="pickLandArt" class="btn btn-secondary">Choose land art</button>
           </div>
           <p class="text-xs text-gray mt-4">Example: set Islands=14 and continue; the draft will fill the remaining slots to ${D.target}.</p>
         </div>
@@ -4564,7 +4848,6 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
         </div>
       </div>
     `;
-    wrap.querySelector('#back').onclick = () => setScreen('colors');
     wrap.querySelector('#pickLandArt').onclick = () => {
       const first = { W:'Plains', U:'Island', B:'Swamp', R:'Mountain', G:'Forest' }[cols[0]] || 'Plains';
       openLandPicker(first);
@@ -4600,7 +4883,7 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
   wrap.innerHTML = `
     <div style="max-width:800px;margin:0 auto;padding:16px">
       <h2 style="font-weight:800;font-size:22px;margin-bottom:8px">
-        Basic Lands — Player ${who}
+        Basic lands, player ${who}
       </h2>
       <p class="text-sm" style="opacity:.8;margin-bottom:10px">
         Deck size target: ${D.lands.targetTotal}. Current nonland cards: <b>${D.lands.baseCount}</b>.
@@ -4622,7 +4905,7 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
         <button id="finalize" class="btn btn-primary" ${D.lands.remaining>0?'disabled':''}>
           Finalize Player ${who}
         </button>
-        <button id="pickLandArtFill" class="btn btn-secondary">🏞️ Choose land art</button>
+        <button id="pickLandArtFill" class="btn btn-secondary">Choose land art</button>
       </div>
     </div>
   `;
@@ -4657,7 +4940,7 @@ wrap.querySelector('#goDraftOff').onclick = ()=>{
     if (D.lands.finalizing) return;
     D.lands.finalizing = true;
     ev.currentTarget.disabled = true;
-    ev.currentTarget.textContent = 'Finalizing…';
+    ev.currentTarget.textContent = 'Finalizing';
     // Build land cards and append to the player's pool
     const pool = (who === 1) ? D.off.p1 : D.off.p2;
 
@@ -4785,12 +5068,6 @@ function DraftOffResults(){
 
   wrap.innerHTML = `
     <div style="max-width:1000px;margin:0 auto;padding:16px">
-      <div class="header">
-        <button id="backToMenu" class="btn btn-secondary text-sm">← Menu</button>
-        <h2 style="font-size:20px;font-weight:700">Draft-off Results</h2>
-        <div class="badge">P1: ${p1.length}/60 • P2: ${p2.length}/60</div>
-      </div>
-
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="card p-4">
           <h3 style="font-weight:800;margin-bottom:8px">Player 1 Deck (${p1.length})</h3>
@@ -4825,7 +5102,6 @@ function DraftOffResults(){
     </div>
   `;
 
-  wrap.querySelector('#backToMenu').onclick = ()=>{ state.screen = 'menu'; render(); };
 
   function downloadNamedDeck(cards, filename){
     const data = JSON.stringify({ name: filename.replace(/\.json$/,''), cards: cards }, null, 2);
@@ -4892,23 +5168,16 @@ function DraftOffResults(){
   function Picks(){
     const wrap = document.createElement('div');
     wrap.innerHTML = `
-      <div class="header">
-        <button id="back" class="btn btn-secondary text-sm">← Exit</button>
-        <h2 style="font-size:20px;font-weight:700">Pick one card • ${deckCount()}/${D.target}</h2>
-        <div class="badge">Colors: ${D.chosenColors.join(', ') || '-'}${draftScopeLabel() ? ' • ' + htmlEscape(draftScopeLabel()) : ''}</div>
-      </div>
-
 <!-- Stats toggle for draft deck -->
 <button id="draftStatsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="draftStatsCard">
-  <span class="left"><span class="chip"></span><span>Draft Deck Statistics </span></span>
-  <span class="chev">▸</span>
+  <span class="left"><span class="chip"></span><span>Draft deck statistics</span></span>
 </button>
 <div class="card p-4 hidden" id="draftStatsCard" style="margin-bottom:12px">
   <div id="manaCurveDraftChart"></div>
 </div>
 
       ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:rgba(59,130,246,.15);border-color:#3b82f6">
-        <strong>Dealing cards…</strong>
+        <strong>Dealing cards</strong>
         <div class="text-xs text-gray mt-1">Fetching a card pool from Scryfall. This happens once per draft.</div>
       </div>` : ''}
 
@@ -4927,7 +5196,7 @@ function DraftOffResults(){
           ${D.poolError ? `
             <div class="text-center" style="padding:24px">
               <p class="text-red mb-4">Couldn’t load cards from Scryfall.</p>
-              <button id="retryPool" class="btn btn-primary">↻ Retry</button>
+              <button id="retryPool" class="btn btn-primary">Retry</button>
             </div>` : ''}
           <div class="text-xs text-gray mt-4">Click one card to draft; the other two disappear.</div>
         </div>
@@ -4960,10 +5229,6 @@ function DraftOffResults(){
     `;
 
     // events
-    wrap.querySelector('#back').onclick = () => {
-      if (!confirm('Leave draft? Picks will be kept only if you finish.')) return;
-      state.screen='builder'; render();
-    };
       
       const draftPreview = wrap.querySelector('#draftPreview');
       const showInPreview = (card) => {
@@ -5008,7 +5273,7 @@ function DraftOffResults(){
       row.onmouseleave = () => { draftHover.style.display = 'none'; };
     });
     const retryBtn = wrap.querySelector('#retryPool');
-    if (retryBtn) retryBtn.onclick = async ()=>{ retryBtn.disabled = true; retryBtn.textContent = 'Loading…'; await ensurePool(); render(); };
+    if (retryBtn) retryBtn.onclick = async ()=>{ retryBtn.disabled = true; retryBtn.textContent = 'Loading'; await ensurePool(); render(); };
 
     
     // Ensure stats CSS is present (re-use from builder if available)
@@ -5209,14 +5474,14 @@ function renderDraftStats(){
           ${curveLegend}
         </div>
         <div class="ds-piecard">
-          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-title">Colours in mana cost</div>
           <div class="ds-piewrap">
             <div class="ds-pie" style="${colorPieStyle}" title="${colorTitle}"></div>
             <div class="ds-list">${colorRows || `<div class="ds-small">No mana symbols found.</div>`}</div>
           </div>
         </div>
         <div class="ds-piecard">
-          <div class="ds-title">Types</div>
+          <div class="ds-title">Card types</div>
           <div class="ds-piewrap">
             <div class="ds-pie" style="${typePieStyle}"></div>
             <div class="ds-list">${typeRows || `<div class="ds-small">No type info available.</div>`}</div>
@@ -5245,33 +5510,27 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
   if (state.onlineMode && state.waitingForAnswer && state.roomCode) {
     connUI = `
       <div class="card" style="background: rgba(59,130,246,0.15); border-color:#3b82f6; margin-bottom: 24px;">
-        <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+        <h3 class="mb-4" style="font-weight: bold;">Step 1. Share this code</h3>
         <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
         <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
         <hr style="border-color: #4b5563; margin: 16px 0;">
-        <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
-        <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+        <h3 class="mb-4" style="font-weight: bold;">Step 2. Enter their response</h3>
+        <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 11px;"></textarea>
         <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
       </div>`;
   } else if (state.onlineMode && state.answerCode) {
     connUI = `
       <div class="card" style="background: rgba(5,150,105,0.2); border-color:#059669; margin-bottom: 24px;">
-        <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+        <h3 class="mb-4" style="font-weight: bold;">Send this code back</h3>
         <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
         <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
-        <p class="text-green text-sm mt-2">Waiting for host…</p>
+        <p class="text-green text-sm mt-2">Waiting for the host.</p>
       </div>`;
   } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
-    connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to draft.</div>';
+    connUI = '<div class="card text-green mb-4 text-center p-4">Connected. Ready to draft.</div>';
   }
 
   wrap.innerHTML = `
-    <div class="header">
-      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
-      <h2 style="font-size:20px;font-weight:700">Draft-off • Setup</h2>
-      <div></div>
-    </div>
-
     ${connUI}
 
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
@@ -5294,7 +5553,7 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
   </div>
 
       <div class="card p-4">
-    <h3 style="font-weight:800;margin-bottom:6px">Solo vs Bot 🤖</h3>
+    <h3 style="font-weight:800;margin-bottom:6px">Solo vs bot</h3>
     <p class="text-xs text-gray mb-2">Draft against a computer opponent, then battle its deck.</p>
     <button id="botOff" class="btn btn-primary">Start vs Bot</button>
   </div>
@@ -5302,7 +5561,6 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
     </div>
   `;
 
-  wrap.querySelector('#back').onclick = ()=>{ D.screen='mode'; render(); };
 
   const hostBtn = wrap.querySelector('#hostOff');
   if (hostBtn) hostBtn.onclick = async ()=>{
@@ -5361,7 +5619,7 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
   const copyOffer = wrap.querySelector('#copyOffer');
   if (copyOffer) copyOffer.onclick = ()=>{
     navigator.clipboard.writeText(state.roomCode||'');
-    copyOffer.textContent = 'Copied ✓';
+    copyOffer.textContent = 'Copied';
     setTimeout(()=>copyOffer.textContent='Copy Code',1000);
   };
   const submitAnswer = wrap.querySelector('#submitAnswer');
@@ -5378,7 +5636,7 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
   const copyAnswer = wrap.querySelector('#copyAnswer');
   if (copyAnswer) copyAnswer.onclick = ()=>{
     navigator.clipboard.writeText(state.answerCode||'');
-    copyAnswer.textContent = 'Copied ✓';
+    copyAnswer.textContent = 'Copied';
     setTimeout(()=>copyAnswer.textContent='Copy Answer Code',1000);
   };
 
@@ -5391,21 +5649,16 @@ function DraftOffRoom(){
 const myTurn = D.off.isLocal ? true : (D.off.currentPicker === me);
 const status = D.off.isLocal
   ? (D.off.vsBot
-        ? (D.off.currentPicker === 1 ? 'Your pick' : 'Bot is picking…')
+        ? (D.off.currentPicker === 1 ? 'Your pick' : 'Bot is picking')
         : (D.off.currentPicker === 1 ? 'Player 1 pick' : 'Player 2 pick'))
-  : (myTurn ? 'Your pick' : 'Waiting for opponent…');
+  : (myTurn ? 'Your pick' : 'Waiting for the opponent');
 
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <div class="header">
-      <button id="leave" class="btn btn-secondary text-sm">← Exit</button>
-      <h2 style="font-size:20px;font-weight:700">Draft-off • Round ${D.off.round} • ${status}</h2>
-      <div class="badge">Pool: Random mix</div>
-      <div class="badge">P1: ${D.off.p1.length}/42 • P2: ${D.off.p2.length}/42</div>
-    </div>
+    <div class="step-meta">${htmlEscape(status)}</div>
 
     ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:rgba(59,130,246,.15);border-color:#3b82f6">
-      <strong>Dealing pack ${D.off.round}…</strong>
+      <strong>Dealing pack ${D.off.round}</strong>
     </div>` : ''}
 
 
@@ -5441,7 +5694,6 @@ const status = D.off.isLocal
     </div>
   `;
   
-  wrap.querySelector('#leave').onclick = ()=>{ D.screen='mode'; render(); };
 
   // hover preview
   const hoverImg = wrap.querySelector('#hoverImg');
@@ -5584,16 +5836,10 @@ function WinstonSetup(){
   const p1Count = (state.decks.player1 || []).length;
   const p2Count = (state.decks.player2 || []).length;
   wrap.innerHTML = `
-    <div class="header">
-      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
-      <h2 style="font-size:20px;font-weight:700">Winston Draft Setup</h2>
-      <div class="badge">Local hotseat or vs bot</div>
-    </div>
-
     <div class="card p-4 mb-4">
       <label class="text-xs flex" style="gap:8px;align-items:center;cursor:pointer">
         <input id="winstonVsBot" type="checkbox">
-        <span><strong>Play against the bot 🤖</strong> — the computer takes Player 2's piles.</span>
+        <span><strong>Play against the bot.</strong> The computer takes Player 2's piles.</span>
       </label>
     </div>
 
@@ -5623,13 +5869,12 @@ function WinstonSetup(){
   const poolSize = () => Math.max(24, parseInt(wrap.querySelector('#winstonPoolSize')?.value || '90', 10));
   const vsBot = () => !!wrap.querySelector('#winstonVsBot')?.checked;
   let uploadedPool = null;
-  wrap.querySelector('#back').onclick = () => { D.screen = 'mode'; render(); };
   wrap.querySelector('#useCollectionPool').onclick = () => startWinstonDraft(state.cards, poolSize(), { vsBot: vsBot() });
   wrap.querySelector('#useP1Pool').onclick = () => startWinstonDraft(state.decks.player1, poolSize(), { vsBot: vsBot() });
   wrap.querySelector('#useP2Pool').onclick = () => startWinstonDraft(state.decks.player2, poolSize(), { vsBot: vsBot() });
   wrap.querySelector('#useStarterPool').onclick = async () => {
     const btn = wrap.querySelector('#useStarterPool');
-    btn.disabled = true; btn.textContent = 'Fetching cards…';
+    btn.disabled = true; btn.textContent = 'Fetching cards';
     let pool = null;
     try { pool = await buildRealStarterPool(poolSize()); } catch {}
     startWinstonDraft(pool || makeWinstonStarterPool(poolSize()), poolSize(), { vsBot: vsBot() });
@@ -5662,12 +5907,6 @@ function WinstonDraft(){
   const pileCards = activePile.slice(-3).reverse();
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <div class="header">
-      <button id="leave" class="btn btn-secondary text-sm">← Exit</button>
-      <h2 style="font-size:20px;font-weight:700">Winston Draft • Player ${W.activePlayer}</h2>
-      <div class="badge">Pool ${W.pool.length} • P1 ${W.p1.length} • P2 ${W.p2.length}</div>
-    </div>
-
     <div class="grid" style="grid-template-columns:2fr 1fr;gap:16px">
       <div class="card p-4">
         <div class="grid" style="grid-template-columns:repeat(3,minmax(160px,1fr));gap:12px">
@@ -5708,11 +5947,6 @@ function WinstonDraft(){
       </div>
     </div>
   `;
-  wrap.querySelector('#leave').onclick = () => {
-    if (!confirm('Leave Winston draft? Current picks will be discarded unless you finish.')) return;
-    D.screen = 'mode';
-    render();
-  };
   wrap.querySelector('#takeWinstonPile').onclick = winstonTakePile;
   wrap.querySelector('#skipWinstonPile').onclick = winstonSkipPile;
   return wrap;
@@ -5730,11 +5964,6 @@ function WinstonResults(){
     return grouped(cards).map(([name, qty]) => `<div class="flex justify-between text-sm py-1"><span>${htmlEscape(name)}</span><span>x${qty}</span></div>`).join('');
   }
   wrap.innerHTML = `
-    <div class="header">
-      <button id="back" class="btn btn-secondary text-sm">← Modes</button>
-      <h2 style="font-size:20px;font-weight:700">Winston Results</h2>
-      <div class="badge">P1 ${W.p1.length} • P2 ${W.p2.length}</div>
-    </div>
     <div class="grid grid-2" style="gap:16px">
       <div class="card p-4">
         <h3 style="font-weight:800;margin-bottom:8px">Player 1 Picks</h3>
@@ -5754,7 +5983,6 @@ function WinstonResults(){
     state.decks.player1 = W.p1.slice();
     state.decks.player2 = W.p2.slice();
   }
-  wrap.querySelector('#back').onclick = () => { D.screen = 'mode'; render(); };
   wrap.querySelector('#loadWinstonDecks').onclick = () => {
     loadDecks();
     state.currentPlayer = 1;
@@ -5777,11 +6005,6 @@ function WinstonResults(){
     const key = 'player' + state.currentPlayer;
     const wrap = document.createElement('div');
     wrap.innerHTML = `
-      <div class="header">
-        <button id="back" class="btn btn-secondary text-sm">← Builder</button>
-        <h2 style="font-size:20px;font-weight:700">Draft complete</h2>
-        <div></div>
-      </div>
       <div class="card p-4">
         <div class="mb-2">Total cards: <strong>${D.deck.length}</strong> (target ${D.target})</div>
         <div class="flex" style="gap:8px;flex-wrap:wrap">
@@ -5791,13 +6014,12 @@ function WinstonResults(){
         <p class="text-xs text-gray mt-2">“Use this as my deck” replaces your current deck in the builder.</p>
       </div>
     `;
-    wrap.querySelector('#back').onclick = ()=>{ state.screen='builder'; render(); };
     wrap.querySelector('#again').onclick = ()=>{ state.screen='draft'; state.draft.screen='setup'; render(); };
     wrap.querySelector('#useDeck').onclick = ()=>{
       state.decks[key] = D.deck.slice();
       state.screen='builder';
       render();
-      toast('Draft deck loaded into builder ✓');
+      toast('Draft deck loaded into the Deck Editor.');
     };
     return wrap;
   }
@@ -5926,6 +6148,36 @@ window.draftOffMaybeNextRoundOrFinish = draftOffMaybeNextRoundOrFinish;
 
   
   
+  // Title, meta line and back target for the step showing now. Back walks the
+  // flow backwards; mid-draft it asks first, in the page rather than a dialog.
+  function draftStep(){
+    const toMenu = () => { state.screen = 'menu'; render(); };
+    const toSetup = () => setScreen('setup');
+    const askLeave = () => { D.confirmLeave = true; render(); };
+    const scope = draftScopeLabel();
+    const poolLine = `Format ${D.format} · deck ${D.deck.length}/${D.target}${scope ? ' · ' + scope : ''}`;
+    const W = D.winston;
+    const off = D.off;
+    const table = {
+      mode:            { title: 'Draft setup', subtitle: 'Pick the type, the players and the source, then start.', back: toMenu },
+      setup:           { title: 'Draft setup', subtitle: 'Pick the type, the players and the source, then start.', back: toMenu },
+      'custom-setup':  { title: 'Cube pool and settings', subtitle: poolLine, back: toMenu },
+      colors:          { title: 'Choose your colours', subtitle: poolLine, back: toSetup },
+      lands:           { title: 'Basic lands', subtitle: 'Optional. Pre-fill basics before the picks start.', back: () => setScreen('colors') },
+      landsfill:       { title: 'Fill the last slots', subtitle: poolLine, back: () => setScreen('picks') },
+      picks:           { title: 'Pick a card', subtitle: `${deckCount()}/${D.target} picked · ${D.chosenColors.map(c => colorWords[c] || c).join(' and ') || 'any colour'}${scope ? ' · ' + scope : ''}`, back: askLeave },
+      'draftoff-setup':{ title: 'Draft-off setup', subtitle: 'Two players, two devices.', back: toSetup },
+      draftoff:        { title: `Draft-off, round ${off.round}`, subtitle: `You ${off.p1.length} · them ${off.p2.length}`, back: askLeave },
+      landswait:       { title: 'Basic lands', subtitle: 'Waiting for the other player.', back: askLeave },
+      decklists:       { title: 'Draft-off results', subtitle: `You ${off.p1.length} · them ${off.p2.length}`, back: toMenu },
+      'winston-setup': { title: 'Winston draft setup', subtitle: 'Local hotseat, or against the bot.', back: toSetup },
+      winston:         { title: `Winston draft, player ${W.activePlayer}`, subtitle: `Pool ${W.pool.length} · player 1 ${W.p1.length} · player 2 ${W.p2.length}`, back: askLeave },
+      'winston-results': { title: 'Winston results', subtitle: `Player 1 ${W.p1.length} · player 2 ${W.p2.length}`, back: toMenu },
+      done:            { title: 'Draft complete', subtitle: `${D.deck.length} cards, target ${D.target}`, back: () => { state.screen = 'builder'; render(); } }
+    };
+    return table[D.screen] || table.done;
+  }
+
   // choose which subview to render
 let content;
 if (D.screen==='mode')         content = Mode();
@@ -5949,25 +6201,41 @@ else if (D.screen==='winston-results') content = WinstonResults();
 else                           content = Done();
 
   
-  // wrapper scaffold
-  div.innerHTML = `
-    <div class="header">
-  <button id="home" class="btn btn-secondary text-sm">← Menu</button>
-<h1 style="font-size:24px;font-weight:800">${
-  D.mode==='custom'    ? 'Custom Draft' :
-  D.mode==='draftoff'  ? 'Draft-off' :
-  D.mode==='winston'   ? 'Winston Draft' :
-                         (getModeConfig(D.modeId || state.selectedMode).title + ' Draft')
-}</h1>
-  <div class="text-xs text-gray">Format: ${D.format} • Deck: ${D.deck.length}/${D.target}${draftScopeLabel() ? ' • ' + htmlEscape(draftScopeLabel()) : ''}</div>
-</div>
-  `;
+  // One top bar for the whole draft: back on the left, the step title in the
+  // middle, one context action on the right. No sub-screen carries its own nav.
+  const step = draftStep();
+  div.innerHTML = topBarHtml({
+    title: step.title,
+    subtitle: step.subtitle,
+    backLabel: 'Back',
+    backId: 'home',
+    actionLabel: 'Deck Editor',
+    actionId: 'draftToEditor'
+  });
+  if (D.confirmLeave) {
+    const bar = document.createElement('div');
+    bar.className = 'card p-3 leave-confirm';
+    bar.innerHTML = `
+      <span class="text-sm">Leave this draft? The picks are lost.</span>
+      <span class="flex" style="gap:8px">
+        <button id="leaveDraftYes" class="btn btn-red text-sm">Leave</button>
+        <button id="leaveDraftNo" class="btn btn-secondary text-sm">Stay</button>
+      </span>`;
+    div.appendChild(bar);
+    bar.querySelector('#leaveDraftYes').onclick = () => {
+      D.confirmLeave = false;
+      state.screen = 'builder';
+      render();
+    };
+    bar.querySelector('#leaveDraftNo').onclick = () => { D.confirmLeave = false; render(); };
+  }
   const mount = document.createElement('div');
   mount.appendChild(content);
   div.appendChild(mount);
 
   // nav
-  div.querySelector('#home').onclick = ()=>{ state.screen='menu'; render(); };
+  div.querySelector('#home').onclick = step.back;
+  div.querySelector('#draftToEditor').onclick = ()=>{ state.builderTab='deck'; state.screen='builder'; render(); };
 
   return div;
 }
@@ -6003,19 +6271,15 @@ function CardCreator() {
   
   const embedded = !!state.embedCreator;   // rendered inside the Deck Editor
   div.innerHTML = `
-    ${embedded ? '' : `<div class="header">
-      <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-      <h1 style="font-size: 24px; font-weight: bold;"></h1>
-      <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
-    </div>`}
+    ${embedded ? '' : topBarHtml({ title: 'Card Collection', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck Editor', actionId: 'ccEditorBtn' })}
     
     <div class="card mb-4">
-      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">🔍 Search Scryfall Cards</h2>
+      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">Search Scryfall</h2>
       <div style="background: #374151; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
-        <p class="text-xs text-gray">💡 <strong>Tip:</strong> Search works best when hosted on HTTPS. If you get errors, try searching for specific card names like "Lightning Bolt" or "Black Lotus".</p>
+        <p class="text-xs text-gray">Search works best over HTTPS. If a search fails, try an exact card name such as "Lightning Bolt".</p>
       </div>
       <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-        <input id="scryfallSearch" class="input" placeholder="Search for MTG cards (e.g., Lightning Bolt)..." style="flex: 1;">
+        <input id="scryfallSearch" class="input" placeholder="Search cards, for example Lightning Bolt" style="flex: 1;">
         <button id="searchBtn" class="btn btn-primary">Search</button>
         <button id="loadAllBtn" class="btn btn-blue">Load All Cards</button>
       </div>
@@ -6077,7 +6341,7 @@ function CardCreator() {
           <label class="mt-4">Or Image URL</label>
           <input id="cardImageUrl" class="input" placeholder="https://..." value="${form.imageUrl || ''}">
         </div>
-        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? '✓ Update Card' : '+ Create Card'}</button>
+        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? 'Update card' : 'Create card'}</button>
       </div>
       <div>
         <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
@@ -6097,8 +6361,8 @@ function CardCreator() {
   
   const ccBack = div.querySelector('#backBtn');
   if (ccBack) ccBack.onclick = () => { state.screen = 'menu'; state.editingCard = null; render(); };
-  const ccLogout = div.querySelector('#logoutBtn');
-  if (ccLogout) ccLogout.onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
+  const ccEditor = div.querySelector('#ccEditorBtn');
+  if (ccEditor) ccEditor.onclick = () => { state.builderTab = 'deck'; state.screen = 'builder'; render(); };
   div.querySelector('#cardType').value = form.type;
   
   const updatePreview = () => {
@@ -6213,7 +6477,7 @@ function CardCreator() {
       return;
     }
     const resultsDiv = div.querySelector('#searchResults');
-    resultsDiv.innerHTML = '<p class="text-blue text-xs loading">Searching Scryfall...</p>';
+    resultsDiv.innerHTML = '<p class="text-blue text-xs loading">Searching Scryfall.</p>';
     try {
       // Use the correct Scryfall API endpoint with proper encoding
       const searchUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
@@ -6315,12 +6579,12 @@ resultsDiv.onclick = (e) => {
   };
 
   state.cards.push(newCard);
-  toast('Added ' + card.name + ' ✓');
+  toast('Added ' + card.name + '.');
 
   if (!tile.querySelector('.added-badge')) {
     const badge = document.createElement('div');
     badge.className = 'added-badge';
-    badge.textContent = 'Added ✓';
+    badge.textContent = 'Added';
     badge.style.cssText = 'position:absolute; top:6px; left:6px; background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px;';
     tile.appendChild(badge);
     tile.style.borderColor = '#10b981';
@@ -6344,7 +6608,7 @@ resultsDiv.onclick = (e) => {
   div.querySelector('#loadAllBtn').onclick = async () => {
     if (state.isLoadingScryfallCards) return;
     if (state.scryfallCards.length > 0) {
-      alert(`✓ ${state.scryfallCards.length} cards already loaded! Use search to find them.`);
+      toast(`${state.scryfallCards.length} cards are already loaded. Use the search box.`);
       return;
     }
     if (!confirm('This will download ~160MB of card data from Scryfall. This may take 1-2 minutes. Continue?\n\nNote: You can also just use the Search feature without loading all cards!')) return;
@@ -6384,8 +6648,8 @@ resultsDiv.onclick = (e) => {
         const cards = await cardsResponse.json();
         state.scryfallCards = cards;
         console.log('Loaded cards:', cards.length);
-        alert(`✓ Success! Loaded ${cards.length.toLocaleString()} MTG cards! You can now search through all cards.`);
-        resultsDiv.innerHTML = '<p class="text-green text-xs text-center p-4">✓ All cards loaded! Use the search box above to find any MTG card.</p>';
+        toast(`Loaded ${cards.length.toLocaleString()} cards. Use the search box to find any of them.`);
+        resultsDiv.innerHTML = '<p class="text-green text-xs text-center p-4">All cards loaded. Use the search box above.</p>';
       } else {
         throw new Error('Could not find oracle cards in bulk data');
       }
@@ -6849,7 +7113,7 @@ function renderDeckStatsInto(containerId){
       <div class="ds-row">
         <!-- Stacked Mana Curve -->
         <div>
-          <div class="ds-title" style="margin-bottom:4px;">Mana Curve</div>
+          <div class="ds-title" style="margin-bottom:4px;">Mana curve</div>
           <div class="ds-curve" style="--bins:${Math.max(keys.length,1)}">
             ${cols || `<div class="text-xs" style="opacity:.7;">No spell costs found (lands excluded).</div>`}
           </div>
@@ -6859,7 +7123,7 @@ function renderDeckStatsInto(containerId){
 
         <!-- Colors in Mana Cost -->
         <div class="ds-piecard">
-          <div class="ds-title">Colors in Mana Cost</div>
+          <div class="ds-title">Colours in mana cost</div>
           <div class="ds-piewrap">
             <div class="ds-pie" style="${colorPieStyle}" title="${colorTitle}"></div>
             <div class="ds-list">
@@ -6870,7 +7134,7 @@ function renderDeckStatsInto(containerId){
 
         <!-- Types -->
         <div class="ds-piecard">
-          <div class="ds-title">Types</div>
+          <div class="ds-title">Card types</div>
           <div class="ds-piewrap">
             <div class="ds-pie" style="${typePieStyle}"></div>
             <div class="ds-list">
@@ -7012,7 +7276,7 @@ function cloneCard(base){
     if (isInDeck) {
       const removeBtn = document.createElement('button');
       removeBtn.className = 'remove-btn';
-      removeBtn.textContent = '✕';
+      removeBtn.textContent = '\u00d7';
       removeBtn.onclick = (e) => {
         e.stopPropagation();
         const i = state.decks[key].indexOf(c);
@@ -7027,21 +7291,22 @@ function cloneCard(base){
 
   // ---------- build main containers ----------
   const deckContainer = document.createElement('div');
-  deckContainer.style.cssText = 'background:#1f2937;padding:16px;border-radius:8px;min-height:200px;';
+  deckContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
   if (!state.decks[key] || state.decks[key].length === 0) {
-    const emptyMsg = document.createElement('p');
-    emptyMsg.className = 'text-gray text-center';
-    emptyMsg.style.padding = '32px 0';
-    emptyMsg.textContent = 'No cards in deck. Click cards below to add them!';
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'editor-empty';
+    emptyMsg.innerHTML = `
+      <div>No cards yet. Search Scryfall in the next column, import a list, or generate a deck.</div>
+      ${deckActionsHtml('editor', { hideBuilder: true, importId: 'editorImportList' })}`;
     deckContainer.appendChild(emptyMsg);
   } else {
     state.decks[key].forEach(c => deckContainer.appendChild(createCardElement(c, true)));
   }
 
   const availContainer = document.createElement('div');
-  availContainer.style.cssText = 'background:#1f2937;padding:16px;border-radius:8px;min-height:200px;';
+  availContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
   if (!state.cards || state.cards.length === 0) {
-    availContainer.innerHTML = '<p class="text-gray text-center" style="padding:32px;">No cards available. Go to Card Creator to add some!</p>';
+    availContainer.innerHTML = '<div class="editor-empty">No cards of your own yet. Search Scryfall above, or open Design cards to make one.</div>';
   } else {
     state.cards.forEach(c => {
       const el = createCardElement(c, false);
@@ -7135,122 +7400,72 @@ function cloneCard(base){
   }
 
   const deckValidation = validateDeckForMode(state.decks[key] || [], mode);
+  const statusLabels = { ready: 'Ready', warning: 'Review', blocked: 'Needs work' };
+  const deckEmpty = deckValidation.empty;
+
+  // An empty deck says so in the decklist column, with the actions that fill
+  // it. Repeating that here would be two messages for one state.
+  const issuesHtml = (deckValidation.status === 'ready' || deckEmpty) ? '' : `
+    <div id="deckIssues" class="deck-validation compact deck-validation-${deckValidation.status}${deckEmpty ? ' is-empty' : ''}">
+      <div class="validation-issues">
+        ${[...deckValidation.errors, ...deckValidation.warnings]
+          .map(m => `<div class="${deckEmpty ? 'note' : 'error'}">${htmlEscape(m)}</div>`).join('')}
+      </div>
+    </div>`;
 
   // ---------- template ----------
   div.innerHTML = `
-    <div class="header flex items-center justify-between gap-3">
-      <button id="backBtn" class="btn btn-secondary h-9 px-3 text-sm">← Back</button>
-      <h1 class="text-xl font-bold">Deck Editor • ${htmlEscape(mode.title)}</h1>
-      <button id="changeMode" class="btn btn-secondary h-9 px-3 text-sm">Change Format</button>
+    ${topBarHtml({ title: 'Deck Editor', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Play', actionId: 'goPlayBtn' })}
+
+    <div class="editor-head">
+      <div class="segmented" role="group" aria-label="Which deck to edit">
+        <button id="editDeck1" class="${state.currentPlayer === 1 ? 'active' : ''}">Your deck ${(state.decks.player1 || []).length}</button>
+        <button id="editDeck2" class="${state.currentPlayer === 2 ? 'active' : ''}">Opponent deck ${(state.decks.player2 || []).length}</button>
+      </div>
+      <input id="deckNameInput" class="input" style="width:190px" placeholder="Deck name"
+             value="${htmlEscape(state.lastDeckName || '')}">
+      <button id="saveDeckToLib" class="btn btn-secondary text-sm">Save</button>
+      <span class="badge">${htmlEscape(mode.title)}</span>
+      <button id="changeMode" class="btn btn-secondary text-sm">Change</button>
+      <span id="deckValidation" class="deck-validation-chip deck-validation-${deckValidation.status}${deckEmpty ? ' is-empty' : ''}">${statusLabels[deckValidation.status] || deckValidation.status}</span>
     </div>
 
-    <div class="flex mb-4" style="gap:8px;flex-wrap:wrap">
+    <div class="editor-toolbar">
       <div class="segmented" role="group" aria-label="Deck Editor section">
-        <button id="tabDeck" class="${state.builderTab !== 'cards' ? 'active' : ''}">🛠️ Build deck</button>
-        <button id="tabCards" class="${state.builderTab === 'cards' ? 'active' : ''}">✨ Create cards</button>
+        <button id="tabDeck" class="${state.builderTab !== 'cards' ? 'active' : ''}">Build deck</button>
+        <button id="tabCards" class="${state.builderTab === 'cards' ? 'active' : ''}">Design cards</button>
       </div>
+      <button id="draftCTA" class="btn btn-secondary" type="button">Draft</button>
+      <button id="importCTA" class="btn btn-secondary" type="button">Import</button>
+      <button id="exportCTA" class="btn btn-secondary" type="button">Export</button>
+      <button id="landsCTA" class="btn btn-secondary" type="button">Lands</button>
+      <button id="statsToggle" class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="deckStatsCard">Statistics</button>
+      <button id="deckShelfToggle" class="btn btn-secondary" type="button">Saved decks (${(state.deckLibrary || []).length})</button>
     </div>
 
     <div id="builderBody">
 
-    <div class="card p-4 mb-4 deck-library">
-      <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
-        <div>
-          <h3 style="font-weight:800;font-size:15px">📚 My Decks</h3>
-          <p class="text-xs text-gray mt-1">Save the deck you are building, then load it into any game.</p>
-        </div>
-        <div class="flex" style="gap:8px;align-items:center;flex-wrap:wrap">
-          <input id="deckNameInput" class="input" style="width:200px" placeholder="Deck name"
-                 value="${htmlEscape(state.lastDeckName || '')}">
-          <button id="saveDeckToLib" class="btn btn-primary text-sm">Save deck</button>
-        </div>
-      </div>
+    ${issuesHtml}
 
-      <div class="flex mt-3" style="gap:10px;align-items:center;flex-wrap:wrap">
-        <span class="text-xs text-gray" style="letter-spacing:.06em;text-transform:uppercase">Editing</span>
-        <div class="segmented" role="group" aria-label="Which deck to edit">
-          <button id="editDeck1" class="${state.currentPlayer === 1 ? 'active' : ''}">Your deck · ${(state.decks.player1 || []).length}</button>
-          <button id="editDeck2" class="${state.currentPlayer === 2 ? 'active' : ''}">Opponent deck · ${(state.decks.player2 || []).length}</button>
-        </div>
-        ${state.currentPlayer === 2 ? '<span class="text-xs text-gray">The bot plays this deck in vs-AI games.</span>' : ''}
-      </div>
-
-      ${(state.deckLibrary || []).length ? `
-        <div class="deck-shelf mt-3">
-          ${state.deckLibrary.map(d => `
-            <div class="deck-shelf-item">
-              <div style="min-width:0">
-                <div class="deck-shelf-name">${htmlEscape(d.name)}</div>
-                <div class="text-xs text-gray">${htmlEscape(libraryDeckSummary(d))}</div>
-              </div>
-              <div class="flex" style="gap:6px">
-                <button class="btn btn-secondary text-xs libLoad" data-id="${d.id}">Load</button>
-                <button class="btn btn-red text-xs libDelete" data-id="${d.id}" aria-label="Delete ${htmlEscape(d.name)}">✕</button>
-              </div>
-            </div>`).join('')}
-        </div>`
-      : '<div class="text-xs text-gray mt-3">No saved decks yet — name this one and press Save.</div>'}
+    <div class="card p-4 hidden" id="deckShelfCard" style="margin-bottom:16px">
+      <h3 style="font-weight:800;font-size:15px;margin-bottom:10px">Saved decks</h3>
+      ${deckLibraryHtml('editorLib')}
     </div>
-
-    <div class="card p-4 mb-4">
-      <div class="flex justify-between" style="align-items:flex-start;gap:12px;">
-        <div>
-          <span class="mode-family">${htmlEscape(mode.family)}</span>
-          <div class="text-sm text-gray mt-2">${htmlEscape(mode.summary)}</div>
-          <div class="text-xs text-gray mt-2">
-            ${mode.target ? `Target ${mode.target} cards` : 'Open deck size'}
-            ${mode.singleton ? ' • Singleton' : ''}
-            ${mode.rarity === 'common' ? ' • Commons only' : ''}
-            ${mode.commanderZone ? ' • Commander zone in battle' : ''}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    ${deckValidationPanelHtml(deckValidation)}
 
     ${jumpstartPanelHtml()}
     ${cubePanelHtml()}
     ${dandanPanelHtml()}
 
-    <div class="action-panel-grid" style="margin-bottom:16px;">
-      <button id="draftCTA" class="action-panel" type="button">
-        <span>Draft</span>
-        <small>Open the draft or pool builder for this mode.</small>
-      </button>
-      <button id="importCTA" class="action-panel" type="button">
-        <span>Import</span>
-        <small>Paste or upload a decklist.</small>
-      </button>
-      <button id="exportCTA" class="action-panel" type="button">
-        <span>Export</span>
-        <small>Download the current deck.</small>
-      </button>
-      <button id="landsCTA" class="action-panel" type="button">
-        <span>🏞️ Lands</span>
-        <small>Choose which basic land printing your decks use.</small>
-      </button>
+    <div class="card p-4 hidden" id="deckStatsCard" style="margin-bottom:16px">
+      <div id="manaCurveDeckChart"></div>
     </div>
-
-<!-- Stretched toggle bar for Deck Statistics -->
-<button id="statsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-controls="deckStatsCard">
-  <span class="left"><span class="chip"></span><span id="statsLabel">Decklist Statistics</span></span>
-  <span class="chev" id="statsChevron">▸</span>
-</button>
-
-<!-- Collapsible stats card (initially hidden) -->
-<div class="card p-4 hidden" id="deckStatsCard" style="margin-bottom:16px">
-  <div id="manaCurveDeckChart"></div>
-</div>
-
 
     <!-- Collapsed Import panel -->
     <div class="card p-4 hidden" id="importCard" style="margin-bottom:16px">
       <div class="flex justify-between" style="align-items:center;margin-bottom:8px">
         <h3 style="font-weight:800;letter-spacing:.2px">Import decklist</h3>
         <div class="text-xs text-gray">
-          <strong>.json</strong> upload = replace current deck immediately.<br>
-          <strong>.txt</strong> or pasted text = Parse → Import parsed.
+          A .json upload replaces the current deck. A .txt file or pasted text goes Parse, then Import parsed.
         </div>
       </div>
 
@@ -7260,7 +7475,7 @@ function cloneCard(base){
 4 Lightning Bolt
 3x Counterspell
 Island x14
-# comments & Sideboard: are ignored"></textarea>
+# comments and Sideboard: lines are ignored"></textarea>
 
           <div class="flex" style="gap:8px;margin-top:8px;flex-wrap:wrap">
             <label class="btn btn-secondary text-sm" style="cursor:pointer">
@@ -7295,24 +7510,27 @@ Island x14
       </div>
     </div>
 
-    <!-- The mana curve renders inside the collapsible stats card above; a second
-         mount with the same id was always left empty (querySelector takes the first). -->
-
-    <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:20px;">
-      <div class="card">
-        <h3 class="mb-4" style="font-weight:bold;">Decklist [${(state.decks[key]||[]).length}]</h3>
-        <p class="text-xs text-gray mb-4">Click the ✕ to remove cards</p>
-        <div id="deckContainer"></div>
+    <div class="editor-grid">
+      <div class="editor-col">
+        <h3>Decklist [${(state.decks[key]||[]).length}]</h3>
+        <div class="editor-scroll" id="deckContainer"></div>
       </div>
-      <div class="card">
-        <h3 class="mb-4" style="font-weight:bold;">Collection [${(state.cards||[]).length}]</h3>
-        <p class="text-xs text-gray mb-4">Click cards to add to deck</p>
-        <div id="availContainer"></div>
+      <div class="editor-col">
+        <h3>Add cards</h3>
+        <div class="editor-search-row">
+          <input id="editorScrySearch" class="input" placeholder="Search Scryfall by name or query">
+          <button id="editorScryBtn" class="btn btn-primary text-sm" type="button">Search</button>
+        </div>
+        <div class="editor-scroll">
+          <div id="editorScryResults" class="scry-grid" style="margin-bottom:12px"></div>
+          <h3>Your cards [${(state.cards||[]).length}]</h3>
+          <div id="availContainer"></div>
+        </div>
       </div>
-      <div class="card" style="position:sticky;top:20px;height:fit-content;">
-        <h3 class="mb-4" style="font-weight:bold;text-align:center;">Card Info</h3>
-        <div id="cardInfoSidebar">
-          <p class="text-gray text-xs text-center" style="padding:20px;">Hover over a card to see details</p>
+      <div class="editor-col">
+        <h3>Card info</h3>
+        <div class="editor-scroll" id="cardInfoSidebar">
+          <p class="text-gray text-xs" style="padding:20px 0;">Hover over a card to see its details.</p>
         </div>
       </div>
     </div>
@@ -7328,10 +7546,9 @@ Island x14
 
   // ---------- header / tiles wiring ----------
   const backBtn   = div.querySelector('#backBtn');
-  if (backBtn) backBtn.onclick = () => {
-    state.screen = state.battleMode === state.selectedMode ? 'mode-studio' : 'menu';
-    render();
-  };
+  if (backBtn) backBtn.onclick = () => { state.screen = 'menu'; render(); };
+  const goPlayBtn = div.querySelector('#goPlayBtn');
+  if (goPlayBtn) goPlayBtn.onclick = () => { state.screen = 'battlemenu'; render(); };
 
   const changeModeBtn = div.querySelector('#changeMode');
   if (changeModeBtn) changeModeBtn.onclick = () => { state.modeIntent = 'build'; state.screen = 'modes'; render(); };
@@ -7364,20 +7581,32 @@ Island x14
       render();
     }
   };
-  div.querySelectorAll('.libLoad').forEach(btn => {
-    btn.onclick = () => {
-      const entry = loadDeckFromLibrary(btn.dataset.id, key);
-      if (entry) { state.lastDeckName = entry.name; toast(`Loaded "${entry.name}".`); render(); }
-    };
+  bindDeckLibrary(div, 'editorLib', key);
+  bindDeckActions(div, 'editor', key, {
+    onLoadSaved: () => {
+      const shelf = div.querySelector('#deckShelfCard');
+      state.deckShelfOpen = true;
+      if (shelf) { shelf.classList.remove('hidden'); shelf.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    }
   });
-  div.querySelectorAll('.libDelete').forEach(btn => {
-    btn.onclick = () => {
-      const entry = (state.deckLibrary || []).find(d => d.id === btn.dataset.id);
-      if (entry && !confirm(`Delete "${entry.name}"?`)) return;
-      deleteDeckFromLibrary(btn.dataset.id);
-      render();
+  const backToDeckTab = (panel) => () => {
+    state.builderTab = 'deck';
+    state.builderPanel = panel;
+    render();
+  };
+  const deckShelfToggle = div.querySelector('#deckShelfToggle');
+  const deckShelfCard = div.querySelector('#deckShelfCard');
+  if (deckShelfToggle && !deckShelfCard) deckShelfToggle.onclick = backToDeckTab('shelf');
+  if (deckShelfToggle && deckShelfCard) {
+    // Renaming and deleting re-render, so the shelf has to remember it is open.
+    if (state.deckShelfOpen || state.deckDeleteConfirm || state.deckRenaming) {
+      deckShelfCard.classList.remove('hidden');
+    }
+    deckShelfToggle.onclick = () => {
+      state.deckShelfOpen = deckShelfCard.classList.contains('hidden');
+      deckShelfCard.classList.toggle('hidden');
     };
-  });
+  }
 
   const editDeck1 = div.querySelector('#editDeck1');
   const editDeck2 = div.querySelector('#editDeck2');
@@ -7392,26 +7621,40 @@ Island x14
 
   const importCTA = div.querySelector('#importCTA');
   const importCard = div.querySelector('#importCard');
+  if (importCTA && !importCard) importCTA.onclick = backToDeckTab('import');
+  const openImportPanel = () => {
+    if (!importCard) return;
+    importCard.classList.remove('hidden');
+    const ta = div.querySelector('#importDeckTA');
+    const st = div.querySelector('#importStatus');
+    if (st) st.textContent = 'Status: ready.';
+    if (ta) ta.focus();
+  };
   if (importCTA && importCard) {
     importCTA.onclick = () => {
-      importCard.classList.toggle('hidden');
-      const ta = div.querySelector('#importDeckTA');
-      const st = div.querySelector('#importStatus');
-      if (!importCard.classList.contains('hidden')) {
-        if (st) st.textContent = 'Status: ready.';
-        if (ta) ta.focus();
+      const opening = importCard.classList.contains('hidden');
+      if (opening) {
+        openImportPanel();
         importCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else {
+        importCard.classList.add('hidden');
+        const st = div.querySelector('#importStatus');
         if (st) st.textContent = 'Status: collapsed.';
       }
     };
   }
+  const importListBtn = div.querySelector('#editorImportList');
+  if (importListBtn) importListBtn.onclick = () => {
+    openImportPanel();
+    if (importCard) importCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Draft entry (image tile)
   const openDraft = div.querySelector('#draftCTA') || div.querySelector('#openDraft');
   if (openDraft) {
     openDraft.onclick = () => {
-      resetDraftForMode(state.selectedMode || 'casual', { screen: 'mode' });
+      const current = getModeConfig(state.selectedMode || 'casual');
+      resetDraftForMode(current.draft ? current.id : 'set-draft', { screen: 'setup' });
       state.screen = 'draft';
       render();
     };
@@ -7431,7 +7674,7 @@ Island x14
   if (randomJumpstart) randomJumpstart.onclick = randomizeJumpstart;
   if (buildJumpstart) buildJumpstart.onclick = async () => {
     buildJumpstart.disabled = true;
-    buildJumpstart.textContent = 'Fetching cards…';
+    buildJumpstart.textContent = 'Fetching cards';
     let deck = null;
     try { deck = await buildRealJumpstartDeck(jumpA?.value, jumpB?.value); } catch {}
     if (!deck) deck = buildJumpstartDeck(jumpA?.value, jumpB?.value);   // offline fallback
@@ -7505,7 +7748,7 @@ Island x14
     const key2 = 'player' + state.currentPlayer;
     if (replace) state.decks[key2] = cards.slice();
     else state.decks[key2] = (state.decks[key2] || []).concat(cards);
-    toast(replace ? 'Deck replaced ✓' : `Added ${cards.length} card(s) ✓`);
+    toast(replace ? 'Deck replaced.' : `Added ${cards.length} card${cards.length === 1 ? '' : 's'}.`);
     render();
   }
 
@@ -7522,7 +7765,7 @@ Island x14
         if (Array.isArray(j.cards)){
           lastParsedCards = ensureImages(j.cards);
           importPrev.innerHTML = `<div class="text-xs text-gray">Ready: JSON with <strong>${lastParsedCards.length}</strong> card objects.</div>`;
-          if (importStat) importStat.textContent = 'JSON parsed. Click “Import parsed” to load it.';
+          if (importStat) importStat.textContent = 'JSON parsed. Click Import parsed to load it.';
           importApply.disabled = false;
           return;
         }
@@ -7531,7 +7774,7 @@ Island x14
       renderImportPreview(m);
       if (!m.size){ if (importStat) importStat.textContent = 'No valid card names found.'; return; }
 
-      if (importStat) importStat.textContent = 'Fetching Scryfall data…';
+      if (importStat) importStat.textContent = 'Fetching Scryfall data.';
       const setPref = (importSet && importSet.value || '').trim();
       const includeImages = !!(importImgs && importImgs.checked);
       const { out, errors } = await convertDecklist(raw, state.currentPlayer, setPref, includeImages, { textContent: (t)=> { if(importStat) importStat.textContent = t; } });
@@ -7582,32 +7825,29 @@ Island x14
     }
     if (importTA) importTA.value = text;
     try { const m = parseDecklist(text); renderImportPreview(m); } catch {}
-    if (importStat) importStat.textContent = 'TXT loaded. Click “Parse” to resolve via Scryfall, then “Import parsed”.';
+    if (importStat) importStat.textContent = 'Text loaded. Click Parse to resolve the names, then Import parsed.';
     importApply.disabled = true;
   };
 
 // --- Deck Statistics toggle wiring ---
 const statsToggle = div.querySelector('#statsToggle');
 const statsCard   = div.querySelector('#deckStatsCard');
-const statsLabel  = div.querySelector('#statsLabel');
-const statsChev   = div.querySelector('#statsChevron');
 
 function openStats(){
   statsCard.classList.remove('hidden');
-  statsToggle.classList.add('open');
+  statsToggle.classList.add('active');
   statsToggle.setAttribute('aria-expanded','true');
-  if (statsChev) statsChev.textContent = '▾';
   // render when opened (fresh each time)
   renderDeckStatsInto('manaCurveDeckChart');
 }
 
 function closeStats(){
   statsCard.classList.add('hidden');
-  statsToggle.classList.remove('open');
+  statsToggle.classList.remove('active');
   statsToggle.setAttribute('aria-expanded','false');
-  if (statsChev) statsChev.textContent = '▸';
 }
 
+if (statsToggle && !statsCard) statsToggle.onclick = backToDeckTab('stats');
 if (statsToggle && statsCard){
   // default closed
   closeStats();
@@ -7616,6 +7856,64 @@ if (statsToggle && statsCard){
     if (statsCard.classList.contains('hidden')) openStats();
     else closeStats();
   };
+}
+
+// A panel asked for from the card-design tab opens once the deck tab is back.
+if (state.builderPanel) {
+  const wanted = state.builderPanel;
+  state.builderPanel = null;
+  if (wanted === 'stats' && statsCard) openStats();
+  if (wanted === 'import') openImportPanel();
+  if (wanted === 'shelf' && deckShelfCard) {
+    state.deckShelfOpen = true;
+    deckShelfCard.classList.remove('hidden');
+  }
+}
+
+// ---------- Scryfall search, straight into the deck ----------
+const scryInput   = div.querySelector('#editorScrySearch');
+const scryBtn     = div.querySelector('#editorScryBtn');
+const scryResults = div.querySelector('#editorScryResults');
+if (scryInput && scryBtn && scryResults) {
+  let found = [];
+  const runSearch = async () => {
+    const query = (scryInput.value || '').trim();
+    if (!query) { scryResults.innerHTML = '<div class="text-xs text-gray">Type a card name or a Scryfall query.</div>'; return; }
+    scryResults.innerHTML = '<div class="text-xs text-gray">Searching Scryfall.</div>';
+    try {
+      const r = await scryfetch(
+        `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      found = Array.isArray(data.data) ? data.data.slice(0, 40) : [];
+      if (!found.length) { scryResults.innerHTML = '<div class="text-xs text-gray">No cards matched that search.</div>'; return; }
+      scryResults.innerHTML = found.map((c, i) => {
+        const img = c.image_uris?.small || c.card_faces?.[0]?.image_uris?.small || '';
+        return `<div class="scry-tile" data-idx="${i}" title="Click to add to the deck">
+          ${img ? `<img src="${img}" alt="${htmlEscape(c.name)}" loading="lazy">` : ''}
+          <div class="scry-name">${htmlEscape(c.name)}</div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      scryResults.innerHTML = '<div class="text-xs text-gray">Search failed. Check the connection and try again.</div>';
+    }
+  };
+  scryBtn.onclick = runSearch;
+  scryInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } };
+  scryResults.onclick = (e) => {
+    const tile = e.target.closest('.scry-tile');
+    if (!tile) return;
+    const card = found[Number(tile.dataset.idx)];
+    if (!card) return;
+    state.decks[key] = state.decks[key] || [];
+    state.decks[key].push({ ...scryfallToCard(card), id: makeId('card'), deckId: Date.now() + Math.random() });
+    state.builderScryQuery = scryInput.value;
+    toast(`Added ${card.name}.`);
+    render();
+  };
+  if (state.builderScryQuery) scryInput.value = state.builderScryQuery;
 }
 
 
@@ -7720,7 +8018,7 @@ function checkHordeVictory(){
   if (battlefieldCards(horde).length) return;
   state.winner = 1;
   state.gameStarted = false;
-  state.actionMessage = 'The Horde is spent — the survivors win!';
+  state.actionMessage = 'The Horde is spent. The survivors win.';
 }
 
 function hordePlayerRef(){ return state.gameState.player2; }
@@ -7880,22 +8178,22 @@ function GameBoard() {
     // fail across networks. Say so before it gets shared, not after.
     const localOnlyWarning = state.localOnlyCode ? `
       <div class="conn-warn mt-3">
-        <strong>⚠ This code only works on your local network.</strong>
+        <strong>This code only works on your local network.</strong>
         Your browser could not reach a STUN server, so the code contains no
         internet-routable address. Check that a VPN, firewall or strict
         network policy is not blocking UDP, then press Back and host again.
       </div>` : '';
     if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
-      connUI = '<div class="card text-green mb-4 text-center p-4">✅ Connected! Ready to play.</div>';
+      connUI = '<div class="card text-green mb-4 text-center p-4">Connected. Ready to play.</div>';
     } else if (state.onlineMode && state.waitingForAnswer) {
       connUI = `
         <div class="card" style="background: rgba(30, 64, 175, 0.2); border-color: #3b82f6; margin-bottom: 24px;">
-          <h3 class="mb-4" style="font-weight: bold;">📋 Step 1: Share This Code</h3>
+          <h3 class="mb-4" style="font-weight: bold;">Step 1. Share this code</h3>
           <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
           <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
           <hr style="border-color: #4b5563; margin: 16px 0;">
-          <h3 class="mb-4" style="font-weight: bold;">📥 Step 2: Enter Their Response</h3>
-          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste answer code..." style="font-size: 11px;"></textarea>
+          <h3 class="mb-4" style="font-weight: bold;">Step 2. Enter their response</h3>
+          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 11px;"></textarea>
           <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
           ${statusLine}
           ${localOnlyWarning}
@@ -7904,18 +8202,18 @@ function GameBoard() {
     } else if (state.onlineMode && state.answerCode) {
       connUI = `
         <div class="card" style="background: rgba(5, 150, 105, 0.2); border-color: #059669; margin-bottom: 24px;">
-          <h3 class="mb-4" style="font-weight: bold;">✅ Send This Code Back</h3>
+          <h3 class="mb-4" style="font-weight: bold;">Send this code back</h3>
           <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
           <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
-          <p class="text-green text-sm mt-4">Waiting for host...</p>
+          <p class="text-green text-sm mt-4">Waiting for the host.</p>
           ${statusLine}
           ${localOnlyWarning}
         </div>
       `;
     } else if (state.onlineMode) {
       connUI = `<div class="card mb-4 text-center p-4">
-        <strong>Preparing connection…</strong>
-        <div class="text-xs text-gray mt-1">Finding a network route. This can take a few seconds — wait for the code before sharing it.</div>
+        <strong>Preparing connection</strong>
+        <div class="text-xs text-gray mt-1">Finding a network route. This can take a few seconds. Wait for the code before sharing it.</div>
         ${statusLine}
       </div>`;
     }
@@ -7944,24 +8242,26 @@ function GameBoard() {
     
     div.innerHTML = `
       <div style="max-width: 800px; width: 100%;">
-        <div class="header">
-          <button id="backBtn" class="btn btn-secondary text-sm">← Back</button>
-          <button id="logoutBtn" class="btn btn-secondary text-sm">Logout</button>
-        </div>
+        ${topBarHtml({
+          title: 'Ready to play',
+          subtitle: mode.title,
+          backLabel: 'Back',
+          backId: 'backBtn',
+          actionLabel: 'Exit to title',
+          actionId: 'logoutBtn'
+        })}
         ${connUI}
         <div class="card text-center">
-          <h1 class="mb-4" style="font-size: 28px; font-weight: bold;">⚔️ Ready to Play?</h1>
-          <div class="mode-family" style="margin:0 auto 8px">${htmlEscape(mode.title)}</div>
 
           <!-- Game setup + a short how-to-play for this format -->
           <div class="setup-card mb-4">
             <div class="setup-title">How this game is set up</div>
             <ul class="setup-list">
               <li><strong>Opening hand:</strong> ${rules.startingHand || rules.openingHand || 7} cards dealt to each player.</li>
-              <li><strong>Starting life:</strong> ${rules.botOpponent ? rules.health + ({ easy: 20, normal: 8, hard: 0 }[aiTier()] || 0) : rules.health}${rules.opponentHealth ? ` — opponent starts at ${Math.round(rules.opponentHealth * ({ easy: 0.75, normal: 1, hard: 1.25 }[aiTier()] || 1))}` : ''}.</li>
+              <li><strong>Starting life:</strong> ${rules.botOpponent ? rules.health + ({ easy: 20, normal: 8, hard: 0 }[aiTier()] || 0) : rules.health}${rules.opponentHealth ? `, opponent starts at ${Math.round(rules.opponentHealth * ({ easy: 0.75, normal: 1, hard: 1.25 }[aiTier()] || 1))}` : ''}.</li>
               <li><strong>Each turn:</strong> you untap and draw automatically when the turn passes to you.</li>
               ${state.strictMana && state.vsAI ? '<li><strong>Strict mana:</strong> cards tap lands for their cost; one land per turn.</li>' : ''}
-              ${!state.vsAI ? '<li><strong>Rules:</strong> self-enforced — play your own legal moves.</li>' : ''}
+              ${!state.vsAI ? '<li><strong>Rules:</strong> self-enforced. Play your own legal moves.</li>' : ''}
               <li><strong>Deck:</strong> ${htmlEscape(deckSizeSummary(mode))}.</li>
               ${rules.botOpponent ? '<li><strong>Opponent:</strong> played automatically by the computer. Its deck and life scale with the chosen difficulty.</li>' : ''}
               ${state.vsAI ? `<li><strong>Bot difficulty:</strong> ${htmlEscape((window.GALDUR_AI && window.GALDUR_AI.difficulty().label) || 'Normal')}.</li>` : ''}
@@ -7980,14 +8280,14 @@ function GameBoard() {
           </div>` : ''}
           ${readyValidationHtml}
           <p class="text-gray mb-8">${
-            state.onlineMode ? 'Waiting for both players to be ready…'
+            state.onlineMode ? 'Waiting for both players to be ready.'
               : state.coop ? 'Co-op: two survivors share one board against the computer.'
               : state.vsAI ? 'The computer plays the opposing seat and takes its own turns.'
-              : 'Local game — two players share this device.'}</p>
+              : 'Local game. Two players share this device.'}</p>
           <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${(!decksReady || waitForHost) ? 'disabled' : ''}>Start Game</button>
           ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeReady" class="btn btn-secondary mt-4">Generate Starter Cube Stack</button>' : ''}
           ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanReady" class="btn btn-secondary mt-4">Generate Dandan Library</button>' : ''}
-          ${readyMessage ? `<p class="${decksReady ? 'text-gray' : 'text-red'} mt-4">⚠️ ${htmlEscape(readyMessage)}</p>` : ''}
+          ${readyMessage ? `<p class="${decksReady ? 'text-gray' : 'text-red'} mt-4">${htmlEscape(readyMessage)}</p>` : ''}
         </div>
       </div>
     `;
@@ -8002,7 +8302,7 @@ function GameBoard() {
         document.execCommand('copy');     // fallback for non-secure contexts
       }
       const original = btn.textContent;
-      btn.textContent = '✓ Copied';
+      btn.textContent = 'Copied';
       setTimeout(() => { btn.textContent = original || label; }, 1200);
     };
     if (div.querySelector('#copyOffer')) {
@@ -8661,7 +8961,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       <div class="battle-canvas ${owner === 'me' ? 'mine' : 'theirs'}"${drop} data-canvas-owner="${owner}">
         <span class="canvas-label">${owner === 'me' ? 'Your battlefield' : 'Opponent battlefield'}${count ? ` · ${count}` : ''}</span>
         ${canvasCardsHtml(player, owner)}
-        ${count ? '' : `<span class="canvas-hint">${owner === 'me' ? 'Drag cards here — place them anywhere you like' : ''}</span>`}
+        ${count ? '' : `<span class="canvas-hint">${owner === 'me' ? 'Drag cards here, anywhere you like' : ''}</span>`}
       </div>`;
   };
 
@@ -8993,12 +9293,12 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       return `
       <div class="replay-bar">
         <div class="flex" style="gap:10px;align-items:center;flex-wrap:wrap">
-          <span class="badge">▶ Replay</span>
-          <button id="replayFirst" class="btn btn-secondary text-xs">⏮</button>
-          <button id="replayPrev" class="btn btn-secondary text-xs">◀ Prev</button>
-          <button id="replayPlay" class="btn btn-primary text-xs">${state.replayPlaying ? '⏸ Pause' : '▶ Play'}</button>
-          <button id="replayNext" class="btn btn-secondary text-xs">Next ▶</button>
-          <button id="replayLast" class="btn btn-secondary text-xs">⏭</button>
+          <span class="badge">Replay</span>
+          <button id="replayFirst" class="btn btn-secondary text-xs">First</button>
+          <button id="replayPrev" class="btn btn-secondary text-xs">Previous</button>
+          <button id="replayPlay" class="btn btn-primary text-xs">${state.replayPlaying ? 'Pause' : 'Play'}</button>
+          <button id="replayNext" class="btn btn-secondary text-xs">Next</button>
+          <button id="replayLast" class="btn btn-secondary text-xs">Last</button>
           <input id="replayScrub" type="range" min="0" max="${Math.max(0, frames.length - 1)}"
                  value="${state.replayIndex}" style="flex:1;min-width:180px">
           <span class="text-xs text-gray">${state.replayIndex + 1} / ${frames.length}</span>

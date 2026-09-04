@@ -56,7 +56,7 @@ async function stubScryfall(page, count = 60) {
 async function openModeStudio(page, modeName) {
   await page.locator('#chooseMode').click();
   await page.locator('.mode-card', { has: page.getByRole('heading', { name: modeName }) })
-    .getByRole('button', { name: 'Open Studio' })
+    .getByRole('button', { name: 'Details' })
     .click();
 }
 
@@ -131,7 +131,7 @@ test('MTG mode hub and Land Game startup work', async ({ page }) => {
   await page.getByRole('button', { name: 'All' }).click();
   await expect(commanderCard).toBeVisible();
 
-  await page.locator('.mode-card', { has: page.getByRole('heading', { name: 'Basic Land Game' }) }).getByRole('button', { name: 'Open Studio' }).click();
+  await page.locator('.mode-card', { has: page.getByRole('heading', { name: 'Basic Land Game' }) }).getByRole('button', { name: 'Details' }).click();
   await expect(page.getByText('Basic Land Game Studio')).toBeVisible();
   await expect(page.getByText('Decks are 10 of each basic land')).toBeVisible();
 
@@ -325,17 +325,17 @@ test('Winston Draft starts from the generated pool and advances piles', async ({
   await openModeStudio(page, 'Winston Draft');
   await page.getByRole('button', { name: 'Draft' }).click();
   await page.locator('#studioStartDraft').click();
-  await expect(page.getByText('Winston Draft Setup')).toBeVisible();
+  await expect(page.locator('.topbar-title h1')).toHaveText('Winston draft setup');
 
   await page.locator('#useStarterPool').click();
-  await expect(page.getByText('Winston Draft • Player 1')).toBeVisible();
+  await expect(page.locator('.topbar-title h1')).toHaveText('Winston draft, player 1');
   await expect(page.locator('#takeWinstonPile')).toBeVisible();
   await expect(page.locator('#skipWinstonPile')).toBeVisible();
 
   await page.locator('#skipWinstonPile').click();
   await expect(page.getByText('Inspecting Pile 2')).toBeVisible();
   await page.locator('#takeWinstonPile').click();
-  await expect(page.getByText('Winston Draft • Player 2')).toBeVisible();
+  await expect(page.locator('.topbar-title h1')).toHaveText('Winston draft, player 2');
 });
 
 test('Cube uses a shared center stack and draws from it', async ({ page }) => {
@@ -410,7 +410,7 @@ test('Mode Studio saves and restores tailored mode setups', async ({ page }) => 
   await expect(page.locator('#setupSelect')).toContainText('Dandan Night');
 
   await page.locator('#studioMenu').click();
-  await expect(page.getByText('Deck Playlists')).toBeVisible();
+  await expect(page.getByText('Deck playlists')).toBeVisible();
   await expect(page.locator('.playlist-title', { hasText: 'Dandan Night' })).toBeVisible();
   await page.locator('[data-open-playlist][data-mode="dandan"]').first().click();
   await expect(page.getByText('Dandan Studio')).toBeVisible();
@@ -450,4 +450,187 @@ test('Horde Magic auto-decks and exposes reveal controls', async ({ page }) => {
 
   await page.locator('#hordeReveal').click();
   await expect(page.locator('#actionLog').getByText(/Horde reveal:/)).toBeVisible();
+});
+
+// --- batch 2: menus, first run, mode picker, deck library, draft entry -----
+
+test('Every mode opens a studio with a heading and a way to start', async ({ page }) => {
+  await login(page, 1);
+  const modes = await page.evaluate(
+    () => window.GALDUR_MODE_DATA.MTG_MODE_LIBRARY.map(m => ({ id: m.id, title: m.title })));
+  expect(modes.length).toBeGreaterThan(10);
+
+  for (const mode of modes) {
+    await page.evaluate(id => {
+      const A = window.GALDUR_APP;
+      A.state.selectedMode = id;
+      A.state.battleMode = id;
+      // 'mode' is the shorthand key that used to render a blank page.
+      A.state.screen = 'mode';
+      A.render();
+    }, mode.id);
+    await expect(page.locator('.topbar-title h1')).toHaveText(`${mode.title} Studio`);
+    const starts = await page.locator('#studioPlayAI, #studioStartDraft').count();
+    expect(starts, `${mode.id} studio has no start button`).toBeGreaterThan(0);
+  }
+});
+
+test('Quick play builds a deck and reaches a game in two clicks', async ({ page }) => {
+  await stubScryfall(page);
+  await page.goto('/index.html');
+  await page.waitForTimeout(250);
+  await page.locator('#enterApp').click();
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    A.state.decks.player1 = [];
+    A.render();
+  });
+
+  await page.locator('#quickPlay').click();
+  await expect(page.locator('#startBtn')).toBeVisible({ timeout: 20000 });
+
+  const info = await page.evaluate(() => {
+    const s = window.GALDUR_APP.state;
+    return { deck: s.decks.player1.length, mode: s.selectedMode, vsAI: s.vsAI, difficulty: s.aiDifficulty };
+  });
+  expect(info.deck).toBeGreaterThan(30);
+  expect(info.mode).toBe('casual');
+  expect(info.vsAI).toBe(true);
+  expect(info.difficulty).toBe('normal');
+});
+
+test('An empty deck offers a generator instead of a dead end', async ({ page }) => {
+  await stubScryfall(page);
+  await login(page, 1);
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    A.state.decks.player1 = [];
+    A.state.selectedMode = 'casual';
+    A.state.battleMode = 'casual';
+    A.state.screen = 'battlemenu';
+    A.render();
+  });
+
+  await expect(page.locator('#battleMineGenerate')).toBeVisible();
+  await expect(page.locator('#battleMineOpenBuilder')).toBeVisible();
+  await page.locator('#battleMineGenColors').selectOption('ur');
+  await page.locator('#battleMineGenerate').click();
+
+  await expect
+    .poll(() => page.evaluate(() => window.GALDUR_APP.state.decks.player1.length), { timeout: 25000 })
+    .toBeGreaterThan(30);
+  await expect(page.locator('#battleMineGenerate')).toHaveCount(0);
+  await expect(page.locator('#p1DeckValidation')).not.toContainText('Needs work');
+});
+
+test('Play on a mode card opens that mode, Details opens its studio', async ({ page }) => {
+  await login(page, 1);
+  await page.locator('#chooseMode').click();
+
+  await page.locator('[data-mode-id="commander"] [data-action="play"]').click();
+  await expect(page.locator('.topbar-title h1')).toHaveText('Play');
+  await expect(page.locator('.flow-step').first()).toContainText('Commander');
+  expect(await page.evaluate(() => window.GALDUR_APP.state.selectedMode)).toBe('commander');
+
+  await page.locator('#changeMode').click();
+  await expect(page.locator('.mode-card.active')).toHaveAttribute('data-mode-id', 'commander');
+  await expect(page.locator('.mode-group-head h2').first()).toBeVisible();
+
+  // Limited modes have no constructed deck, so Play opens the draft flow.
+  await page.locator('[data-mode-id="set-draft"] [data-action="play"]').click();
+  await expect(page.locator('#startDraft')).toBeVisible();
+
+  await page.evaluate(() => { window.GALDUR_APP.state.screen = 'modes'; window.GALDUR_APP.render(); });
+  await page.locator('[data-mode-id="boss"] [data-action="details"]').click();
+  await expect(page.locator('.topbar-title h1')).toHaveText('Boss Battle Studio');
+});
+
+test('The deck library loads, renames and deletes without a browser dialog', async ({ page }) => {
+  let dialogs = 0;
+  page.on('dialog', d => { dialogs += 1; d.dismiss(); });
+  await login(page, 1);
+
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    const cards = Array.from({ length: 40 }, (_, i) => ({
+      id: 'lib-card-' + i, name: 'Shelf Card ' + i, type: 'Creature', cost: '{1}{G}',
+      colors: ['G'], effect: '', power: 1, toughness: 1
+    }));
+    A.state.deckLibrary = [{ id: 'lib1', name: 'Shelf Deck', modeId: 'casual', cards, savedAt: Date.now() }];
+    A.state.decks.player1 = [];
+    A.state.builderTab = 'deck';
+    A.state.screen = 'builder';
+    A.render();
+  });
+
+  await page.locator('#deckShelfToggle').click();
+  await expect(page.locator('.deck-row-name')).toHaveText('Shelf Deck');
+  await expect(page.locator('.deck-row-meta')).toContainText('40 cards');
+
+  await page.locator('.editorLibRename').click();
+  await page.locator('.editorLibRenameInput').fill('Renamed Shelf');
+  await page.locator('.editorLibRenameSave').click();
+  await expect(page.locator('.deck-row-name')).toHaveText('Renamed Shelf');
+
+  await page.locator('.editorLibLoad').click();
+  expect(await page.evaluate(() => window.GALDUR_APP.state.decks.player1.length)).toBe(40);
+
+  await page.locator('.editorLibDelete').click();
+  await expect(page.getByText('Delete this deck?')).toBeVisible();
+  await page.locator('.editorLibDelNo').click();
+  await expect(page.locator('.deck-row-name')).toHaveText('Renamed Shelf');
+
+  await page.locator('.editorLibDelete').click();
+  await page.locator('.editorLibDelYes').click();
+  await expect(page.locator('.deck-row')).toHaveCount(0);
+  expect(await page.evaluate(() => window.GALDUR_APP.state.deckLibrary.length)).toBe(0);
+  expect(dialogs).toBe(0);
+});
+
+test('A solo draft starts from the setup form and deals a pick row', async ({ page }) => {
+  await stubScryfall(page);
+  await login(page, 1);
+
+  await page.locator('#goDraft').click();
+  await expect(page.locator('.topbar-title h1')).toContainText('Draft');
+  await expect(page.locator('#draftPlayers')).toHaveValue('solo');
+  await expect(page.locator('.draft-type-row.active')).toContainText('Set draft');
+
+  await page.locator('#startDraft').click();
+  await expect(page.locator('.topbar-title h1')).toHaveText('Choose your colours');
+  await page.locator('[data-i="0"]').click();
+
+  await expect(page.locator('.topbar-title h1')).toHaveText('Basic lands');
+  await page.evaluate(() => { document.querySelectorAll('input[data-c]').forEach(i => { i.value = '0'; }); });
+  await page.locator('#apply').click();
+
+  await page.waitForFunction(() => {
+    const D = window.GALDUR_APP.state.draft;
+    return D.screen === 'picks' && !D.dealing && D.pool.length > 0;
+  }, { timeout: 30000 });
+  await expect(page.locator('.topbar-title h1')).toHaveText('Pick a card');
+  await expect(page.locator('.draft-choice')).toHaveCount(3);
+
+  // One nav bar, not one per step.
+  expect(await page.locator('#home, #back, #leave, #backToMenu').count()).toBe(1);
+
+  // Picking keeps the hover preview inside the window.
+  await page.locator('.draft-choice').first().click();
+  await page.waitForFunction(() => window.GALDUR_APP.state.draft.deck.length > 0, { timeout: 15000 });
+  const row = page.locator('.draft-small').first();
+  await row.hover();
+  await page.mouse.move(1230, 640);
+  const box = await page.evaluate(() => {
+    const el = document.getElementById('draftHoverBox');
+    if (!el || el.style.display === 'none') return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+             w: window.innerWidth, h: window.innerHeight };
+  });
+  if (box) {
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.top).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(box.w);
+    expect(box.bottom).toBeLessThanOrEqual(box.h);
+  }
 });
