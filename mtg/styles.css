@@ -268,7 +268,6 @@
     }
     .battle-zone.pile.is-static { cursor: default; opacity: .85; }
     .battle-zone.pile:not(.is-static):hover { border-color: #a78bfa; background: rgba(139, 92, 246, .16); }
-    .pile-icon { font-size: 22px; line-height: 1; }
     .pile-count { font-size: 18px; font-weight: 800; }
     .battle-divider { border-top: 3px dashed #7c3aed; margin: 10px 0; }
     /* The opponent's life/zone summary is a status line, not a card. */
@@ -303,30 +302,6 @@
     .validation-issues .warning { color: #fde68a; background: rgba(217, 119, 6, 0.14); }
     .validation-issues .ok { color: #bbf7d0; background: rgba(22, 163, 74, 0.12); }
     
-    /* Turn notification */
-    .turn-notification {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-      color: white;
-      padding: 30px 60px;
-      border-radius: 16px;
-      font-size: 36px;
-      font-weight: bold;
-      box-shadow: 0 10px 40px rgba(59, 130, 246, 0.5);
-      z-index: 10000;
-      animation: fadeInOut 2s ease-in-out;
-      pointer-events: none;
-    }
-    
-    @keyframes fadeInOut {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-      80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-    }
     .hand-card { 
       display: inline-block; 
       margin: 4px; 
@@ -704,7 +679,6 @@
 .battle-turn-panel { min-width:280px; }
 .battle-mode-line { display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
 .battle-phase-row .btn { padding:6px 9px; border-radius:7px; }
-.battle-scroll { background:rgba(7,11,18,.34); }
 .battle-player-card {
   max-width:980px;
   margin-left:auto;
@@ -752,7 +726,6 @@
 .battle-toolbar .btn { padding:8px 10px; border-radius:7px; }
 .battle-hand {
   background:rgba(17,24,39,.94) !important;
-  height:108px !important;
   border-top:1px solid rgba(148,163,184,.24) !important;
   box-shadow:0 -10px 24px rgba(0,0,0,.18);
 }
@@ -783,3 +756,198 @@
   .battle-turn-panel { min-width:100%; order:3; }
   .battle-sidebar { width:100% !important; border-left:0 !important; border-top:1px solid rgba(148,163,184,.22); }
 }
+
+
+/* --- Battle layout: fixed shell, resizable halves and sidebar -------------
+   The shell is a full-height flex row. Nothing is absolutely positioned over
+   the board, so the hand tray can never sit on top of the player's field. */
+.battle-shell {
+  --sidebar-w: 300px;
+  --opp-pct: 38%;
+  display: flex;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+.battle-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.battle-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+}
+.battle-topbar-right { display: flex; align-items: center; gap: 8px; }
+.battle-turn-panel { min-width: 280px; }
+
+/* Phase bar: the active phase reads at a glance, Next advances it. */
+.phase-bar {
+  display: flex; gap: 4px; justify-content: center; align-items: center;
+  flex-wrap: wrap; margin-top: 4px;
+}
+.phase-bar .phaseBtn, .phase-bar .phase-next {
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid var(--line); background: rgba(15,23,42,.6); color: var(--text-dim);
+}
+.phase-bar .phaseBtn:hover, .phase-bar .phase-next:hover { border-color: var(--line-strong); color: var(--text); }
+.phase-bar .phaseBtn.is-active {
+  color: var(--text); border-color: var(--accent);
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+  background: rgba(99,102,241,.14);
+}
+.phase-bar .phase-next { margin-left: 6px; color: var(--text); }
+.phase-hint { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+.shortcut-legend {
+  flex: 0 0 auto; font-size: 11.5px; color: var(--text-dim);
+  padding: 6px 14px; border-bottom: 1px solid var(--line);
+  background: rgba(15,23,42,.5);
+}
+
+/* The two battlefields split the space that is left. */
+.battle-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  gap: 0;
+  overflow-y: auto;
+}
+.battle-board > .battle-half.opponent { flex: 0 0 var(--opp-pct); min-height: 0; }
+.battle-board > .battle-half.you { flex: 1 1 auto; min-height: 0; }
+.battle-half { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.battle-half .battle-canvas { flex: 1 1 auto; min-height: 180px; }
+
+.field-divider, .sidebar-divider {
+  flex: 0 0 auto; background: transparent; position: relative;
+}
+.field-divider { height: 10px; cursor: row-resize; }
+.sidebar-divider { width: 8px; cursor: col-resize; }
+.field-divider::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 4px; height: 2px;
+  background: var(--line); border-radius: 2px;
+}
+.sidebar-divider::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
+  background: var(--line); border-radius: 2px;
+}
+.field-divider:hover::after, .sidebar-divider:hover::after,
+.field-divider.dragging::after, .sidebar-divider.dragging::after { background: var(--accent); }
+
+.battle-sidebar {
+  flex: 0 0 var(--sidebar-w);
+  width: var(--sidebar-w) !important;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* Toolbar strip: reserved height, so it never overlaps the field. */
+.battle-tools {
+  flex: 0 0 auto;
+  padding: 6px 12px 4px;
+  border-top: 1px solid var(--line);
+  background: rgba(15,23,42,.5);
+}
+.battle-tools .battle-toolbar {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  align-items: center; max-width: none; border: 0; background: none; padding: 0;
+}
+.battle-tools .drop-zone-row { display: inline-flex; gap: 6px; margin: 0; }
+.battle-tools .drop-zone { min-height: 26px; padding: 4px 10px; min-width: 84px; }
+.hand-zoom-label { display: flex; align-items: center; gap: 6px; }
+.hand-zoom-label input { width: 110px; }
+
+/* Hand tray: its height is part of the layout, never an overlay. */
+.battle-hand {
+  flex: 0 0 auto;
+  height: calc(112px * var(--hand-zoom, 1) + 34px);
+  max-height: 34vh;
+  padding: 8px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px; overflow-x: auto; overflow-y: hidden;
+}
+.battle-hand.collapsed { height: 0; padding: 0; overflow: hidden; border-top-width: 0 !important; }
+
+/* Stat strips: text only, one line per player. */
+.stat-strip {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 5px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: rgba(17,24,39,.6);
+}
+.stat-strip.opponent { border-color: rgba(248,113,113,.30); }
+.stat-strip.you { border-color: rgba(52,211,153,.30); }
+.stat-life-group { display: flex; align-items: center; gap: 6px; }
+.stat-life { font-size: 13px; font-weight: 750; white-space: nowrap; }
+.stat-strip.opponent .stat-life { color: #fca5a5; }
+.stat-strip.you .stat-life { color: #86efac; }
+.life-step {
+  font: inherit; font-size: 13px; line-height: 1; font-weight: 800; cursor: pointer;
+  width: 22px; height: 22px; border-radius: 5px;
+  border: 1px solid var(--line); background: rgba(15,23,42,.7); color: var(--text);
+}
+.life-step:hover { border-color: var(--line-strong); }
+.stat-tiles { display: flex; gap: 6px; flex-wrap: wrap; }
+.stat-strip .battle-zone.pile, .stat-tile {
+  position: relative;
+  flex: 0 0 auto; min-height: 0; min-width: 74px;
+  display: flex; flex-direction: row; align-items: baseline; justify-content: space-between;
+  gap: 6px; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: rgba(15,23,42,.55); color: var(--text);
+  font: inherit; cursor: pointer;
+}
+.stat-tile { cursor: default; }
+.stat-strip .battle-zone.pile.is-static { cursor: default; opacity: .85; }
+.stat-strip .battle-zone.pile .zone-title, .stat-tile .zone-title {
+  position: static; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-dim); font-weight: 700;
+}
+.stat-strip .battle-zone.pile .pile-count, .stat-tile .stat-count {
+  font-size: 13px; font-weight: 800; color: var(--text);
+}
+.stat-strip .battle-zone.pile:not(.is-static):hover { border-color: var(--line-strong); background: rgba(30,41,59,.8); }
+.stat-notes { display: flex; gap: 10px; flex-wrap: wrap; }
+.stat-note { font-size: 11px; color: var(--text-dim); }
+
+/* Turn banner: brief, quiet, never in the way. */
+.turn-banner {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 10000; pointer-events: none;
+  padding: 6px 16px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: rgba(17,24,39,.94);
+  color: var(--text); font-size: 13px; font-weight: 700;
+  animation: bannerFade 1.2s ease forwards;
+}
+.turn-banner.action { top: auto; bottom: 16px; animation: bannerFade 2s ease forwards; }
+@keyframes bannerFade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Action log: newest first, no scrolling needed to see it. */
+.battle-action-log { max-height: 40vh; overflow: auto; }
+.battle-action-log .log-row { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.battle-action-log .log-row.bot { border-left: 2px solid var(--line-strong); padding-left: 8px; }
+
+@media (max-width: 780px) {
+  .battle-shell { display: block !important; height: auto !important; max-height: none; min-height: 100vh; }
+  .battle-board { display: block; }
+  .battle-board > .battle-half.opponent { flex: none; }
+  .battle-half .battle-canvas { min-height: 220px; }
+  .sidebar-divider, .field-divider { display: none; }
+  .battle-sidebar { flex: none; width: 100% !important; }
+}
+
+.battle-tools .drop-zone { display: inline-flex; align-items: center; justify-content: center; }

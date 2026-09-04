@@ -159,7 +159,7 @@ test('A life-based win shows the victory modal instead of the pre-game screen', 
     A.render();
   });
   await expect(page.locator('#returnBtn')).toBeVisible();
-  await expect(page.getByText('You Win!')).toBeVisible();
+  await expect(page.getByText('You win')).toBeVisible();
 });
 
 test('Simultaneous lethal is a draw rather than an automatic player 2 win', async ({ page }) => {
@@ -1451,4 +1451,141 @@ test('The land picker offers printings and applies the chosen art', async ({ pag
   // The card carries the chosen printing, not the rate-limited named redirect.
   expect(applied.cardUrl).toBe(applied.chosenUrl);
   expect(applied.cardUrl).not.toContain('/cards/named');
+});
+
+// --- Board usability: layout, banner, stat strip, rematch -------------------
+
+async function startBoard(page, modeId = 'commander') {
+  await stubScryfall(page);
+  await enter(page);
+  await openBattleMenu(page, modeId);
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(600);
+}
+
+test('The battlefield dividers resize the board and remember their sizes', async ({ page }) => {
+  await startBoard(page);
+
+  const before = await page.evaluate(() => {
+    const shell = document.querySelector('.battle-shell');
+    return {
+      opp: getComputedStyle(shell).getPropertyValue('--opp-pct').trim(),
+      side: getComputedStyle(shell).getPropertyValue('--sidebar-w').trim()
+    };
+  });
+  expect(before.opp).toBe('38%');
+  expect(before.side).toBe('300px');
+
+  // Drag the divider between the two battlefields upward, then the sidebar edge.
+  const field = page.locator('#fieldDivider');
+  const box = await field.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 90, { steps: 8 });
+  await page.mouse.up();
+
+  const side = page.locator('#sidebarDivider');
+  const sbox = await side.boundingBox();
+  await page.mouse.move(sbox.x + sbox.width / 2, sbox.y + sbox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(sbox.x - 80, sbox.y + sbox.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('galdur.layout')));
+  expect(saved.oppPct).toBeLessThan(38);
+  expect(saved.sidebarPx).toBeGreaterThan(300);
+
+  // The saved sizes come back on the next paint of the board.
+  await page.evaluate(() => window.GALDUR_APP.render());
+  const after = await page.evaluate(() => {
+    const shell = document.querySelector('.battle-shell');
+    return shell.style.getPropertyValue('--sidebar-w');
+  });
+  expect(after).toBe(`${Math.round(saved.sidebarPx)}px`);
+
+  // Double-click resets a divider to its default.
+  await page.locator('#fieldDivider').dblclick();
+  const reset = await page.evaluate(() => JSON.parse(localStorage.getItem('galdur.layout')).oppPct);
+  expect(reset).toBe(38);
+});
+
+test('The turn banner is brief and never blocks a click', async ({ page }) => {
+  await startBoard(page);
+
+  await page.evaluate(() => {
+    window.GALDUR_APP.state.showTurnNotification = true;
+    window.GALDUR_APP.render();
+  });
+  const banner = page.locator('.turn-banner');
+  await expect(banner).toHaveText('Your turn');
+  // Pointer events pass straight through, so the board stays usable.
+  expect(await banner.evaluate(el => getComputedStyle(el).pointerEvents)).toBe('none');
+
+  // A click at the banner's own centre lands on whatever sits behind it.
+  const box = await banner.boundingBox();
+  const hit = await page.evaluate(([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return el ? el.className.toString() : '';
+  }, [box.x + box.width / 2, box.y + box.height / 2]);
+  expect(hit).not.toContain('turn-banner');
+});
+
+test('The stat strips adjust life for both human seats', async ({ page }) => {
+  await stubScryfall(page);
+  await enter(page);
+  await openBattleMenu(page, 'commander');
+  await seedDecks(page);
+  await page.locator('#playLocal').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(600);
+
+  await expect(page.getByText(/You - LP: 20/)).toBeVisible();
+  await page.locator('#minusLP').click();
+  await expect(page.getByText(/You - LP: 19/)).toBeVisible();
+  await page.locator('#plusLP').click();
+  await expect(page.getByText(/You - LP: 20/)).toBeVisible();
+
+  // A local game means a human holds the other seat too.
+  await expect(page.getByText(/Opponent - LP: 20/)).toBeVisible();
+  await page.locator('#oppMinusLP').click();
+  await expect(page.getByText(/Opponent - LP: 19/)).toBeVisible();
+  await page.locator('#oppPlusLP').click();
+  await expect(page.getByText(/Opponent - LP: 20/)).toBeVisible();
+});
+
+test('Rematch deals a fresh game with the same decks and mode', async ({ page }) => {
+  await startBoard(page);
+
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    A.state.turnCount = 7;
+    A.state.gameState.player2.health = 0;
+    A.checkWinner();
+    A.render();
+  });
+  await expect(page.getByText('You win')).toBeVisible();
+  await expect(page.locator('.modal-content').getByText(/Turn 7/)).toBeVisible();
+
+  await page.locator('#rematchBtn').click();
+  await page.waitForTimeout(600);
+
+  const after = await page.evaluate(() => {
+    const s = window.GALDUR_APP.state;
+    return {
+      winner: s.winner,
+      started: s.gameStarted,
+      turn: s.turnCount,
+      mode: s.battleMode,
+      hand: s.gameState.player1.hand.length,
+      life: s.gameState.player1.health
+    };
+  });
+  expect(after.winner).toBe(null);
+  expect(after.started).toBe(true);
+  expect(after.turn).toBe(1);
+  expect(after.mode).toBe('commander');
+  expect(after.hand).toBe(7);
+  expect(after.life).toBeGreaterThan(0);
 });

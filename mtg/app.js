@@ -48,6 +48,10 @@ const state = {
   builderTab: 'deck',        // Deck Editor section: 'deck' | 'cards'
   embedCreator: false,       // CardCreator rendered inside the Deck Editor
   handZoom: 1,               // hand card scale, 0.7 - 1.8
+  handCollapsed: false,      // hand tray peeked shut
+  showShortcuts: false,      // keyboard legend open
+  turnCount: 1,              // turns taken this game
+  layout: null,              // { oppPct, sidebarPx } board split, from localStorage
   landsPlayedThisTurn: 0,    // strict mode: one land per turn
   aiActing: false,           // the bot is visibly taking its turn
   deckLibrary: [],           // named saved decks: { id, name, modeId, cards, savedAt }
@@ -2940,7 +2944,97 @@ function LandPickerModal(){
 // Containers whose scroll position must survive a re-render. render() rebuilds
 // the whole screen, so without this every remote update in an online game
 // yanked the other player's view back to the top mid-read.
-const SCROLL_KEEP = ['.battle-scroll', '#draftList', '#deckContainer', '#availContainer', '#zoneCards', '.mode-grid'];
+const SCROLL_KEEP = ['.battle-half.opponent .battle-canvas', '.battle-half.you .battle-canvas', '#actionLog', '#draftList', '#deckContainer', '#availContainer', '#zoneCards', '.mode-grid'];
+
+// --- Board layout: the two battlefield halves and the sidebar are resizable.
+// Sizes live in localStorage so a table keeps its shape between sessions.
+const LAYOUT_KEY = 'galdur.layout';
+const LAYOUT_DEFAULTS = { oppPct: 38, sidebarPx: 300 };
+
+function boardLayout(){
+  if (!state.layout) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch {}
+    state.layout = { ...LAYOUT_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) };
+  }
+  const l = state.layout;
+  l.oppPct = Math.min(70, Math.max(20, Number(l.oppPct) || LAYOUT_DEFAULTS.oppPct));
+  l.sidebarPx = Math.min(520, Math.max(220, Number(l.sidebarPx) || LAYOUT_DEFAULTS.sidebarPx));
+  return l;
+}
+
+function saveBoardLayout(patch){
+  const l = boardLayout();
+  Object.assign(l, patch || {});
+  boardLayout();
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch {}
+}
+
+// Deal a fresh game for a mode. Used by Start Game and by Rematch.
+function beginGame(mode, rules){
+    // Online: only the host deals, so both peers share the same shuffle.
+    if (state.onlineMode && !state.isHost) return;
+
+    const shuffle = (arr) => {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    const p1 = shuffle(state.decks.player1.map((c, i) => cloneForGame(c, 'p1-' + i)));
+    const p2 = shuffle(state.decks.player2.map((c, i) => cloneForGame(c, 'p2-' + i)));
+
+    state.battleMode = mode.id;
+    // Horde and Boss always have a machine-driven player 2, however the game
+    // was started — otherwise "Play Local" leaves nobody to run them and the
+    // turn just stalls after you pass.
+    if (rules.botOpponent && !state.onlineMode) state.vsAI = true;
+    state.gameState = normalizeGameStateZones(buildGameStateForMode(mode, p1, p2));
+    if (mode.commanderZone) {
+      seedCommandZoneFromDeck(state.gameState.player1, mode);
+      seedCommandZoneFromDeck(state.gameState.player2, mode);
+    }
+    // Deal opening hands for every mode. Modes may override the size
+    // (the Basic Land Game opens on five); everything else opens on seven.
+    const openingHand = rules.startingHand || rules.openingHand || 7;
+    if (openingHand) {
+      const sharedZone = state.gameState.shared;
+      for (const who of ['player1', 'player2']) {
+        const player = state.gameState[who];
+        const drawPile = (sharedZone && sharedZone.enabled) ? sharedZone.deck : player.deck;
+        for (let i = 0; i < openingHand && drawPile.length; i++) {
+          player.hand.push(drawPile.shift());
+        }
+      }
+    }
+  state.activePlayer = 1;
+  state.gameStarted = true;
+  state.winner = null;
+  state.turnCount = 1;
+  state.targeting = null;
+  state.declaringAttack = false;
+  state.attackSelection = [];
+  state.selectedCard = null;
+  state.selectedFieldCard = null;
+  state.selectedZoneCard = null;
+  state.viewingZone = null;
+  state.gameLog = [];
+  state.gameHistory = [];
+  startReplayRecording(mode.id);
+  addGameLog(`${rules.title} started.`);
+
+  // A short banner tells player 1 the table is theirs.
+  if (state.currentPlayer === 1) {
+    state.showTurnNotification = true;
+    setTimeout(() => { state.showTurnNotification = false; render(); }, 1200);
+  }
+
+  sendGameInit();   // full opening snapshot so the joiner gets both shuffled decks
+  render();
+}
 
 function captureScroll(){
   const saved = [];
@@ -7946,65 +8040,7 @@ function GameBoard() {
       render(); 
     };
     div.querySelector('#logoutBtn').onclick = () => { state.currentPlayer = null; state.screen = 'login'; render(); };
-    div.querySelector('#startBtn').onclick = () => {
-      // Online: only the host deals, so both peers share the same shuffle.
-      if (state.onlineMode && !state.isHost) return;
-
-      const shuffle = (arr) => {
-        const a = arr.slice();
-        for (let i = a.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [a[i], a[j]] = [a[j], a[i]];
-        }
-        return a;
-      };
-
-      const p1 = shuffle(state.decks.player1.map((c, i) => cloneForGame(c, 'p1-' + i)));
-      const p2 = shuffle(state.decks.player2.map((c, i) => cloneForGame(c, 'p2-' + i)));
-
-      state.battleMode = mode.id;
-      // Horde and Boss always have a machine-driven player 2, however the game
-      // was started — otherwise "Play Local" leaves nobody to run them and the
-      // turn just stalls after you pass.
-      if (rules.botOpponent && !state.onlineMode) state.vsAI = true;
-      state.gameState = normalizeGameStateZones(buildGameStateForMode(mode, p1, p2));
-      if (mode.commanderZone) {
-        seedCommandZoneFromDeck(state.gameState.player1, mode);
-        seedCommandZoneFromDeck(state.gameState.player2, mode);
-      }
-      // Deal opening hands for every mode. Modes may override the size
-      // (the Basic Land Game opens on five); everything else opens on seven.
-      const openingHand = rules.startingHand || rules.openingHand || 7;
-      if (openingHand) {
-        const sharedZone = state.gameState.shared;
-        for (const who of ['player1', 'player2']) {
-          const player = state.gameState[who];
-          const drawPile = (sharedZone && sharedZone.enabled) ? sharedZone.deck : player.deck;
-          for (let i = 0; i < openingHand && drawPile.length; i++) {
-            player.hand.push(drawPile.shift());
-          }
-        }
-      }
-      state.activePlayer = 1; 
-      state.gameStarted = true;
-      state.targeting = null;
-      state.gameLog = [];
-      state.gameHistory = [];
-      startReplayRecording(mode.id);
-      addGameLog(`${rules.title} started.`);
-      
-      // Show "Your Turn" notification for player 1 at game start
-      if (state.currentPlayer === 1) {
-        state.showTurnNotification = true;
-        setTimeout(() => {
-          state.showTurnNotification = false;
-          render();
-        }, 2000);
-      }
-
-      sendGameInit();   // full opening snapshot so the joiner gets both shuffled decks
-      render();
-    };
+    div.querySelector('#startBtn').onclick = () => beginGame(mode, rules);
     return div;
   }
 
@@ -8387,6 +8423,14 @@ function GameBoard() {
       .filter(c => c.aiAttacking);
   }
 
+  // Evergreen keywords worth seeing during combat, pulled from the rules text.
+  const COMBAT_KEYWORDS = ['Flying', 'Trample', 'Deathtouch', 'First strike', 'Double strike',
+    'Lifelink', 'Menace', 'Vigilance', 'Reach', 'Haste', 'Defender', 'Indestructible'];
+  function keywordsOf(card){
+    const text = ((card && card.effect) || '').toLowerCase();
+    return COMBAT_KEYWORDS.filter(k => text.includes(k.toLowerCase())).join(', ');
+  }
+
   // Creatures that could attack right now (vs-AI games only).
   function myReadyAttackers(){
     return battlefieldCards(me).filter(c => {
@@ -8411,7 +8455,7 @@ function GameBoard() {
         <div class="modal-content" style="max-width:820px">
           <div class="flex justify-between mb-4" style="align-items:flex-start;gap:12px">
             <div>
-              <h3 style="font-weight:800;font-size:18px">⚔️ Declare attackers</h3>
+              <h3 style="font-weight:800;font-size:18px">Declare attackers</h3>
               <div class="text-xs text-gray mt-1">
                 Pick who swings. The opponent has ${blockers} untapped creature${blockers === 1 ? '' : 's'} and will block on its own.
               </div>
@@ -8428,15 +8472,15 @@ function GameBoard() {
                   <button class="attackPick card${on ? ' picked' : ''}" data-id="${htmlEscape(String(id))}" style="padding:8px;text-align:left;cursor:pointer">
                     <div style="height:120px;overflow:hidden;border-radius:6px">${gameCardPreviewHtml(c)}</div>
                     <div class="text-xs mt-2" style="font-weight:700">${htmlEscape(c.name)}</div>
-                    <div class="text-xs text-red">${pt.p}/${pt.t}</div>
+                    <div class="text-xs text-red">${pt.p}/${pt.t}${keywordsOf(c) ? ` · ${htmlEscape(keywordsOf(c))}` : ''}</div>
                   </button>`;
               }).join('')}
             </div>
             <div class="flex mt-4" style="gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
-              <div class="text-sm">Attacking with <strong>${chosen.length}</strong> · <strong>${totalPower}</strong> damage if unblocked</div>
+              <div class="text-sm">Attacking with <strong>${chosen.length}</strong>. Opponent drops to <strong>${Math.max(0, opp.health - totalPower)}</strong> life if nothing blocks.</div>
               <div class="flex" style="gap:8px">
                 <button id="attackAll" class="btn btn-secondary text-sm">Select all</button>
-                <button id="confirmAttack" class="btn btn-red text-sm" ${chosen.length ? '' : 'disabled'}>Attack!</button>
+                <button id="confirmAttack" class="btn btn-red text-sm" ${chosen.length ? '' : 'disabled'}>Attack</button>
               </div>
             </div>`
           : '<div class="text-center text-gray p-4">No untapped creatures are able to attack.</div>'}
@@ -8450,13 +8494,14 @@ function GameBoard() {
     if (!attackers.length) return '';
     const myBlockers = battlefieldCards(me)
       .filter(c => ((c.type || '').toLowerCase().includes('creature') || c.isToken) && !c.tapped);
+    const incoming = attackers.reduce((sum, a) => sum + effectivePT(a).p, 0);
     return `
       <div class="modal">
         <div class="modal-content" style="max-width:760px">
           <div class="flex justify-between mb-4">
             <div>
-              <h3 style="font-weight:800;font-size:18px">🤖 AI attacks!</h3>
-              <div class="text-xs text-gray mt-1">Assign a blocker to each attacker, or let the damage through.</div>
+              <h3 style="font-weight:800;font-size:18px">Incoming attack</h3>
+              <div class="text-xs text-gray mt-1">Assign a blocker to each attacker, or let the damage through. Unblocked total: <strong>${incoming}</strong>. You would drop to <strong>${Math.max(0, me.health - incoming)}</strong> life.</div>
             </div>
           </div>
           <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;max-height:56vh;overflow:auto">
@@ -8467,9 +8512,10 @@ function GameBoard() {
               <div class="card" style="padding:10px;display:flex;flex-direction:column;gap:6px">
                 <div style="height:120px;overflow:hidden;border-radius:6px;flex:0 0 auto">${gameCardPreviewHtml(a)}</div>
                 <div class="text-xs" style="font-weight:700">${htmlEscape(a.name)} <span class="text-red">${apt.p}/${apt.t}</span></div>
+                ${keywordsOf(a) ? `<div class="text-xs text-gray">${htmlEscape(keywordsOf(a))}</div>` : ''}
                 ${(a.effect || '') ? `<div class="text-xs text-gray" style="max-height:32px;overflow:hidden">${htmlEscape(a.effect)}</div>` : ''}
                 <select class="input text-xs aiBlockPick" style="margin-top:auto" data-attacker="${htmlEscape(String(a.gameId || a.id))}">
-                  <option value="">— No block (take ${apt.p}) —</option>
+                  <option value="">No block, take ${apt.p}</option>
                   ${legal.map(b => {
                     const bpt = effectivePT(b);
                     return `<option value="${htmlEscape(String(b.gameId || b.id))}">${htmlEscape(b.name)} (${bpt.p}/${bpt.t})</option>`;
@@ -8479,8 +8525,8 @@ function GameBoard() {
             }).join('')}
           </div>
           <div class="flex mt-4" style="gap:8px;justify-content:flex-end">
-            <button id="aiNoBlocks" class="btn btn-secondary text-sm">Take All Damage</button>
-            <button id="aiResolveCombat" class="btn btn-primary text-sm">Resolve Combat</button>
+            <button id="aiNoBlocks" class="btn btn-secondary text-sm">No blocks, take ${incoming}</button>
+            <button id="aiResolveCombat" class="btn btn-primary text-sm">Resolve combat</button>
           </div>
         </div>
       </div>
@@ -8539,11 +8585,11 @@ function GameBoard() {
     const sidebar = target || div.querySelector('#cardInfo');
     if (sidebar && card) {
       const c = card;
-      const countersDisplay = c.counters && c.counters > 0 ? `<div class="text-green text-sm mt-2">✨ +${c.counters}/+${c.counters} Counters</div>` : '';
+      const countersDisplay = c.counters && c.counters > 0 ? `<div class="text-green text-sm mt-2">+${c.counters}/+${c.counters} counters</div>` : '';
       sidebar.innerHTML = `
         <div class="card-preview">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-            <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${c.isToken ? '🎭 ' : ''}${htmlEscape(c.name || '')}</div>
+            <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${htmlEscape(c.name || '')}</div>
             ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${htmlEscape(c.cost)}</div>` : ''}
           </div>
           <div class="text-xs text-gray text-center mb-2">${htmlEscape(c.type || '')}${c.isToken ? ' (Token)' : ''}</div>
@@ -8552,7 +8598,7 @@ function GameBoard() {
 ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = effectivePT(c); return `<div class="text-xs text-green mt-1">P/T: ${e.p} / ${e.t}</div>`; })() 
   : ''}
           <div class="text-xs">${htmlEscape(c.effect || 'No effect')}</div>
-          ${c.tapped ? '<div class="text-xs text-red mt-2">⟳ TAPPED</div>' : ''}
+          ${c.tapped ? '<div class="text-xs text-red mt-2">Tapped</div>' : ''}
           ${countersDisplay}
         </div>
       `;
@@ -8598,8 +8644,8 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
   // lanes are spaced accordingly, and a crowded lane fans its cards closer
   // together rather than spilling out of the canvas.
   const LANE_Y = {
-    me:  { supportField: 3, creatureField: 35, landField: 67 },
-    opp: { landField: 3, creatureField: 35, supportField: 67 }
+    me:  { supportField: 2, creatureField: 31, landField: 60 },
+    opp: { landField: 2, creatureField: 31, supportField: 60 }
   };
   function autoPosFor(player, zoneKey, i, owner){
     const y = (LANE_Y[owner === 'opp' ? 'opp' : 'me'])[zoneKey] ?? 34;
@@ -8619,13 +8665,13 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       </div>`;
   };
 
-  // Command zone / library / graveyard sit in the back row beside the lands.
-  // The player's own piles double as drop targets, so a card can be dragged
-  // straight from the battlefield onto the graveyard.
-  const pileBox = (id, icon, label, count, clickable = true, dropTarget = '') => {
+  // Compact, text-only stat tiles. The ids and the .pile-count class are
+  // load-bearing: other handlers and the test suite key off them. A player's
+  // own piles double as drop targets, so a card can be dragged from the
+  // battlefield straight onto the graveyard.
+  const pileBox = (id, label, count, clickable = true, dropTarget = '') => {
     const body = `
       <span class="zone-title">${htmlEscape(label)}</span>
-      <span class="pile-icon">${icon}</span>
       <span class="pile-count">${count}</span>`;
     const drop = dropTarget ? ` data-drop-target="${dropTarget}"` : '';
     return clickable
@@ -8633,105 +8679,142 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       : `<div class="battle-zone pile is-static"${drop}>${body}</div>`;
   };
 
-  const pilesRow = (player, owner) => {
+  const statStrip = (player, owner) => {
     const isMe = owner === 'me';
     const deckCount = sharedGame ? shared.deck.length : (player.deck || []).length;
+    const name = isMe
+      ? (state.coop ? `Survivors (Player ${state.coopSeat} acting)` : 'You')
+      : (bossMode ? 'Boss' : hordeMode ? 'The Horde' : 'Opponent');
+    // Life is adjustable wherever a human holds the seat.
+    const humanSeat = isMe || !state.vsAI;
+    const step = (id, sign, title) =>
+      `<button id="${id}" class="life-step" title="${title}">${sign}</button>`;
+    const life = `
+      ${humanSeat ? step(isMe ? 'minusLP' : 'oppMinusLP', '−', 'Lose 1 life') : ''}
+      <span class="stat-life">${htmlEscape(name)} - LP: ${player.health}</span>
+      ${humanSeat ? step(isMe ? 'plusLP' : 'oppPlusLP', '+', 'Gain 1 life') : ''}`;
+    const handTile = `<div class="stat-tile"><span class="zone-title">Hand</span><span class="stat-count">${player.hand.length}</span></div>`;
     const piles = [
       commanderZoneOn
-        ? pileBox(isMe ? 'viewCommander' : 'viewOppCommander', '👑', commandMeta.shortLabel,
+        ? pileBox(isMe ? 'viewCommander' : 'viewOppCommander', commandMeta.shortLabel,
             (player.commanderZone || []).length, true, isMe ? 'commanderZone' : '')
         : '',
-      // The opponent's library is hidden information — show the count only.
-      pileBox(isMe ? 'viewDeck' : '', '📚', sharedGame ? shared.label : 'Library',
+      // The opponent's library is hidden information: count only, no click.
+      pileBox(isMe ? 'viewDeck' : '', sharedGame ? shared.label : 'Library',
         deckCount, isMe || sharedGame, isMe ? 'deck' : ''),
-      pileBox(isMe ? 'viewGY' : 'viewOppGY', '⚰️', 'Graveyard',
+      handTile,
+      pileBox(isMe ? 'viewGY' : 'viewOppGY', 'Graveyard',
         (player.graveyard || []).length, true, isMe ? 'graveyard' : ''),
-      pileBox(isMe ? 'viewExile' : 'viewOppExile', '🚫', 'Exile',
+      pileBox(isMe ? 'viewExile' : 'viewOppExile', 'Exile',
         (player.exile || []).length, true, isMe ? 'exile' : '')
     ].filter(Boolean).join('');
-    return `<div class="pile-row">${piles}</div>`;
+    const notes = [
+      (!isMe && sharedGame) ? `<span class="stat-note">${htmlEscape(shared.label)} center stack, top-to-bottom draw</span>` : '',
+      (!isMe && landGameMode) ? `<span class="stat-note">Opponent lands: ${formatLandGameProgress(opp)}</span>` : '',
+      (!isMe && hordeMode) ? `<span class="stat-note">Horde field: ${battlefieldCards(hordePlayer).length}</span>` : '',
+      (isMe && landGameMode) ? `<span class="stat-note">Goal: control all five basic land names, or five copies of one basic. Your lands: ${formatLandGameProgress(me)}</span>` : ''
+    ].filter(Boolean).join('');
+    return `
+      <div class="stat-strip ${isMe ? 'you' : 'opponent'}">
+        <div class="stat-life-group">${life}</div>
+        <div class="stat-tiles">${piles}</div>
+        ${notes ? `<div class="stat-notes">${notes}</div>` : ''}
+      </div>`;
   };
 
-  // Each half is one open canvas plus the library/graveyard/exile piles.
-  const opponentHalf = `<div class="battle-half opponent">${pilesRow(opp, 'opp')}${canvasBox(opp, 'opp')}</div>`;
-  const myHalf = `<div class="battle-half you">${canvasBox(me, 'me')}${pilesRow(me, 'me')}</div>`;
+  // Each half is one open canvas plus that player's stat strip.
+  const opponentHalf = `<div class="battle-half opponent">${statStrip(opp, 'opp')}${canvasBox(opp, 'opp')}</div>`;
+  const myHalf = `<div class="battle-half you">${canvasBox(me, 'me')}${statStrip(me, 'me')}</div>`;
+
+  const layout = boardLayout();
+  const PHASE_HINTS = {
+    Draw: 'Untap and draw for the turn',
+    Main: 'Play lands and cast spells',
+    Combat: 'Declare attackers, then blockers',
+    'Second Main': 'Cast what you held back',
+    End: 'Finish up, then pass the turn'
+  };
+  const phaseNow = state.gameState.phase || 'Main';
+  const turnLabel = state.aiActing ? 'Bot is playing'
+    : state.activePlayer === state.currentPlayer ? 'Your turn'
+    : state.vsAI ? "Bot's turn" : "Opponent's turn";
+
+  // Group runs of consecutive bot entries so one bot turn reads as one line.
+  const logRows = (() => {
+    const entries = (state.gameLog || []).slice(0, 24);
+    const isBot = (e) => /^(AI |Bot |The Horde )/.test(e.message || '');
+    const rows = [];
+    for (const entry of entries) {
+      const last = rows[rows.length - 1];
+      if (isBot(entry) && last && last.bot) { last.lines.push(entry.message); continue; }
+      rows.push({ bot: isBot(entry), lines: [entry.message] });
+    }
+    return rows.slice(0, 14);
+  })();
 
   div.innerHTML = `
-    <div class="battle-shell" style="display: flex; height: 100vh;">
-      <div class="battle-main" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-        <div class="battle-topbar" style="background: #1f2937; padding: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #374151;">
-          <button id="exitBtn" class="btn btn-secondary text-xs">← Exit</button>
+    <div class="battle-shell" style="--sidebar-w:${layout.sidebarPx}px;--opp-pct:${layout.oppPct}%">
+      <div class="battle-main">
+        <div class="battle-topbar">
+          <button id="exitBtn" class="btn btn-secondary text-xs">Exit</button>
           <div class="text-center battle-turn-panel">
             <div class="battle-mode-line">
               <span class="mode-family">${htmlEscape(mode.title)}</span>
-              <span class="badge">${state.onlineMode ? 'Online' : state.vsAI ? '🤖 vs AI' : 'Local'}</span>
-              ${state.coop ? `<span class="badge">🤝 Co-op • Survivor ${state.coopSeat}</span>` : ''}
+              <span class="badge">${state.onlineMode ? 'Online' : state.vsAI ? 'vs AI' : 'Local'}</span>
+              ${state.coop ? `<span class="badge">Co-op, survivor ${state.coopSeat}</span>` : ''}
               ${sharedGame ? `<span class="badge">${htmlEscape(shared.label)}</span>` : ''}
+              <span class="badge">Turn ${state.turnCount || 1}</span>
+              <span class="turn-pill ${state.activePlayer === state.currentPlayer ? 'yours' : 'theirs'}">${turnLabel}</span>
             </div>
-            <span class="turn-pill ${state.activePlayer === state.currentPlayer ? 'yours' : 'theirs'}">${
-              state.aiActing ? '🤖 Bot is playing…'
-                : state.activePlayer === state.currentPlayer ? 'Your turn'
-                : state.vsAI ? "Bot's turn" : "Opponent's turn"}</span>
-            <div class="text-xs text-gray">${htmlEscape(state.gameState.phase || 'Main')} phase</div>
-            <div class="flex battle-phase-row" style="gap:4px;justify-content:center;flex-wrap:wrap;margin-top:4px">
-              ${TURN_PHASES.map(phase => `<button class="phaseBtn btn ${state.gameState.phase === phase ? 'btn-blue' : 'btn-secondary'} text-xs" data-phase="${phase}">${phase}</button>`).join('')}
-              <button id="nextPhase" class="btn btn-purple text-xs">Next</button>
+            <div class="phase-bar">
+              ${TURN_PHASES.map(phase => `<button class="phaseBtn ${phaseNow === phase ? 'is-active' : ''}" data-phase="${phase}">${phase}</button>`).join('')}
+              <button id="nextPhase" class="phase-next" title="Advance to the next phase">Next phase</button>
             </div>
+            <div class="phase-hint">${htmlEscape(PHASE_HINTS[phaseNow] || '')}</div>
           </div>
-          <button id="endTurn" class="btn ${state.activePlayer === state.currentPlayer ? 'btn-primary end-turn-ready' : 'btn-secondary'} text-xs">End Turn →</button>
+          <div class="battle-topbar-right">
+            <button id="endTurn" class="btn ${state.activePlayer === state.currentPlayer ? 'btn-primary end-turn-ready' : 'btn-secondary'}">End turn</button>
+            <button id="toggleShortcuts" class="btn btn-secondary text-xs" aria-expanded="${state.showShortcuts ? 'true' : 'false'}">Keys</button>
+          </div>
         </div>
-        <div class="battle-scroll" style="flex: 1; overflow-y: auto; padding: 16px;">
-          <div class="mb-4 text-center battle-player-card opponent">
-            <div class="text-red" style="font-weight: bold; font-size: 16px;">❤️ ${bossMode ? '💀 Boss' : hordeMode ? 'The Horde' : 'Opponent'} - LP: ${opp.health}</div>
-            <div class="text-xs text-gray battle-zone-line">📚 ${sharedGame ? htmlEscape(shared.label) : 'Deck'}: ${oppDeckCount} | 🃏 Hand: ${opp.hand.length} | ⚰️ GY: ${opp.graveyard.length} | 🚫 Exile: ${opp.exile.length}${commanderZoneOn ? ` | 👑 ${htmlEscape(commandMeta.shortLabel)}: ${opp.commanderZone.length}` : ''}${hordeMode ? ` | Horde field: ${battlefieldCards(hordePlayer).length}` : ''}</div>
-            ${sharedGame ? `<div class="badge mt-2">${htmlEscape(shared.label)} center stack • top-to-bottom draw</div>` : ''}
-            ${landGameMode ? `<div class="badge mt-2">Opponent lands: ${formatLandGameProgress(opp)}</div>` : ''}
-          </div>
+        ${state.showShortcuts ? `<div class="shortcut-legend">Space ends the turn. A opens the attack picker. D draws. Double-click a hand card to play it. Right-click a card you control for its menu.</div>` : ''}
+        <div class="battle-board">
           ${opponentHalf}
-          <div class="battle-divider"> </div>
+          <div class="field-divider" id="fieldDivider" role="separator" aria-orientation="horizontal" title="Drag to resize. Double-click to reset."></div>
           ${myHalf}
-          <div class="mt-4 text-center battle-player-card you">
-            <div class="text-green" style="font-weight: bold; font-size: 16px;">❤️ ${state.coop ? `Survivors (Player ${state.coopSeat} acting)` : 'You'} - LP: ${me.health}</div>
-            ${landGameMode ? `<div class="card p-3 mt-3" style="background:rgba(5,150,105,.12);border-color:#10b981">
-              <div style="font-weight:800;font-size:13px">Basic Land Game</div>
-              <div class="text-xs text-gray mt-1">Goal: control all five basic land names, or five copies of one basic.</div>
-              <div class="badge mt-2">Your lands: ${formatLandGameProgress(me)}</div>
-            </div>` : ''}
-            <div class="battle-toolbar" style="display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
-              <button id="drawBtn" class="btn btn-secondary text-xs">📥 Draw (${myDeckCount})</button>
-              <button id="upkeepBtn" class="btn btn-purple text-xs">⚡ Upkeep</button>
-              <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
-              ${state.vsAI ? '<button id="declareAttack" class="btn btn-red text-xs">⚔️ Attack</button>' : ''}
-              <button id="tidyField" class="btn btn-secondary text-xs" title="Arrange your battlefield into tidy rows">🧹 Tidy</button>
-              <button id="saveReplay" class="btn btn-secondary text-xs" title="Save this game as a replay file">🎬 Replay</button>
-              <button id="createToken" class="btn btn-green text-xs">🎭 Create Token</button>
-              ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal Top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn Top</button><button id="shuffleSharedStack" class="btn btn-purple text-xs">Shuffle Stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
-              ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-purple text-xs">Horde Reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde Attack</button>' : ''}
-              <button id="minusLP" class="btn btn-red text-xs">-1 LP</button>
-              <button id="plusLP" class="btn btn-green text-xs">+1 LP</button>
-              <button id="mulliganBtn" class="btn btn-blue text-xs" ${rules.noMulligan ? 'disabled' : ''}>🔄 Mulligan</button>
-              ${state.coop ? '<button id="passSeat" class="btn btn-purple text-xs">🤝 Pass to Teammate</button>' : ''}
-            </div>
-            <div class="flex mt-2" style="gap:12px;align-items:center;justify-content:center;flex-wrap:wrap">
-              <label class="text-xs text-gray" style="display:flex;align-items:center;gap:6px">
-                🔍 Hand size
-                <input id="handZoom" type="range" min="0.7" max="1.8" step="0.1" value="${state.handZoom || 1}" style="width:120px">
-              </label>
-              <span class="text-xs text-gray">Space = end turn · A = attack · D = draw · double-click a hand card to play it</span>
-            </div>
-            <div class="drop-zone-row" aria-label="Quick card zones">
-              <div id="handDrop" class="drop-zone" data-drop-target="hand">Hand</div>
-              <div id="graveyardDrop" class="drop-zone" data-drop-target="graveyard">Graveyard</div>
-              <div id="exileDrop" class="drop-zone" data-drop-target="exile">Exile</div>
-              <div id="deckDrop" class="drop-zone" data-drop-target="deck">Deck bottom</div>
-            </div>
+        </div>
+        <div class="battle-tools">
+          <div class="battle-toolbar">
+            <button id="drawBtn" class="btn btn-secondary text-xs">Draw (${myDeckCount})</button>
+            <button id="upkeepBtn" class="btn btn-secondary text-xs">Upkeep</button>
+            <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
+            ${state.vsAI ? '<button id="declareAttack" class="btn btn-red text-xs">Attack</button>' : ''}
+            <button id="tidyField" class="btn btn-secondary text-xs" title="Arrange your battlefield into tidy rows">Tidy</button>
+            <button id="saveReplay" class="btn btn-secondary text-xs" title="Save this game as a replay file">Replay</button>
+            <button id="createToken" class="btn btn-secondary text-xs">Create token</button>
+            ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn top</button><button id="shuffleSharedStack" class="btn btn-secondary text-xs">Shuffle stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
+            ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-secondary text-xs">Horde reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde attack</button>' : ''}
+            <button id="mulliganBtn" class="btn btn-secondary text-xs" ${rules.noMulligan ? 'disabled' : ''}>Mulligan</button>
+            ${state.coop ? '<button id="passSeat" class="btn btn-secondary text-xs">Pass to teammate</button>' : ''}
+            <label class="text-xs text-gray hand-zoom-label">
+              Hand size
+              <input id="handZoom" type="range" min="0.7" max="1.8" step="0.1" value="${state.handZoom || 1}">
+            </label>
+            <button id="toggleHand" class="btn btn-secondary text-xs">${state.handCollapsed ? 'Show hand' : 'Hide hand'}</button>
+            <span class="drop-zone-row" aria-label="Quick card zones">
+              <span id="handDrop" class="drop-zone" data-drop-target="hand">Hand</span>
+              <span id="graveyardDrop" class="drop-zone" data-drop-target="graveyard">Graveyard</span>
+              <span id="exileDrop" class="drop-zone" data-drop-target="exile">Exile</span>
+              <span id="deckDrop" class="drop-zone" data-drop-target="deck">Deck bottom</span>
+            </span>
           </div>
         </div>
-        <div id="handContainer" class="battle-hand" data-drop-target="hand" style="background: #1f2937; padding: 8px; height: 120px; overflow-x: auto; display: flex; justify-content: center; align-items: center; gap: 4px; border-top: 2px solid #374151;"></div>
+        <div id="handContainer" class="battle-hand${state.handCollapsed ? ' collapsed' : ''}" data-drop-target="hand"></div>
       </div>
+      <div class="sidebar-divider" id="sidebarDivider" role="separator" aria-orientation="vertical" title="Drag to resize. Double-click to reset."></div>
       <div class="sidebar battle-sidebar">
         <h3 class="text-sm font-bold mb-2 text-center">Stack</h3>
-        <div id="stackPanel" class="card p-3 mb-4 battle-side-card" data-drop-target="stack" style="background:rgba(59,130,246,.10);border-color:#3b82f6">
+        <div id="stackPanel" class="card p-3 mb-4 battle-side-card" data-drop-target="stack">
           ${gameStack.length ? (() => {
             const top = gameStack[gameStack.length - 1];
             return `
@@ -8752,22 +8835,22 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         </div>
         <div class="mt-4" style="border-top:1px solid rgba(255,255,255,.12);padding-top:12px">
           <h3 class="text-sm font-bold mb-2 text-center">Action Log</h3>
-          <div id="actionLog" class="battle-action-log" style="max-height:220px;overflow:auto">
-            ${(state.gameLog || []).slice(0, 12).map(entry => `
-              <div class="text-xs text-gray" style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
-                ${htmlEscape(entry.message)}
+          <div id="actionLog" class="battle-action-log">
+            ${logRows.map(row => `
+              <div class="log-row${row.bot ? ' bot' : ''}">
+                ${row.lines.map(m => `<div class="text-xs text-gray">${htmlEscape(m)}</div>`).join('')}
               </div>
             `).join('') || '<div class="text-xs text-gray text-center">No actions yet.</div>'}
           </div>
         </div>
       </div>
     </div>
-    ${state.showTurnNotification ? `<div class="turn-notification">🎮 Your Turn!</div>` : ''}
-    ${state.actionMessage ? `<div class="turn-notification">${state.actionMessage}</div>` : ''} 
+    ${state.showTurnNotification ? `<div class="turn-banner">Your turn</div>` : ''}
+    ${state.actionMessage ? `<div class="turn-banner action">${htmlEscape(state.actionMessage)}</div>` : ''}
     ${state.creatingToken ? `
       <div class="modal">
         <div class="modal-content" style="max-width: 400px;">
-          <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">🎭 Create Token</h3>
+          <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">Create token</h3>
           <div class="mb-4">
             <label>Token Name</label>
             <input id="tokenName" class="input" placeholder="Soldier Token" value="Token">
@@ -8808,16 +8891,19 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
 
     <!-- ACTION GRID: always two columns, evenly spaced -->
     <div class="action-grid" style="display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; align-items: stretch;">
-      <button id="tapCard" class="btn ${sel.tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px; width:100%; text-align:center;">⟳ ${sel.tapped ? 'Untap' : 'Tap'}</button>
-      <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%; text-align:center;">🖐️ To Hand</button>
+      <button id="tapCard" class="btn ${sel.tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px; width:100%; text-align:center;">${sel.tapped ? 'Untap' : 'Tap'}</button>
+      <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%; text-align:center;">To hand</button>
 
-      <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">⚰️ To GY</button>
-      <button id="toExile" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">🚫 Exile</button>
+      <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">To graveyard</button>
+      <button id="toExile" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">To exile</button>
+
+      <button id="plusCounter" class="btn btn-green text-sm" style="padding: 14px; width:100%; text-align:center;">+1/+1 counter</button>
+      <button id="minusCounter" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">-1/-1 counter</button>
 
       <!-- COUNTERS: spans full width so grid stays balanced; collapsed by default -->
       <details class="counter-panel" style="grid-column: 1 / -1; margin-top: 0;">
         <summary class="btn btn-secondary text-sm" style="display:block; width: 100%; padding: 14px; text-align:center;">
-          🔘 Counters
+          More counters
         </summary>
         <div style="padding: 10px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; margin-top: 8px;">
           <div class="text-xs mb-1">P/T: <span id="ptNow"></span></div>
@@ -8835,11 +8921,14 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
           </div>
         </div>
       </details>
+
+      <button id="toTopDeck" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">To top of library</button>
+      <button id="toBottomDeck" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">To bottom of library</button>
+      <button id="duplicateCard" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">Duplicate as token</button>
+      ${commanderZoneOn ? `<button id="fieldToCommand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">To ${htmlEscape(commandMeta.label)}</button>` : ''}
     </div>
 
-    <button id="toBottomDeck" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">📚 To Deck</button>
-    ${commanderZoneOn ? `<button id="fieldToCommand" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">👑 To ${htmlEscape(commandMeta.label)}</button>` : ''}
-    <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">❌ Cancel</button>
+    <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">Close</button>
   </div>`;
 })() : ''}
 
@@ -8855,20 +8944,20 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         <div class="modal-content" style="max-width: 700px;">
           <div class="flex justify-between mb-4">
             <h3 style="font-weight: bold; font-size: 18px;">${state.viewingZone.title}</h3>
-            <button id="closeZone" class="btn btn-secondary text-xs">✕ Close</button>
+            <button id="closeZone" class="btn btn-secondary text-xs">Close</button>
           </div>
           ${state.viewingZone.owner === 'me' && state.selectedZoneCard !== null && state.viewingZone.cards[state.selectedZoneCard] ? `
             <div style="background: #374151; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
               <div class="text-center mb-3" style="font-weight: bold; color: #fbbf24;">${state.viewingZone.cards[state.selectedZoneCard].name}</div>
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                <button id="zoneToHand" class="btn btn-primary text-xs">🖐️ To Hand</button>
-                <button id="zoneToUpper" class="btn btn-primary text-xs">⬇️ To Upper</button>
-                <button id="zoneToLower" class="btn btn-primary text-xs">⬆️ To Lower</button>
-                ${state.viewingZone.zone !== 'deck' ? '<button id="zoneToDeck" class="btn btn-secondary text-sm">📚 To Deck</button>' : ''}
-                ${commanderZoneOn && state.viewingZone.zone !== 'commanderZone' ? `<button id="zoneToCommand" class="btn btn-secondary text-xs">👑 ${htmlEscape(commandMeta.shortLabel)}</button>` : ''}
-                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">🚫 Exile</button>' : ''}
-                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">⚰️ To GY</button>' : ''}
-                <button id="cancelZoneSelect" class="btn btn-secondary text-xs">❌ Cancel</button>
+                <button id="zoneToHand" class="btn btn-primary text-xs">To hand</button>
+                <button id="zoneToUpper" class="btn btn-primary text-xs">To creatures</button>
+                <button id="zoneToLower" class="btn btn-primary text-xs">To support</button>
+                ${state.viewingZone.zone !== 'deck' ? '<button id="zoneToDeck" class="btn btn-secondary text-sm">To deck</button>' : ''}
+                ${commanderZoneOn && state.viewingZone.zone !== 'commanderZone' ? `<button id="zoneToCommand" class="btn btn-secondary text-xs">${htmlEscape(commandMeta.shortLabel)}</button>` : ''}
+                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">Exile</button>' : ''}
+                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">To graveyard</button>' : ''}
+                <button id="cancelZoneSelect" class="btn btn-secondary text-xs">Cancel</button>
               </div>
             </div>
           ` : ''}
@@ -8891,11 +8980,11 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               .join('');
           })()}
           <button id="castToStack" class="btn btn-blue text-sm" style="padding: 14px; grid-column:1 / -1;">Cast to Stack</button>
-          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">⚰️️ Discard</button>
-          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">📚 To Deck</button>
-          ${commanderZoneOn ? `<button id="toCommand" class="btn btn-secondary text-sm" style="padding: 14px; grid-column:1 / -1;">👑 To ${htmlEscape(commandMeta.label)}</button>` : ''}
+          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">Discard</button>
+          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">To deck</button>
+          ${commanderZoneOn ? `<button id="toCommand" class="btn btn-secondary text-sm" style="padding: 14px; grid-column:1 / -1;">To ${htmlEscape(commandMeta.label)}</button>` : ''}
         </div>
-        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">❌ Cancel</button>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">Cancel</button>
       </div>
     ` : ''}
     ${state.replayMode ? (() => {
@@ -8921,23 +9010,26 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     ${targetingModalHtml()}
     ${attackModalHtml()}
     ${aiBlockersModalHtml()}
-    ${state.winner ? `
+    ${state.winner ? (() => {
+      const outcome = state.winner === 'draw' ? 'Draw'
+        : state.winner === state.currentPlayer ? 'You win' : 'You lose';
+      const detail = state.winner === 'draw'
+        ? 'Both players hit 0 life at the same time.'
+        : `Player ${state.winner} took the game.`;
+      return `
       <div class="modal">
-        <div class="modal-content text-center">
-          <h2 class="mb-4" style="font-size: 48px;">${state.winner === 'draw' ? '🤝' : '🏆'}</h2>
-          <h2 class="mb-4" style="font-size: 32px; font-weight: bold;">${
-            state.winner === 'draw' ? 'Draw!'
-              : state.winner === state.currentPlayer ? '🎉 You Win!' : '😔 You Lose'}</h2>
-          <p class="text-gray mb-8">${state.winner === 'draw'
-            ? 'Both players hit 0 life at the same time.'
-            : `Player ${state.winner} is victorious!`}</p>
+        <div class="modal-content text-center" style="max-width:460px">
+          <h2 class="mb-2" style="font-size:28px;font-weight:800">${outcome}</h2>
+          <div class="text-xs text-gray mb-2">${htmlEscape(mode.title)} · Turn ${state.turnCount || 1}</div>
+          <p class="text-gray mb-4">${detail}</p>
           <div class="flex" style="gap:10px;justify-content:center;flex-wrap:wrap">
-            ${state.replayMode ? '' : '<button id="saveReplayEnd" class="btn btn-secondary" style="padding:16px 24px">🎬 Save replay</button>'}
-            <button id="returnBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;">Return to Menu</button>
+            ${state.replayMode ? '' : '<button id="saveReplayEnd" class="btn btn-secondary">Save replay</button>'}
+            <button id="rematchBtn" class="btn btn-primary">Rematch</button>
+            <button id="returnBtn" class="btn btn-secondary">Menu</button>
           </div>
         </div>
-      </div>
-    ` : ''}
+      </div>`;
+    })() : ''}
   `;
   
   if (state.replayMode) {
@@ -8959,7 +9051,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       render();
     };
     // Nothing on the board itself is interactive while watching.
-    const shell = div.querySelector('.battle-scroll');
+    const shell = div.querySelector('.battle-board');
     if (shell) shell.style.pointerEvents = 'none';
   }
 
@@ -9008,7 +9100,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
   if (me.hand.length === 0) {
     const emptyMsg = document.createElement('span');
     emptyMsg.className = 'text-gray text-xs';
-    emptyMsg.textContent = '🃏 No cards in hand - Click Draw!';
+    emptyMsg.textContent = 'No cards in hand. Press Draw.';
     handContainer.appendChild(emptyMsg);
   } else {
     me.hand.forEach((card, idx) => {
@@ -9105,6 +9197,14 @@ if (card.stun && card.stun > 0) {
         fieldCard.addEventListener('dragend', () => {
           fieldCard.classList.remove('dragging');
         });
+        // Right-click opens the same per-card menu as a left click.
+        fieldCard.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          state.selectedCard = null;
+          state.selectedFieldCard = { zone, idx, owner };
+          render();
+        });
         fieldCard.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -9157,6 +9257,71 @@ if (card.stun && card.stun > 0) {
   });
   const nextPhaseBtn = div.querySelector('#nextPhase');
   if (nextPhaseBtn) nextPhaseBtn.onclick = advanceTurnPhase;
+
+  const shortcutsBtn = div.querySelector('#toggleShortcuts');
+  if (shortcutsBtn) shortcutsBtn.onclick = () => { state.showShortcuts = !state.showShortcuts; render(); };
+  const handToggleBtn = div.querySelector('#toggleHand');
+  if (handToggleBtn) handToggleBtn.onclick = () => { state.handCollapsed = !state.handCollapsed; render(); };
+
+  // Opponent life, for seats a human holds.
+  const oppMinus = div.querySelector('#oppMinusLP');
+  const oppPlus = div.querySelector('#oppPlusLP');
+  const adjustOppLife = (delta) => {
+    executeGameAction('life_change', { player: state.currentPlayer === 1 ? 2 : 1, delta }, () => {
+      opp.health = Math.max(0, opp.health + delta);
+      checkWinner();
+      return opp.health;
+    }, `Opponent ${delta > 0 ? 'gains' : 'loses'} ${Math.abs(delta)} life.`, { ms: 1200 });
+  };
+  if (oppMinus) oppMinus.onclick = () => adjustOppLife(-1);
+  if (oppPlus) oppPlus.onclick = () => adjustOppLife(1);
+
+  // --- Draggable dividers ------------------------------------------------
+  // The shell carries the sizes as CSS variables, so a drag can update the
+  // board live without a re-render tearing the pointer capture away.
+  const shellEl = div.querySelector('.battle-shell');
+  const boardEl = div.querySelector('.battle-board');
+  const wireDivider = (el, opts) => {
+    if (!el || !shellEl) return;
+    el.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      el.setPointerCapture(event.pointerId);
+      el.classList.add('dragging');
+      const move = (ev) => shellEl.style.setProperty(opts.varName, opts.valueAt(ev));
+      const up = () => {
+        el.classList.remove('dragging');
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+        saveBoardLayout(opts.read(shellEl));
+      };
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+    });
+    el.addEventListener('dblclick', () => {
+      saveBoardLayout({ [opts.key]: LAYOUT_DEFAULTS[opts.key] });
+      render();
+    });
+  };
+  wireDivider(div.querySelector('#fieldDivider'), {
+    key: 'oppPct',
+    varName: '--opp-pct',
+    valueAt: (ev) => {
+      const box = boardEl.getBoundingClientRect();
+      const pct = Math.min(70, Math.max(20, ((ev.clientY - box.top) / box.height) * 100));
+      return pct.toFixed(2) + '%';
+    },
+    read: (shell) => ({ oppPct: parseFloat(shell.style.getPropertyValue('--opp-pct')) || LAYOUT_DEFAULTS.oppPct })
+  });
+  wireDivider(div.querySelector('#sidebarDivider'), {
+    key: 'sidebarPx',
+    varName: '--sidebar-w',
+    valueAt: (ev) => {
+      const box = shellEl.getBoundingClientRect();
+      const px = Math.min(520, Math.max(220, box.right - ev.clientX));
+      return Math.round(px) + 'px';
+    },
+    read: (shell) => ({ sidebarPx: parseFloat(shell.style.getPropertyValue('--sidebar-w')) || LAYOUT_DEFAULTS.sidebarPx })
+  });
   const resolveStackTopBtn = div.querySelector('#resolveStackTop');
   if (resolveStackTopBtn) resolveStackTopBtn.onclick = resolveTopStack;
   const counterStackTopBtn = div.querySelector('#counterStackTop');
@@ -9222,28 +9387,28 @@ if (card.stun && card.stun > 0) {
   if (undoActionBtn) undoActionBtn.onclick = undoLastGameAction;
   
   if (gyBtn) gyBtn.onclick = () => { 
-    state.viewingZone = { title: '⚰️ Your Graveyard', cards: me.graveyard, zone: 'graveyard', owner: 'me' };
+    state.viewingZone = { title: 'Your graveyard', cards: me.graveyard, zone: 'graveyard', owner: 'me' };
     state.selectedZoneCard = null;
     render();
   };
   
   const viewExileBtn = div.querySelector('#viewExile');
   if (viewExileBtn) viewExileBtn.onclick = () => {
-    state.viewingZone = { title: '🚫 Your Exile', cards: me.exile, zone: 'exile', owner: 'me' };
+    state.viewingZone = { title: 'Your exile', cards: me.exile, zone: 'exile', owner: 'me' };
     state.selectedZoneCard = null;
     render();
   };
   
   const viewOppGYBtn = div.querySelector('#viewOppGY');
   if (viewOppGYBtn) viewOppGYBtn.onclick = () => {
-    state.viewingZone = { title: "👁️ Opponent's Graveyard", cards: opp.graveyard, zone: 'graveyard', owner: 'opp' };
+    state.viewingZone = { title: "Opponent's graveyard", cards: opp.graveyard, zone: 'graveyard', owner: 'opp' };
     state.selectedZoneCard = null;
     render();
   };
   
   const viewOppExileBtn = div.querySelector('#viewOppExile');
   if (viewOppExileBtn) viewOppExileBtn.onclick = () => {
-    state.viewingZone = { title: "👁️ Opponent's Exile", cards: opp.exile, zone: 'exile', owner: 'opp' };
+    state.viewingZone = { title: "Opponent's exile", cards: opp.exile, zone: 'exile', owner: 'opp' };
     state.selectedZoneCard = null;
     render();
   };
@@ -9267,22 +9432,22 @@ if (card.stun && card.stun > 0) {
   
   if (viewDeckBtn) viewDeckBtn.onclick = () => {
   state.viewingZone = sharedGame
-    ? { title: `📚 ${shared.label} (top→bottom)`, cards: shared.deck, zone: 'deck', owner: 'me', shared: true }
-    : { title: '📚 Your Deck (top→bottom)', cards: me.deck, zone: 'deck', owner: 'me' };
+    ? { title: `${shared.label} (top to bottom)`, cards: shared.deck, zone: 'deck', owner: 'me', shared: true }
+    : { title: 'Your library (top to bottom)', cards: me.deck, zone: 'deck', owner: 'me' };
   state.selectedZoneCard = null;
   render();
 };
 
   const viewOppCommanderBtn = div.querySelector('#viewOppCommander');
   if (viewOppCommanderBtn) viewOppCommanderBtn.onclick = () => {
-    state.viewingZone = { title: `👑 Opponent ${commandMeta.label}`, cards: opp.commanderZone, zone: 'commanderZone', owner: 'opp' };
+    state.viewingZone = { title: `Opponent ${commandMeta.label}`, cards: opp.commanderZone, zone: 'commanderZone', owner: 'opp' };
     state.selectedZoneCard = null;
     render();
   };
 
   const viewCommanderBtn = div.querySelector('#viewCommander');
   if (viewCommanderBtn) viewCommanderBtn.onclick = () => {
-    state.viewingZone = { title: `👑 ${commandMeta.label}`, cards: me.commanderZone, zone: 'commanderZone', owner: 'me' };
+    state.viewingZone = { title: `${commandMeta.label}`, cards: me.commanderZone, zone: 'commanderZone', owner: 'me' };
     state.selectedZoneCard = null;
     render();
   };
@@ -9329,7 +9494,7 @@ if (card.stun && card.stun > 0) {
   };
   const viewSharedGYBtn = div.querySelector('#viewSharedGY');
   if (viewSharedGYBtn) viewSharedGYBtn.onclick = () => {
-    state.viewingZone = { title: `⚰️ ${shared.label} Graveyard`, cards: shared.graveyard, zone: 'sharedGraveyard', owner: 'me', shared: true };
+    state.viewingZone = { title: `${shared.label} graveyard`, cards: shared.graveyard, zone: 'sharedGraveyard', owner: 'me', shared: true };
     state.selectedZoneCard = null;
     render();
   };
@@ -9443,12 +9608,13 @@ if (card.stun && card.stun > 0) {
       }
       state.turnDrewName = drewName;
 
+      state.turnCount = (state.turnCount || 1) + 1;
       if (state.activePlayer === state.currentPlayer) {
         state.showTurnNotification = true;
         setTimeout(() => {
           state.showTurnNotification = false;
           render();
-        }, 2000);
+        }, 1200);
       }
     }, () => {
       const who = seatLabel(nextPlayer);
@@ -9649,6 +9815,10 @@ if (toHandBtn) toHandBtn.onclick = () => {
     const toGYBtn = div.querySelector('#toGraveyard');
     const toExileBtn = div.querySelector('#toExile');
     const toBottomDeckBtn = div.querySelector('#toBottomDeck');
+    const toTopDeckBtn = div.querySelector('#toTopDeck');
+    const duplicateBtn = div.querySelector('#duplicateCard');
+    const plusCounterBtn = div.querySelector('#plusCounter');
+    const minusCounterBtn = div.querySelector('#minusCounter');
     const fieldToCommandBtn = div.querySelector('#fieldToCommand');
     const cancelFieldBtn = div.querySelector('#cancelFieldSelect');
     const card = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
@@ -9755,6 +9925,45 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
       }, `Moved ${card.name} to ${sharedGame ? shared.label : 'deck'}.`);
     };
 
+    if (toTopDeckBtn) toTopDeckBtn.onclick = () => {
+      const targetDeck = sharedGame ? shared.deck : me.deck;
+      executeGameAction('field_to_deck_top', { cardName: card.name, shared: sharedGame }, () => {
+        targetDeck.unshift(card);
+        me[state.selectedFieldCard.zone].splice(state.selectedFieldCard.idx, 1);
+        state.selectedFieldCard = null;
+      }, `Put ${card.name} on top of ${sharedGame ? shared.label : 'your library'}.`);
+    };
+
+    // A copy of the permanent, marked as a token so it is clearly not the card.
+    if (duplicateBtn) duplicateBtn.onclick = () => {
+      const zone = state.selectedFieldCard.zone;
+      executeGameAction('duplicate_token', { cardName: card.name, zone }, () => {
+        const copy = initBattleCard({
+          ...cloneJSON(card),
+          id: makeId('token'),
+          gameId: makeId('token'),
+          isToken: true,
+          tapped: false,
+          pos: null
+        });
+        me[zone].push(copy);
+        state.selectedFieldCard = null;
+        return copy;
+      }, `Copied ${card.name} as a token.`);
+    };
+
+    // One button per direction, moving power and toughness together.
+    const adjustCounter = (delta) => {
+      executeGameAction('adjust_card_marker', { cardName: card.name, type: 'counter', delta }, () => {
+        if (!card.pt) card.pt = { p: 0, t: 0 };
+        card.pt.p += delta;
+        card.pt.t += delta;
+        return card.pt;
+      }, `${card.name}: ${delta > 0 ? '+1/+1' : '-1/-1'} counter.`, { ms: 1000 });
+    };
+    if (plusCounterBtn) plusCounterBtn.onclick = () => adjustCounter(1);
+    if (minusCounterBtn) minusCounterBtn.onclick = () => adjustCounter(-1);
+
     if (fieldToCommandBtn) fieldToCommandBtn.onclick = () => {
       if (!canMoveToCommandZone(me)) return;
       executeGameAction('field_to_command', { cardName: card.name }, () => {
@@ -9840,6 +10049,9 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
   
   const saveReplayEnd = div.querySelector('#saveReplayEnd');
   if (saveReplayEnd) saveReplayEnd.onclick = replayToFile;
+  const rematchBtn = div.querySelector('#rematchBtn');
+  // Same decks, same mode, same difficulty: just deal again.
+  if (rematchBtn) rematchBtn.onclick = () => beginGame(mode, rules);
   if (state.winner && div.querySelector('#returnBtn')) {
     div.querySelector('#returnBtn').onclick = () => {
       if (state.onlineMode) disconnectOnline();
