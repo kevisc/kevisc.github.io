@@ -78,7 +78,7 @@ test('Boss Battle starts asymmetric life totals and offers co-op', async ({ page
   });
   expect(st.coop).toBe(true);
   expect(st.vsAI).toBe(true);
-  expect(st.survivors).toBe(38);   // 30 base + the Normal co-op cushion
+  expect(st.survivors).toBe(42);   // 30 base + the Normal co-op cushion (12)
   expect(st.boss).toBe(40);
   expect(st.hand).toBe(7);           // vs-AI games deal an opening hand
 
@@ -681,14 +681,27 @@ test('Attacking taps the attackers and can be cancelled', async ({ page }) => {
       .every(c => !c.tapped))).toBe(true);
 
   // Attacking with one creature taps only that one (no vigilance here).
+  // Checked before the bot blocks: a good double block can kill the attacker,
+  // and a card in the graveyard is no longer tapped.
   await page.locator('#declareAttack').click();
   await page.locator('.attackPick').first().click();
   await page.locator('#confirmAttack').click();
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(400);
   const tapped = await page.evaluate(() =>
     window.GALDUR_APP.battlefieldCards(window.GALDUR_APP.state.gameState.player1)
       .filter(c => c.tapped).length);
   expect(tapped).toBe(1);
+
+  // Once combat resolves the attacker is still tapped, or it died attacking.
+  await page.waitForTimeout(3000);
+  const after = await page.evaluate(() => {
+    const A = window.GALDUR_APP, p1 = A.state.gameState.player1;
+    return {
+      tapped: A.battlefieldCards(p1).filter(c => c.tapped).length,
+      dead: p1.graveyard.some(c => c.name === 'Big Bear')
+    };
+  });
+  expect(after.tapped === 1 || after.dead).toBe(true);
 });
 
 
@@ -1590,4 +1603,198 @@ test('Rematch deals a fresh game with the same decks and mode', async ({ page })
   expect(after.mode).toBe('commander');
   expect(after.hand).toBe(7);
   expect(after.life).toBeGreaterThan(0);
+});
+
+// --- batch 4: battlefield placement + bot decisions ------------------------
+
+// Fill both battlefields with more cards than one row holds.
+async function crowdedBoard(page) {
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP, s = A.state;
+    const mk = (n, i, land) => ({
+      id: n + i, gameId: n + i,
+      name: land ? 'Forest' : `${n} ${i}`,
+      type: land ? 'Basic Land - Forest' : 'Creature - Bear',
+      cost: land ? '' : '{1}{G}', colors: ['G'], effect: '',
+      power: land ? 0 : 2, toughness: land ? 0 : 2,
+      tapped: false, pt: { p: 0, t: 0 }, stun: 0
+    });
+    const me = s.gameState.player1, opp = s.gameState.player2;
+    me.creatureField = Array.from({ length: 8 }, (_, i) => mk('Bear', i, false));
+    me.landField = Array.from({ length: 6 }, (_, i) => mk('Land', i, true));
+    me.supportField = [];
+    opp.creatureField = Array.from({ length: 5 }, (_, i) => mk('Ogre', i, false));
+    opp.landField = Array.from({ length: 4 }, (_, i) => mk('Land', i, true));
+    opp.supportField = [];
+    s.aiActing = false;
+    A.render();
+  });
+  await page.waitForTimeout(300);
+}
+
+// The deepest overlap, in pixels, between any two cards on the same canvas.
+async function worstOverlap(page) {
+  return page.evaluate(() => {
+    let worst = 0;
+    document.querySelectorAll('.battle-canvas').forEach(canvas => {
+      const cards = [...canvas.querySelectorAll('.canvas-card')].map(n => n.getBoundingClientRect());
+      for (let i = 0; i < cards.length; i++) {
+        for (let j = i + 1; j < cards.length; j++) {
+          const a = cards[i], b = cards[j];
+          const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          if (x > 0 && y > 0) worst = Math.max(worst, Math.min(x, y));
+        }
+      }
+    });
+    return Math.round(worst);
+  });
+}
+
+test('Auto-placed cards fill the lanes without overlapping', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(500);
+  await crowdedBoard(page);
+
+  expect(await page.locator('.battle-canvas.mine .canvas-card').count()).toBe(14);
+  expect(await worstOverlap(page)).toBeLessThanOrEqual(3);
+
+  // The cards are big enough to read a power/toughness box on.
+  const size = await page.evaluate(() => {
+    const r = document.querySelector('.battle-canvas.mine .canvas-card').getBoundingClientRect();
+    return { w: Math.round(r.width), h: Math.round(r.height) };
+  });
+  // Bigger than the old fixed 68x95, and still the printed card ratio.
+  expect(size.w).toBeGreaterThan(68);
+  expect(size.h).toBeGreaterThan(95);
+  expect(size.h / size.w).toBeCloseTo(95 / 68, 1);
+
+  // Tidy writes the same layout into card.pos, so it must not overlap either.
+  await page.locator('#tidyField').click();
+  await page.waitForTimeout(400);
+  expect(await worstOverlap(page)).toBeLessThanOrEqual(3);
+  const placed = await page.evaluate(() =>
+    window.GALDUR_APP.battlefieldCards(window.GALDUR_APP.state.gameState.player1).every(c => c.pos));
+  expect(placed).toBe(true);
+});
+
+// Board builder for the two combat-decision tests.
+async function setBoard(page, spec) {
+  await page.evaluate((s2) => {
+    const A = window.GALDUR_APP, s = A.state;
+    const mk = (c) => ({
+      id: c.name + Math.random(), gameId: 'g' + Math.random().toString(36).slice(2),
+      name: c.name, type: c.type || 'Creature - Bear', cost: '', colors: [], effect: c.effect || '',
+      power: c.p, toughness: c.t, tapped: !!c.tapped, aiSick: !!c.sick, pt: { p: 0, t: 0 }, stun: 0
+    });
+    const p1 = s.gameState.player1, p2 = s.gameState.player2;
+    s.aiDifficulty = s2.difficulty;
+    p1.creatureField = (s2.mine || []).map(mk);
+    p2.creatureField = (s2.bot || []).map(mk);
+    p1.supportField = []; p1.landField = [];
+    p2.supportField = []; p2.landField = [];
+    p1.health = s2.myLife ?? 20;
+    p2.health = s2.botLife ?? 20;
+    s.activePlayer = 1;
+    A.render();
+  }, spec);
+  await page.waitForTimeout(200);
+}
+
+test('On Hard the bot refuses an attack that walks into a losing block', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(500);
+
+  // The bot's 2/2 would die to the 3/4 and achieve nothing.
+  await setBoard(page, {
+    difficulty: 'hard',
+    bot: [{ name: 'Bot Bear', p: 2, t: 2 }],
+    mine: [{ name: 'Guard', type: 'Creature - Wall', p: 3, t: 4 }]
+  });
+  expect(await page.evaluate(() => window.GALDUR_AI.chooseAttackers().map(c => c.name))).toEqual([]);
+
+  // Tap the blocker and the same attack is free damage, so it swings.
+  await page.evaluate(() => {
+    window.GALDUR_APP.state.gameState.player1.creatureField[0].tapped = true;
+    window.GALDUR_APP.render();
+  });
+  expect(await page.evaluate(() => window.GALDUR_AI.chooseAttackers().map(c => c.name))).toEqual(['Bot Bear']);
+
+  // A trade it wins is still on: a 4/4 into the same 3/4 kills and survives.
+  await setBoard(page, {
+    difficulty: 'hard',
+    bot: [{ name: 'Bot Ogre', p: 4, t: 4 }],
+    mine: [{ name: 'Guard', type: 'Creature - Wall', p: 3, t: 4 }]
+  });
+  expect(await page.evaluate(() => window.GALDUR_AI.chooseAttackers().map(c => c.name))).toEqual(['Bot Ogre']);
+});
+
+test('The bot blocks to stay alive when the attack would kill it', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(500);
+
+  // 5 damage is coming at a bot on 4 life. It has two bodies and must use them.
+  await setBoard(page, {
+    difficulty: 'hard',
+    botLife: 4,
+    mine: [{ name: 'Raider', p: 3, t: 3 }, { name: 'Scout', p: 2, t: 2 }],
+    bot: [{ name: 'Wall', type: 'Creature - Wall', p: 0, t: 4, effect: 'Defender.' }, { name: 'Bot Bear', p: 2, t: 2 }]
+  });
+
+  const blocks = await page.evaluate(() => {
+    const p1 = window.GALDUR_APP.state.gameState.player1;
+    const assignments = window.GALDUR_AI.aiChooseBlocks(p1.creatureField);
+    return Object.keys(assignments).length;
+  });
+  expect(blocks).toBe(2);
+
+  await page.evaluate(async () => {
+    const A = window.GALDUR_APP, p1 = A.state.gameState.player1;
+    await window.GALDUR_AI.playerAttack(p1.creatureField.map(c => c.gameId || c.id));
+  });
+  await page.waitForTimeout(2500);
+
+  const after = await page.evaluate(() => {
+    const s = window.GALDUR_APP.state;
+    return { botLife: s.gameState.player2.health, winner: s.winner, log: (s.gameLog || [])[0]?.message || '' };
+  });
+  expect(after.botLife).toBe(4);      // both attackers were blocked
+  expect(after.winner).toBeFalsy();
+  expect(after.log).toMatch(/blocks/);
+});
+
+test('Multi-blocks take down an attacker one creature cannot', async ({ page }) => {
+  await enter(page);
+  await openBattleMenu(page, 'casual');
+  await seedDecks(page);
+  await page.locator('#playAI').click();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(500);
+
+  // One 5/5 attacker, two 3/3 blockers: neither kills it alone, both together do.
+  await setBoard(page, {
+    difficulty: 'hard',
+    mine: [{ name: 'Colossus', p: 5, t: 5 }],
+    bot: [{ name: 'Guard A', p: 3, t: 3 }, { name: 'Guard B', p: 3, t: 3 }]
+  });
+  const grouped = await page.evaluate(() => {
+    const p1 = window.GALDUR_APP.state.gameState.player1;
+    const assignments = window.GALDUR_AI.aiChooseBlocks(p1.creatureField);
+    const first = Object.values(assignments)[0];
+    return Array.isArray(first) ? first.length : (first ? 1 : 0);
+  });
+  expect(grouped).toBe(2);
 });

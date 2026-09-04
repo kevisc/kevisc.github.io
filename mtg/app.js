@@ -675,24 +675,32 @@ function buildJumpstartDeck(themeAId, themeBId){
 }
 
 function makeStarterSurvivorDeck(owner = 'survivor'){
-  const deck = [];
+  // The survivors need a deck that can actually fight the mode they are put
+  // in. Measured against the Boss and the Horde, the old list (2/2s, 3/3s and
+  // three tricks the sandbox cannot resolve) lost more or less every game. It
+  // now runs a curve, seven pieces of removal, a pair of fliers to get damage
+  // past a wall of big bodies, and a little lifegain.
   const specs = [
-    ['Sanctuary Guard', 'Creature - Human Soldier', '{1}{W}', ['W'], 2, 2, 'Vigilance.'],
-    ['Expedition Healer', 'Creature - Human Cleric', '{2}{W}', ['W'], 2, 3, 'When this enters, you gain 2 life.'],
-    ['Trailblazing Archer', 'Creature - Elf Archer', '{1}{G}', ['G'], 2, 2, 'Reach.'],
-    ['Outpost Captain', 'Creature - Human Knight', '{3}{W}', ['W'], 3, 3, 'Other creatures you control get +0/+1.'],
-    ['Shelter Charm', 'Instant', '{W}', ['W'], 0, 0, 'Target creature gains indestructible until end of turn.'],
-    ['Coordinated Strike', 'Instant', '{1}{W}', ['W'], 0, 0, 'Two target creatures get +1/+1 until end of turn.'],
-    ['Monster Hunter', 'Creature - Human Warrior', '{2}{G}', ['G'], 3, 2, 'When this blocks a token, it gets +2/+2 until end of turn.'],
-    ['Campfire Renewal', 'Sorcery', '{2}{G}', ['G'], 0, 0, 'Return target creature card from your graveyard to your hand.']
+    [4, 'Sanctuary Guard', 'Creature - Human Soldier', '{1}{W}', ['W'], 2, 2, 'Vigilance.'],
+    [4, 'Trailblazing Archer', 'Creature - Elf Archer', '{1}{G}', ['G'], 2, 2, 'Reach.'],
+    [3, 'Expedition Healer', 'Creature - Human Cleric', '{2}{W}', ['W'], 2, 3, 'When this enters, you gain 2 life.'],
+    [3, 'Watchtower Falcon', 'Creature - Bird', '{2}{W}', ['W'], 2, 2, 'Flying.'],
+    [2, 'Skyward Sentinel', 'Creature - Griffin', '{3}{W}', ['W'], 3, 3, 'Flying.'],
+    [3, 'Thicket Warden', 'Creature - Elf Warrior', '{3}{G}', ['G'], 4, 4, ''],
+    [2, 'Wildwood Colossus', 'Creature - Treefolk', '{5}{G}', ['G'], 5, 5, 'Trample.'],
+    [4, "Hunter's Volley", 'Instant', '{1}{G}', ['G'], 0, 0, 'Deal 3 damage to target creature.'],
+    [3, 'Righteous Verdict', 'Sorcery', '{2}{W}', ['W'], 0, 0, 'Destroy target creature.'],
+    [2, 'Scout Ahead', 'Sorcery', '{1}{G}', ['G'], 0, 0, 'Draw two cards.'],
+    [1, 'Field Rations', 'Sorcery', '{1}{W}', ['W'], 0, 0, 'You gain 5 life.']
   ];
-  for (let round = 0; round < 4; round++) {
-    for (const [name, type, cost, colors, power, toughness, effect] of specs) {
+  const deck = [];
+  for (const [count, name, type, cost, colors, power, toughness, effect] of specs) {
+    for (let i = 0; i < count; i++) {
       deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness, { rarity: 'common' }));
     }
   }
-  for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Plains', `${owner}_p_${i}`, owner));
-  for (let i = 0; i < 10; i++) deck.push(makeBasicLandCard('Forest', `${owner}_f_${i}`, owner));
+  for (let i = 0; i < 11; i++) deck.push(makeBasicLandCard('Plains', `${owner}_p_${i}`, owner));
+  for (let i = 0; i < 11; i++) deck.push(makeBasicLandCard('Forest', `${owner}_f_${i}`, owner));
   return shuffleCopy(deck);
 }
 
@@ -733,10 +741,16 @@ function aiTier(){
 function makeHordeDeck(tier = aiTier()){
   // Survivors win by emptying this library, so its SIZE is the clock: a short
   // Easy deck is a winnable game, a long Hard deck is a grind.
+  // Measured with the survivor starter deck. The old Normal and Hard libraries
+  // were 80 and 120 cards, which is 16 and 24 turns of survival, and nobody
+  // ever reached the end of them. The library is now a game long, and the
+  // threat is what is IN it: Easy is thin fodder, Normal mixes giants in, Hard
+  // is mostly 4/4 tramplers and drains. One token joins per turn on every
+  // difficulty (see revealHorde), so the mix is the dial that matters.
   const counts = {
-    easy:   { fodder: 24, surge: 1, regrow: 1, drain: 1, untap: 2, giants: 2 },
-    normal: { fodder: 58, surge: 4, regrow: 4, drain: 5, untap: 4, giants: 8 },
-    hard:   { fodder: 78, surge: 8, regrow: 6, drain: 8, untap: 5, giants: 16 }
+    easy:   { fodder: 14, surge: 1, regrow: 1, drain: 1, untap: 2, giants: 2 },
+    normal: { fodder: 22, surge: 3, regrow: 3, drain: 5, untap: 2, giants: 10 },
+    hard:   { fodder: 16, surge: 6, regrow: 5, drain: 12, untap: 3, giants: 40 }
   }[tier];
   const deck = [];
   const tokenMix = [
@@ -840,19 +854,19 @@ function makeBossDeck(){
     ['Shadow Stalker', 'Creature - Nightstalker', '{2}{B}', ['B'], 3, 3, 'Deathtouch.'],
     ['Infernal Bolt', 'Instant', '{R}', ['R'], 0, 0, 'Deal 2 damage to target creature or player.']
   ];
-  // Easy runs two threat cycles and no bombs doubled; Hard triples the top
-  // threats so its late game genuinely bites.
+  // Threat density is the boss's difficulty dial. Easy and Normal leave the
+  // bombs out; Hard adds everything up to a 5-power body. The old build ran
+  // three cycles of the whole list plus doubled bombs at Hard, which measured
+  // as a boss the survivors beat in about one game in a hundred.
   const tier = aiTier();
-  const cycles = { easy: 2, normal: 3, hard: 3 }[tier];
+  const small = threats.filter(t => t[4] <= 4 && !/destroy target creature/i.test(t[6]));
+  const mid = threats.filter(t => t[4] <= 5);
+  const pool = { easy: small, normal: small, hard: mid }[tier];
+  const cycles = { easy: 2, normal: 2, hard: 2 }[tier];
   for (let cycle = 0; cycle < cycles; cycle++) {
-    for (const [name, type, cost, colors, power, toughness, effect] of threats) {
+    for (const [name, type, cost, colors, power, toughness, effect] of pool) {
       deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness,
         { rarity: cycle === 0 ? 'rare' : 'uncommon' }));
-    }
-  }
-  if (tier === 'hard') {
-    for (const [name, type, cost, colors, power, toughness, effect] of threats.filter(t => t[4] >= 5 || /destroy|deal 3/i.test(t[6]))) {
-      deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness, { rarity: 'rare' }));
     }
   }
   for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Swamp', `boss_s_${i}`, 'boss'));
@@ -982,7 +996,7 @@ function buildGameStateForMode(mode, p1Deck, p2Deck){
   }
   // Survivors get a cushion on the easier settings of the co-op modes, so the
   // fight is winnable rather than a race the board state always wins.
-  const survivorBonus = rules.botOpponent ? ({ easy: 20, normal: 8, hard: 0 }[tier] || 0) : 0;
+  const survivorBonus = rules.botOpponent ? ({ easy: 20, normal: 12, hard: 6 }[tier] || 0) : 0;
   const survivorState = emptyPlayerState(shared ? [] : p1Deck, rules);
   survivorState.health += survivorBonus;
   return {
@@ -1817,15 +1831,20 @@ async function buildRealAiDeck(tier){
 
 // The boss plays real black/red threats and removal.
 async function buildRealBossDeck(tier){
-  const scope = { easy: 'legal:pauper', normal: 'legal:pioneer', hard: 'legal:commander r>=rare' }[tier] || 'legal:pioneer';
-  const minPower = { easy: 0, normal: 3, hard: 4 }[tier] || 0;
+  // Mirrors makeBossDeck: the generated fallback and the real-card version have
+  // to be the same fight, or the difficulty changes when Scryfall answers.
+  const scope = { easy: 'legal:pauper', normal: 'legal:pioneer', hard: 'legal:pioneer' }[tier] || 'legal:pioneer';
+  const power = { easy: [0, 4], normal: [0, 4], hard: [0, 5] }[tier] || [0, 5];
   return buildDeckFromPool({
-    query: `${scope} id<=br -t:land game:paper cmc<=7`,
+    query: `${scope} id<=br -t:land game:paper cmc<=6`,
     colors: ['B', 'R'], owner: 'boss',
-    creatures: { easy: 20, normal: 24, hard: 26 }[tier] || 24,
-    spells: { easy: 6, normal: 8, hard: 10 }[tier] || 8,
+    creatures: { easy: 18, normal: 20, hard: 22 }[tier] || 20,
+    spells: { easy: 6, normal: 6, hard: 8 }[tier] || 6,
     lands: 22,
-    creatureFilter: (c) => (parseInt(c.power, 10) || 0) >= minPower
+    creatureFilter: (c) => {
+      const p = parseInt(c.power, 10) || 0;
+      return p >= power[0] && p <= power[1];
+    }
   });
 }
 
@@ -1840,7 +1859,7 @@ async function buildRealSurvivorDeck(){
 // Real printed token cards for the Horde. The reveal/attack engine keys off
 // "Token" in the type line, which real token cards carry.
 async function buildRealHordeDeck(tier){
-  const counts = { easy: { fodder: 24, giants: 2 }, normal: { fodder: 58, giants: 8 }, hard: { fodder: 78, giants: 16 } }[tier];
+  const counts = { easy: { fodder: 14, giants: 2 }, normal: { fodder: 22, giants: 10 }, hard: { fodder: 16, giants: 40 } }[tier];
   const arts = await realCardsFrom('is:token t:creature game:paper', 16);
   if (arts.length < 5) return null;
   const power = (c) => parseInt(c.power, 10) || 0;
@@ -1852,7 +1871,7 @@ async function buildRealHordeDeck(tier){
   for (let i = 0; i < counts.fodder; i++) deck.push(clone(pickFrom(small, i), i));
   for (let i = 0; i < counts.giants; i++) deck.push(clone(pickFrom(big, i), 1000 + i));
   // The action cards are variant instructions, not real Magic cards.
-  const actions = { easy: { surge: 1, regrow: 1, drain: 1, untap: 2 }, normal: { surge: 4, regrow: 4, drain: 5, untap: 4 }, hard: { surge: 8, regrow: 6, drain: 8, untap: 5 } }[tier];
+  const actions = { easy: { surge: 1, regrow: 1, drain: 1, untap: 2 }, normal: { surge: 3, regrow: 3, drain: 5, untap: 2 }, hard: { surge: 6, regrow: 5, drain: 12, untap: 3 } }[tier];
   for (let i = 0; i < actions.surge; i++) deck.push(makeHordeAction('Mindless Surge', 'Reveal two extra Horde cards.', 'surge'));
   for (let i = 0; i < actions.regrow; i++) deck.push(makeHordeAction('Graveborn Return', 'Return up to two Horde tokens from the graveyard to the battlefield.', 'regrow'));
   for (let i = 0; i < actions.drain; i++) deck.push(makeHordeAction('Gnawing Dread', 'Each survivor loses 2 life.', 'drain'));
@@ -3433,6 +3452,8 @@ function render() {
   if (state.landPicker) root.appendChild(LandPickerModal());
 
   restoreScroll(scroll);
+  // Size and place the battlefield cards against the canvas we actually have.
+  layoutBattleCanvases();
   // Keep the caret in a text field the player was typing in (deck names,
   // import box) — a remote update used to steal focus mid-word.
   if (activeId) {
@@ -8081,6 +8102,128 @@ function defaultZoneForCard(card){
   return 'supportField';
 }
 
+// --- Battlefield auto-placement geometry ---------------------------------
+//
+// Cards sit on the canvas at percentage coordinates but are drawn at a fixed
+// pixel size, so the lanes have to be measured rather than guessed. Three
+// fixed percentage lanes used to sit closer together than a card is tall, and
+// a land was drawn over the lower half of a creature.
+//
+// canvasMetrics holds the last measured size of each canvas. canvasGeometry
+// turns a card count per lane into a card size plus a row grid that cannot
+// overlap. layoutBattleCanvases() re-measures after every render and re-places
+// every auto-positioned card.
+
+const CANVAS_LANES = {
+  me:  ['supportField', 'creatureField', 'landField'],
+  opp: ['landField', 'creatureField', 'supportField']
+};
+const CANVAS_CARD_RATIO = 95 / 68;   // the printed card ratio the app draws
+const CANVAS_CARD_MAX = 104;         // width in px, the size we want
+const CANVAS_CARD_MIN = 46;          // width in px, the size we refuse to go under
+const CANVAS_PAD = 10;
+const CANVAS_GAP_X = 10;
+const CANVAS_GAP_Y = 10;
+const CANVAS_LANE_SPREAD = 26;       // extra air between lanes when there is room
+
+const canvasMetrics = {
+  me:  { w: 760, h: 320 },
+  opp: { w: 760, h: 240 }
+};
+
+function canvasSide(owner){ return owner === 'opp' ? 'opp' : 'me'; }
+
+function canvasRowPlan(counts, lanes, w, cardW){
+  const perRow = Math.max(1, Math.floor((w - 2 * CANVAS_PAD + CANVAS_GAP_X) / (cardW + CANVAS_GAP_X)));
+  const rows = lanes.map(z => Math.ceil(Math.max(0, counts[z] || 0) / perRow));
+  return { perRow, rows, totalRows: rows.reduce((a, b) => a + b, 0) };
+}
+
+// Pure: how many cards each lane holds plus the measured canvas, in; the grid
+// every auto-placed card sits on, out. The card is as large as the lanes allow.
+function canvasGeometry(counts, owner){
+  const side = canvasSide(owner);
+  const box = canvasMetrics[side] || canvasMetrics.me;
+  const w = Math.max(240, box.w || 240);
+  const h = Math.max(120, box.h || 120);
+  const lanes = CANVAS_LANES[side];
+
+  let cardW = CANVAS_CARD_MIN;
+  let cardH = Math.round(cardW * CANVAS_CARD_RATIO);
+  let plan = canvasRowPlan(counts, lanes, w, cardW);
+  let fits = false;
+  for (let candidate = CANVAS_CARD_MAX; candidate >= CANVAS_CARD_MIN; candidate -= 2) {
+    const candidateH = Math.round(candidate * CANVAS_CARD_RATIO);
+    const p = canvasRowPlan(counts, lanes, w, candidate);
+    const used = p.totalRows * candidateH + Math.max(0, p.totalRows - 1) * CANVAS_GAP_Y;
+    if (p.totalRows === 0 || used + 2 * CANVAS_PAD <= h) {
+      cardW = candidate; cardH = candidateH; plan = p; fits = true; break;
+    }
+  }
+
+  const used = plan.totalRows * cardH + Math.max(0, plan.totalRows - 1) * CANVAS_GAP_Y;
+  // The normal case: spread the slack between the lanes. The overflow case:
+  // even the smallest card needs more rows than the canvas has, so the rows
+  // step by whatever is left. That only happens on a board of 30-plus cards.
+  const rowStep = fits
+    ? cardH + CANVAS_GAP_Y
+    : Math.max(cardH * 0.34, (h - 2 * CANVAS_PAD - cardH) / Math.max(1, plan.totalRows - 1));
+  const laneCount = plan.rows.filter(r => r > 0).length;
+  const slack = fits ? Math.max(0, h - 2 * CANVAS_PAD - used) : 0;
+  const spread = laneCount > 1 ? Math.min(CANVAS_LANE_SPREAD, slack / (laneCount - 1)) : 0;
+
+  const laneY = {};
+  let y = CANVAS_PAD;
+  lanes.forEach((zone, i) => {
+    laneY[zone] = y;
+    if (plan.rows[i] > 0) y += plan.rows[i] * rowStep + spread;
+  });
+
+  return { w, h, cardW, cardH, perRow: plan.perRow, rowStep, laneY, fits };
+}
+
+// The percentage position of the i-th card of a lane, as the canvas is now.
+function autoPosOnCanvas(counts, zoneKey, i, owner){
+  const g = canvasGeometry(counts, owner);
+  const col = i % g.perRow;
+  const row = Math.floor(i / g.perRow);
+  const x = CANVAS_PAD + col * (g.cardW + CANVAS_GAP_X);
+  const y = (g.laneY[zoneKey] ?? CANVAS_PAD) + row * g.rowStep;
+  return {
+    x: Math.round((100 * x / g.w) * 1000) / 1000,
+    y: Math.round((100 * y / g.h) * 1000) / 1000
+  };
+}
+
+function canvasCountsFor(player){
+  const counts = {};
+  for (const key of BATTLE_ZONE_KEYS) counts[key] = (player?.[key] || []).length;
+  return counts;
+}
+
+// Runs after every render: measure both canvases, size the cards to the space
+// there actually is, and re-place every card that has no dropped position.
+function layoutBattleCanvases(){
+  const canvases = document.querySelectorAll('.battle-canvas[data-canvas-owner]');
+  canvases.forEach(el => {
+    const side = canvasSide(el.getAttribute('data-canvas-owner'));
+    const w = el.clientWidth, h = el.clientHeight;
+    if (w > 60 && h > 60) canvasMetrics[side] = { w, h };
+    const counts = {};
+    for (const key of BATTLE_ZONE_KEYS) {
+      counts[key] = el.querySelectorAll(`.canvas-card[data-zone="${key}"]`).length;
+    }
+    const g = canvasGeometry(counts, side);
+    el.style.setProperty('--cc-w', g.cardW + 'px');
+    el.style.setProperty('--cc-h', g.cardH + 'px');
+    el.querySelectorAll('.canvas-card[data-autopos]').forEach(node => {
+      const pos = autoPosOnCanvas(counts, node.getAttribute('data-zone'), Number(node.getAttribute('data-idx')) || 0, side);
+      node.style.left = pos.x + '%';
+      node.style.top = pos.y + '%';
+    });
+  });
+}
+
 // Guarantee the three zones exist, folding any legacy upper/lower board into
 // them (older saved snapshots, or a peer still on the previous layout).
 function normalizePlayerZones(player){
@@ -8196,7 +8339,11 @@ function revealHorde(){
     //    to be both gentle AND unwinnable.
     const tier = aiTier();
     const revealPerTurn = 5;
-    const tokenCap = { easy: 1, normal: 2, hard: 4 }[tier] ?? 2;
+    // Measured, not guessed: two tokens a turn kills a survivor deck by turn
+    // five on every difficulty, so the library never runs out and the mode has
+    // no win in it. One a turn is the survivable rate; the difficulty lives in
+    // how long the library is, how many giants are in it, and the life cushion.
+    const tokenCap = { easy: 1, normal: 1, hard: 1 }[tier] ?? 1;
     let toReveal = revealPerTurn;
 
     while (guard < 60 && toReveal > 0) {
@@ -9051,24 +9198,18 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         && state.selectedFieldCard.zone === zoneKey
         && state.selectedFieldCard.idx === i;
       const pos = c.pos || autoPosFor(player, zoneKey, i, owner);
+      // data-autopos marks a card that has never been dropped by hand, so the
+      // post-render measuring pass may move it and a dropped card may not.
       return `<div class="field-card canvas-card${c.tapped ? ' tapped' : ''}${sel ? ' selected' : ''}"
-        data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"
+        data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"${c.pos ? '' : ' data-autopos="1"'}
         style="left:${pos.x}%;top:${pos.y}%"></div>`;
     })).join('');
 
-  // Cards that have never been placed get a sensible default spot, grouped by
-  // type in three lanes. A card is about a third of the canvas tall, so the
-  // lanes are spaced accordingly, and a crowded lane fans its cards closer
-  // together rather than spilling out of the canvas.
-  const LANE_Y = {
-    me:  { supportField: 2, creatureField: 31, landField: 60 },
-    opp: { landField: 2, creatureField: 31, supportField: 60 }
-  };
+  // Cards that have never been placed get a spot on the measured lane grid
+  // (see canvasGeometry). A full lane wraps to a second row, and the card only
+  // shrinks when the lanes genuinely cannot fit at the size we want.
   function autoPosFor(player, zoneKey, i, owner){
-    const y = (LANE_Y[owner === 'opp' ? 'opp' : 'me'])[zoneKey] ?? 34;
-    const count = (player[zoneKey] || []).length || 1;
-    const step = Math.min(8.2, 90 / Math.max(1, count));   // fan when crowded
-    return { x: 1.5 + i * step, y };
+    return autoPosOnCanvas(canvasCountsFor(player), zoneKey, i, owner);
   }
 
   const canvasBox = (player, owner) => {
@@ -9705,7 +9846,10 @@ if (card.stun && card.stun > 0) {
       event.preventDefault();
       el.setPointerCapture(event.pointerId);
       el.classList.add('dragging');
-      const move = (ev) => shellEl.style.setProperty(opts.varName, opts.valueAt(ev));
+      const move = (ev) => {
+        shellEl.style.setProperty(opts.varName, opts.valueAt(ev));
+        layoutBattleCanvases();          // the canvases just changed height
+      };
       const up = () => {
         el.classList.remove('dragging');
         el.removeEventListener('pointermove', move);
@@ -10517,6 +10661,9 @@ window.GALDUR_APP = {
   BATTLE_ZONE_KEYS,
   battlefieldCards,
   defaultZoneForCard,
+  // Battlefield placement, exposed so the layout can be asserted in tests.
+  canvasGeometry,
+  layoutBattleCanvases,
   // Online handshake, exposed so the connection flow can be driven in tests.
   createOnlineRoom,
   joinOnlineRoom,
@@ -10538,6 +10685,14 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'd' || e.key === 'D') {
     document.getElementById('drawBtn')?.click();
   }
+});
+
+// A resized window changes the battlefield canvases, so the lane grid has to
+// be measured again. Re-placing the cards is cheap; a full render is not.
+let _canvasResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (_canvasResizeTimer) clearTimeout(_canvasResizeTimer);
+  _canvasResizeTimer = setTimeout(() => { _canvasResizeTimer = null; layoutBattleCanvases(); }, 80);
 });
 
 loadLocal();          // restore saved collection + decks before first paint

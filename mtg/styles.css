@@ -329,8 +329,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
       font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
       color: var(--text-dim);
     }
-    /* Slightly smaller cards on the open field so three lanes breathe. */
-    .battle-canvas .field-card img { width: 68px; height: 95px; }
+    /* The card size is measured per canvas (see layoutBattleCanvases), so a
+       tall board draws large, readable cards and a short one still fits. */
+    .battle-canvas .field-card img { width: var(--cc-w, 92px); height: var(--cc-h, 129px); }
     .canvas-hint {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       pointer-events: none; color: var(--text-dim); font-size: 13px;
@@ -1686,9 +1687,10 @@ pre, code, textarea { max-width: 100%; overflow-x: auto; }
 
 .gicon { display: inline-block; vertical-align: -2px; flex: 0 0 auto; }
 
-/* The open battlefield keeps its card size: the three auto-placed lanes are
-   spaced for it, and a taller card would overlap the lane below. */
-.battle-canvas .field-card img { width: 68px; height: 95px; }
+/* The open battlefield sizes its cards to the canvas it was measured at, so a
+   tall board reads clearly and a short one still fits three lanes.
+   layoutBattleCanvases() sets --cc-w / --cc-h on each canvas. */
+.battle-canvas .field-card img { width: var(--cc-w, 92px); height: var(--cc-h, 129px); }
 .hand-card img { width: calc(84px * var(--hand-zoom, 1)); height: calc(118px * var(--hand-zoom, 1)); }
 .battle-hand .hand-card img {
   width: calc(84px * var(--hand-zoom)); height: calc(118px * var(--hand-zoom));
