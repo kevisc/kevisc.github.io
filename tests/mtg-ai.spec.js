@@ -916,7 +916,7 @@ test('The Deck Editor holds both deck building and card design', async ({ page }
     s.selectedMode = 'casual'; s.battleMode = 'casual';
     s.builderTab = 'deck'; s.screen = 'builder'; A.render();
   });
-  await expect(page.locator('h1')).toContainText('Deck Editor');
+  await expect(page.locator('h1')).toContainText('Deck editor');
   await expect(page.locator('#deckContainer')).toBeVisible();
 
   // The card designer lives behind a tab rather than on its own screen.

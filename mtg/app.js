@@ -20,9 +20,9 @@ const state = {
   deckDeleteConfirm: null,   // deck library id awaiting an inline delete confirm
   deckRenaming: null,        // deck library id being renamed inline
   deckLibraryTarget: null,   // which seat a library Load fills next
-  builderScryQuery: '',      // last Scryfall query typed in the Deck Editor
+  builderScryQuery: '',      // last Scryfall query typed in the Deck editor
   builderPanel: null,        // panel to open after switching back to the deck tab
-  deckShelfOpen: false,      // saved-deck shelf left open in the Deck Editor
+  deckShelfOpen: false,      // saved-deck shelf left open in the Deck editor
   editingCard: null,
   activePlayer: 1,
   gameState: {
@@ -52,8 +52,8 @@ const state = {
   coopSeat: 1,               // which teammate currently holds the device
   aiDifficulty: 'normal',    // 'easy' | 'normal' | 'hard'
   strictMana: false,         // enforce paying costs by tapping lands (bot games)
-  builderTab: 'deck',        // Deck Editor section: 'deck' | 'cards'
-  embedCreator: false,       // CardCreator rendered inside the Deck Editor
+  builderTab: 'deck',        // Deck editor section: 'deck' | 'cards'
+  embedCreator: false,       // CardCreator rendered inside the Deck editor
   handZoom: 1,               // hand card scale, 0.7 - 1.8
   handCollapsed: false,      // hand tray peeked shut
   showShortcuts: false,      // keyboard legend open
@@ -421,6 +421,26 @@ function makeGeneratedCard(name, type, cost, colors, effect, power = 0, toughnes
   }, name);
 }
 
+// --- Icons -------------------------------------------------------------
+//
+// One place for the few glyphs the interface needs. They are monochrome and
+// inherit currentColor, so they take the colour of the text around them.
+const GALDUR_ICON_PATHS = {
+  card:      '<rect x="4" y="2.5" width="12" height="17" rx="2"/><path d="M8 6h4M8 10h4"/>',
+  library:   '<rect x="3" y="4" width="4" height="14" rx="1"/><rect x="9" y="4" width="4" height="14" rx="1"/><path d="M15.5 5.2l3.2 12.4"/>',
+  graveyard: '<path d="M5 19v-8a5 5 0 0 1 10 0v8"/><path d="M3 19h14"/><path d="M10 8v5M8 10.5h4"/>',
+  exile:     '<path d="M10 3.5v9"/><path d="M6.4 6.1a6 6 0 1 0 7.2 0"/>',
+  life:      '<path d="M10 17s-6-3.8-6-8a3.5 3.5 0 0 1 6-2.4A3.5 3.5 0 0 1 16 9c0 4.2-6 8-6 8z"/>'
+};
+
+function galdurIcon(name, size = 14){
+  const path = GALDUR_ICON_PATHS[name];
+  if (!path) return '';
+  return `<svg class="gicon" width="${size}" height="${size}" viewBox="0 0 20 20" fill="none" `
+    + `stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" `
+    + `aria-hidden="true" focusable="false">${path}</svg>`;
+}
+
 function optimizeCardImage(img, loading = 'lazy'){
   if (!img) return img;
   img.loading = loading;
@@ -434,25 +454,132 @@ function cardArtLabel(name, maxChars = 26){
   return clean.slice(0, Math.max(8, maxChars - 1)).trim() + '...';
 }
 
+// --- Card face ---------------------------------------------------------
+//
+// Every card without artwork gets this drawn face. It carries the four things
+// a player reads at a glance: name, mana cost, type line and P/T, plus a thin
+// colour-identity edge. The rules text only appears on the larger renders,
+// where there is room for it to be legible.
+const MANA_INK = { W: '#ded6c0', U: '#6f9fc4', B: '#8a8390', R: '#c8756a', G: '#6d9f77', C: '#9b9a95' };
+
+// Rough width of a string in a system sans, in SVG user units. Good enough to
+// decide where to break or clip a line.
+function svgTextWidth(text, size){
+  return String(text || '').length * size * 0.53;
+}
+
+function clipToWidth(text, size, maxWidth){
+  const s = String(text || '');
+  if (svgTextWidth(s, size) <= maxWidth) return s;
+  const room = Math.max(1, Math.floor(maxWidth / (size * 0.53)) - 1);
+  return s.slice(0, room).trimEnd() + '...';
+}
+
+// Break a string onto at most `maxLines` lines that each fit `maxWidth`.
+function wrapToLines(text, size, maxWidth, maxLines){
+  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? line + ' ' + w : w;
+    if (svgTextWidth(next, size) <= maxWidth || !line) { line = next; continue; }
+    lines.push(line);
+    line = w;
+    if (lines.length === maxLines) break;
+  }
+  if (lines.length < maxLines && line) lines.push(line);
+  if (lines.length === maxLines && line && lines[maxLines - 1] !== line) {
+    lines[maxLines - 1] = clipToWidth(lines[maxLines - 1] + ' ' + line, size, maxWidth);
+  }
+  return lines.slice(0, maxLines).map(l => clipToWidth(l, size, maxWidth));
+}
+
+// Split a mana cost like {2}{U}{U} into the pips to draw. Generic mana becomes
+// one grey pip carrying the number; hybrid pips take the first colour.
+function manaPips(cost){
+  const raw = String(cost || '').match(/\{[^}]+\}/g) || [];
+  const pips = [];
+  raw.forEach(sym => {
+    const body = sym.slice(1, -1).toUpperCase();
+    if (/^\d+$/.test(body)) { pips.unshift({ label: body, ink: MANA_INK.C }); return; }
+    if (body === 'X') { pips.unshift({ label: 'X', ink: MANA_INK.C }); return; }
+    const letter = (body.match(/[WUBRG]/) || ['C'])[0];
+    pips.push({ label: '', ink: MANA_INK[letter] || MANA_INK.C });
+  });
+  return pips;
+}
+
+function identityInk(card){
+  const colors = (Array.isArray(card?.colors) ? card.colors : [])
+    .map(c => String(c).toUpperCase())
+    .filter(c => MANA_INK[c]);
+  if (!colors.length) return [MANA_INK.C];
+  return colors.slice(0, 3).map(c => MANA_INK[c]);
+}
+
 function cardPlaceholderSvgUrl(card, width = 100, height = 140){
   const isToken = !!card?.isToken;
-  const name = htmlEscape(cardArtLabel(card?.name || (isToken ? 'Token' : 'Card')));
-  const type = htmlEscape(cardArtLabel(card?.type || '', 24));
+  const W = 100;
+  const H = 140;
+  const name = String(card?.name || (isToken ? 'Token' : 'Card'));
+  const type = String(card?.type || (isToken ? 'Token' : ''));
+  const rules = String(card?.effect || '');
   const power = card?.power ?? '';
   const toughness = card?.toughness ?? '';
   // normalizePlayableCard coerces missing P/T to 0, so "has a value" is not a
-  // usable test — only creatures and tokens actually have a printed P/T box.
-  const typeText = ((card?.type || '') + '').toLowerCase();
+  // usable test. Only creatures and tokens actually carry a printed P/T box.
+  const typeText = type.toLowerCase();
   const hasPt = (isToken || typeText.includes('creature')) && (power !== '' || toughness !== '');
-  const bg = isToken ? '#065f46' : '#334155';
-  const stroke = isToken ? '#10b981' : '#64748b';
+
+  const pips = manaPips(card?.cost).slice(0, 5);
+  const pipR = 3.4;
+  const pipGap = 1.4;
+  const pipsWidth = pips.length ? pips.length * (pipR * 2) + (pips.length - 1) * pipGap : 0;
+
+  const inks = identityInk(card);
+  const edge = inks.length === 1
+    ? `<rect x="0" y="0" width="3.5" height="${H}" rx="1.75" fill="${inks[0]}" opacity=".85"/>`
+    : inks.map((ink, i) => `<rect x="0" y="${(H / inks.length) * i}" width="3.5" height="${H / inks.length}" fill="${ink}" opacity=".85"/>`).join('');
+
+  const padL = 8;
+  const padR = 6;
+  const nameSize = 8.6;
+  const nameRoom = W - padL - padR - (pipsWidth ? pipsWidth + 3 : 0);
+  const nameLines = wrapToLines(name, nameSize, nameRoom, 2);
+  const headBottom = 12 + (nameLines.length - 1) * 9.4;
+
+  // Rules text earns its place only on the larger renders.
+  const showRules = height >= 120 && !!rules;
+  const ruleSize = 5.8;
+  const ruleLines = showRules ? wrapToLines(rules, ruleSize, W - padL - padR, 4) : [];
+
+  const esc = htmlEscape;
+  const artTop = headBottom + (type ? 17 : 7);
+  const artBottom = hasPt ? H - 20 : H - 8;
+  const showArt = artBottom - artTop > 16 && !showRules;
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-      <rect width="${width}" height="${height}" rx="7" fill="${bg}"/>
-      <rect x="5" y="5" width="${width - 10}" height="${height - 10}" rx="5" fill="none" stroke="${stroke}" stroke-width="2"/>
-      <text x="${width / 2}" y="${height * 0.42}" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="10" font-weight="700">${name}</text>
-      ${type ? `<text x="${width / 2}" y="${height * 0.57}" text-anchor="middle" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="8">${type}</text>` : ''}
-      ${hasPt ? `<text x="${width / 2}" y="${height * 0.74}" text-anchor="middle" fill="#e2e8f0" font-family="Arial, sans-serif" font-size="10">${htmlEscape(power)}/${htmlEscape(toughness)}</text>` : ''}
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${W} ${H}">
+      <defs>
+        <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="#ffffff" stroke-opacity=".045" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <rect width="${W}" height="${H}" rx="5" fill="#16181d"/>
+      ${edge}
+      ${nameLines.map((l, i) => `<text x="${padL}" y="${12 + i * 9.4}" fill="#e8e6e1" font-family="-apple-system, Segoe UI, Arial, sans-serif" font-size="${nameSize}" font-weight="600">${esc(l)}</text>`).join('')}
+      ${pips.map((p, i) => {
+        const cx = W - padR - pipsWidth + pipR + i * (pipR * 2 + pipGap);
+        return `<circle cx="${cx.toFixed(2)}" cy="9" r="${pipR}" fill="${p.ink}"/>` +
+          (p.label ? `<text x="${cx.toFixed(2)}" y="10.9" text-anchor="middle" fill="#14150f" font-family="-apple-system, Segoe UI, Arial, sans-serif" font-size="4.6" font-weight="700">${esc(p.label)}</text>` : '');
+      }).join('')}
+      <line x1="${padL}" y1="${headBottom + 4}" x2="${W - padR}" y2="${headBottom + 4}" stroke="#ffffff" stroke-opacity=".10"/>
+      ${type ? `<text x="${padL}" y="${headBottom + 14}" fill="#a6a49e" font-family="-apple-system, Segoe UI, Arial, sans-serif" font-size="6.4">${esc(clipToWidth(type, 6.4, W - padL - padR))}</text>` : ''}
+      ${showArt ? `<rect x="${padL}" y="${artTop}" width="${W - padL - padR}" height="${artBottom - artTop}" rx="2" fill="url(#hatch)" stroke="#ffffff" stroke-opacity=".07"/>` : ''}
+      ${ruleLines.map((l, i) => `<text x="${padL}" y="${artTop + 8 + i * 7.4}" fill="#918f89" font-family="-apple-system, Segoe UI, Arial, sans-serif" font-size="${ruleSize}">${esc(l)}</text>`).join('')}
+      ${hasPt ? `
+        <rect x="${W - padR - 25}" y="${H - 17}" width="25" height="12.5" rx="3" fill="#24272e" stroke="#ffffff" stroke-opacity=".14"/>
+        <text x="${W - padR - 12.5}" y="${H - 7.6}" text-anchor="middle" fill="#e8e6e1" font-family="-apple-system, Segoe UI, Arial, sans-serif" font-size="8.2" font-weight="700">${esc(power)}/${esc(toughness)}</text>` : ''}
+      ${isToken ? `<text x="${padL}" y="${H - 7.6}" fill="#918f89" font-family="-apple-system, Segoe UI, Arial, sans-serif" font-size="5.6" letter-spacing=".4">TOKEN</text>` : ''}
     </svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
@@ -1088,7 +1215,7 @@ function planManaPayment(player, cost){
     if (opts.length) colored.push(opts);
     else if (inner === 'C' || inner === 'S') generic += 1;
   }
-  const lands = untappedLandsOf(player).map(c => ({ card: c, color: landColorOf(c) }));
+  const lands = untappedLandsOf(player).map(c => ({ card: c, color:landColorOf(c) }));
   const used = new Set();
   for (const opts of colored) {
     const hit = lands.find(l => !used.has(l.card) && opts.includes(l.color))
@@ -1179,7 +1306,7 @@ function validateDeckForMode(deck, modeOrId){
   if (!cards.length) {
     errors.push(mode.sharedLibrary
       ? 'No shared stack loaded yet. Import a list or generate one.'
-      : 'No cards yet. Generate a deck, load a saved one, or build one in the Deck Editor.');
+      : 'No cards yet. Generate a deck, load a saved one, or build one in the Deck editor.');
   }
 
   if (cards.length) {
@@ -1328,7 +1455,7 @@ function toast(message, ms = 2200) {
   t.setAttribute('role', 'status');
   t.style.cssText = [
     'position:fixed','right:16px','bottom:16px','z-index:10000',
-    'background:#111827','border:1px solid #374151','color:#fff',
+    'background:var(--surface)','border:1px solid var(--line-strong)','color:var(--text-dim)',
     'padding:10px 14px','border-radius:8px','box-shadow:0 8px 24px rgba(0,0,0,.35)',
     'opacity:0','transform:translateY(8px)','transition:opacity .15s ease, transform .15s ease'
   ].join(';');
@@ -2925,7 +3052,7 @@ function LandPickerModal(){
       <div class="flex mb-4" style="gap:8px;flex-wrap:wrap">
         ${BASIC_LAND_NAMES.map(n => {
           const art = chosenLandArt(n);
-          return `<button class="landTab btn ${n === P.land ? 'btn-blue' : 'btn-secondary'} text-sm" data-land="${n}">
+          return `<button class="landTab btn btn-secondary${n === P.land ? ' is-on' : ''} text-sm" data-land="${n}">
             ${htmlEscape(n)}${art ? ' (chosen)' : ''}
           </button>`;
         }).join('')}
@@ -2942,7 +3069,7 @@ function LandPickerModal(){
           ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;max-height:56vh;overflow:auto">
               ${P.printings.map((art, i) => `
                 <button class="landArtChoice card" data-i="${i}" title="${htmlEscape(art.setName || '')}"
-                  style="padding:6px;cursor:pointer;text-align:left;${current && current.id === art.id ? 'border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.45)' : ''}">
+                  style="padding:6px;cursor:pointer;text-align:left;${current && current.id === art.id ? 'border-color:var(--line-strong);box-shadow:0 0 0 2px var(--line-strong)' : ''}">
                   <img src="${htmlEscape(art.imageUrl)}" alt="${htmlEscape(art.name)}" loading="lazy" decoding="async"
                        style="width:100%;border-radius:6px;display:block">
                   <div class="text-xs mt-1" style="font-weight:700">${htmlEscape(art.set || '')}</div>
@@ -3036,7 +3163,7 @@ function beginGame(mode, rules){
       seedCommandZoneFromDeck(state.gameState.player2, mode);
     }
     // Deal opening hands for every mode. Modes may override the size
-    // (the Basic Land Game opens on five); everything else opens on seven.
+    // (the Basic land game opens on five); everything else opens on seven.
     const openingHand = rules.startingHand || rules.openingHand || 7;
     if (openingHand) {
       const sharedZone = state.gameState.shared;
@@ -3161,10 +3288,10 @@ function deckActionsHtml(prefix, options = {}){
   return `
     <div class="validation-actions" data-deck-actions="${htmlEscape(prefix)}">
       <select id="${prefix}GenColors" class="input" aria-label="Deck colours">${colorOptions}</select>
-      <button id="${prefix}Generate" class="btn btn-primary" type="button">Generate a deck</button>
+      <button id="${prefix}Generate" class="btn btn-secondary" type="button">Generate a deck</button>
       <button id="${prefix}LoadSaved" class="btn btn-secondary" type="button" ${hasSaved ? '' : 'disabled'}>Load a saved deck</button>
       ${options.importId ? `<button id="${htmlEscape(options.importId)}" class="btn btn-secondary" type="button">Import a list</button>` : ''}
-      ${options.hideBuilder ? '' : `<button id="${prefix}OpenBuilder" class="btn btn-secondary" type="button">Build in Deck Editor</button>`}
+      ${options.hideBuilder ? '' : `<button id="${prefix}OpenBuilder" class="btn btn-secondary" type="button">Build in Deck editor</button>`}
     </div>
   `;
 }
@@ -3199,7 +3326,7 @@ function bindDeckActions(root, prefix, slotKey, options = {}){
 // page never hands control to a browser dialog.
 function deckLibraryHtml(prefix){
   const decks = state.deckLibrary || [];
-  if (!decks.length) return '<div class="text-xs text-gray">No saved decks yet. Save one from the Deck Editor.</div>';
+  if (!decks.length) return '<div class="text-xs text-gray">No saved decks yet. Save one from the Deck editor.</div>';
   return decks.map(d => {
     const confirming = state.deckDeleteConfirm === d.id;
     const renaming = state.deckRenaming === d.id;
@@ -3214,7 +3341,7 @@ function deckLibraryHtml(prefix){
         <div class="deck-row-actions">
           ${confirming
             ? `<span class="text-xs text-gray">Delete this deck?</span>
-               <button class="btn btn-red ${prefix}DelYes" data-id="${d.id}">Delete</button>
+               <button class="btn btn-danger ${prefix}DelYes" data-id="${d.id}">Delete</button>
                <button class="btn btn-secondary ${prefix}DelNo" data-id="${d.id}">Keep</button>`
             : renaming
               ? `<button class="btn btn-primary ${prefix}RenameSave" data-id="${d.id}">Save name</button>
@@ -3326,25 +3453,16 @@ function LoginScreen() {
   const div = document.createElement('div');
   div.className = 'screen';
   div.innerHTML = `
-    <div class="text-center" style="max-width: 820px; width:100%; padding: 0 16px;">
-      <div class="hero"><img src="title_wizards.png" alt="Wizards Duel"></div>
-      <h1 style="
-  font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 6px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-  Galdurspjöld
-</h1>
-      <p class="text-gray mb-1" style="font-size: 14px;">Create custom cards, play with friends.</p>
-
-<p class="text-xs text-gray" style="margin-bottom: 20px;">
- Made by KS. 2025. 
-</p>
+    <div class="landing">
+      <div class="hero"><img src="title_wizards.png" alt="Two wizards duelling"></div>
+      <h1 class="landing-title">Galdurspjöld</h1>
+      <p class="landing-lede">Create custom cards, play with friends.</p>
+      <p class="landing-meta">Made by KS. 2025.</p>
       <div class="card enter-card">
         <p class="text-sm text-gray mb-4">Enter the table. Build your own deck. The bot brings its own, or you can craft your opponent's too.</p>
-        <button id="enterApp" class="btn btn-primary" style="padding: 18px 42px; font-size: 18px;">Enter</button>
+        <button id="enterApp" class="btn btn-primary btn-lg">Enter</button>
       </div>
     </div>
-
   `;
 
   div.querySelector('#enterApp').onclick = () => {
@@ -3383,7 +3501,7 @@ function ModeHubScreen() {
       </div>
       ${mode.note ? `<div class="mode-note-plain">${htmlEscape(mode.note)}</div>` : ''}
       <div class="mode-actions">
-        <button class="btn btn-primary" data-action="play" data-mode="${mode.id}">Play</button>
+        <button class="btn btn-secondary" data-action="play" data-mode="${mode.id}">Play</button>
         <button class="btn btn-secondary" data-action="details" data-mode="${mode.id}">Details</button>
       </div>
     </div>
@@ -3403,7 +3521,7 @@ function ModeHubScreen() {
   }).join('');
 
   div.innerHTML = `
-    ${topBarHtml({ title: 'Choose Mode', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Card Collection', actionId: 'collectionBtn' })}
+    ${topBarHtml({ title: 'Choose mode', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Card collection', actionId: 'collectionBtn' })}
 
     <div class="mode-filter-bar">
       <div class="mode-filter-head">
@@ -3507,7 +3625,7 @@ function MainMenu() {
           <small>Choose the mode, decks and opponent yourself.</small>
         </button>
         <button id="goBuild" class="action-panel">
-          <span>Deck Editor</span>
+          <span>Deck editor</span>
           <small>Search cards, import a list, check the curve.</small>
         </button>
         <button id="goDraft" class="action-panel">
@@ -3768,7 +3886,7 @@ function ModeStudioScreen() {
                 ${setupOptions || '<option>No saved playlists</option>'}
               </select>
               <button id="loadSetup" class="btn btn-secondary text-xs" ${savedSetups.length ? '' : 'disabled'}>Load</button>
-              <button id="deleteSetup" class="btn btn-red text-xs" ${savedSetups.length ? '' : 'disabled'}>Delete</button>
+              <button id="deleteSetup" class="btn btn-danger text-xs" ${savedSetups.length ? '' : 'disabled'}>Delete</button>
             </div>
           </div>
         </div>
@@ -3850,7 +3968,7 @@ function ModeStudioScreen() {
   });
   bind('#studioStarterLand', () => {
     setupLandGameDecks();
-    toast('Basic Land Game decks regenerated.');
+    toast('Basic land game decks regenerated.');
     render();
   });
   const studioStart = (opts = {}) => {
@@ -3990,7 +4108,7 @@ function BattleMenu()  {
 
   div.innerHTML = `
     <div class="battle-flow">
-      ${topBarHtml({ title: 'Play', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck Editor', actionId: 'editorBtn' })}
+      ${topBarHtml({ title: 'Play', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck editor', actionId: 'editorBtn' })}
 
       <section class="flow-step">
         <div class="flow-step-head">
@@ -4044,7 +4162,7 @@ function BattleMenu()  {
             ${turnConfigured
               ? '<span class="badge" style="margin-left:8px">configured</span>'
               : (state.turnServer && state.turnServer.urls
-                  ? '<span class="badge" style="margin-left:8px;border-color:rgba(251,191,36,.6);color:#fcd34d">unusable url</span>'
+                  ? '<span class="badge" style="margin-left:8px;border-color:var(--accent-line);color:var(--accent)">unusable url</span>'
                   : '')}
           </summary>
           <p class="text-xs text-gray mt-3">
@@ -4436,7 +4554,7 @@ async function ensurePool(){
   // Still nothing: flag it so Picks shows a Retry button instead of a dead screen.
   D.pool = [];
   D.poolError = true;
-  toast('Couldn’t load cards from Scryfall. Check your connection and press Retry.', 3500);
+  toast('Could not load cards from Scryfall. Check your connection, then press Retry.', 3500);
 }
 
 async function pushBasicLands(){
@@ -4680,7 +4798,7 @@ function Mode(){ return Setup(); }
   wrap.innerHTML = `
     <div class="grid grid-2">
       <div class="card p-4">
-        <label>Upload custom pool (.json)</label>
+        <label for="customPoolFile">Upload a custom pool (.json)</label>
         <input id="customPoolFile" type="file" accept=".json" class="input" />
         <div id="customPoolStatus" class="text-xs text-gray" style="margin-top:8px">No file loaded.</div>
 
@@ -4712,8 +4830,8 @@ function Mode(){ return Setup(); }
         </div>
 
         <p class="text-xs text-gray mt-4">
-          JSON must be your app’s export format (i.e., <code>{"cards":[...]}</code>).
-          Cards in the pool with “Land” in type are ignored as draft offers.
+          JSON must be this app's export format (i.e., <code>{"cards":[...]}</code>).
+          Cards in the pool with Land in the type line are ignored as draft offers.
         </p>
       </div>
 
@@ -4732,7 +4850,7 @@ function Mode(){ return Setup(); }
       D.format = f;
       D.target = (f==='commander') ? 100 : 60;
       D.rarity = b.dataset.rarity || '';
-      // default singleton only in commander – can be overridden by the checkbox
+      // default singleton only in commander; the checkbox can override it
       D.allowDuplicates = (f!=='commander');
       wrap.querySelector('#customAllowDupes').checked = D.allowDuplicates;
     };
@@ -4770,7 +4888,7 @@ function Mode(){ return Setup(); }
       });
       D.customPool = pool;
       statusEl.textContent = `Loaded ${pool.length} cards.`;
-      previewEl.innerHTML = `${pool.slice(0,12).map(x=>x.name).join(', ')}${pool.length>12?' …':''}`;
+      previewEl.innerHTML = `${pool.slice(0,12).map(x=>x.name).join(', ')}${pool.length>12?' and more':''}`;
       contBtn.disabled = pool.length === 0;
     }catch(err){
       statusEl.textContent = 'Invalid JSON: ' + err.message;
@@ -4894,7 +5012,7 @@ function Mode(){ return Setup(); }
           <div class="card p-3" data-land="${n}">
             <div style="font-weight:700;margin-bottom:6px">${n}</div>
             <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn btn-secondary" data-act="dec" data-name="${n}">−</button>
+              <button class="btn btn-secondary" data-act="dec" data-name="${n}" aria-label="Remove one ${n}">-</button>
               <div id="cnt_${n}" style="min-width:30px;text-align:center">${D.lands.counts[n] || 0}</div>
               <button class="btn btn-secondary" data-act="inc" data-name="${n}">+</button>
             </div>
@@ -5024,12 +5142,11 @@ function LandsWaitScreen(){
   wrap.innerHTML = `
     <div style="max-width:600px;margin:0 auto;padding:32px;text-align:center">
       <h2 style="font-weight:800;font-size:24px;margin-bottom:16px">
-        Lands Finalized!
+        Lands are set
       </h2>
-      <div class="card p-4 mb-4" style="background:rgba(59,130,246,0.15);border-color:#3b82f6;">
-        <div style="font-size:48px;margin-bottom:12px">⏳</div>
+      <div class="card p-4 mb-4" style="background:var(--surface-3);border-color:var(--line-strong);">
         <p style="font-size:16px;margin-bottom:8px">
-          Waiting for opponent to finish adding lands...
+          Waiting for the opponent to finish adding lands.
         </p>
         <p class="text-sm text-gray">
           Your deck: ${myDeck.length} cards
@@ -5063,7 +5180,7 @@ function DraftOffResults(){
 
   function listHTML(g){
     return g.map(([name,qty])=>`<div class="flex items-center justify-between text-sm py-1">
-      <span>${name}</span><span class="opacity-80">×${qty}</span></div>`).join('');
+      <span>${name}</span><span class="opacity-80">x${qty}</span></div>`).join('');
   }
 
   wrap.innerHTML = `
@@ -5071,7 +5188,7 @@ function DraftOffResults(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="card p-4">
           <h3 style="font-weight:800;margin-bottom:8px">Player 1 Deck (${p1.length})</h3>
-          <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+          <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;">
             ${listHTML(g1)}
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -5082,7 +5199,7 @@ function DraftOffResults(){
 
         <div class="card p-4">
           <h3 style="font-weight:800;margin-bottom:8px">Player 2 Deck (${p2.length})</h3>
-          <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+          <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;">
             ${listHTML(g2)}
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -5093,10 +5210,10 @@ function DraftOffResults(){
       </div>
 
       <div class="card p-4 mt-4" style="text-align:center">
-        <h3 style="font-weight:800;margin-bottom:12px">Ready to Battle?</h3>
+        <h3 style="margin-bottom:8px">Ready to battle</h3>
         <p class="text-sm text-gray mb-3">Load both decks and start a game with your drafted cards.</p>
-        <button id="startBattle" class="btn btn-green" style="padding:12px 32px;font-size:16px">
-          Start Battle with Drafted Decks
+        <button id="startBattle" class="btn btn-primary">
+          Start a battle with the drafted decks
         </button>
       </div>
     </div>
@@ -5176,7 +5293,7 @@ function DraftOffResults(){
   <div id="manaCurveDraftChart"></div>
 </div>
 
-      ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:rgba(59,130,246,.15);border-color:#3b82f6">
+      ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:var(--surface-3);border-color:var(--line-strong)">
         <strong>Dealing cards</strong>
         <div class="text-xs text-gray mt-1">Fetching a card pool from Scryfall. This happens once per draft.</div>
       </div>` : ''}
@@ -5186,16 +5303,14 @@ function DraftOffResults(){
           <div id="draftRow" class="draft-row">
             ${D.pool.map((c,i)=>`
               <div class="draft-choice" data-i="${i}">
-                ${c.imageUrl ? cardImageMarkup(c, { loading: 'eager', style: 'width:100%;display:block' })
-                              : `<div style="height:220px;background:#374151;display:flex;align-items:center;justify-content:center">${htmlEscape(c.name)}</div>`}
-                <div style="position:absolute;left:6px;top:6px" class="badge">${(c.rarity||'').toUpperCase()}</div>
-                <div style="position:absolute;right:6px;bottom:6px" class="badge">${c.name}</div>
+                ${cardImageMarkup(c, { loading: 'eager', width: 160, height: 224, style: 'width:100%;display:block' })}
+                <div class="draft-rarity badge">${htmlEscape((c.rarity || 'common').toLowerCase())}</div>
               </div>
             `).join('')}
           </div>
           ${D.poolError ? `
             <div class="text-center" style="padding:24px">
-              <p class="text-red mb-4">Couldn’t load cards from Scryfall.</p>
+              <p class="text-red mb-4">Could not load cards from Scryfall.</p>
               <button id="retryPool" class="btn btn-primary">Retry</button>
             </div>` : ''}
           <div class="text-xs text-gray mt-4">Click one card to draft; the other two disappear.</div>
@@ -5206,7 +5321,7 @@ function DraftOffResults(){
             <div class="text-xs text-gray text-center" style="padding:18px">Hover a card to read it here</div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
-            <div><strong>Draft List</strong></div>
+            <div><strong>Draft list</strong></div>
             <div class="text-xs badge">Left: ${leftCount()}</div>
           </div>
           <div id="draftList" style="margin-top:8px;max-height:56vh;overflow-y:auto;padding-right:4px">
@@ -5223,7 +5338,7 @@ function DraftOffResults(){
           <div class="mt-4 flex" style="gap:8px">
             <button id="finishNow" class="btn btn-secondary">Finish</button>
           </div>
-          <p class="text-xs text-gray mt-2">“Finish” saves current picks into your deck even if not full.</p>
+          <p class="text-xs text-gray mt-2">Finish saves the current picks into your deck, even when it is not full.</p>
         </div>
       </div>
     `;
@@ -5282,20 +5397,20 @@ function DraftOffResults(){
   const s = document.createElement('style');
   s.id = 'deckStatsCSS';
   s.textContent = `
-  .ds-card{background:rgba(255,255,255,0.03);border:1px solid rgba(139,92,246,0.35);border-radius:12px;padding:12px;}
+  .ds-card{background:rgba(255,255,255,.03);border:1px solid var(--line-strong);border-radius:12px;padding:12px;}
   .ds-title{font-size:12px;letter-spacing:.04em;text-transform:uppercase;opacity:.8;margin-bottom:8px;}
   .ds-row{display:grid;gap:12px;}
   @media (min-width:900px){.ds-row{grid-template-columns:2fr 1fr 1fr;}}
   .ds-curve{height:160px;display:grid;align-items:end;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));padding:8px 6px 0 6px;}
   .ds-col{position:relative;height:100%;display:flex;flex-direction:column;justify-content:flex-end;}
-  .ds-seg{width:100%;border:2px solid #ecfdf5;}
-  .ds-seg.crea{background:linear-gradient(180deg,#34d399 0%,#10b981 100%);border-radius:8px 8px 0 0;}
-.ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 8px 8px; }
+  .ds-seg{width:100%;border:1px solid var(--line);}
+  .ds-seg.crea{background:var(--accent);border-radius:4px 4px 0 0;}
+.ds-seg.noncrea{ background:var(--surface-3); border-radius:0 0 4px 4px; }
 .ds-seg.noncrea.only{
   /* ensure the top “white outline” always shows */
   border-top-width: 2px !important;
   border-top-style: solid !important;
-  border-top-color: #ecfdf5 !important;
+  border-top-color:var(--line) !important;
 
   /* force the same rounded cap as the green bars */
   border-top-left-radius: 8px !important;
@@ -5303,24 +5418,24 @@ function DraftOffResults(){
   border-radius: 8px 8px 4px 4px !important;
 
   /* optional: add a subtle crisp edge like the green cap */
-  box-shadow: 0 0 0 1px rgba(236,253,245,.65) inset;
+  box-shadow:none;
 }
-  .ds-x{margin-top:6px;display:grid;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));font-size:11px;opacity:.8;text-align:center;}
-  .ds-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:11px;opacity:.85;}
+  .ds-x{margin-top:6px;display:grid;gap:10px;grid-template-columns:repeat(var(--bins,1),minmax(16px,1fr));font-size:12px;opacity:.8;text-align:center;}
+  .ds-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:12px;opacity:.85;}
   .ds-key{display:inline-flex;align-items:center;gap:6px;}
-  .ds-swatch{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.5);}
+  .ds-swatch{width:12px;height:12px;border-radius:3px;border:1px solid var(--line-strong);}
   .ds-pies{display:grid;gap:12px;grid-template-columns:1fr;}
   @media (min-width:900px){.ds-pies{grid-template-columns:1fr 1fr;}}
   .ds-piewrap{display:flex;gap:12px;align-items:center;}
-  .ds-pie{--size:120px;width:var(--size);height:var(--size);border-radius:50%;border:2px solid rgba(236,253,245,0.7);box-shadow:inset 0 0 16px rgba(0,0,0,0.35);}
+  .ds-pie{--size:120px;width:var(--size);height:var(--size);border-radius:50%;border:1px solid var(--line);box-shadow:inset 0 0 16px rgba(0,0,0,0.35);}
   .ds-list{font-size:12px;line-height:1.6;}
   .ds-list .row{display:flex;justify-content:space-between;gap:12px;}
   .ds-small{font-size:12px;opacity:.8;}
-  .stats-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(31,41,55,0.85);border:1px solid rgba(139,92,246,0.55);border-radius:10px;font-size:14px;font-weight:700;color:#e9d5ff;cursor:pointer;box-shadow:0 4px 14px rgba(139,92,246,0.25);transition:border-color .15s ease, background .15s ease, transform .08s ease;margin-bottom:10px;}
-  .stats-toggle:hover{border-color:#a78bfa;background:rgba(31,41,55,0.95);}
+  .stats-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;font-size:14px;font-weight:700;color:var(--text);cursor:pointer;box-shadow:0 4px 14px var(--line-strong);transition:border-color .15s ease, background .15s ease, transform .08s ease;margin-bottom:10px;}
+  .stats-toggle:hover{border-color:var(--line-strong);background:var(--surface);}
   .stats-toggle:active{transform:translateY(1px);}
   .stats-toggle .left{display:flex;align-items:center;gap:10px;}
-  .stats-toggle .chip{width:10px;height:10px;border-radius:50%;background:linear-gradient(180deg,#34d399 0%,#10b981 100%);border:1px solid #ecfdf5;box-shadow:0 0 0 2px rgba(16,185,129,25);}
+  .stats-toggle .chip{width:10px;height:10px;border-radius:50%;background:linear-gradient(180deg,var(--success-soft) 0%,var(--success-soft) 100%);border:1px solid var(--success-line);box-shadow:0 0 0 2px var(--success-line);}
   .stats-toggle .chev{font-size:16px;opacity:.9;transition:transform .15s ease;}
   .stats-toggle.open .chev{transform:rotate(90deg);}
   `;
@@ -5399,10 +5514,10 @@ function pieStyleFromCountsLocal(obj, palette){
   let acc = 0;
   const stops = entries.map(([k,v])=>{
     const start = acc / total * 360; acc += v; const end = acc / total * 360;
-    const color = palette[k] || '#999';
+    const color = palette[k] || 'var(--text-3)';
     return `${color} ${start}deg ${end}deg`;
   }).join(', ');
-  return `background: conic-gradient(${stops});`;
+  return `background:conic-gradient(${stops});`;
 }
 
 function renderDraftStats(){
@@ -5413,14 +5528,14 @@ function renderDraftStats(){
   const { keys, bins, peak } = stackedCurveLocal(deck);
 
   const manaColors = countManaSymbolsLocal(deck);
-  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+  const colorPalette = { W:'var(--mana-w)', U:'var(--mana-u)', B:'var(--mana-b)', R:'var(--mana-r)', G:'var(--mana-g)' };
 
   const tb = typesBreakdownLocal(deck);
   const typeObj = Object.fromEntries(tb);
   const typePalette = {
-    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
-    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
-    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+    'Creature':'#c9a227', 'Artifact Creature':'#a8862c', 'Instant':'#8d8a84',
+    'Sorcery':'#77746e', 'Enchantment':'#e0d3a8', 'Artifact':'#5f5d59',
+    'Planeswalker':'#b8a97c', 'Basic Land':'#4a4845', 'Land':'#3a3936', 'Other':'#2b2a28'
   };
 
   const cols = keys.map(k=>{
@@ -5443,8 +5558,8 @@ function renderDraftStats(){
 
   const curveLegend = `
     <div class="ds-legend">
-      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
-      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:var(--accent); border-color:var(--accent)"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:var(--surface-3); border-color:var(--line-strong)"></span> Non-creature</span>
       <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
     </div>`;
 
@@ -5460,7 +5575,7 @@ function renderDraftStats(){
     .sort((a,b)=>b[1]-a[1])
     .map(([k,v])=>{
       const pct = (v/typeTotal*100).toFixed(1)+'%';
-      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'var(--text-3)'}"></span>`;
       return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
     }).join('');
 
@@ -5494,8 +5609,8 @@ function renderDraftStats(){
 const toggle = wrap.querySelector('#draftStatsToggle');
 const card   = wrap.querySelector('#draftStatsCard');
 const chev   = toggle ? toggle.querySelector('.chev') : null;
-function openDraftStats(){ if (!card) return; card.classList.remove('hidden'); if (toggle){ toggle.classList.add('open'); toggle.setAttribute('aria-expanded','true'); if (chev) chev.textContent='▾'; } renderDraftStats(); }
-function closeDraftStats(){ if (!card) return; card.classList.add('hidden'); if (toggle){ toggle.classList.remove('open'); toggle.setAttribute('aria-expanded','false'); if (chev) chev.textContent='▸'; } }
+function openDraftStats(){ if (!card) return; card.classList.remove('hidden'); if (toggle){ toggle.classList.add('open'); toggle.setAttribute('aria-expanded','true');  } renderDraftStats(); }
+function closeDraftStats(){ if (!card) return; card.classList.add('hidden'); if (toggle){ toggle.classList.remove('open'); toggle.setAttribute('aria-expanded','false');  } }
 if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classList.contains('hidden')) openDraftStats(); else closeDraftStats(); }; }
 //// end 
     
@@ -5509,21 +5624,21 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
   let connUI = '';
   if (state.onlineMode && state.waitingForAnswer && state.roomCode) {
     connUI = `
-      <div class="card" style="background: rgba(59,130,246,0.15); border-color:#3b82f6; margin-bottom: 24px;">
+      <div class="card" style="background:var(--surface-3); border-color:var(--line-strong); margin-bottom: 24px;">
         <h3 class="mb-4" style="font-weight: bold;">Step 1. Share this code</h3>
-        <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
-        <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
-        <hr style="border-color: #4b5563; margin: 16px 0;">
+        <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 12px;">${state.roomCode}</textarea>
+        <button id="copyOffer" class="btn btn-secondary mb-4" style="width: 100%;">Copy code</button>
+        <hr style="border-color:var(--line-strong); margin: 16px 0;">
         <h3 class="mb-4" style="font-weight: bold;">Step 2. Enter their response</h3>
-        <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 11px;"></textarea>
-        <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+        <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 12px;"></textarea>
+        <button id="submitAnswer" class="btn btn-primary" style="width: 100%;">Connect</button>
       </div>`;
   } else if (state.onlineMode && state.answerCode) {
     connUI = `
-      <div class="card" style="background: rgba(5,150,105,0.2); border-color:#059669; margin-bottom: 24px;">
+      <div class="card" style="background:var(--success-soft); border-color:var(--success-line); margin-bottom: 24px;">
         <h3 class="mb-4" style="font-weight: bold;">Send this code back</h3>
-        <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
-        <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+        <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 12px;">${state.answerCode}</textarea>
+        <button id="copyAnswer" class="btn btn-primary" style="width: 100%;">Copy answer code</button>
         <p class="text-green text-sm mt-2">Waiting for the host.</p>
       </div>`;
   } else if (state.onlineMode && state.dataChannel && state.dataChannel.readyState === 'open') {
@@ -5541,7 +5656,7 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
       </div>
       <div class="card p-4">
         <h3 style="font-weight:800;margin-bottom:6px">Join Draft-off</h3>
-        <p class="text-xs text-gray mb-2">Paste the host’s code to connect.</p>
+        <p class="text-xs text-gray mb-2">Paste the host's code to connect.</p>
         <input id="joinCode" class="input mb-2" placeholder="Paste host code">
         <button id="joinOff" class="btn btn-primary">Join</button>
       </div>
@@ -5657,7 +5772,7 @@ const status = D.off.isLocal
   wrap.innerHTML = `
     <div class="step-meta">${htmlEscape(status)}</div>
 
-    ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:rgba(59,130,246,.15);border-color:#3b82f6">
+    ${D.dealing ? `<div class="card p-3 mb-3 text-center" style="background:var(--surface-3);border-color:var(--line-strong)">
       <strong>Dealing pack ${D.off.round}</strong>
     </div>` : ''}
 
@@ -5668,7 +5783,7 @@ const status = D.off.isLocal
           ${D.off.table.map((c,i)=>`
             <div class="card" data-i="${i}" style="padding:0;position:relative;cursor:${myTurn?'pointer':'not-allowed'}">
               ${c.imageUrl ? cardImageMarkup(c, { loading: 'eager', style: 'width:100%;display:block;border-radius:8px' })
-                           : `<div style="height:220px;background:#374151;border-radius:8px;display:flex;align-items:center;justify-content:center">${c.name}</div>`}
+                           : cardImageMarkup(c, { loading: 'eager', width: 160, height: 224, style: 'width:100%;display:block;border-radius:8px' })}
               <div class="badge" style="position:absolute;left:6px;top:6px">${(c.rarity||'').toUpperCase()}</div>
               <div class="badge" style="position:absolute;right:6px;bottom:6px">${c.name}</div>
             </div>
@@ -5911,7 +6026,7 @@ function WinstonDraft(){
       <div class="card p-4">
         <div class="grid" style="grid-template-columns:repeat(3,minmax(160px,1fr));gap:12px">
           ${W.piles.map((pile, i) => `
-            <div class="card p-3" style="border-color:${i === W.currentPile ? '#fbbf24' : 'rgba(139,92,246,.35)'}">
+            <div class="card p-3" style="border-color:${i === W.currentPile ? 'var(--accent)' : 'var(--line)'}">
               <div class="flex justify-between mb-2">
                 <strong>Pile ${i + 1}</strong>
                 <span class="badge">${pile.length}</span>
@@ -5942,7 +6057,7 @@ function WinstonDraft(){
       <div class="card p-4">
         <h3 style="font-weight:800;margin-bottom:8px">Draft Log</h3>
         <div style="max-height:420px;overflow:auto">
-          ${W.log.slice(0, 24).map(line => `<div class="text-xs text-gray" style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)">${htmlEscape(line)}</div>`).join('')}
+          ${W.log.slice(0, 24).map(line => `<div class="text-xs text-gray" style="padding:5px 0;border-bottom:1px solid var(--line)">${htmlEscape(line)}</div>`).join('')}
         </div>
       </div>
     </div>
@@ -5975,8 +6090,8 @@ function WinstonResults(){
       </div>
     </div>
     <div class="card p-4 mt-4 text-center">
-      <button id="loadWinstonDecks" class="btn btn-primary">Load Both Decks</button>
-      <button id="battleWinston" class="btn btn-green">Battle with Winston Decks</button>
+      <button id="loadWinstonDecks" class="btn btn-primary">Load both decks</button>
+      <button id="battleWinston" class="btn btn-primary">Battle with Winston decks</button>
     </div>
   `;
   function loadDecks(){
@@ -6011,7 +6126,7 @@ function WinstonResults(){
           <button id="useDeck" class="btn btn-primary">Use this as my deck</button>
           <button id="again" class="btn btn-secondary">Start new draft</button>
         </div>
-        <p class="text-xs text-gray mt-2">“Use this as my deck” replaces your current deck in the builder.</p>
+        <p class="text-xs text-gray mt-2">Use this as my deck replaces your current deck in the builder.</p>
       </div>
     `;
     wrap.querySelector('#again').onclick = ()=>{ state.screen='draft'; state.draft.screen='setup'; render(); };
@@ -6019,7 +6134,7 @@ function WinstonResults(){
       state.decks[key] = D.deck.slice();
       state.screen='builder';
       render();
-      toast('Draft deck loaded into the Deck Editor.');
+      toast('Draft deck loaded into the Deck editor.');
     };
     return wrap;
   }
@@ -6164,7 +6279,7 @@ window.draftOffMaybeNextRoundOrFinish = draftOffMaybeNextRoundOrFinish;
       'custom-setup':  { title: 'Cube pool and settings', subtitle: poolLine, back: toMenu },
       colors:          { title: 'Choose your colours', subtitle: poolLine, back: toSetup },
       lands:           { title: 'Basic lands', subtitle: 'Optional. Pre-fill basics before the picks start.', back: () => setScreen('colors') },
-      landsfill:       { title: 'Fill the last slots', subtitle: poolLine, back: () => setScreen('picks') },
+      landsfill:{ title: 'Fill the last slots', subtitle: poolLine, back: () => setScreen('picks') },
       picks:           { title: 'Pick a card', subtitle: `${deckCount()}/${D.target} picked · ${D.chosenColors.map(c => colorWords[c] || c).join(' and ') || 'any colour'}${scope ? ' · ' + scope : ''}`, back: askLeave },
       'draftoff-setup':{ title: 'Draft-off setup', subtitle: 'Two players, two devices.', back: toSetup },
       draftoff:        { title: `Draft-off, round ${off.round}`, subtitle: `You ${off.p1.length} · them ${off.p2.length}`, back: askLeave },
@@ -6209,7 +6324,7 @@ else                           content = Done();
     subtitle: step.subtitle,
     backLabel: 'Back',
     backId: 'home',
-    actionLabel: 'Deck Editor',
+    actionLabel: 'Deck editor',
     actionId: 'draftToEditor'
   });
   if (D.confirmLeave) {
@@ -6218,7 +6333,7 @@ else                           content = Done();
     bar.innerHTML = `
       <span class="text-sm">Leave this draft? The picks are lost.</span>
       <span class="flex" style="gap:8px">
-        <button id="leaveDraftYes" class="btn btn-red text-sm">Leave</button>
+        <button id="leaveDraftYes" class="btn btn-danger text-sm">Leave</button>
         <button id="leaveDraftNo" class="btn btn-secondary text-sm">Stay</button>
       </span>`;
     div.appendChild(bar);
@@ -6252,49 +6367,49 @@ function CardCreator() {
   
   const cardsHtml = state.cards.map((c, i) => `
     <div class="card-preview" style="position: relative;">
-      <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+      <div style="background:var(--surface-2); padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
-          <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+          <span style="font-size: 12px; color:var(--accent);">${c.cost || ''}</span>
         </div>
         <p class="text-xs text-gray">${c.type}</p>
       </div>
-      <div class="card-img">${c.image || c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;height:100%;object-fit:cover;border-radius:6px' }) : '🃏'}</div>
-      ${c.type && c.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
-      <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+      <div class="card-img">${c.image || c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;height:100%;object-fit:cover;border-radius:6px' }) : galdurIcon('card', 28)}</div>
+      ${c.type && c.type.includes('Creature') ? `<div style="background:var(--surface-2); padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span></div>` : ''}
+      <div style="background:var(--surface-2); padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
       <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
-        <button class="btn btn-secondary text-xs editCard" data-id="${i}" style="padding: 4px 8px;">Edit</button>
-        <button class="btn btn-red text-xs delCard" data-id="${i}" style="padding: 4px 8px;">Del</button>
+        <button class="btn btn-secondary text-xs editCard" data-id="${i}">Edit</button>
+        <button class="btn btn-danger text-xs delCard" data-id="${i}">Delete</button>
       </div>
     </div>
   `).join('');
   
-  const embedded = !!state.embedCreator;   // rendered inside the Deck Editor
+  const embedded = !!state.embedCreator;   // rendered inside the Deck editor
   div.innerHTML = `
-    ${embedded ? '' : topBarHtml({ title: 'Card Collection', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck Editor', actionId: 'ccEditorBtn' })}
+    ${embedded ? '' : topBarHtml({ title: 'Card collection', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck editor', actionId: 'ccEditorBtn' })}
     
     <div class="card mb-4">
       <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">Search Scryfall</h2>
-      <div style="background: #374151; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+      <div style="background:var(--surface-2); border-radius: 6px; padding: 12px; margin-bottom: 12px;">
         <p class="text-xs text-gray">Search works best over HTTPS. If a search fails, try an exact card name such as "Lightning Bolt".</p>
       </div>
       <div style="display: flex; gap: 8px; margin-bottom: 16px;">
         <input id="scryfallSearch" class="input" placeholder="Search cards, for example Lightning Bolt" style="flex: 1;">
         <button id="searchBtn" class="btn btn-primary">Search</button>
-        <button id="loadAllBtn" class="btn btn-blue">Load All Cards</button>
+        <button id="loadAllBtn" class="btn btn-secondary">Load all cards</button>
       </div>
       <div id="searchResults" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;"></div>
     </div>
     
-    <h2 class="mb-4" style="font-size: 20px; font-weight: bold;">${state.editingCard ? 'Edit Card' : 'Create Custom Card'}</h2>
+    <h2 class="mb-4">${state.editingCard ? 'Edit card' : 'Create a custom card'}</h2>
     <div class="grid grid-2 mb-8">
       <div class="card">
         <div class="mb-4">
-          <label>Card Name</label>
+          <label for="cardName">Card name</label>
           <input id="cardName" class="input" value="${form.name}">
         </div>
         <div class="mb-4">
-          <label>Type</label>
+          <label for="cardType">Type</label>
           <select id="cardType" class="input">
             <option value="Creature">Creature</option>
             <option value="Instant">Instant</option>
@@ -6306,42 +6421,42 @@ function CardCreator() {
           </select>
         </div>
         <div class="mb-4">
-          <label>Mana Cost</label>
+          <label for="cardCost">Mana cost</label>
           <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-            <button class="mana-btn" data-color="W" style="background: #f9fafb; color: #111827; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #d1d5db;">W</button>
-            <button class="mana-btn" data-color="U" style="background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">U</button>
-            <button class="mana-btn" data-color="B" style="background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 2px solid #4b5563;">B</button>
-            <button class="mana-btn" data-color="R" style="background: #dc2626; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">R</button>
-            <button class="mana-btn" data-color="G" style="background: #059669; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">G</button>
-            <button class="mana-btn" data-color="C" style="background: #9ca3af; color: white; padding: 8px 12px; border-radius: 6px; font-weight: bold;">C</button>
-            <input id="genericMana" type="number" min="0" max="20" value="0" style="width: 60px;" class="input text-center" placeholder="0">
-            <button id="clearMana" class="btn btn-red text-xs" style="padding: 8px 12px;">Clear</button>
+            <button class="mana-btn" data-color="W" aria-label="Add white mana">W</button>
+            <button class="mana-btn" data-color="U" aria-label="Add blue mana">U</button>
+            <button class="mana-btn" data-color="B" aria-label="Add black mana">B</button>
+            <button class="mana-btn" data-color="R" aria-label="Add red mana">R</button>
+            <button class="mana-btn" data-color="G" aria-label="Add green mana">G</button>
+            <button class="mana-btn" data-color="C" aria-label="Add colourless mana">C</button>
+            <input id="genericMana" type="number" min="0" max="20" value="0" style="width: 64px;" class="input text-center" placeholder="0">
+            <button id="clearMana" class="btn btn-secondary text-xs">Clear</button>
           </div>
           <input id="cardCost" class="input" value="${form.cost}" placeholder="{2}{U}{U}" readonly>
         </div>
         <div id="creatureStats" class="mb-4" style="${!form.type || !form.type.includes('Creature') ? 'display:none' : ''}">
           <div class="grid grid-2">
             <div>
-              <label>Power</label>
+              <label for="cardPower">Power</label>
               <input id="cardPower" class="input" type="text" value="${form.power}">
             </div>
             <div>
-              <label>Toughness</label>
+              <label for="cardToughness">Toughness</label>
               <input id="cardToughness" class="input" type="text" value="${form.toughness}">
             </div>
           </div>
         </div>
         <div class="mb-4">
-          <label>Effect / Oracle Text</label>
+          <label for="cardEffect">Effect or rules text</label>
           <textarea id="cardEffect" class="input" rows="4">${form.effect}</textarea>
         </div>
         <div class="mb-4">
-          <label>Upload Image</label>
+          <label for="cardImage">Upload an image</label>
           <input id="cardImage" class="input" type="file" accept="image/*">
-          <label class="mt-4">Or Image URL</label>
+          <label class="mt-4" for="cardImageUrl">Or an image url</label>
           <input id="cardImageUrl" class="input" placeholder="https://..." value="${form.imageUrl || ''}">
         </div>
-        <button id="submitCard" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">${state.editingCard ? 'Update card' : 'Create card'}</button>
+        <button id="submitCard" class="btn btn-primary btn-lg" style="width: 100%;">${state.editingCard ? 'Update card' : 'Create card'}</button>
       </div>
       <div>
         <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
@@ -6352,7 +6467,7 @@ function CardCreator() {
     <div class="card">
       <h2 id="collectionCount" class="mb-4" style="font-size: 18px; font-weight: bold;">Collection (${state.cards.length} cards)</h2>
       <div id="collectionGrid" class="grid grid-4">
-       ${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall or create custom cards!</p>'}
+       ${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall, or create your own.</p>'}
 </div>
 
 
@@ -6375,16 +6490,16 @@ function CardCreator() {
     div.querySelector('#creatureStats').style.display = form.type.includes('Creature') ? 'block' : 'none';
     div.querySelector('#preview').innerHTML = `
       <div class="card-preview">
-        <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+        <div style="background:var(--surface-2); padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3 style="font-weight: bold;">${form.name || 'Unnamed Card'}</h3>
-            <span style="font-size: 12px; color: #fbbf24;">${form.cost || ''}</span>
+            <span style="font-size: 12px; color:var(--accent);">${form.cost || ''}</span>
           </div>
           <p class="text-xs text-gray">${form.type}</p>
         </div>
-        <div class="card-img">${form.image || form.imageUrl ? `<img src="${form.image || form.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : '🃏'}</div>
-        ${form.type.includes('Creature') ? `<div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>PWR: ${form.power}</span><span>TGH: ${form.toughness}</span></div>` : ''}
-        <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect text'}</p></div>
+        <div class="card-img">${form.image || form.imageUrl ? `<img src="${form.image || form.imageUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">` : galdurIcon('card', 28)}</div>
+        ${form.type.includes('Creature') ? `<div style="background:var(--surface-2); padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;"><span>PWR: ${form.power}</span><span>TGH: ${form.toughness}</span></div>` : ''}
+        <div style="background:var(--surface-2); padding: 8px; border-radius: 6px;"><p class="text-xs">${form.effect || 'No effect text'}</p></div>
       </div>
     `;
   };
@@ -6431,25 +6546,25 @@ function CardCreator() {
   wrapper.className = 'card-preview';
   wrapper.style.position = 'relative';
   wrapper.innerHTML = `
-    <div style="background: #4b5563; padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
+    <div style="background:var(--surface-2); padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
-        <span style="font-size: 12px; color: #fbbf24;">${c.cost || ''}</span>
+        <span style="font-size: 12px; color:var(--accent);">${c.cost || ''}</span>
       </div>
       <p class="text-xs text-gray">${c.type || ''}</p>
     </div>
     <div class="card-img">
-      ${c.image || c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;height:100%;object-fit:cover;border-radius:6px' }) : '🃏'}
+      ${c.image || c.imageUrl ? cardImageMarkup(c, { style: 'width:100%;height:100%;object-fit:cover;border-radius:6px' }) : galdurIcon('card', 28)}
     </div>
     ${c.type && c.type.includes('Creature') ? `
-      <div style="background: #4b5563; padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
+      <div style="background:var(--surface-2); padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
         <span class="text-sm">PWR: ${c.power}</span><span class="text-sm">TGH: ${c.toughness}</span>
       </div>` : ''
     }
-    <div style="background: #4b5563; padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
+    <div style="background:var(--surface-2); padding: 8px; border-radius: 6px;"><p class="text-xs">${c.effect || 'No effect'}</p></div>
     <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;">
-      <button class="btn btn-secondary text-xs editCard" style="padding: 4px 8px;">Edit</button>
-      <button class="btn btn-red text-xs delCard" style="padding: 4px 8px;">Del</button>
+      <button class="btn btn-secondary text-xs editCard">Edit</button>
+      <button class="btn btn-danger text-xs delCard">Delete</button>
     </div>
   `;
 
@@ -6507,9 +6622,9 @@ function CardCreator() {
         resultsDiv.innerHTML = data.data.slice(0, 40).map((card, idx) => {
           const imgUrl = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '';
           return `
-            <div class="scryfall-result" data-idx="${idx}" style="cursor: pointer; border: 2px solid #374151; border-radius: 6px; overflow: hidden; transition: all 0.2s; position: relative;">
-              ${imgUrl ? `<img src="${imgUrl}" style="width: 100%; display: block;">` : `<div style="padding: 20px; text-align: center; background: #374151; font-size: 12px;">${card.name}</div>`}
-              <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 4px; font-size: 10px; text-align: center;">${card.name}</div>
+            <div class="scryfall-result" data-idx="${idx}" style="cursor: pointer; border:2px solid var(--line-strong); border-radius: 6px; overflow: hidden; transition: all 0.2s; position: relative;">
+              ${imgUrl ? `<img src="${imgUrl}" style="width: 100%; display: block;">` : `<div style="padding: 20px; text-align: center; background:var(--surface-2); font-size: 12px;">${card.name}</div>`}
+              <div style="position: absolute; bottom: 0; left: 0; right: 0; background:rgba(0,0,0,0.8); color:white; padding: 4px; font-size: 12px; text-align: center;">${card.name}</div>
             </div>
           `;
         }).join('');
@@ -6520,7 +6635,7 @@ let hoverDiv = document.getElementById('scryfallHover');
 if (!hoverDiv) {
   hoverDiv = document.createElement('div');
   hoverDiv.id = 'scryfallHover';
-  hoverDiv.style.cssText = 'position:fixed; pointer-events:none; z-index:9999; display:none; background:#1f2937; border:1px solid #374151; border-radius:8px; width:320px; max-width:90vw; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.5)';
+  hoverDiv.style.cssText = 'position:fixed; pointer-events:none; z-index:9999; display:none; background:var(--surface); border:1px solid var(--line-strong); border-radius:8px; width:320px; max-width:90vw; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.5)';
   document.body.appendChild(hoverDiv);
 }
 
@@ -6585,9 +6700,9 @@ resultsDiv.onclick = (e) => {
     const badge = document.createElement('div');
     badge.className = 'added-badge';
     badge.textContent = 'Added';
-    badge.style.cssText = 'position:absolute; top:6px; left:6px; background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px;';
+    badge.style.cssText = 'position:absolute; top:6px; left:6px; background:var(--success-soft); color:white; font-size:12px; padding:2px 6px; border-radius:4px;';
     tile.appendChild(badge);
-    tile.style.borderColor = '#10b981';
+    tile.style.borderColor = 'var(--accent)';
   }
 
   // Live update of the collection without re-rendering:
@@ -6835,7 +6950,7 @@ function DeckBuilder() {
   div.className = 'container';
 
 
-// --- NEW: Deck Statistics CSS (once) ---
+// --- NEW: Deck statistics CSS (once) ---
 (function ensureDeckStatsCSS(){
   if (document.getElementById('deckStatsCSS')) return;
   const s = document.createElement('style');
@@ -6843,8 +6958,8 @@ function DeckBuilder() {
   s.textContent = `
   /* Card-like wrapper */
   .ds-card{
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(139,92,246,0.35);
+    background:rgba(255,255,255,.03);
+    border:1px solid var(--line-strong);
     border-radius: 12px;
     padding: 12px;
   }
@@ -6861,14 +6976,14 @@ function DeckBuilder() {
   .ds-curve{ height: 160px; display:grid; align-items:end; gap:10px;
              grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); padding: 8px 6px 0 6px;}
   .ds-col{ position:relative; height:100%; display:flex; flex-direction:column; justify-content:flex-end; }
-  .ds-seg{ width:100%; border:2px solid #ecfdf5; }
-  .ds-seg.crea{ background: linear-gradient(180deg,#34d399 0%,#10b981 100%); border-radius:8px 8px 0 0; }
-.ds-seg.noncrea{ background: linear-gradient(180deg,#8b5cf6 0%,#6d28d9 100%); border-radius:0 0 8px 8px; }
+  .ds-seg{ width:100%; border:1px solid var(--line); }
+  .ds-seg.crea{ background:var(--accent); border-radius:4px 4px 0 0; }
+.ds-seg.noncrea{ background:var(--surface-3); border-radius:0 0 4px 4px; }
 .ds-seg.noncrea.only{
   /* ensure the top “white outline” always shows */
   border-top-width: 2px !important;
   border-top-style: solid !important;
-  border-top-color: #ecfdf5 !important;
+  border-top-color:var(--line) !important;
 
   /* force the same rounded cap as the green bars */
   border-top-left-radius: 8px !important;
@@ -6876,15 +6991,15 @@ function DeckBuilder() {
   border-radius: 8px 8px 4px 4px !important;
 
   /* optional: add a subtle crisp edge like the green cap */
-  box-shadow: 0 0 0 1px rgba(236,253,245,.65) inset;
+  box-shadow:none;
 }
-  .ds-count{ position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:700; color:#d1fae5; text-shadow:0 1px 0 rgba(0,0,0,.45); }
+  .ds-count{ position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:12px; font-weight:700; color:var(--success); text-shadow:0 1px 0 rgba(0,0,0,.45); }
   .ds-x{ margin-top:6px; display:grid; gap:10px;
-         grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); font-size:11px; opacity:.8; text-align:center; }
+         grid-template-columns: repeat(var(--bins,1), minmax(16px,1fr)); font-size:12px; opacity:.8; text-align:center; }
 
-  .ds-legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; font-size:11px; opacity:.85; }
+  .ds-legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; font-size:12px; opacity:.85; }
   .ds-key{ display:inline-flex; align-items:center; gap:6px; }
-  .ds-swatch{ width:12px; height:12px; border-radius:3px; border:1px solid rgba(255,255,255,.5); }
+  .ds-swatch{ width:12px; height:12px; border-radius:3px; border:1px solid var(--line-strong); }
 
   /* Pie charts (conic-gradient) */
   .ds-pies{ display:grid; gap:12px; grid-template-columns: 1fr; }
@@ -6894,42 +7009,42 @@ function DeckBuilder() {
 .ds-pie{
     --size: 120px;
     width: var(--size); height: var(--size); border-radius: 50%;
-    border:2px solid rgba(236,253,245,0.7);
-    box-shadow: inset 0 0 16px rgba(0,0,0,0.35);
+    border:1px solid var(--line);
+    box-shadow:inset 0 0 16px rgba(0,0,0,0.35);
   }
   .ds-list{ font-size:12px; line-height:1.6; }
   .ds-list .row{ display:flex; justify-content:space-between; gap:12px; }
   .ds-small{ font-size:12px; opacity:.8; }
   
   
-  /* Stretched toggle bar for Deck Statistics */
+  /* Stretched toggle bar for Deck statistics */
 .stats-toggle{
   width: 100%;
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px;
-  background: rgba(31,41,55,0.85);
-  border: 1px solid rgba(139,92,246,0.55);
+  background:var(--surface);
+  border:1px solid var(--line-strong);
   border-radius: 10px;
   font-size: 14px; font-weight: 700;
-  color: #e9d5ff;
+  color:var(--text);
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(139,92,246,0.25);
+  box-shadow:0 4px 14px var(--line-strong);
   transition: border-color .15s ease, background .15s ease, transform .08s ease;
   margin-bottom: 10px;
 }
-.stats-toggle:hover{ border-color:#a78bfa; background: rgba(31,41,55,0.95); }
+.stats-toggle:hover{ border-color:var(--line-strong); background:var(--surface); }
 .stats-toggle:active{ transform: translateY(1px); }
 .stats-toggle .left{ display:flex; align-items:center; gap:10px; }
 .stats-toggle .chip{
   width: 10px; height:10px; border-radius:50%;
-  background: linear-gradient(180deg,#34d399 0%,#10b981 100%);
-  border: 1px solid #ecfdf5;
-  box-shadow: 0 0 0 2px rgba(16,185,129,.25);
+  background:linear-gradient(180deg,var(--success-soft) 0%,var(--success-soft) 100%);
+  border:1px solid var(--success-line);
+  box-shadow:0 0 0 2px var(--success-line);
 }
 .stats-toggle .chev{
   font-size: 16px; opacity: .9; transition: transform .15s ease;
 }
-.stats-toggle.open .chev{ transform: rotate(90deg); } /* ▸ → ▾ */
+.stats-toggle.open .chev{ transform: rotate(90deg); } 
   `;
   document.head.appendChild(s);
 })();
@@ -7027,14 +7142,14 @@ function pieStyleFromCounts(obj, palette){
     const start = acc / total * 360;
     acc += v;
     const end = acc / total * 360;
-    const color = palette[k] || '#999';
+    const color = palette[k] || 'var(--text-3)';
     return `${color} ${start}deg ${end}deg`;
   }).join(', ');
-  return `background: conic-gradient(${stops});`;
+  return `background:conic-gradient(${stops});`;
 }
 
 
-// --- NEW: render Deck Statistics into existing mount ---
+// --- NEW: render Deck statistics into existing mount ---
 function renderDeckStatsInto(containerId){
   const mount = div.querySelector('#' + containerId);
   if (!mount) return;
@@ -7045,16 +7160,16 @@ function renderDeckStatsInto(containerId){
 
   // Colors pie (W/U/B/R/G)
   const manaColors = countManaSymbols(deck);
-  const colorPalette = { W:'#fef08a', U:'#60a5fa', B:'#6b7280', R:'#f87171', G:'#34d399' };
+  const colorPalette = { W:'var(--mana-w)', U:'var(--mana-u)', B:'var(--mana-b)', R:'var(--mana-r)', G:'var(--mana-g)' };
 
   // Types pie
   const tb = typesBreakdown(deck);
   const typeObj = Object.fromEntries(tb);
   // stable palette for common types
   const typePalette = {
-    'Creature':'#10b981', 'Artifact Creature':'#22c55e', 'Instant':'#60a5fa',
-    'Sorcery':'#93c5fd', 'Enchantment':'#f59e0b', 'Artifact':'#d1d5db',
-    'Planeswalker':'#f472b6', 'Basic Land':'#a3e635', 'Land':'#84cc16', 'Other':'#c084fc'
+    'Creature':'#c9a227', 'Artifact Creature':'#a8862c', 'Instant':'#8d8a84',
+    'Sorcery':'#77746e', 'Enchantment':'#e0d3a8', 'Artifact':'#5f5d59',
+    'Planeswalker':'#b8a97c', 'Basic Land':'#4a4845', 'Land':'#3a3936', 'Other':'#2b2a28'
   };
 
   // Build stacked curve columns
@@ -7076,8 +7191,8 @@ function renderDeckStatsInto(containerId){
   // Legends
   const curveLegend = `
     <div class="ds-legend">
-      <span class="ds-key"><span class="ds-swatch" style="background:#10b981; border-color:#ecfdf5"></span> Creature</span>
-      <span class="ds-key"><span class="ds-swatch" style="background:#8b5cf6; border-color:#ede9fe"></span> Non-Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:var(--accent); border-color:var(--accent)"></span> Creature</span>
+      <span class="ds-key"><span class="ds-swatch" style="background:var(--surface-3); border-color:var(--line-strong)"></span> Non-creature</span>
       <span class="ds-small">Avg CMC (spells): <strong>${avg.toFixed(2)}</strong></span>
     </div>`;
 
@@ -7095,7 +7210,7 @@ function renderDeckStatsInto(containerId){
     .sort((a,b)=>b[1]-a[1])
     .map(([k,v])=>{
       const pct = (v/typeTotal*100).toFixed(1)+'%';
-      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'#999'}"></span>`;
+      const sw = `<span class="ds-swatch" style="background:${typePalette[k]||'var(--text-3)'}"></span>`;
       return `<div class="row"><span class="ds-key">${sw}${k}</span><span>${v} <span class="ds-small">(${pct})</span></span></div>`;
     }).join('');
     
@@ -7121,7 +7236,7 @@ function renderDeckStatsInto(containerId){
           ${curveLegend}
         </div>
 
-        <!-- Colors in Mana Cost -->
+        <!-- Colors in Mana cost -->
         <div class="ds-piecard">
           <div class="ds-title">Colours in mana cost</div>
           <div class="ds-piewrap">
@@ -7198,7 +7313,7 @@ const cols = bins.map(b=>{
       <div class="card-preview">
         <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
           <div class="text-center mb-2" style="font-weight:700;font-size:16px;flex:1;">${c.name}</div>
-          ${c.cost ? `<div style="font-size:14px;color:#fbbf24;white-space:nowrap;">${c.cost}</div>` : ''}
+          ${c.cost ? `<div style="font-size:14px;color:var(--accent);white-space:nowrap;">${c.cost}</div>` : ''}
         </div>
         <div class="text-xs text-gray text-center mb-2">${c.type || ''}</div>
         ${cardImageMarkup(c, { style: 'width:100%;border-radius:6px;margin-bottom:12px;display:block' })}
@@ -7408,14 +7523,16 @@ function cloneCard(base){
   const issuesHtml = (deckValidation.status === 'ready' || deckEmpty) ? '' : `
     <div id="deckIssues" class="deck-validation compact deck-validation-${deckValidation.status}${deckEmpty ? ' is-empty' : ''}">
       <div class="validation-issues">
-        ${[...deckValidation.errors, ...deckValidation.warnings]
-          .map(m => `<div class="${deckEmpty ? 'note' : 'error'}">${htmlEscape(m)}</div>`).join('')}
+        ${[
+          ...deckValidation.errors.map(m => ({ kind: 'error', m })),
+          ...deckValidation.warnings.map(m => ({ kind: 'warning', m }))
+        ].map(i => `<div class="${deckEmpty ? 'note' : i.kind}">${htmlEscape(i.m)}</div>`).join('')}
       </div>
     </div>`;
 
   // ---------- template ----------
   div.innerHTML = `
-    ${topBarHtml({ title: 'Deck Editor', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Play', actionId: 'goPlayBtn' })}
+    ${topBarHtml({ title: 'Deck editor', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Play', actionId: 'goPlayBtn' })}
 
     <div class="editor-head">
       <div class="segmented" role="group" aria-label="Which deck to edit">
@@ -7431,7 +7548,7 @@ function cloneCard(base){
     </div>
 
     <div class="editor-toolbar">
-      <div class="segmented" role="group" aria-label="Deck Editor section">
+      <div class="segmented" role="group" aria-label="Deck editor section">
         <button id="tabDeck" class="${state.builderTab !== 'cards' ? 'active' : ''}">Build deck</button>
         <button id="tabCards" class="${state.builderTab === 'cards' ? 'active' : ''}">Design cards</button>
       </div>
@@ -7505,7 +7622,7 @@ Island x14
 
         <div>
           <div id="importStatus" class="text-xs text-gray">Status: collapsed.</div>
-          <div id="importPreview" style="margin-top:8px;max-height:200px;overflow:auto;border:1px solid #374151;border-radius:8px;padding:8px"></div>
+          <div id="importPreview" style="margin-top:8px;max-height:200px;overflow:auto;border:1px solid var(--line-strong);border-radius:8px;padding:8px"></div>
         </div>
       </div>
     </div>
@@ -7829,7 +7946,7 @@ Island x14
     importApply.disabled = true;
   };
 
-// --- Deck Statistics toggle wiring ---
+// --- Deck statistics toggle wiring ---
 const statsToggle = div.querySelector('#statsToggle');
 const statsCard   = div.querySelector('#deckStatsCard');
 
@@ -8123,7 +8240,7 @@ function hordeAttack(){
   }, ({ count, damage }) => `Horde attack: ${count} creature${count === 1 ? '' : 's'} dealt ${damage} damage.`);
 }
 
-// --- Basic Land Game helpers (top level so the AI autopilot can score/win) ---
+// --- Basic land game helpers (top level so the AI autopilot can score/win) ---
 
 function basicLandName(card){
   return BASIC_LAND_NAMES.includes(card?.name) ? card.name : '';
@@ -8155,7 +8272,7 @@ function checkLandGameVictory(){
     const hasFive = BASIC_LAND_NAMES.some(name => counts[name] >= 5);
     if (hasDomain || hasFive) {
       state.winner = playerNum;
-      state.actionMessage = `Player ${playerNum} completes the Basic Land Game goal.`;
+      state.actionMessage = `Player ${playerNum} completes the Basic land game goal.`;
       return;
     }
   }
@@ -8187,24 +8304,24 @@ function GameBoard() {
       connUI = '<div class="card text-green mb-4 text-center p-4">Connected. Ready to play.</div>';
     } else if (state.onlineMode && state.waitingForAnswer) {
       connUI = `
-        <div class="card" style="background: rgba(30, 64, 175, 0.2); border-color: #3b82f6; margin-bottom: 24px;">
+        <div class="card" style="background:var(--surface-2); border-color:var(--line); margin-bottom: 24px;">
           <h3 class="mb-4" style="font-weight: bold;">Step 1. Share this code</h3>
-          <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 11px;">${state.roomCode}</textarea>
-          <button id="copyOffer" class="btn btn-blue mb-4" style="width: 100%;">Copy Code</button>
-          <hr style="border-color: #4b5563; margin: 16px 0;">
+          <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 12px;">${state.roomCode}</textarea>
+          <button id="copyOffer" class="btn btn-secondary mb-4" style="width: 100%;">Copy code</button>
+          <hr style="border-color:var(--line-strong); margin: 16px 0;">
           <h3 class="mb-4" style="font-weight: bold;">Step 2. Enter their response</h3>
-          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 11px;"></textarea>
-          <button id="submitAnswer" class="btn btn-green" style="width: 100%;">Connect</button>
+          <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 12px;"></textarea>
+          <button id="submitAnswer" class="btn btn-primary" style="width: 100%;">Connect</button>
           ${statusLine}
           ${localOnlyWarning}
         </div>
       `;
     } else if (state.onlineMode && state.answerCode) {
       connUI = `
-        <div class="card" style="background: rgba(5, 150, 105, 0.2); border-color: #059669; margin-bottom: 24px;">
+        <div class="card" style="background:var(--success-soft); border-color:var(--success-line); margin-bottom: 24px;">
           <h3 class="mb-4" style="font-weight: bold;">Send this code back</h3>
-          <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 11px;">${state.answerCode}</textarea>
-          <button id="copyAnswer" class="btn btn-green" style="width: 100%;">Copy Answer Code</button>
+          <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 12px;">${state.answerCode}</textarea>
+          <button id="copyAnswer" class="btn btn-primary" style="width: 100%;">Copy answer code</button>
           <p class="text-green text-sm mt-4">Waiting for the host.</p>
           ${statusLine}
           ${localOnlyWarning}
@@ -8284,7 +8401,7 @@ function GameBoard() {
               : state.coop ? 'Co-op: two survivors share one board against the computer.'
               : state.vsAI ? 'The computer plays the opposing seat and takes its own turns.'
               : 'Local game. Two players share this device.'}</p>
-          <button id="startBtn" class="btn btn-primary" style="padding: 16px 32px; font-size: 18px;" ${(!decksReady || waitForHost) ? 'disabled' : ''}>Start Game</button>
+          <button id="startBtn" class="btn btn-primary btn-lg" ${(!decksReady || waitForHost) ? 'disabled' : ''}>Start Game</button>
           ${mode.id === 'cube' && !sharedStackReady ? '<button id="starterCubeReady" class="btn btn-secondary mt-4">Generate Starter Cube Stack</button>' : ''}
           ${mode.id === 'dandan' && !sharedStackReady ? '<button id="starterDandanReady" class="btn btn-secondary mt-4">Generate Dandan Library</button>' : ''}
           ${readyMessage ? `<p class="${decksReady ? 'text-gray' : 'text-red'} mt-4">${htmlEscape(readyMessage)}</p>` : ''}
@@ -8780,7 +8897,7 @@ function GameBoard() {
               <div class="text-sm">Attacking with <strong>${chosen.length}</strong>. Opponent drops to <strong>${Math.max(0, opp.health - totalPower)}</strong> life if nothing blocks.</div>
               <div class="flex" style="gap:8px">
                 <button id="attackAll" class="btn btn-secondary text-sm">Select all</button>
-                <button id="confirmAttack" class="btn btn-red text-sm" ${chosen.length ? '' : 'disabled'}>Attack</button>
+                <button id="confirmAttack" class="btn btn-primary text-sm" ${chosen.length ? '' : 'disabled'}>Attack</button>
               </div>
             </div>`
           : '<div class="text-center text-gray p-4">No untapped creatures are able to attack.</div>'}
@@ -8867,11 +8984,11 @@ function GameBoard() {
     const repeatNames = [...new Set(landGameFieldCards(me).map(c => c.name).filter(name => name !== 'Plains'))];
     const repeatButtons = repeatNames.map(name => `<button class="repeatLandEffect btn btn-secondary text-xs" data-land="${name}">Repeat ${name}</button>`).join('');
     return `
-      <div class="card p-3 mb-3" style="background:rgba(5,150,105,.16);border-color:#10b981">
-        <div class="text-xs text-gray mb-2">Basic Land Game effect</div>
+      <div class="card p-3 mb-3" style="background:var(--success-soft);border-color:var(--success-line)">
+        <div class="text-xs text-gray mb-2">Basic land game effect</div>
         ${land === 'Plains'
           ? `<div class="flex" style="gap:8px;flex-wrap:wrap">${repeatButtons || '<span class="text-xs text-gray">No non-Plains land to repeat.</span>'}</div>`
-          : `<button id="resolveLandGameEffect" class="btn btn-green text-sm" style="width:100%">Resolve ${land}</button>`}
+          : `<button id="resolveLandGameEffect" class="btn btn-primary text-sm" style="width:100%">Resolve ${land}</button>`}
       </div>
     `;
   }
@@ -8890,7 +9007,7 @@ function GameBoard() {
         <div class="card-preview">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
             <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${htmlEscape(c.name || '')}</div>
-            ${c.cost ? `<div style="font-size: 12px; color: #fbbf24;">${htmlEscape(c.cost)}</div>` : ''}
+            ${c.cost ? `<div style="font-size: 12px; color:var(--accent);">${htmlEscape(c.cost)}</div>` : ''}
           </div>
           <div class="text-xs text-gray text-center mb-2">${htmlEscape(c.type || '')}${c.isToken ? ' (Token)' : ''}</div>
           ${cardImageMarkup(c, { style: 'width:100%;border-radius:6px;margin-bottom:8px;display:block' })}
@@ -8969,13 +9086,13 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
   // load-bearing: other handlers and the test suite key off them. A player's
   // own piles double as drop targets, so a card can be dragged from the
   // battlefield straight onto the graveyard.
-  const pileBox = (id, label, count, clickable = true, dropTarget = '') => {
+  const pileBox = (id, label, count, clickable = true, dropTarget = '', icon = '') => {
     const body = `
-      <span class="zone-title">${htmlEscape(label)}</span>
+      <span class="zone-title">${icon ? galdurIcon(icon, 12) : ''}${htmlEscape(label)}</span>
       <span class="pile-count">${count}</span>`;
     const drop = dropTarget ? ` data-drop-target="${dropTarget}"` : '';
     return clickable
-      ? `<button class="battle-zone pile" id="${id}"${drop}>${body}</button>`
+      ? `<button class="battle-zone pile" id="${id}"${drop} aria-label="${htmlEscape(label)}, ${count} cards">${body}</button>`
       : `<div class="battle-zone pile is-static"${drop}>${body}</div>`;
   };
 
@@ -8988,12 +9105,13 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     // Life is adjustable wherever a human holds the seat.
     const humanSeat = isMe || !state.vsAI;
     const step = (id, sign, title) =>
-      `<button id="${id}" class="life-step" title="${title}">${sign}</button>`;
+      `<button id="${id}" class="life-step" title="${title}" aria-label="${title}">${sign}</button>`;
+    const lowLife = player.health <= 5;
     const life = `
-      ${humanSeat ? step(isMe ? 'minusLP' : 'oppMinusLP', '−', 'Lose 1 life') : ''}
-      <span class="stat-life">${htmlEscape(name)} - LP: ${player.health}</span>
+      ${humanSeat ? step(isMe ? 'minusLP' : 'oppMinusLP', '-', 'Lose 1 life') : ''}
+      <span class="stat-life${lowLife ? ' is-low' : ''}">${galdurIcon('life', 13)}${htmlEscape(name)} - LP: ${player.health}</span>
       ${humanSeat ? step(isMe ? 'plusLP' : 'oppPlusLP', '+', 'Gain 1 life') : ''}`;
-    const handTile = `<div class="stat-tile"><span class="zone-title">Hand</span><span class="stat-count">${player.hand.length}</span></div>`;
+    const handTile = `<div class="stat-tile"><span class="zone-title">${galdurIcon('card', 12)}Hand</span><span class="stat-count">${player.hand.length}</span></div>`;
     const piles = [
       commanderZoneOn
         ? pileBox(isMe ? 'viewCommander' : 'viewOppCommander', commandMeta.shortLabel,
@@ -9001,12 +9119,12 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         : '',
       // The opponent's library is hidden information: count only, no click.
       pileBox(isMe ? 'viewDeck' : '', sharedGame ? shared.label : 'Library',
-        deckCount, isMe || sharedGame, isMe ? 'deck' : ''),
+        deckCount, isMe || sharedGame, isMe ? 'deck' : '', 'library'),
       handTile,
       pileBox(isMe ? 'viewGY' : 'viewOppGY', 'Graveyard',
-        (player.graveyard || []).length, true, isMe ? 'graveyard' : ''),
+        (player.graveyard || []).length, true, isMe ? 'graveyard' : '', 'graveyard'),
       pileBox(isMe ? 'viewExile' : 'viewOppExile', 'Exile',
-        (player.exile || []).length, true, isMe ? 'exile' : '')
+        (player.exile || []).length, true, isMe ? 'exile' : '', 'exile')
     ].filter(Boolean).join('');
     const notes = [
       (!isMe && sharedGame) ? `<span class="stat-note">${htmlEscape(shared.label)} center stack, top-to-bottom draw</span>` : '',
@@ -9088,12 +9206,12 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
             <button id="drawBtn" class="btn btn-secondary text-xs">Draw (${myDeckCount})</button>
             <button id="upkeepBtn" class="btn btn-secondary text-xs">Upkeep</button>
             <button id="undoAction" class="btn btn-secondary text-xs" ${(state.gameHistory || []).length ? '' : 'disabled'}>Undo</button>
-            ${state.vsAI ? '<button id="declareAttack" class="btn btn-red text-xs">Attack</button>' : ''}
+            ${state.vsAI ? '<button id="declareAttack" class="btn btn-secondary text-xs">Attack</button>' : ''}
             <button id="tidyField" class="btn btn-secondary text-xs" title="Arrange your battlefield into tidy rows">Tidy</button>
             <button id="saveReplay" class="btn btn-secondary text-xs" title="Save this game as a replay file">Replay</button>
             <button id="createToken" class="btn btn-secondary text-xs">Create token</button>
-            ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal top</button><button id="burnSharedTop" class="btn btn-red text-xs">Burn top</button><button id="shuffleSharedStack" class="btn btn-secondary text-xs">Shuffle stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
-            ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-secondary text-xs">Horde reveal</button><button id="hordeAttack" class="btn btn-red text-xs">Horde attack</button>' : ''}
+            ${sharedGame ? `<button id="revealSharedTop" class="btn btn-secondary text-xs">Reveal top</button><button id="burnSharedTop" class="btn btn-danger text-xs">Burn top</button><button id="shuffleSharedStack" class="btn btn-secondary text-xs">Shuffle stack</button><button id="viewSharedGY" class="btn btn-secondary text-xs">Shared GY (${shared.graveyard.length})</button>` : ''}
+            ${hordeMode && state.currentPlayer === 1 ? '<button id="hordeReveal" class="btn btn-secondary text-xs">Horde reveal</button><button id="hordeAttack" class="btn btn-secondary text-xs">Horde attack</button>' : ''}
             <button id="mulliganBtn" class="btn btn-secondary text-xs" ${rules.noMulligan ? 'disabled' : ''}>Mulligan</button>
             ${state.coop ? '<button id="passSeat" class="btn btn-secondary text-xs">Pass to teammate</button>' : ''}
             <label class="text-xs text-gray hand-zoom-label">
@@ -9122,19 +9240,19 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
               <div style="font-weight:800;font-size:13px">${htmlEscape(top.card?.name || 'Spell')}</div>
               <div class="text-xs text-gray mt-1">Player ${top.owner} • ${htmlEscape(top.card?.type || '')}</div>
               <div class="flex mt-3" style="gap:6px;flex-wrap:wrap">
-                <button id="resolveStackTop" class="btn btn-green text-xs">Resolve Top</button>
-                <button id="counterStackTop" class="btn btn-red text-xs">Counter Top</button>
+                <button id="resolveStackTop" class="btn btn-primary text-xs">Resolve top</button>
+                <button id="counterStackTop" class="btn btn-danger text-xs">Counter top</button>
               </div>
               ${gameStack.length > 1 ? `<div class="text-xs text-gray mt-2">${gameStack.length - 1} below</div>` : ''}
             `;
           })() : '<div class="text-xs text-gray text-center">Stack empty</div>'}
         </div>
-        <h3 class="text-sm font-bold mb-2 text-center">Card Info</h3>
+        <h3 class="text-sm font-bold mb-2 text-center">Card info</h3>
         <div id="cardInfo">
           <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>
         </div>
-        <div class="mt-4" style="border-top:1px solid rgba(255,255,255,.12);padding-top:12px">
-          <h3 class="text-sm font-bold mb-2 text-center">Action Log</h3>
+        <div class="mt-4" style="border-top:1px solid var(--line);padding-top:12px">
+          <h3 class="text-sm font-bold mb-2 text-center">Action log</h3>
           <div id="actionLog" class="battle-action-log">
             ${logRows.map(row => `
               <div class="log-row${row.bot ? ' bot' : ''}">
@@ -9152,25 +9270,25 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         <div class="modal-content" style="max-width: 400px;">
           <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">Create token</h3>
           <div class="mb-4">
-            <label>Token Name</label>
+            <label for="tokenName">Token name</label>
             <input id="tokenName" class="input" placeholder="Soldier Token" value="Token">
           </div>
           <div class="mb-4">
-            <label>Token Type</label>
-            <input id="tokenType" class="input" placeholder="Creature — Soldier" value="Creature Token">
+            <label for="tokenType">Token type</label>
+            <input id="tokenType" class="input" placeholder="Creature - Soldier" value="Creature Token">
           </div>
           <div class="grid grid-2 mb-4">
             <div>
-              <label>Power</label>
+              <label for="tokenPower">Power</label>
               <input id="tokenPower" class="input" type="number" value="1">
             </div>
             <div>
-              <label>Toughness</label>
+              <label for="tokenToughness">Toughness</label>
               <input id="tokenToughness" class="input" type="number" value="1">
             </div>
           </div>
           <div class="mb-4">
-            <label>Effect (Optional)</label>
+            <label for="tokenEffect">Effect (optional)</label>
             <textarea id="tokenEffect" class="input" rows="2" placeholder="Flying, Haste"></textarea>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -9185,27 +9303,27 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     ${state.selectedFieldCard !== null ? (() => {
   const sel = me[state.selectedFieldCard.zone][state.selectedFieldCard.idx];
   return `
-  <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #8b5cf6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 360px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);">
-    <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #a78bfa;">${sel.name}</div>
+  <div class="card-pop" role="dialog" aria-label="Card actions">
+    <div class="card-pop-title">${htmlEscape(sel.name)}</div>
     ${landGameEffectPanelHtml(sel)}
 
     <!-- ACTION GRID: always two columns, evenly spaced -->
-    <div class="action-grid" style="display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; align-items: stretch;">
-      <button id="tapCard" class="btn ${sel.tapped ? 'btn-green' : 'btn-blue'} text-sm" style="padding: 14px; width:100%; text-align:center;">${sel.tapped ? 'Untap' : 'Tap'}</button>
-      <button id="toHand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%; text-align:center;">To hand</button>
+    <div class="action-grid">
+      <button id="tapCard" class="btn btn-secondary${sel.tapped ? ' is-on' : ''} text-sm" style="width:100%">${sel.tapped ? 'Untap' : 'Tap'}</button>
+      <button id="toHand" class="btn btn-secondary text-sm" style="width:100%">To hand</button>
 
-      <button id="toGraveyard" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">To graveyard</button>
-      <button id="toExile" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">To exile</button>
+      <button id="toGraveyard" class="btn btn-danger text-sm" style="width:100%">To graveyard</button>
+      <button id="toExile" class="btn btn-danger text-sm" style="width:100%">To exile</button>
 
-      <button id="plusCounter" class="btn btn-green text-sm" style="padding: 14px; width:100%; text-align:center;">+1/+1 counter</button>
-      <button id="minusCounter" class="btn btn-red text-sm" style="padding: 14px; width:100%; text-align:center;">-1/-1 counter</button>
+      <button id="plusCounter" class="btn btn-secondary text-sm" style="width:100%">+1/+1 counter</button>
+      <button id="minusCounter" class="btn btn-secondary text-sm" style="width:100%">-1/-1 counter</button>
 
       <!-- COUNTERS: spans full width so grid stays balanced; collapsed by default -->
       <details class="counter-panel" style="grid-column: 1 / -1; margin-top: 0;">
-        <summary class="btn btn-secondary text-sm" style="display:block; width: 100%; padding: 14px; text-align:center;">
+        <summary class="btn btn-secondary text-sm" style="width:100%">
           More counters
         </summary>
-        <div style="padding: 10px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; margin-top: 8px;">
+        <div class="counter-pad">
           <div class="text-xs mb-1">P/T: <span id="ptNow"></span></div>
           <div class="flex mb-2">
             <button id="incP" class="btn btn-secondary text-xs">+P</button>
@@ -9222,13 +9340,13 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         </div>
       </details>
 
-      <button id="toTopDeck" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">To top of library</button>
-      <button id="toBottomDeck" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">To bottom of library</button>
-      <button id="duplicateCard" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">Duplicate as token</button>
-      ${commanderZoneOn ? `<button id="fieldToCommand" class="btn btn-secondary text-sm" style="padding: 14px; width:100%;">To ${htmlEscape(commandMeta.label)}</button>` : ''}
+      <button id="toTopDeck" class="btn btn-secondary text-sm" style="width:100%">To top of library</button>
+      <button id="toBottomDeck" class="btn btn-secondary text-sm" style="width:100%">To bottom of library</button>
+      <button id="duplicateCard" class="btn btn-secondary text-sm" style="width:100%">Duplicate as token</button>
+      ${commanderZoneOn ? `<button id="fieldToCommand" class="btn btn-secondary text-sm" style="width:100%">To ${htmlEscape(commandMeta.label)}</button>` : ''}
     </div>
 
-    <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width: 100%; padding: 14px;">Close</button>
+    <button id="cancelFieldSelect" class="btn btn-secondary text-sm mt-3" style="width:100%">Close</button>
   </div>`;
 })() : ''}
 
@@ -9243,20 +9361,20 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       <div class="modal">
         <div class="modal-content" style="max-width: 700px;">
           <div class="flex justify-between mb-4">
-            <h3 style="font-weight: bold; font-size: 18px;">${state.viewingZone.title}</h3>
+            <h3>${htmlEscape(state.viewingZone.title)}</h3>
             <button id="closeZone" class="btn btn-secondary text-xs">Close</button>
           </div>
           ${state.viewingZone.owner === 'me' && state.selectedZoneCard !== null && state.viewingZone.cards[state.selectedZoneCard] ? `
-            <div style="background: #374151; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-              <div class="text-center mb-3" style="font-weight: bold; color: #fbbf24;">${state.viewingZone.cards[state.selectedZoneCard].name}</div>
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+            <div class="zone-pick">
+              <div class="zone-pick-title">${htmlEscape(state.viewingZone.cards[state.selectedZoneCard].name)}</div>
+              <div class="zone-pick-actions">
                 <button id="zoneToHand" class="btn btn-primary text-xs">To hand</button>
                 <button id="zoneToUpper" class="btn btn-primary text-xs">To creatures</button>
                 <button id="zoneToLower" class="btn btn-primary text-xs">To support</button>
                 ${state.viewingZone.zone !== 'deck' ? '<button id="zoneToDeck" class="btn btn-secondary text-sm">To deck</button>' : ''}
                 ${commanderZoneOn && state.viewingZone.zone !== 'commanderZone' ? `<button id="zoneToCommand" class="btn btn-secondary text-xs">${htmlEscape(commandMeta.shortLabel)}</button>` : ''}
-                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-red text-xs">Exile</button>' : ''}
-                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-red text-xs">To graveyard</button>' : ''}
+                ${state.viewingZone.zone === 'graveyard' ? '<button id="zoneToExile" class="btn btn-danger text-xs">Exile</button>' : ''}
+                ${state.viewingZone.zone === 'exile' ? '<button id="zoneToGY" class="btn btn-danger text-xs">To graveyard</button>' : ''}
                 <button id="cancelZoneSelect" class="btn btn-secondary text-xs">Cancel</button>
               </div>
             </div>
@@ -9268,23 +9386,23 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       </div>
     ` : ''}
     ${state.selectedCard !== null && me.hand[state.selectedCard] ? `
-      <div style="position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 3px solid #3b82f6; border-radius: 12px; padding: 20px; z-index: 9999; min-width: 340px; box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);">
-        <div class="text-center mb-4" style="font-weight: bold; font-size: 18px; color: #60a5fa;">${me.hand[state.selectedCard].name}</div>
+      <div class="card-pop" role="dialog" aria-label="Hand card actions">
+        <div class="card-pop-title">${htmlEscape(me.hand[state.selectedCard].name)}</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           ${(() => {
             const card = me.hand[state.selectedCard];
             const suggested = defaultZoneForCard(card);
             // The suggested zone leads; the others stay available for odd cases.
             return [suggested, ...BATTLE_ZONE_KEYS.filter(k => k !== suggested)]
-              .map((k, i) => `<button class="placeCard btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} text-sm" data-zone="${k}" style="padding:14px${i === 0 ? ';grid-column:1 / -1' : ''}">${i === 0 ? '▶ Play to ' : ''}${htmlEscape(battleZoneLabel(k))}</button>`)
+              .map((k, i) => `<button class="placeCard btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} text-sm" data-zone="${k}" style="${i === 0 ? 'grid-column:1 / -1' : ''}">${i === 0 ? 'Play to ' : ''}${htmlEscape(battleZoneLabel(k))}</button>`)
               .join('');
           })()}
-          <button id="castToStack" class="btn btn-blue text-sm" style="padding: 14px; grid-column:1 / -1;">Cast to Stack</button>
-          <button id="discardCard" class="btn btn-red text-sm" style="padding: 14px;">Discard</button>
-          <button id="toDeck" class="btn btn-green text-sm" style="padding: 14px;">To deck</button>
-          ${commanderZoneOn ? `<button id="toCommand" class="btn btn-secondary text-sm" style="padding: 14px; grid-column:1 / -1;">To ${htmlEscape(commandMeta.label)}</button>` : ''}
+          <button id="castToStack" class="btn btn-secondary text-sm" style="grid-column:1 / -1">Cast to stack</button>
+          <button id="discardCard" class="btn btn-danger text-sm">Discard</button>
+          <button id="toDeck" class="btn btn-secondary text-sm">To deck</button>
+          ${commanderZoneOn ? `<button id="toCommand" class="btn btn-secondary text-sm" style="grid-column:1 / -1">To ${htmlEscape(commandMeta.label)}</button>` : ''}
         </div>
-        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width: 100%; padding: 14px;">Cancel</button>
+        <button id="cancelSelect" class="btn btn-secondary text-sm mt-4" style="width:100%">Cancel</button>
       </div>
     ` : ''}
     ${state.replayMode ? (() => {
@@ -9302,7 +9420,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
           <input id="replayScrub" type="range" min="0" max="${Math.max(0, frames.length - 1)}"
                  value="${state.replayIndex}" style="flex:1;min-width:180px">
           <span class="text-xs text-gray">${state.replayIndex + 1} / ${frames.length}</span>
-          <button id="replayExit" class="btn btn-red text-xs">Close</button>
+          <button id="replayExit" class="btn btn-secondary text-xs">Close</button>
         </div>
         <div class="text-xs text-gray mt-2">${htmlEscape(f.message || f.actionType || '')}</div>
       </div>`;
@@ -9319,7 +9437,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       return `
       <div class="modal">
         <div class="modal-content text-center" style="max-width:460px">
-          <h2 class="mb-2" style="font-size:28px;font-weight:800">${outcome}</h2>
+          <h2 class="mb-2 outcome ${state.winner === 'draw' ? 'is-draw' : (state.winner === state.currentPlayer ? 'is-win' : 'is-loss')}">${outcome}</h2>
           <div class="text-xs text-gray mb-2">${htmlEscape(mode.title)} · Turn ${state.turnCount || 1}</div>
           <p class="text-gray mb-4">${detail}</p>
           <div class="flex" style="gap:10px;justify-content:center;flex-wrap:wrap">

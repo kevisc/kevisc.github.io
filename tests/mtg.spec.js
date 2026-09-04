@@ -634,3 +634,75 @@ test('A solo draft starts from the setup form and deals a pick row', async ({ pa
     expect(box.bottom).toBeLessThanOrEqual(box.h);
   }
 });
+
+// The interface carries no emoji. Pictographs, dingbats and arrow glyphs all
+// read as decoration next to the plain type the rest of the app uses, so the
+// rendered DOM must stay clear of them on every screen a player passes through.
+test('No emoji survive in the rendered interface', async ({ page }) => {
+  await login(page);
+
+  const scan = () => page.evaluate(() => {
+    const ranges = [
+      [0x2190, 0x21ff], [0x2300, 0x23ff], [0x2460, 0x24ff], [0x25a0, 0x27bf],
+      [0x2900, 0x297f], [0x2b00, 0x2bff], [0x3030, 0x303d], [0xfe0f, 0xfe0f],
+      [0x1f000, 0x1faff]
+    ];
+    const isEmoji = (cp) => ranges.some(([a, b]) => cp >= a && cp <= b);
+    const found = [];
+    const record = (where, text) => {
+      for (const ch of String(text || '')) {
+        if (isEmoji(ch.codePointAt(0))) found.push(`${where}: ${ch} (U+${ch.codePointAt(0).toString(16)})`);
+      }
+    };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) record('text', node.nodeValue);
+    document.querySelectorAll('[title], [aria-label], [placeholder], [alt], [value]').forEach(el => {
+      ['title', 'aria-label', 'placeholder', 'alt', 'value'].forEach(a => {
+        if (el.hasAttribute(a)) record(a, el.getAttribute(a));
+      });
+    });
+    return [...new Set(found)];
+  });
+
+  // Menu
+  expect(await scan()).toEqual([]);
+
+  // Battle menu
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP, s = A.state;
+    s.selectedMode = 'casual';
+    s.battleMode = 'casual';
+    s.screen = 'battlemenu';
+    A.render();
+  });
+  expect(await scan()).toEqual([]);
+
+  // Game board, with cards on the table and a card menu open.
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP, s = A.state;
+    const deck = (owner) => Array.from({ length: 40 }, (_, i) => ({
+      id: `${owner}-${i}`, name: i % 3 ? `Bear ${i}` : 'Forest',
+      type: i % 3 ? 'Creature - Bear' : 'Basic Land - Forest',
+      cost: i % 3 ? '{1}{G}' : '', colors: ['G'], effect: i % 3 ? 'Trample.' : '',
+      power: i % 3 ? 2 : 0, toughness: i % 3 ? 2 : 0, rarity: 'common', imageUrl: ''
+    }));
+    s.decks.player1 = deck('p1');
+    s.decks.player2 = deck('p2');
+    A.render();
+  });
+  await page.locator('#playLocal').click();
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#endTurn')).toBeVisible();
+  expect(await scan()).toEqual([]);
+
+  // The victory modal is part of the game screen.
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    A.state.gameState.player2.health = 0;
+    A.checkWinner();
+    A.render();
+  });
+  await expect(page.locator('#returnBtn')).toBeVisible();
+  expect(await scan()).toEqual([]);
+});
