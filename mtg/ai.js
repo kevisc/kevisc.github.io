@@ -1256,7 +1256,11 @@ function boot(){
       const n = Math.round(landTarget * symbolCounts[col] / total);
       for (let i = 0; i < n; i++) lands.push(A.makeBasicLandCard(NAMES[col], i + 1, 'bot'));
     }
-    while (lands.length < landTarget) lands.push(A.makeBasicLandCard('Plains', lands.length + 1, 'bot'));
+    // Rounding can leave the deck a land or two short. Pad with the colour the
+    // bot drafted most, not with a fixed Plains.
+    const main = Object.keys(symbolCounts).reduce((a, b) => (symbolCounts[b] > symbolCounts[a] ? b : a), 'W');
+    const padName = symbolCounts[main] > 0 ? NAMES[main] : (lands[0]?.name || NAMES.W);
+    while (lands.length < landTarget) lands.push(A.makeBasicLandCard(padName, lands.length + 1, 'bot'));
     D.off.p2 = picks.concat(lands);
     D.off.p2LandsDone = true;
     A.toast(`Bot finishes its deck (${D.off.p2.length} cards).`);

@@ -18,6 +18,9 @@ const state = {
   studioTab: 'play',
   quickPlayBusy: false,      // Quick play is fetching a real-card deck
   deckDeleteConfirm: null,   // deck library id awaiting an inline delete confirm
+  deckClearConfirm: false,   // the decklist column is asking before it empties the slot
+  importReplace: false,      // import adds to the deck unless the player picks replace
+  deckClearUndo: null,       // { key, cards, at } so a cleared deck can come back
   deckRenaming: null,        // deck library id being renamed inline
   deckLibraryTarget: null,   // which seat a library Load fills next
   builderScryQuery: '',      // last Scryfall query typed in the Deck editor
@@ -702,8 +705,7 @@ function makeStarterSurvivorDeck(owner = 'survivor'){
       deck.push(makeGeneratedCard(name, type, cost, colors, effect, power, toughness, { rarity: 'common' }));
     }
   }
-  for (let i = 0; i < 11; i++) deck.push(makeBasicLandCard('Plains', `${owner}_p_${i}`, owner));
-  for (let i = 0; i < 11; i++) deck.push(makeBasicLandCard('Forest', `${owner}_f_${i}`, owner));
+  deck.push(...makeBasicLandsFor(deck, 22, owner, ['W', 'G']));
   return shuffleCopy(deck);
 }
 
@@ -872,8 +874,7 @@ function makeBossDeck(){
         { rarity: cycle === 0 ? 'rare' : 'uncommon' }));
     }
   }
-  for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Swamp', `boss_s_${i}`, 'boss'));
-  for (let i = 0; i < 12; i++) deck.push(makeBasicLandCard('Mountain', `boss_m_${i}`, 'boss'));
+  deck.push(...makeBasicLandsFor(deck, 24, 'boss', ['B', 'R']));
   return shuffleCopy(deck);
 }
 
@@ -1627,27 +1628,79 @@ function usableDraftCard(c){
   return !(c.type || '').toLowerCase().includes('land');
 }
 
-// Load (and shuffle) one page of results for a query. Large result sets pull a
-// random page so repeat drafts don't keep seeing the same alphabetical head.
-function poolSearchUrl(query, page){
-  const base = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=cards`;
-  return page > 1 ? `${base}&page=${page}` : base;
+// Scryfall sorts by card name when a search names no order, so every draft
+// opened on the same alphabetical head: "+2 Mace", "Aang's Iceberg", and so on.
+// The API has no random sort. order=random is accepted and then ignored, and
+// the answer comes back alphabetical again.
+//
+// So a pool picks a supported order and direction PER PAGE, starts on a random
+// page, and shuffles what it fetched. The two pages of a pool never share an
+// ordering, so whatever the first page leans on, the second cuts across it.
+//
+// The orders are the ones that scatter a page across names and sets. Measured
+// on one 175-card page of a Pioneer search: edhrec, usd, eur and artist each
+// return 22 to 24 different initials from 62 to 83 different sets, while
+// order=name gives 2 initials, order=rarity 3, and order=set 14 sets. Sorting
+// on a printed attribute hands the player a pack of one letter, one colour or
+// one set, which is the bug in a different coat.
+const POOL_ORDERS = ['edhrec', 'usd', 'eur', 'artist'];
+const POOL_DIRS = ['asc', 'desc'];
+// How many pages a query has, remembered across pools. The first draft of a
+// query has to guess; every later one jumps anywhere in the real range.
+const _poolTotals = new Map();
+const POOL_PAGE_GUESS = 5;
+
+function randomPoolSort(exceptOrder){
+  const orders = POOL_ORDERS.filter(o => o !== exceptOrder);
+  return {
+    order: orders[Math.floor(Math.random() * orders.length)],
+    dir: POOL_DIRS[Math.floor(Math.random() * POOL_DIRS.length)]
+  };
 }
 
-// Fetch one page and append its unseen cards to the entry.
-async function addPoolPage(entry, page){
-  if (entry.pages.has(page)) return 0;
+function poolSearchUrl(query, page, sort){
+  const parts = [
+    `q=${encodeURIComponent(query)}`,
+    'unique=cards',
+    `order=${encodeURIComponent(sort.order)}`,
+    `dir=${encodeURIComponent(sort.dir)}`
+  ];
+  if (page > 1) parts.push(`page=${page}`);
+  return `https://api.scryfall.com/cards/search?${parts.join('&')}`;
+}
+
+// Shuffle the part of the pool nobody has been dealt yet, so a second page
+// mixes into the first instead of queueing behind it.
+function shufflePoolTail(entry){
+  for (let i = entry.cards.length - 1; i > entry.idx; i--){
+    const j = entry.idx + Math.floor(Math.random() * (i - entry.idx + 1));
+    const tmp = entry.cards[i];
+    entry.cards[i] = entry.cards[j];
+    entry.cards[j] = tmp;
+  }
+}
+
+// Fetch one page under one ordering, and append its unseen cards to the entry.
+async function addPoolPage(entry, page, sort){
+  const key = `${sort.order}:${sort.dir}:${page}`;
+  if (entry.fetched.has(key)) return 0;
+  entry.fetched.add(key);
   entry.pages.add(page);
+  entry.sorts.push(sort);
   try {
-    const r = await scryfetch(poolSearchUrl(entry.query, page), { headers: { Accept: 'application/json' } });
-    if (!r.ok) return 0;
+    const r = await scryfetch(poolSearchUrl(entry.query, page, sort), { headers: { Accept: 'application/json' } });
+    if (!r.ok) return 0;                       // a page past the end answers 422
     const data = await r.json();
-    if (typeof data.total_cards === 'number') entry.total = data.total_cards;
+    if (typeof data.total_cards === 'number') {
+      entry.total = data.total_cards;
+      _poolTotals.set(entry.query, data.total_cards);
+    }
     const fresh = (Array.isArray(data.data) ? data.data : [])
       .map(scryfallToCard)
       .filter(c => usableDraftCard(c) && !entry.ids.has(c.id));
     fresh.forEach(c => entry.ids.add(c.id));
-    entry.cards.push(...shuffleCopy(fresh));
+    entry.cards.push(...fresh);
+    shufflePoolTail(entry);
     return fresh.length;
   } catch (e) {
     console.warn('draft pool page failed', entry.query, page, e);
@@ -1660,17 +1713,40 @@ function poolPageCount(entry){
   return Math.min(Math.ceil(entry.total / SCRY_PAGE_SIZE), 40);   // Scryfall caps deep paging
 }
 
+// A page number nobody has fetched yet, picked at random rather than in order.
+function randomUnseenPage(entry, pages){
+  const left = [];
+  for (let p = 1; p <= pages; p++) if (!entry.pages.has(p)) left.push(p);
+  if (!left.length) return 0;
+  return left[Math.floor(Math.random() * left.length)];
+}
+
 function loadDraftPool(query){
   const key = String(query || '').trim();
   if (_draftPools.has(key)) return _draftPools.get(key);
 
   const job = (async () => {
-    const entry = { query: key, cards: [], idx: 0, ids: new Set(), pages: new Set(), total: 0 };
-    await addPoolPage(entry, 1);
-    // Large result sets: jump to a random page so repeat drafts don't keep
-    // seeing the same alphabetical head of the results.
+    const entry = {
+      query: key,
+      cards: [], idx: 0, ids: new Set(),
+      pages: new Set(), fetched: new Set(), sorts: [],
+      total: _poolTotals.get(key) || 0
+    };
+    // Open on a random page. A known total gives the real range. Otherwise a
+    // small guess keeps the jump safe, and a page past the end costs one
+    // wasted request before page 1 answers.
+    const first = randomPoolSort();
+    const range = entry.total ? poolPageCount(entry) : POOL_PAGE_GUESS;
+    const firstPage = 1 + Math.floor(Math.random() * range);
+    let got = await addPoolPage(entry, firstPage, first);
+    if (!got && firstPage !== 1) got = await addPoolPage(entry, 1, first);
+    // A second page, under a different ordering, from elsewhere in the results.
+    // Two requests per pool, as before.
     const pages = poolPageCount(entry);
-    if (pages > 1) await addPoolPage(entry, 1 + Math.floor(Math.random() * pages));
+    if (got && pages > 1) {
+      const next = randomUnseenPage(entry, pages);
+      if (next) await addPoolPage(entry, next, randomPoolSort(first.order));
+    }
     return entry;
   })();
 
@@ -1698,8 +1774,10 @@ async function drawFromPool(query, accept){
     const pages = poolPageCount(entry);
     if (entry.pages.size >= pages) return null;
     let added = 0;
-    for (let p = 1; p <= pages && !added; p++) {
-      if (!entry.pages.has(p)) added = await addPoolPage(entry, p);
+    while (!added) {
+      const p = randomUnseenPage(entry, pages);
+      if (!p) break;
+      added = await addPoolPage(entry, p, randomPoolSort());
     }
     if (!added) return null;
   }
@@ -1778,6 +1856,84 @@ async function resolveLandArt(landName){
 
 const BASIC_NAME_FOR = { W: 'Plains', U: 'Island', B: 'Swamp', R: 'Mountain', G: 'Forest' };
 
+// ---------------------------------------------------------------------------
+// Basic lands follow the deck, not a hard-coded guess.
+//
+// Every builder used to name its basics in the source: the survivor deck asked
+// for Plains and Forests whatever it played, and an even split ignored how much
+// of each colour the spells really cost. Both now read the deck's own mana
+// costs, so a white-heavy deck gets mostly Plains and a splash gets one or two
+// sources.
+// ---------------------------------------------------------------------------
+
+// Coloured mana symbols the deck asks for, counted over every card.
+function manaSymbolCounts(cards){
+  const counts = { W: 0, U: 0, B: 0, R: 0, G: 0 };
+  for (const card of cards || []) {
+    if (!card) continue;
+    const cost = String(card.cost || card.mana_cost || '');
+    const tokens = cost.match(/\{([^}]+)\}/g) || [];
+    let seen = 0;
+    for (const t of tokens) {
+      for (const ch of t.slice(1, -1)) if (counts[ch] !== undefined) { counts[ch]++; seen++; }
+    }
+    // Tokens and generated cards often carry no mana cost. Their colour field
+    // is the only signal, so count it once.
+    if (!seen) for (const ch of (Array.isArray(card.colors) ? card.colors : [])) {
+      if (counts[ch] !== undefined) counts[ch]++;
+    }
+  }
+  return counts;
+}
+
+// Split `count` basics across the colours a deck plays, weighted by its mana
+// symbols. Largest remainder wins the leftovers, so the plan always totals
+// exactly `count`. `fallbackColors` covers a deck with no coloured costs at all.
+function basicLandPlan(cards, count, fallbackColors){
+  const total = Math.max(0, count | 0);
+  if (!total) return [];
+  const counts = manaSymbolCounts(cards);
+  let colors = ['W', 'U', 'B', 'R', 'G'].filter(c => counts[c] > 0);
+  if (!colors.length) {
+    colors = (fallbackColors || []).filter(c => BASIC_NAME_FOR[c]);
+    colors.forEach(c => { counts[c] = 1; });
+  }
+  if (!colors.length) { colors = ['W']; counts.W = 1; }
+
+  const weight = colors.reduce((a, c) => a + counts[c], 0);
+  const plan = colors.map(c => {
+    const exact = total * counts[c] / weight;
+    return { color: c, name: BASIC_NAME_FOR[c], count: Math.floor(exact), rest: exact - Math.floor(exact) };
+  });
+  plan.sort((a, b) => (b.rest - a.rest) || (counts[b.color] - counts[a.color]));
+  let left = total - plan.reduce((a, e) => a + e.count, 0);
+  for (let i = 0; left > 0; i++, left--) plan[i % plan.length].count++;
+
+  // Every colour the deck plays needs at least one source, as long as there
+  // are enough lands to go round. Take the extra from the biggest pile.
+  if (total >= plan.length) {
+    for (const entry of plan) {
+      if (entry.count > 0) continue;
+      const richest = plan.reduce((a, b) => (b.count > a.count ? b : a));
+      if (richest.count <= 1) break;
+      richest.count--;
+      entry.count++;
+    }
+  }
+  return plan.filter(e => e.count > 0).sort((a, b) => b.count - a.count);
+}
+
+// The basics themselves, in the player's chosen art where they picked some.
+function makeBasicLandsFor(cards, count, owner, fallbackColors){
+  const out = [];
+  for (const entry of basicLandPlan(cards, count, fallbackColors)) {
+    for (let i = 0; i < entry.count; i++) {
+      out.push(makeBasicLandCard(entry.name, `${entry.color}_${i}`, owner));
+    }
+  }
+  return out;
+}
+
 // Draw `count` distinct cards from one pooled query.
 async function realCardsFrom(query, count, accept){
   const out = [];
@@ -1791,14 +1947,16 @@ async function realCardsFrom(query, count, accept){
   return out;
 }
 
-async function realBasicsFor(colors, count, owner){
+// `spells` are the cards the deck already holds. Their mana costs decide the
+// split; `colors` is only the fallback for a deck with no coloured costs.
+async function realBasicsFor(colors, count, owner, spells){
+  const plan = basicLandPlan(spells || [], count, colors);
+  for (const entry of plan) await resolveLandArt(entry.name);   // warm the art cache
   const lands = [];
-  for (const col of colors) await resolveLandArt(BASIC_NAME_FOR[col]);   // warm the art cache
-  let i = 0;
-  while (lands.length < count) {
-    const col = colors[i % colors.length];
-    lands.push({ ...makeBasicLandCard(BASIC_NAME_FOR[col], i, owner), realCard: true });
-    i++;
+  for (const entry of plan) {
+    for (let i = 0; i < entry.count; i++) {
+      lands.push({ ...makeBasicLandCard(entry.name, `${entry.color}_${i}`, owner), realCard: true });
+    }
   }
   return lands;
 }
@@ -1823,7 +1981,7 @@ async function buildDeckFromPool({ query, colors, owner, creatures, spells, land
   ];
   if (chosen.length < 12) return null;
 
-  const basics = await realBasicsFor(colors, lands, owner);
+  const basics = await realBasicsFor(colors, lands, owner, chosen);
   return shuffleCopy([...chosen, ...basics]);
 }
 
@@ -3356,6 +3514,67 @@ function deckActionsHtml(prefix, options = {}){
       ${options.hideBuilder ? '' : `<button id="${prefix}OpenBuilder" class="btn btn-secondary" type="button">Build in Deck editor</button>`}
     </div>
   `;
+}
+
+// Clearing a deck used to mean clicking the red cross on every card. The
+// decklist column now empties the slot in one click. It confirms in the panel
+// itself, never with a browser dialog, and the cleared cards stay recoverable
+// for a few seconds.
+const DECK_CLEAR_UNDO_MS = 15000;
+
+function deckClearUndoFor(slotKey){
+  const undo = state.deckClearUndo;
+  if (!undo || undo.key !== slotKey) return null;
+  if (Date.now() - undo.at > DECK_CLEAR_UNDO_MS) { state.deckClearUndo = null; return null; }
+  return undo;
+}
+
+function deckClearActionsHtml(slotKey){
+  const count = (state.decks[slotKey] || []).length;
+  const undo = deckClearUndoFor(slotKey);
+  if (undo) {
+    return `<span class="text-xs text-gray">Cleared ${undo.cards.length} card${undo.cards.length === 1 ? '' : 's'}.</span>
+      <button id="deckClearUndoBtn" class="btn btn-secondary text-sm" type="button">Undo</button>`;
+  }
+  if (!count) return '';
+  if (state.deckClearConfirm) {
+    return `<span class="text-xs text-gray">Remove all ${count} cards?</span>
+      <button id="deckClearYes" class="btn btn-danger text-sm" type="button">Clear deck</button>
+      <button id="deckClearNo" class="btn btn-secondary text-sm" type="button">Keep</button>`;
+  }
+  return `<button id="deckClearBtn" class="btn btn-secondary text-sm" type="button">Clear deck</button>`;
+}
+
+function bindDeckClearActions(root, slotKey){
+  const ask = root.querySelector('#deckClearBtn');
+  if (ask) ask.onclick = () => { state.deckClearConfirm = true; render(); };
+  const no = root.querySelector('#deckClearNo');
+  if (no) no.onclick = () => { state.deckClearConfirm = false; render(); };
+  const yes = root.querySelector('#deckClearYes');
+  if (yes) yes.onclick = () => {
+    const cards = (state.decks[slotKey] || []).slice();
+    state.decks[slotKey] = [];
+    state.deckClearConfirm = false;
+    state.deckClearUndo = { key: slotKey, cards, at: Date.now() };
+    scheduleSave();
+    toast(`Cleared ${cards.length} card${cards.length === 1 ? '' : 's'}. Undo is in the decklist header.`);
+    render();
+    setTimeout(() => {
+      if (deckClearUndoFor(slotKey)) return;      // the window is still open
+      if (state.deckClearUndo) return;            // a newer clear replaced it
+      render();
+    }, DECK_CLEAR_UNDO_MS + 200);
+  };
+  const undoBtn = root.querySelector('#deckClearUndoBtn');
+  if (undoBtn) undoBtn.onclick = () => {
+    const undo = deckClearUndoFor(slotKey);
+    if (!undo) { render(); return; }
+    state.decks[slotKey] = (state.decks[slotKey] || []).concat(undo.cards);
+    state.deckClearUndo = null;
+    scheduleSave();
+    toast('Deck restored.');
+    render();
+  };
 }
 
 function bindDeckActions(root, prefix, slotKey, options = {}){
@@ -6897,39 +7116,150 @@ resultsDiv.onclick = (e) => {
 // Deck import helpers (GLOBAL)
 // ===============================
 
-// 1) Parse simple text decklists into a Map(name -> qty)
+// 1) Parse a pasted decklist into a Map(name -> qty).
+//
+// People paste what their deck site gave them, so the parser has to read the
+// real export formats:
+//   4 Lightning Bolt            plain
+//   4 Lightning Bolt (M10) 146  MTG Arena and MTGO
+//   3 Brainstorm [ICE]          Deckstats and friends
+//   1 Fire // Ice               split, transform and adventure cards
+//   Counterspell x2 / 3x Ponder quantity after or joined
+// A "//" only opens a comment at the start of a line. Inside a line it is part
+// of the card's name, and stripping it used to turn "Fire // Ice" into "Fire".
+// Section headers count with or without a colon: MTGGoldfish writes a bare
+// "Sideboard", which used to import as a card called Sideboard.
+const DECKLIST_SECTION = /^(deck|decklist|main|mainboard|maindeck|sideboard|side|companion|commander|maybeboard|considering|token|tokens|about)\b[\s:]*(\(\d+\))?$/i;
+
+// Strip the printing a line names: set code, collector number, foil marker.
+function stripPrintingInfo(name){
+  let out = String(name || '').trim();
+  out = out.replace(/\s*\*[a-z]{1,2}\*\s*$/i, '');                 // Arena foil marker, e.g. *F*
+  out = out.replace(/\s*<[^>]{1,20}>\s*$/, '');                    // "Name <SET>"
+  // "(M10) 146", "[ICE] 12", "(M10)", "[ICE]". The set code is short, which
+  // keeps real names such as "Erase (Not the Urza's Legacy One)" intact.
+  out = out.replace(/\s*[([][A-Za-z0-9_]{2,6}[)\]](?:\s*[-#]?\s*\d+[A-Za-z\u2605\u2020]*)?\s*$/, '');
+  out = out.replace(/\s*\|\s*[A-Za-z0-9]{2,6}\s*$/, '');           // "Name | SET"
+  return out.trim();
+}
+
 if (!window.parseDecklist) window.parseDecklist = function(text){
-  const lines = String(text||'').split(/[\r\n]+/).map(s=>s.trim());
-  const ignore = /^(#|\/\/|sideboard:|companions?:|maybeboard:)/i;
+  const lines = String(text||'').split(/[\r\n]+/);
   const m = new Map();
-  for (let raw of lines){
-    if (!raw || ignore.test(raw)) continue;
-    let line = raw.replace(/\s+/g,' ').trim();
-    line = line.replace(/\s*\/\/.*$/, '').trim();     // strip trailing // comments
+  for (const raw of lines){
+    let line = String(raw).replace(/\s+/g,' ').trim();
     if (!line) continue;
+    if (/^(#|\/\/)/.test(line)) continue;              // comment, start of line only
+    line = line.replace(/^sb:\s*/i, '');               // Magic Workstation sideboard marker
+    if (!line || DECKLIST_SECTION.test(line)) continue;
+    if (/^name\s+\S/i.test(line)) continue;            // the "Name My Deck" line Arena writes
 
     let qty = 1, name = line, match;
     if ((match = line.match(/^(\d+)\s*x?\s+(.+)$/i))) { qty = +match[1]; name = match[2]; }
     else if ((match = line.match(/^(.+?)\s+x(\d+)$/i))) { name = match[1]; qty = +match[2]; }
     else if ((match = line.match(/^(\d+)x\s+(.+)$/i))) { qty = +match[1]; name = match[2]; }
 
+    name = stripPrintingInfo(name);
     name = name.replace(/\u2019/g,"'").replace(/\s+/g,' ').trim();
-    if (!name) continue;
+    if (!name || DECKLIST_SECTION.test(name)) continue;
     m.set(name, (m.get(name)||0) + (Number.isFinite(qty)?qty:1));
   }
   return m;
 };
 
-// 2) Scryfall resolver by name (prefers set if provided)
+// A name written two ways still means one card: case, curly apostrophes and
+// the spacing around "//" all vary between exports.
+function decklistNameKey(name){
+  return String(name || '')
+    .replace(/\u2019/g, "'")
+    .replace(/\s*\/\/\s*/g, ' // ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+// 2) Scryfall resolver by name. Exact first, then fuzzy, so a small typo or
+// half a split card's name still lands on the right card.
 if (!window.fetchCardByName) window.fetchCardByName = async function(name, setPref){
   const base = 'https://api.scryfall.com/cards/named';
   const esc = encodeURIComponent(name);
-  async function get(u){ const r = await fetch(u); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j = await r.json(); if (j.object==='error') throw new Error(j.details||'Scryfall error'); return j; }
+  async function get(u){
+    const r = await scryfetch(u, { headers: { Accept: 'application/json' } });
+    let j = null;
+    try { j = await r.json(); } catch { j = null; }
+    if (!j) throw new Error(`HTTP ${r.status}`);
+    if (j.object === 'error') throw new Error(j.details || 'Scryfall error');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return j;
+  }
   if (setPref) {
     try { return await get(`${base}?exact=${esc}&set=${encodeURIComponent(setPref)}`); }
-    catch { /* fallback to any set */ }
+    catch { /* fall back to any printing */ }
   }
-  return await get(`${base}?exact=${esc}`);
+  try { return await get(`${base}?exact=${esc}`); }
+  catch (e) {
+    try { return await get(`${base}?fuzzy=${esc}`); }
+    catch { throw e; }                                 // report the exact-match reason
+  }
+};
+
+// 2b) Batch resolver. Scryfall's collection endpoint takes 75 identifiers per
+// request, so a 60-card list costs one request instead of sixty. Names it
+// cannot place come back in not_found and get one fuzzy retry each.
+if (!window.fetchCardsByNames) window.fetchCardsByNames = async function(names, setPref){
+  const wanted = (names || []).filter(Boolean);
+  const found = new Map();                            // requested name -> card JSON
+  const errors = [];
+  const CHUNK = 75;
+
+  const indexCard = (index, card) => {
+    const add = (n) => {
+      const k = decklistNameKey(n);
+      if (k && !index.has(k)) index.set(k, card);
+    };
+    add(card.name);
+    (card.card_faces || []).forEach(f => add(f.name));
+    if (String(card.name || '').includes('//')) {
+      String(card.name).split('//').forEach(part => add(part));
+    }
+  };
+
+  for (let i = 0; i < wanted.length; i += CHUNK) {
+    const chunk = wanted.slice(i, i + CHUNK);
+    const index = new Map();
+    let batched = false;
+    try {
+      const r = await scryfetch('https://api.scryfall.com/cards/collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          identifiers: chunk.map(n => setPref ? { name: n, set: setPref } : { name: n })
+        })
+      });
+      if (r.ok) {
+        const j = await r.json();
+        if (Array.isArray(j.data)) {
+          j.data.forEach(card => indexCard(index, card));
+          batched = true;
+        }
+      }
+    } catch { /* the per-name path below covers it */ }
+
+    for (const name of chunk) {
+      const hit = index.get(decklistNameKey(name));
+      if (hit) { found.set(name, hit); continue; }
+      // Not in the batch (or the batch failed): one lookup, exact then fuzzy.
+      try {
+        found.set(name, await window.fetchCardByName(name, setPref));
+      } catch (e) {
+        errors.push({
+          name,
+          error: batched ? 'No card matches that name.' : (e.message || String(e))
+        });
+      }
+    }
+  }
+  return { found, errors };
 };
 
 // 3) Convert a Scryfall card JSON to your in-game card objects (qty copies)
@@ -6974,36 +7304,27 @@ if (!window.cardToGameObjects) window.cardToGameObjects = function(cardJSON, qua
   return out;
 };
 
-// 4) Full TXT → Scryfall → game objects converter (shows status via .textContent if provided)
+// 4) Full TXT to Scryfall to game objects. One batched lookup, so a 60-card
+// list is one request rather than sixty. A name that will not resolve is
+// reported and skipped: the rest of the deck still imports.
 if (!window.convertDecklist) window.convertDecklist = async function(text, player, setPref, includeImages, statusElLike){
   const setStatus = (t)=>{ if (statusElLike && typeof statusElLike.textContent === 'string') statusElLike.textContent = t; };
   const m = window.parseDecklist(text);
   if (!m.size) throw new Error('No valid card names found.');
 
   const names = [...m.keys()];
-  const results = [];
-  const concurrency = 6;
-  let idx = 0, done = 0, errs = [];
+  setStatus(`Looking up ${names.length} name${names.length === 1 ? '' : 's'} on Scryfall.`);
+  const { found, errors } = await window.fetchCardsByNames(names, setPref);
 
-  async function next(){
-    if (idx >= names.length) return;
-    const myIdx = idx++;
-    const name = names[myIdx];
-    setStatus(`Fetching ${done}/${names.length} • Now: ${name}`);
-    try{
-      const cj = await window.fetchCardByName(name, setPref);
-      const qty = m.get(name)||1;
-      results.push(...window.cardToGameObjects(cj, qty, includeImages));
-    } catch(e){
-      errs.push({ name, error: e.message || String(e) });
-    } finally {
-      done++; setStatus(`Fetched ${done}/${names.length}`);
-      if (idx < names.length) await next();
-    }
+  const results = [];
+  for (const name of names){
+    const cj = found.get(name);
+    if (!cj) continue;
+    results.push(...window.cardToGameObjects(cj, m.get(name) || 1, includeImages));
   }
-  await Promise.all(Array.from({length: Math.min(concurrency, names.length)}, () => next()));
+  setStatus(`Matched ${found.size} of ${names.length} names.`);
   results.sort((a,b)=> a.name.localeCompare(b.name));
-  return { out: { player: Number(player)||1, timestamp: Date.now(), cards: results }, errors: errs };
+  return { out: { player: Number(player)||1, timestamp: Date.now(), cards: results }, errors };
 };
 
 
@@ -7461,6 +7782,8 @@ function cloneCard(base){
       const removeBtn = document.createElement('button');
       removeBtn.className = 'remove-btn';
       removeBtn.textContent = '\u00d7';
+      removeBtn.title = `Remove one copy of ${c.name || 'this card'}`;
+      removeBtn.setAttribute('aria-label', `Remove one copy of ${c.name || 'this card'}`);
       removeBtn.onclick = (e) => {
         e.stopPropagation();
         const i = state.decks[key].indexOf(c);
@@ -7468,6 +7791,24 @@ function cloneCard(base){
         render(); // will rebuild and re-render the chart
       };
       cardDiv.appendChild(removeBtn);
+
+      // A 4-of used to cost four clicks. One button takes the whole playset.
+      const copies = (state.decks[key] || []).filter(x => (x.name || '') === (c.name || '')).length;
+      if (copies > 1) {
+        const allBtn = document.createElement('button');
+        allBtn.className = 'remove-all-btn';
+        allBtn.textContent = `-${copies}`;
+        allBtn.title = `Remove all ${copies} copies of ${c.name || 'this card'}`;
+        allBtn.setAttribute('aria-label', `Remove all ${copies} copies of ${c.name || 'this card'}`);
+        allBtn.onclick = (e) => {
+          e.stopPropagation();
+          const name = c.name || '';
+          state.decks[key] = (state.decks[key] || []).filter(x => (x.name || '') !== name);
+          toast(`Removed ${copies} copies of ${name}.`);
+          render();
+        };
+        cardDiv.appendChild(allBtn);
+      }
     }
 
     return cardDiv;
@@ -7651,19 +7992,29 @@ function cloneCard(base){
       <div class="flex justify-between" style="align-items:center;margin-bottom:8px">
         <h3 style="letter-spacing:.2px">Import decklist</h3>
         <div class="text-xs text-gray">
-          A .json upload replaces the current deck. A .txt file or pasted text goes Parse, then Import parsed.
+          Paste a list, press Parse, check the preview, then press Import.
         </div>
       </div>
 
-      <div class="grid" style="grid-template-columns:1fr 320px;gap:12px">
+      <div class="grid" style="grid-template-columns:1fr 340px;gap:12px">
         <div>
-          <textarea id="importDeckTA" class="input" style="min-height:120px" placeholder="Examples:
-4 Lightning Bolt
-3x Counterspell
-Island x14
-# comments and Sideboard: lines are ignored"></textarea>
+          <textarea id="importDeckTA" class="input" style="min-height:120px" placeholder="Paste a decklist. For example:
+4 Lightning Bolt (M10) 146
+3 Brainstorm [ICE]
+1 Fire // Ice
+2x Counterspell
+Island x14"></textarea>
 
-          <div class="flex" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+          <div class="text-xs text-gray" style="margin-top:6px;line-height:1.5">
+            Accepted: MTG Arena and MTGO exports (<code>4 Lightning Bolt (M10) 146</code>),
+            bracket set codes (<code>3 Brainstorm [ICE]</code>), split and double-faced names
+            (<code>1 Fire // Ice</code>), <code>2x Counterspell</code>, <code>Island x14</code>,
+            or a bare card name. Section headers such as <code>Deck</code>, <code>Sideboard</code>
+            and <code>Commander</code> are skipped, with or without a colon. Lines starting with
+            <code>#</code> or <code>//</code> are comments. A .json deck file loads straight in.
+          </div>
+
+          <div class="flex" style="gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
             <label class="btn btn-secondary text-sm" style="cursor:pointer">
               Upload .txt or .json
               <input id="importDeckFile" type="file" accept=".txt,.json" class="hidden">
@@ -7678,27 +8029,35 @@ Island x14
               <input id="importIncludeImages" type="checkbox" checked>
               Include images
             </label>
+          </div>
 
-            <label class="text-xs flex" style="gap:6px;align-items:center;cursor:pointer">
-              <input id="importReplace" type="checkbox">
-              Replace current deck (instead of add)
-            </label>
+          <div style="margin-top:12px">
+            <div class="text-xs text-gray" style="margin-bottom:6px">What should the import do?</div>
+            <div class="segmented" role="group" aria-label="What the import does">
+              <button type="button" id="importModeAdd" class="${state.importReplace ? '' : 'active'}" aria-pressed="${state.importReplace ? 'false' : 'true'}">Add to the current deck</button>
+              <button type="button" id="importModeReplace" class="${state.importReplace ? 'active' : ''}" aria-pressed="${state.importReplace ? 'true' : 'false'}">Replace the current deck</button>
+            </div>
+          </div>
 
+          <div class="flex" style="gap:8px;margin-top:12px;flex-wrap:wrap">
             <button id="btnImportParse"  class="btn btn-primary text-sm">Parse</button>
-            <button id="btnImportApply"  class="btn btn-secondary text-sm" disabled>Import parsed</button>
+            <button id="btnImportApply"  class="btn btn-secondary text-sm" disabled>${state.importReplace ? 'Replace deck with these cards' : 'Add these cards to the deck'}</button>
           </div>
         </div>
 
         <div>
           <div id="importStatus" class="text-xs text-gray">Status: collapsed.</div>
-          <div id="importPreview" style="margin-top:8px;max-height:200px;overflow:auto;border:1px solid var(--line-strong);border-radius:8px;padding:8px"></div>
+          <div id="importPreview" style="margin-top:8px;max-height:260px;overflow:auto;border:1px solid var(--line-strong);border-radius:8px;padding:8px"></div>
         </div>
       </div>
     </div>
 
     <div class="editor-grid">
       <div class="editor-col">
-        <h3>Decklist [${(state.decks[key]||[]).length}]</h3>
+        <div class="editor-col-head">
+          <h3>Decklist [${(state.decks[key]||[]).length}]</h3>
+          <div class="editor-col-actions">${deckClearActionsHtml(key)}</div>
+        </div>
         <div class="editor-scroll" id="deckContainer"></div>
       </div>
       <div class="editor-col">
@@ -7768,6 +8127,7 @@ Island x14
     }
   };
   bindDeckLibrary(div, 'editorLib', key);
+  bindDeckClearActions(div, key);
   bindDeckActions(div, 'editor', key, {
     onLoadSaved: () => {
       const shelf = div.querySelector('#deckShelfCard');
@@ -7893,7 +8253,8 @@ Island x14
   const importFile  = div.querySelector('#importDeckFile');
   const importSet   = div.querySelector('#importSetPref');
   const importImgs  = div.querySelector('#importIncludeImages');
-  const importRepl  = div.querySelector('#importReplace');
+  const importAddBtn = div.querySelector('#importModeAdd');
+  const importReplBtn = div.querySelector('#importModeReplace');
   const importParse = div.querySelector('#btnImportParse');
   const importApply = div.querySelector('#btnImportApply');
   const importStat  = div.querySelector('#importStatus');
@@ -7902,22 +8263,42 @@ Island x14
   // Keep a cache of the last parsed result (for TXT or pasted JSON)
   let lastParsedCards = null;
 
-  function renderImportPreview(map){
+  // The preview is what the person checks before anything touches the deck: the
+  // exact names and quantities the parser read, and the lines Scryfall could
+  // not place. An unmatched line is listed, not fatal. Fix it in the box and
+  // press Parse again; the rest of the list is unaffected.
+  function renderImportPreview(map, errors){
     if (!map || map.size === 0) { importPrev.innerHTML = ''; return; }
+    const failed = new Map((errors || []).map(e => [e.name, e.error]));
     const rows = [];
     let total = 0;
     // Names come straight from pasted text — escape before injecting as HTML.
-    for (const [name, qty] of map){ rows.push(`<tr><td style="width:40px">${htmlEscape(String(qty))}</td><td>${htmlEscape(name)}</td></tr>`); total += qty; }
+    for (const [name, qty] of map){
+      const bad = failed.has(name);
+      rows.push(`<tr${bad ? ' style="color:var(--danger)"' : ''}>
+        <td style="width:40px">${htmlEscape(String(qty))}</td>
+        <td>${htmlEscape(name)}${bad ? ' <span class="text-xs">(no match)</span>' : ''}</td>
+      </tr>`);
+      total += qty;
+    }
+    const problems = failed.size
+      ? `<div class="text-xs" style="margin-top:8px;color:var(--danger)">
+           <strong>${failed.size} line${failed.size === 1 ? '' : 's'} did not match a card.</strong>
+           <ul style="margin:4px 0 0 16px">
+             ${[...failed].map(([n, why]) => `<li>${htmlEscape(n)}: ${htmlEscape(why || 'No card matches that name.')}</li>`).join('')}
+           </ul>
+           Correct the spelling in the box and press Parse again. The other cards import as they are.
+         </div>`
+      : '';
     importPrev.innerHTML = `
       <table style="width:100%;border-collapse:collapse">
         <thead><tr><th style="text-align:left;width:40px">Qty</th><th style="text-align:left">Name</th></tr></thead>
         <tbody>${rows.join('')}</tbody>
       </table>
       <div class="text-xs text-gray" style="margin-top:6px">
-        Parsed <strong>${map.size}</strong> unique names / <strong>${total}</strong> total.
-        Supported lines: <code>4 Lightning Bolt</code>, <code>Lightning Bolt x2</code>, <code>3x Counterspell</code>, or just the name.
-        Lines beginning with <code>#</code> or <code>//</code> and headers like <code>Sideboard:</code> are ignored.
-      </div>`;
+        Read <strong>${map.size}</strong> unique name${map.size === 1 ? '' : 's'}, <strong>${total}</strong> card${total === 1 ? '' : 's'} in total.
+      </div>
+      ${problems}`;
   }
 
   function ensureImages(cards){
@@ -7934,7 +8315,9 @@ Island x14
     const key2 = 'player' + state.currentPlayer;
     if (replace) state.decks[key2] = cards.slice();
     else state.decks[key2] = (state.decks[key2] || []).concat(cards);
-    toast(replace ? 'Deck replaced.' : `Added ${cards.length} card${cards.length === 1 ? '' : 's'}.`);
+    toast(replace
+      ? `Deck replaced with ${cards.length} card${cards.length === 1 ? '' : 's'}.`
+      : `Added ${cards.length} card${cards.length === 1 ? '' : 's'}.`);
     render();
   }
 
@@ -7951,37 +8334,42 @@ Island x14
         if (Array.isArray(j.cards)){
           lastParsedCards = ensureImages(j.cards);
           importPrev.innerHTML = `<div class="text-xs text-gray">Ready: JSON with <strong>${lastParsedCards.length}</strong> card objects.</div>`;
-          if (importStat) importStat.textContent = 'JSON parsed. Click Import parsed to load it.';
+          if (importStat) importStat.textContent = `JSON parsed: ${lastParsedCards.length} cards ready. Press ${state.importReplace ? 'Replace' : 'Add'} to apply.`;
           importApply.disabled = false;
           return;
         }
       }
       const m = parseDecklist(raw);
       renderImportPreview(m);
-      if (!m.size){ if (importStat) importStat.textContent = 'No valid card names found.'; return; }
+      if (!m.size){ if (importStat) importStat.textContent = 'No card names found in that text.'; return; }
 
-      if (importStat) importStat.textContent = 'Fetching Scryfall data.';
+      if (importStat) importStat.textContent = 'Looking the names up on Scryfall.';
       const setPref = (importSet && importSet.value || '').trim();
       const includeImages = !!(importImgs && importImgs.checked);
       const { out, errors } = await convertDecklist(raw, state.currentPlayer, setPref, includeImages, { textContent: (t)=> { if(importStat) importStat.textContent = t; } });
 
+      renderImportPreview(m, errors);
       lastParsedCards = out.cards;
-      importApply.disabled = false;
+      importApply.disabled = !out.cards.length;
 
-      const warn = errors && errors.length ? ` • ${errors.length} could not be matched.` : '';
-      if (importStat) importStat.textContent = `Parsed ${m.size} unique (${[...m.values()].reduce((a,b)=>a+b,0)} total). Resolved ${out.cards.length} objects${warn}.`;
+      const matched = m.size - (errors ? errors.length : 0);
+      const warn = errors && errors.length
+        ? ` ${errors.length} name${errors.length === 1 ? '' : 's'} did not match, listed below.`
+        : '';
+      if (importStat) importStat.textContent = out.cards.length
+        ? `Ready: ${out.cards.length} card${out.cards.length === 1 ? '' : 's'} from ${matched} name${matched === 1 ? '' : 's'}.${warn} Press ${state.importReplace ? 'Replace' : 'Add'} to apply.`
+        : `No name matched a card.${warn}`;
     } catch(e){
-      if (importStat) importStat.textContent = 'Error: ' + e.message;
+      if (importStat) importStat.textContent = 'Import failed: ' + e.message;
     }
   }
 
   function doImportParsed(){
     if (!lastParsedCards || !lastParsedCards.length){
-      toast('Nothing parsed yet. Click Parse first.');
+      toast('Nothing parsed yet. Press Parse first.');
       return;
     }
-    const replace = !!(importRepl && importRepl.checked);
-    applyToDeck(lastParsedCards, replace);
+    applyToDeck(lastParsedCards, !!state.importReplace);
   }
 
   if (importParse) importParse.onclick = () => {
@@ -7989,6 +8377,25 @@ Island x14
     doParse(raw);
   };
   if (importApply) importApply.onclick = () => doImportParsed();
+
+  // Add or replace is a choice the person makes on screen, not a checkbox
+  // hidden among the options. The apply button says which one is armed.
+  function setImportMode(replace){
+    state.importReplace = !!replace;
+    if (importAddBtn) {
+      importAddBtn.classList.toggle('active', !replace);
+      importAddBtn.setAttribute('aria-pressed', String(!replace));
+    }
+    if (importReplBtn) {
+      importReplBtn.classList.toggle('active', !!replace);
+      importReplBtn.setAttribute('aria-pressed', String(!!replace));
+    }
+    if (importApply) {
+      importApply.textContent = replace ? 'Replace deck with these cards' : 'Add these cards to the deck';
+    }
+  }
+  if (importAddBtn) importAddBtn.onclick = () => setImportMode(false);
+  if (importReplBtn) importReplBtn.onclick = () => setImportMode(true);
 
   if (importFile) importFile.onchange = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -8011,7 +8418,7 @@ Island x14
     }
     if (importTA) importTA.value = text;
     try { const m = parseDecklist(text); renderImportPreview(m); } catch {}
-    if (importStat) importStat.textContent = 'Text loaded. Click Parse to resolve the names, then Import parsed.';
+    if (importStat) importStat.textContent = 'Text loaded. Press Parse to look the names up, then apply.';
     importApply.disabled = true;
   };
 
@@ -10750,6 +11157,12 @@ window.GALDUR_APP = {
   getCMC,
   initBattleCard,
   makeBasicLandCard,
+  // Basics follow the deck's own mana costs. Exposed so the split can be asserted.
+  basicLandPlan,
+  makeBasicLandsFor,
+  // Draft pools, exposed so the ordering can be driven and tested.
+  loadDraftPool,
+  resetDraftPools,
   shuffleCopy,
   getModeConfig,
   getModeRules,

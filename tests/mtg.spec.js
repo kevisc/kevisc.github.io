@@ -706,3 +706,223 @@ test('No emoji survive in the rendered interface', async ({ page }) => {
   await expect(page.locator('#returnBtn')).toBeVisible();
   expect(await scan()).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------
+// Owner-reported bugs: decklist import, draft variety, clearing a deck, and
+// basics that follow the deck's colours.
+// ---------------------------------------------------------------------------
+
+test('The decklist parser reads the export formats people actually paste', async ({ page }) => {
+  await login(page, 1);
+  const parsed = await page.evaluate(() => [...window.parseDecklist([
+    '4 Lightning Bolt (M10) 146',     // MTG Arena and MTGO
+    '3 Brainstorm [ICE]',             // bracket set codes
+    '1 Fire // Ice',                  // split card, not a comment
+    'Sideboard',                      // bare header, no colon
+    'Deck',
+    '// a real comment',
+    '2x Counterspell',
+    'Island x14',
+    '1 Ponder (M10) 76 *F*'           // foil marker
+  ].join('\n'))]);
+
+  expect(parsed).toEqual([
+    ['Lightning Bolt', 4],
+    ['Brainstorm', 3],
+    ['Fire // Ice', 1],
+    ['Counterspell', 2],
+    ['Island', 14],
+    ['Ponder', 1]
+  ]);
+});
+
+test('Importing a decklist costs one batched request and reports the names it could not match', async ({ page }) => {
+  let collection = 0, named = 0;
+  await page.route('**://api.scryfall.com/**', async route => {
+    const url = route.request().url();
+    const card = (name) => ({
+      id: 'stub-' + name, name, type_line: 'Creature — Test', mana_cost: '{1}{G}', cmc: 2,
+      colors: ['G'], oracle_text: 'Test.', power: '2', toughness: '2', rarity: 'common',
+      image_uris: { normal: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E' }
+    });
+    if (url.includes('/cards/collection')) {
+      collection += 1;
+      const ids = JSON.parse(route.request().postData() || '{}').identifiers || [];
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        object: 'list',
+        data: ids.filter(i => !/Nonesuch/i.test(i.name)).map(i => card(i.name)),
+        not_found: ids.filter(i => /Nonesuch/i.test(i.name))
+      }) });
+    }
+    if (url.includes('/cards/named')) {
+      named += 1;
+      return route.fulfill({ status: 404, contentType: 'application/json',
+        body: JSON.stringify({ object: 'error', status: 404, details: 'No card found.' }) });
+    }
+    return route.fulfill({ status: 404, body: '{}' });
+  });
+  await login(page, 1);
+
+  const result = await page.evaluate(async () => {
+    const r = await window.convertDecklist([
+      '4 Lightning Bolt (M10) 146',
+      '3 Brainstorm [ICE]',
+      '1 Fire // Ice',
+      'Sideboard',
+      '2 Ponder',
+      '1 Nonesuch Card'
+    ].join('\n'), 1, '', true, { textContent: '' });
+    return { cards: r.out.cards.length, errors: r.errors.map(e => e.name) };
+  });
+
+  expect(result.cards).toBe(10);                   // 4 + 3 + 1 + 2, the bad line skipped
+  expect(result.errors).toEqual(['Nonesuch Card']);
+  expect(collection).toBe(1);                      // one batch, not one request per name
+  expect(named).toBe(2);                           // the unknown name alone retries exact then fuzzy
+});
+
+test('A draft pool asks for a random order and page, and does not deal alphabetically', async ({ page }) => {
+  const urls = [];
+  await page.route('**://api.scryfall.com/**', async route => {
+    const url = route.request().url();
+    if (!url.includes('/cards/search')) return route.fulfill({ status: 404, body: '{}' });
+    urls.push(url);
+    // Names in strict alphabetical order, the way Scryfall answers by default.
+    const data = Array.from({ length: 175 }, (_, i) => ({
+      id: 'card-' + url.length + '-' + i,
+      name: 'Card ' + String(i).padStart(3, '0'),
+      type_line: 'Creature — Test', mana_cost: '{1}{G}', cmc: 2, colors: ['G'],
+      oracle_text: 'Test.', power: '2', toughness: '2', rarity: 'common',
+      image_uris: { normal: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E' }
+    }));
+    return route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ object: 'list', total_cards: 2000, has_more: true, data }) });
+  });
+  await login(page, 1);
+
+  const load = () => page.evaluate(async () => {
+    const A = window.GALDUR_APP;
+    A.resetDraftPools();
+    const entry = await A.loadDraftPool('legal:pioneer t:creature');
+    return { sorts: entry.sorts.map(s => s.order), pages: [...entry.pages].length,
+             first: entry.cards.slice(0, 12).map(c => c.name) };
+  });
+
+  const a = await load();
+  const b = await load();
+
+  // Every request names an order and a direction. Scryfall sorts by name
+  // otherwise, which is what put "+2 Mace" at the head of every draft.
+  expect(urls.length).toBeGreaterThan(0);
+  for (const url of urls) {
+    expect(url).toMatch(/[?&]order=/);
+    expect(url).toMatch(/[?&]dir=(asc|desc)/);
+  }
+  expect(urls.some(u => /[?&]page=\d+/.test(u))).toBe(true);
+  expect(a.pages).toBe(2);
+  // The two pages never share an ordering, so whatever the first clusters on
+  // (one letter, one set, one colour), the second cuts across it.
+  expect(a.sorts).toHaveLength(2);
+  expect(a.sorts[0]).not.toBe(a.sorts[1]);
+
+  // The pool is shuffled, so the deal order is not the fetch order.
+  const sorted = [...a.first].sort();
+  expect(a.first).not.toEqual(sorted);
+  // Two pools of the same query deal different cards.
+  expect(a.first).not.toEqual(b.first);
+});
+
+test('Clear deck empties the slot in one go, confirms inline, and offers an undo', async ({ page }) => {
+  let dialogs = 0;
+  page.on('dialog', d => { dialogs += 1; d.dismiss(); });
+  await login(page, 1);
+
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    A.state.decks.player1 = Array.from({ length: 12 }, (_, i) => ({
+      id: 'clear-' + i, name: i < 4 ? 'Lightning Bolt' : 'Filler ' + i,
+      type: 'Instant', cost: '{R}', colors: ['R'], effect: '', power: 0, toughness: 0
+    }));
+    A.state.builderTab = 'deck';
+    A.state.screen = 'builder';
+    A.render();
+  });
+
+  const size = () => page.evaluate(() => window.GALDUR_APP.state.decks.player1.length);
+
+  await page.locator('#deckClearBtn').click();
+  await expect(page.getByText('Remove all 12 cards?')).toBeVisible();
+  await page.locator('#deckClearNo').click();
+  expect(await size()).toBe(12);
+
+  await page.locator('#deckClearBtn').click();
+  await page.locator('#deckClearYes').click();
+  expect(await size()).toBe(0);
+
+  await page.locator('#deckClearUndoBtn').click();
+  expect(await size()).toBe(12);
+
+  // Removing a playset takes one click, not four.
+  const tile = page.locator('.deck-card').filter({ has: page.locator('img[alt="Lightning Bolt"]') }).first();
+  await tile.hover();
+  await tile.locator('.remove-all-btn').click();
+  expect(await page.evaluate(() =>
+    window.GALDUR_APP.state.decks.player1.filter(c => c.name === 'Lightning Bolt').length)).toBe(0);
+  expect(await size()).toBe(8);
+  expect(dialogs).toBe(0);
+});
+
+test('Basic lands follow the deck colours, not a hard-coded Forest', async ({ page }) => {
+  await page.route('**://api.scryfall.com/**', async route => {
+    const url = route.request().url();
+    const card = (i) => ({
+      id: 'wu-' + i, name: (i % 2 ? 'White Card ' : 'Blue Card ') + i,
+      type_line: 'Creature — Test', cmc: 2,
+      mana_cost: i % 2 ? '{1}{W}{W}' : '{2}{U}',
+      colors: [i % 2 ? 'W' : 'U'], oracle_text: 'Test.', power: '2', toughness: '2',
+      rarity: 'common', image_uris: { normal: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E' }
+    });
+    if (url.includes('/cards/search')) {
+      const data = Array.from({ length: 60 }, (_, i) => card(i));
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ object: 'list', total_cards: 60, has_more: false, data }) });
+    }
+    return route.fulfill({ status: 404, body: '{}' });
+  });
+  await login(page, 1);
+
+  // The plan itself: a white/blue list gets Plains and Islands, weighted by pips.
+  const plan = await page.evaluate(() => window.GALDUR_APP.basicLandPlan([
+    { name: 'White thing', cost: '{1}{W}{W}', colors: ['W'] },
+    { name: 'White thing', cost: '{1}{W}{W}', colors: ['W'] },
+    { name: 'Blue thing', cost: '{2}{U}', colors: ['U'] }
+  ], 22, ['W', 'U']));
+  expect(plan.map(e => e.name).sort()).toEqual(['Island', 'Plains']);
+  expect(plan.reduce((a, e) => a + e.count, 0)).toBe(22);
+  const plains = plan.find(e => e.name === 'Plains');
+  const island = plan.find(e => e.name === 'Island');
+  expect(plains.count).toBeGreaterThan(island.count);   // four W pips against one U
+
+  // And a generated white/blue deck holds no Forests.
+  const basics = await page.evaluate(async () => {
+    const A = window.GALDUR_APP;
+    A.state.decks.player1 = [];
+    A.state.builderTab = 'deck';
+    A.state.screen = 'builder';
+    A.render();
+    const select = document.querySelector('#editorGenColors');
+    if (select) select.value = 'wu';
+    document.querySelector('#editorGenerate').click();
+    await new Promise(r => setTimeout(r, 2500));
+    const counts = {};
+    for (const c of A.state.decks.player1) {
+      if (/Basic Land/.test(c.type || '')) counts[c.name] = (counts[c.name] || 0) + 1;
+    }
+    return counts;
+  });
+  expect(basics.Forest).toBeUndefined();
+  expect(basics.Swamp).toBeUndefined();
+  expect(basics.Mountain).toBeUndefined();
+  expect(basics.Plains).toBeGreaterThan(0);
+  expect(basics.Island).toBeGreaterThan(0);
+});

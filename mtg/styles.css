@@ -1181,6 +1181,22 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
   background: var(--danger-fill); color: #f7eeec; border-radius: var(--r-sm);
   padding: 2px 7px; font-size: var(--t-micro); font-weight: 600;
 }
+/* Take a whole playset in one click. Sits opposite the single-copy cross. */
+.remove-all-btn {
+  position: absolute; top: 0; left: 0; display: none; cursor: pointer;
+  background: var(--surface-3); color: var(--text); border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); padding: 2px 6px; font-size: var(--t-micro); font-weight: 600;
+}
+.deck-card:hover .remove-all-btn { display: block; }
+.remove-all-btn:hover { background: var(--danger-fill); color: #f7eeec; border-color: var(--danger-fill); }
+
+/* Decklist column header: the title on the left, its actions on the right. */
+.editor-col-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--s-3); flex-wrap: wrap;
+}
+.editor-col-actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.editor-col-head h3 { margin-bottom: var(--s-3); }
 
 /* Mana buttons in the card designer: the only place the mana hues appear
    as a fill, because that is exactly what they mean there. */
