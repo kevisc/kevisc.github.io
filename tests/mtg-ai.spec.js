@@ -1607,80 +1607,115 @@ test('Rematch deals a fresh game with the same decks and mode', async ({ page })
 
 // --- batch 4: battlefield placement + bot decisions ------------------------
 
-// Fill both battlefields with more cards than one row holds.
-async function crowdedBoard(page) {
-  await page.evaluate(() => {
+// Fill both battlefields. A realistic board carries creatures, artifacts and
+// lands at the same time: the artifact lane is the one the old three-band
+// layout could not fit, so it must be in the fixture.
+async function fillBoard(page, spec) {
+  await page.evaluate((spec) => {
     const A = window.GALDUR_APP, s = A.state;
-    const mk = (n, i, land) => ({
-      id: n + i, gameId: n + i,
-      name: land ? 'Forest' : `${n} ${i}`,
-      type: land ? 'Basic Land - Forest' : 'Creature - Bear',
-      cost: land ? '' : '{1}{G}', colors: ['G'], effect: '',
-      power: land ? 0 : 2, toughness: land ? 0 : 2,
+    const mk = (n, i, kind) => ({
+      id: n + kind + i, gameId: n + kind + i,
+      name: kind === 'land' ? 'Forest' : `${n} ${kind} ${i}`,
+      type: kind === 'land' ? 'Basic Land - Forest' : kind === 'support' ? 'Artifact' : 'Creature - Bear',
+      cost: kind === 'land' ? '' : '{1}{G}', colors: ['G'], effect: '',
+      power: kind === 'creature' ? 2 : 0, toughness: kind === 'creature' ? 2 : 0,
       tapped: false, pt: { p: 0, t: 0 }, stun: 0
     });
-    const me = s.gameState.player1, opp = s.gameState.player2;
-    me.creatureField = Array.from({ length: 8 }, (_, i) => mk('Bear', i, false));
-    me.landField = Array.from({ length: 6 }, (_, i) => mk('Land', i, true));
-    me.supportField = [];
-    opp.creatureField = Array.from({ length: 5 }, (_, i) => mk('Ogre', i, false));
-    opp.landField = Array.from({ length: 4 }, (_, i) => mk('Land', i, true));
-    opp.supportField = [];
+    const fill = (player, tag, counts) => {
+      player.creatureField = Array.from({ length: counts[0] }, (_, i) => mk(tag, i, 'creature'));
+      player.supportField = Array.from({ length: counts[1] }, (_, i) => mk(tag, i, 'support'));
+      player.landField = Array.from({ length: counts[2] }, (_, i) => mk(tag, i, 'land'));
+    };
+    fill(s.gameState.player1, 'Mine', spec.me);
+    fill(s.gameState.player2, 'Theirs', spec.opp);
     s.aiActing = false;
     A.render();
-  });
+  }, spec);
   await page.waitForTimeout(300);
 }
 
-// The deepest overlap, in pixels, between any two cards on the same canvas.
-async function worstOverlap(page) {
+// Every canvas, measured: how many card pairs intersect and how small the
+// cards got. Both seats count, not just the taller one.
+async function canvasReport(page) {
   return page.evaluate(() => {
-    let worst = 0;
-    document.querySelectorAll('.battle-canvas').forEach(canvas => {
+    const out = [];
+    document.querySelectorAll('.battle-canvas[data-canvas-owner]').forEach(canvas => {
       const cards = [...canvas.querySelectorAll('.canvas-card')].map(n => n.getBoundingClientRect());
+      let pairs = 0, worst = 0;
       for (let i = 0; i < cards.length; i++) {
         for (let j = i + 1; j < cards.length; j++) {
           const a = cards[i], b = cards[j];
           const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
           const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-          if (x > 0 && y > 0) worst = Math.max(worst, Math.min(x, y));
+          if (x > 2 && y > 2) { pairs++; worst = Math.max(worst, Math.round(Math.min(x, y))); }
         }
       }
+      out.push({
+        owner: canvas.getAttribute('data-canvas-owner'),
+        count: cards.length,
+        pairs, worst,
+        width: cards.length ? Math.round(cards[0].width) : 0,
+        height: cards.length ? Math.round(cards[0].height) : 0,
+        scrolls: canvas.scrollHeight > canvas.clientHeight + 1,
+        overflowY: getComputedStyle(canvas).overflowY
+      });
     });
-    return Math.round(worst);
+    return out;
   });
 }
 
-test('Auto-placed cards fill the lanes without overlapping', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+test('Auto-placed cards never overlap and stay readable', async ({ page }) => {
   await enter(page);
   await openBattleMenu(page, 'casual');
   await seedDecks(page);
   await page.locator('#playAI').click();
   await page.locator('#startBtn').click();
   await page.waitForTimeout(500);
-  await crowdedBoard(page);
 
-  expect(await page.locator('.battle-canvas.mine .canvas-card').count()).toBe(14);
-  expect(await worstOverlap(page)).toBeLessThanOrEqual(3);
+  // A realistic mid-game board on both seats: creatures, artifacts, lands.
+  const boards = [
+    { me: [4, 2, 5], opp: [4, 2, 5] },
+    { me: [8, 3, 6], opp: [8, 3, 6] }
+  ];
+  for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]) {
+    await page.setViewportSize(size);
+    await page.waitForTimeout(250);
+    for (const board of boards) {
+      await fillBoard(page, board);
+      const report = await canvasReport(page);
+      expect(report.length).toBe(2);
+      for (const seat of report) {
+        const where = `${size.width}x${size.height} ${seat.owner} ${board.me.join('/')}`;
+        expect(seat.count, where).toBe(board.me[0] + board.me[1] + board.me[2]);
+        // No two cards may touch: the power/toughness box lives on the bottom edge.
+        expect(seat.pairs, where).toBe(0);
+        // Readable: never below the printed 68px the old fixed board used.
+        expect(seat.width, where).toBeGreaterThanOrEqual(68);
+        expect(seat.height / seat.width).toBeCloseTo(95 / 68, 1);
+        // A board that needs more rows than there is room for scrolls; it
+        // must never answer by shrinking the card or stacking the rows.
+        if (seat.scrolls) expect(seat.overflowY, where).toBe('auto');
+      }
+    }
+  }
 
-  // The cards are big enough to read a power/toughness box on.
-  const size = await page.evaluate(() => {
-    const r = document.querySelector('.battle-canvas.mine .canvas-card').getBoundingClientRect();
-    return { w: Math.round(r.width), h: Math.round(r.height) };
+  // Tidy hands every permanent back to the measured grid, so a resize keeps
+  // it tidy. That means clearing card.pos, not freezing a copy of it.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await fillBoard(page, { me: [4, 2, 5], opp: [4, 2, 5] });
+  await page.evaluate(() => {
+    const A = window.GALDUR_APP;
+    A.state.gameState.player1.creatureField[0].pos = { x: 70, y: 60 };
+    A.render();
   });
-  // Bigger than the old fixed 68x95, and still the printed card ratio.
-  expect(size.w).toBeGreaterThan(68);
-  expect(size.h).toBeGreaterThan(95);
-  expect(size.h / size.w).toBeCloseTo(95 / 68, 1);
-
-  // Tidy writes the same layout into card.pos, so it must not overlap either.
+  await page.waitForTimeout(200);
   await page.locator('#tidyField').click();
   await page.waitForTimeout(400);
-  expect(await worstOverlap(page)).toBeLessThanOrEqual(3);
-  const placed = await page.evaluate(() =>
-    window.GALDUR_APP.battlefieldCards(window.GALDUR_APP.state.gameState.player1).every(c => c.pos));
-  expect(placed).toBe(true);
+  const tidied = await canvasReport(page);
+  for (const seat of tidied) expect(seat.pairs).toBe(0);
+  const managed = await page.evaluate(() =>
+    window.GALDUR_APP.battlefieldCards(window.GALDUR_APP.state.gameState.player1).every(c => !c.pos));
+  expect(managed).toBe(true);
 });
 
 // Board builder for the two combat-decision tests.

@@ -191,7 +191,7 @@ function boot(){
         for (let i = 0; i < fx.n; i++) {
           me.creatureField.push(A.initBattleCard({
             id: 'tok' + Math.random(), gameId: 'tok-' + Math.random().toString(36).slice(2),
-            name: titleCase(fx.name) + ' Token', type: `Creature Token — ${titleCase(fx.name)}`,
+            name: titleCase(fx.name) + ' Token', type: `Creature Token - ${titleCase(fx.name)}`,
             cost: '', colors: [], effect: '', power: fx.p, toughness: fx.t, isToken: true
           }));
         }

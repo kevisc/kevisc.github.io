@@ -641,7 +641,10 @@ function cardImageMarkup(card, options = {}){
     `background-image:url("${placeholder}")`,
     options.style || ''
   ].filter(Boolean).join(';');
-  return `<img class="card-art-img ${htmlEscape(options.className || '')}" src="${htmlEscape(primary)}" alt="${htmlEscape(card?.name || 'Card')}" loading="${htmlEscape(options.loading || 'lazy')}" decoding="async" data-fallback-stage="0" data-fallback-src="${htmlEscape(fallback)}" data-placeholder-src="${htmlEscape(placeholder)}" onerror="window.GALDUR_CARD_IMAGE_FALLBACK && window.GALDUR_CARD_IMAGE_FALLBACK(this)" style="${htmlEscape(style)}">`;
+  // width/height are attributes, not just numbers for the placeholder: they
+  // give the element an aspect ratio before the art loads, so the page does
+  // not jump (and a restored scroll position still means something).
+  return `<img class="card-art-img ${htmlEscape(options.className || '')}" width="${width}" height="${height}" src="${htmlEscape(primary)}" alt="${htmlEscape(card?.name || 'Card')}" loading="${htmlEscape(options.loading || 'lazy')}" decoding="async" data-fallback-stage="0" data-fallback-src="${htmlEscape(fallback)}" data-placeholder-src="${htmlEscape(placeholder)}" onerror="window.GALDUR_CARD_IMAGE_FALLBACK && window.GALDUR_CARD_IMAGE_FALLBACK(this)" style="${htmlEscape(style)}">`;
 }
 
 function makeJumpstartPacket(themeId, packetIndex = 1){
@@ -1592,6 +1595,12 @@ const SCRY_PAGE_SIZE = 175;
 const _draftPools = new Map();
 
 // Scryfall card JSON -> the app's canonical playable-card shape.
+// Scryfall prints its type lines with an em-dash. The app's own copy never
+// uses one, so normalise on the way in and none reaches the screen.
+function normalizeTypeLine(text){
+  return String(text || '').replace(/\s*[\u2014\u2013]\s*/g, ' - ');
+}
+
 function scryfallToCard(c){
   const img = c?.image_uris?.normal
     || c?.card_faces?.[0]?.image_uris?.normal
@@ -1600,7 +1609,7 @@ function scryfallToCard(c){
   return {
     id: c.id,
     name: c.name,
-    type: c.type_line || face?.type_line || '',
+    type: normalizeTypeLine(c.type_line || face?.type_line || ''),
     cost: c.mana_cost || face?.mana_cost || '',
     colors: c.colors || c.color_identity || [],
     effect: c.oracle_text || face?.oracle_text || '',
@@ -1737,7 +1746,7 @@ async function resolveLandArt(landName){
       const art = {
         id: c.id,
         name: c.name,
-        type: c.type_line || `Basic Land — ${landName}`,
+        type: c.type_line || `Basic Land - ${landName}`,
         imageUrl: c.image_uris.normal,
         set: (c.set || '').toUpperCase(),
         setName: c.set_name || '',
@@ -1818,15 +1827,28 @@ async function buildDeckFromPool({ query, colors, owner, creatures, spells, land
   return shuffleCopy([...chosen, ...basics]);
 }
 
-// A generic opponent deck for ordinary formats, scaled by difficulty.
-async function buildRealAiDeck(tier){
+// A generic opponent deck for ordinary formats, scaled by difficulty. The size
+// follows the mode, or a Casual bot arrived with 40 cards in a 60-card format
+// and its own panel read "Review".
+async function buildRealAiDeck(tier, size = 60){
   const pair = TWO_COLOR_PAIRS[Math.floor(Math.random() * TWO_COLOR_PAIRS.length)];
   const id = pair.join('').toLowerCase();
   const scope = { easy: 'legal:pauper', normal: 'legal:pioneer', hard: 'legal:commander r>=uncommon' }[tier] || 'legal:pioneer';
+  const total = Math.max(40, Math.min(100, size || 60));
+  const lands = Math.round(total * 0.42);
+  const spells = Math.round((total - lands) * 0.3);
   return buildDeckFromPool({
     query: `${scope} id<=${id} -t:land game:paper cmc<=6`,
-    colors: pair, owner: 'ai', creatures: 16, spells: 7, lands: 17
+    colors: pair, owner: 'ai', creatures: total - lands - spells, spells, lands
   });
+}
+
+// The bot's generated deck carries its difficulty, so changing the difficulty
+// rebuilds it. An Easy deck (legal:pauper) used to stay in play on Hard.
+function aiDeckKind(){ return `jumpstart:${aiTier()}`; }
+function aiDeckSize(mode){
+  const policy = deckSizePolicy(mode || currentModeConfig());
+  return Math.max(40, Math.min(100, policy.count || mode?.target || 60));
 }
 
 // The boss plays real black/red threats and removal.
@@ -1960,7 +1982,7 @@ async function fetchLandPrintings(landName, limit = 60){
     .map(c => ({
       id: c.id,
       name: c.name,
-      type: c.type_line || `Basic Land — ${landName}`,
+      type: c.type_line || `Basic Land - ${landName}`,
       imageUrl: c.image_uris.normal,
       set: (c.set || '').toUpperCase(),
       setName: c.set_name || '',
@@ -2341,6 +2363,8 @@ function enterReplay(data){
   state.replayMode = true;
   state.replayData = data;
   state.replayIndex = data.frames.length - 1;
+  // The previous live game's undo stack does not belong to this replay.
+  state.gameHistory = [];
   state.battleMode = data.mode || state.battleMode;
   state.gameStarted = true;
   state.screen = 'game';
@@ -2395,6 +2419,9 @@ function executeGameAction(type, payload, mutator, message, options = {}){
 }
 
 function undoLastGameAction(){
+  // A replay is read-only. Without this, Undo popped a snapshot from the
+  // previous live game and wrote it over the frame on screen.
+  if (state.replayMode) return;
   const snapshot = (state.gameHistory || []).shift();
   if (!snapshot) {
     showAction('Nothing to undo.', 1600, false);
@@ -3059,7 +3086,7 @@ function LandPickerModal(){
     <div class="modal-content" style="max-width:940px">
       <div class="flex justify-between mb-4" style="align-items:flex-start;gap:12px">
         <div>
-          <h3 style="font-weight:800;font-size:20px">Choose your basic lands</h3>
+          <h3 style="font-size:20px">Choose your basic lands</h3>
           <div class="text-xs text-gray mt-1">
             Pick the printing used whenever a ${htmlEscape(P.land)} is added to a deck or draft.
             Your choice is saved.
@@ -3128,7 +3155,14 @@ function LandPickerModal(){
 // Containers whose scroll position must survive a re-render. render() rebuilds
 // the whole screen, so without this every remote update in an online game
 // yanked the other player's view back to the top mid-read.
-const SCROLL_KEEP = ['.battle-half.opponent .battle-canvas', '.battle-half.you .battle-canvas', '#actionLog', '#draftList', '#deckContainer', '#availContainer', '#zoneCards', '.mode-grid'];
+// Every entry here was checked against a live DOM: it is an element that
+// really does scroll. A selector for a clipped element keeps nothing.
+const SCROLL_KEEP = [
+  '.battle-sidebar', '.battle-board', '.battle-canvas', '.battle-hand',
+  '#actionLog', '#draftList',
+  '#deckContainer', '#availScroll', '#cardInfoSidebar',
+  '#zoneCards', '.mode-grid'
+];
 
 // --- Board layout: the two battlefield halves and the sidebar are resizable.
 // Sizes live in localStorage so a table keeps its shape between sessions.
@@ -3156,6 +3190,9 @@ function saveBoardLayout(patch){
 
 // Deal a fresh game for a mode. Used by Start Game and by Rematch.
 function beginGame(mode, rules){
+    // A replay is a recording, not a table. Dealing over it left replayMode
+    // true and every action on the new board refused.
+    if (state.replayMode) return;
     // Online: only the host deals, so both peers share the same shuffle.
     if (state.onlineMode && !state.isHost) return;
 
@@ -3232,12 +3269,18 @@ function captureScroll(){
 
 function restoreScroll(saved){
   if (!saved.length) return;
-  for (const { sel, i, top, left } of saved) {
-    const el = document.querySelectorAll(sel)[i];
-    if (!el) continue;
-    el.scrollTop = top;
-    el.scrollLeft = left;
-  }
+  const apply = () => {
+    for (const { sel, i, top, left } of saved) {
+      const el = document.querySelectorAll(sel)[i];
+      if (!el) continue;
+      el.scrollTop = top;
+      el.scrollLeft = left;
+    }
+  };
+  apply();
+  // Card art settles a frame late, so a panel can still be short when the
+  // first pass runs. One more pass on the next frame catches that.
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
 }
 
 // One top bar for every screen: back on the left, title in the middle, a single
@@ -3673,7 +3716,7 @@ function MainMenu() {
       </div>
 
       <div class="card p-4 mt-4">
-        <h2 style="font-size:17px;font-weight:900;margin-bottom:4px">Deck playlists</h2>
+        <h2 style="font-size:17px;margin-bottom:4px">Deck playlists</h2>
         <p class="text-xs text-gray">Saved mode and deck combinations for quick setup.</p>
         <div class="playlist-list mt-4">
           ${playlistHtml}
@@ -3706,7 +3749,7 @@ function MainMenu() {
     };
   }
 
-  // Two clicks to a game: Enter, then Quick play.
+  // Enter, Quick play, Start Game: a casual bot game with no setup to fill in.
   div.querySelector('#quickPlay').onclick = async () => {
     if (state.quickPlayBusy) return;
     state.selectedMode = 'casual';
@@ -3714,7 +3757,10 @@ function MainMenu() {
     state.aiDifficulty = 'normal';
     const seat = 'player1';
     state.currentPlayer = 1;
-    if (!(state.decks[seat] || []).length) {
+    // A generated deck from another mode is leftover, not the player's deck.
+    // Guarding on length alone handed a Casual game the 50-card Boss survivor
+    // deck, which the app's own panel then flagged as "Review".
+    if (deckReplaceableBy(state.decks[seat], 'generated')) {
       state.quickPlayBusy = true;
       render();
       const pick = DECK_COLOR_CHOICES[Math.floor(Math.random() * DECK_COLOR_CHOICES.length)];
@@ -3762,11 +3808,12 @@ function startVsBot(mode, opts = {}){
   state.bossRound = 0;
   state.currentPlayer = 1;              // the human always sits in seat 1
   applyAutoDeck(mode);
-  if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, 'jumpstart')) {
+  const botKind = aiDeckKind();
+  if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, botKind)) {
     const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
     const built = buildJumpstartDeck(themes[0], themes[1]);
-    state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
-    upgradeDeckSlot('player2', 'jumpstart', () => buildRealAiDeck(aiTier()));
+    state.decks.player2 = tagAutoDeck(built.cards, botKind);
+    upgradeDeckSlot('player2', botKind, () => buildRealAiDeck(aiTier(), aiDeckSize(mode)));
   }
   state.screen = 'game';
   render();
@@ -3831,7 +3878,7 @@ function ModeStudioScreen() {
   const buildValidation = rules.sharedLibrary ? sharedValidation : validateDeckForMode(state.decks[myKey] || [], mode);
   const buildPanelHtml = `
     <div class="studio-panel-card">
-      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Build For ${htmlEscape(mode.title)}</h2>
+      <h2 style="font-size:18px;margin-bottom:8px">Build For ${htmlEscape(mode.title)}</h2>
       ${deckValidationPanelHtml(buildValidation, { id: 'studioBuildValidation', title: rules.sharedLibrary ? `${rules.sharedLabel || 'Shared Stack'} Build` : `Player ${state.currentPlayer} Deck`, compact: true })}
       <div class="flex mt-4" style="gap:8px;flex-wrap:wrap">
         ${mode.build ? '<button id="studioOpenBuilder" class="btn btn-primary">Open Builder</button>' : ''}
@@ -3845,7 +3892,7 @@ function ModeStudioScreen() {
   `;
   const draftPanelHtml = `
     <div class="studio-panel-card">
-      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">${htmlEscape(mode.title)} Draft</h2>
+      <h2 style="font-size:18px;margin-bottom:8px">${htmlEscape(mode.title)} Draft</h2>
       <p class="text-sm text-gray">${mode.draft ? 'Draft and pool tools are scoped to this mode.' : 'This mode does not use a draft flow.'}</p>
       <div class="flex mt-4" style="gap:8px;flex-wrap:wrap">
         ${mode.draft ? '<button id="studioStartDraft" class="btn btn-primary">Start draft</button>' : ''}
@@ -3854,7 +3901,7 @@ function ModeStudioScreen() {
   `;
   const playPanelHtml = `
     <div class="studio-panel-card">
-      <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Match readiness</h2>
+      <h2 style="font-size:18px;margin-bottom:8px">Match readiness</h2>
       ${matchValidationHtml}
       <div class="flex mt-4" style="gap:10px;flex-wrap:wrap">
         ${rules.botOpponent
@@ -3881,7 +3928,7 @@ function ModeStudioScreen() {
 
     <div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(320px,1.35fr);gap:16px;align-items:start">
       <div class="card p-4">
-        <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode requirements</h2>
+        <h2 style="font-size:18px;margin-bottom:8px">Mode requirements</h2>
         <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
         ${mode.note ? `<div class="mode-note-plain mt-4">${htmlEscape(mode.note)}</div>` : ''}
         <div class="validation-facts" style="margin-top:14px">
@@ -3897,7 +3944,7 @@ function ModeStudioScreen() {
             : `No ${htmlEscape(rules.sharedLabel || 'shared library')} loaded yet.`}
         </div>` : ''}
         <div class="card p-3 mt-4 playlist-card">
-          <h3 style="font-size:14px;font-weight:800;margin-bottom:6px">Deck playlists</h3>
+          <h3 style="font-size:14px;margin-bottom:6px">Deck playlists</h3>
           <p class="text-xs text-gray mb-2">Save the current Player 1 / Player 2 decks for this mode.</p>
           <div class="grid" style="gap:8px">
             <input id="setupName" class="input" placeholder="${htmlEscape(defaultSetupName(mode))}">
@@ -3916,7 +3963,7 @@ function ModeStudioScreen() {
       <div class="card p-4">
         <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
           <div>
-            <h2 style="font-size:18px;font-weight:800;margin-bottom:8px">Mode workspace</h2>
+            <h2 style="font-size:18px;margin-bottom:8px">Mode workspace</h2>
             <p class="text-sm text-gray">${htmlEscape(mode.title)} tools and readiness.</p>
           </div>
           <button id="studioChangeMode" class="btn btn-secondary text-sm">Change mode</button>
@@ -4002,12 +4049,13 @@ function ModeStudioScreen() {
     if (opts.vsAI) {
       state.currentPlayer = 1;             // the human always sits in seat 1
       // Generate an opponent deck for ordinary formats that have none.
-      if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, 'jumpstart')) {
+      const botKind = aiDeckKind();
+      if (!mode.autoDeck && deckReplaceableBy(state.decks.player2, botKind)) {
         const themes = shuffleCopy(JUMPSTART_THEMES.map(t => t.id));
         const built = buildJumpstartDeck(themes[0], themes[1]);
-        state.decks.player2 = tagAutoDeck(built.cards, 'jumpstart');
+        state.decks.player2 = tagAutoDeck(built.cards, botKind);
         toast(`AI deck generated: ${built.name}.`);
-        upgradeDeckSlot('player2', 'jumpstart', () => buildRealAiDeck(aiTier()));
+        upgradeDeckSlot('player2', botKind, () => buildRealAiDeck(aiTier(), aiDeckSize(mode)));
       }
     }
     state.screen = 'game';
@@ -4138,7 +4186,7 @@ function BattleMenu()  {
         </div>
         <div class="card p-4">
           <div class="mode-family">${htmlEscape(mode.family)}</div>
-          <h3 style="font-size:20px;font-weight:800;margin:8px 0 4px">${htmlEscape(mode.title)}</h3>
+          <h3 style="font-size:20px;margin:8px 0 4px">${htmlEscape(mode.title)}</h3>
           <p class="text-sm text-gray">${htmlEscape(mode.summary)}</p>
           ${mode.note ? `<p class="mode-note-plain mt-4">${htmlEscape(mode.note)}</p>` : ''}
         </div>
@@ -4158,7 +4206,7 @@ function BattleMenu()  {
         <div class="card p-4 difficulty-card">
           <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
             <div>
-              <h3 style="font-weight:800;font-size:15px">Bot difficulty</h3>
+              <h3 style="font-size:15px">Bot difficulty</h3>
               <p class="text-xs text-gray mt-1" id="difficultyBlurb"></p>
             </div>
             <div class="segmented" role="group" aria-label="Bot difficulty">
@@ -4594,7 +4642,7 @@ async function pushBasicLands(){
       D.deck.push({
         id: `land_${k}_${i}_${makeId('bl')}`,
         name: landName,
-        type: art?.type || `Basic Land — ${landName}`,
+        type: art?.type || `Basic Land - ${landName}`,
         cost: '',
         colors: [k],
         effect: '',
@@ -4677,7 +4725,7 @@ function Mode(){ return Setup(); }
     wrap.innerHTML = `
       <div class="draft-setup">
         <div class="card p-4">
-          <h2 style="font-size:16px;font-weight:800;margin-bottom:10px">Draft type</h2>
+          <h2 style="font-size:16px;margin-bottom:10px">Draft type</h2>
           <div class="draft-type-list">
             ${DRAFT_TYPES.map(t => `
               <label class="draft-type-row ${t.id === typeId ? 'active' : ''}" data-type-row="${t.id}">
@@ -4691,14 +4739,14 @@ function Mode(){ return Setup(); }
         </div>
 
         <div class="card p-4">
-          <h2 style="font-size:16px;font-weight:800;margin-bottom:10px">Players</h2>
+          <h2 style="font-size:16px;margin-bottom:10px">Players</h2>
           <select id="draftPlayers" class="input">
             ${DRAFT_PLAYER_MODES.map(m => `<option value="${m.id}" ${m.id === players ? 'selected' : ''}>${htmlEscape(m.label)}</option>`).join('')}
           </select>
         </div>
 
         <div class="card p-4">
-          <h2 style="font-size:16px;font-weight:800;margin-bottom:10px">Source and size</h2>
+          <h2 style="font-size:16px;margin-bottom:10px">Source and size</h2>
           <div class="draft-field-row">
             <div id="setCodeField" ${type.source === 'set' ? '' : 'hidden'}>
               <label class="text-xs">Set code (optional)</label>
@@ -5014,14 +5062,14 @@ function Mode(){ return Setup(); }
  const fetchLand = window.fetchBasicLandCard || (async (landName)=>{
    const r = await scryfetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(landName)}`);
    const c = await r.json(); const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
-   return { id:c.id, name:c.name, type:c.type_line||'Basic Land', cost:'', colors:[], effect:'', power:0, toughness:0, imageUrl:img, rarity:c.rarity||'common' };
+   return { id:c.id, name:c.name, type:normalizeTypeLine(c.type_line)||'Basic Land', cost:'', colors:[], effect:'', power:0, toughness:0, imageUrl:img, rarity:c.rarity||'common' };
  });
  const cloner    = window.cloneCard || (base => ({ ...base, id: 'id_'+Math.random().toString(36).slice(2)+Date.now().toString(36) }));
 
 
   wrap.innerHTML = `
     <div style="max-width:800px;margin:0 auto;padding:16px">
-      <h2 style="font-weight:800;font-size:22px;margin-bottom:8px">
+      <h2 style="font-size:22px;margin-bottom:8px">
         Basic lands, player ${who}
       </h2>
       <p class="text-sm" style="opacity:.8;margin-bottom:10px">
@@ -5162,7 +5210,7 @@ function LandsWaitScreen(){
 
   wrap.innerHTML = `
     <div style="max-width:600px;margin:0 auto;padding:32px;text-align:center">
-      <h2 style="font-weight:800;font-size:24px;margin-bottom:16px">
+      <h2 style="font-size:24px;margin-bottom:16px">
         Lands are set
       </h2>
       <div class="card p-4 mb-4" style="background:var(--surface-3);border-color:var(--line-strong);">
@@ -5208,7 +5256,7 @@ function DraftOffResults(){
     <div style="max-width:1000px;margin:0 auto;padding:16px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="card p-4">
-          <h3 style="font-weight:800;margin-bottom:8px">Player 1 Deck (${p1.length})</h3>
+          <h3 style="margin-bottom:8px">Player 1 Deck (${p1.length})</h3>
           <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;">
             ${listHTML(g1)}
           </div>
@@ -5219,7 +5267,7 @@ function DraftOffResults(){
         </div>
 
         <div class="card p-4">
-          <h3 style="font-weight:800;margin-bottom:8px">Player 2 Deck (${p2.length})</h3>
+          <h3 style="margin-bottom:8px">Player 2 Deck (${p2.length})</h3>
           <div class="mb-3" style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;">
             ${listHTML(g2)}
           </div>
@@ -5646,18 +5694,18 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
   if (state.onlineMode && state.waitingForAnswer && state.roomCode) {
     connUI = `
       <div class="card" style="background:var(--surface-3); border-color:var(--line-strong); margin-bottom: 24px;">
-        <h3 class="mb-4" style="font-weight: bold;">Step 1. Share this code</h3>
+        <h3 class="mb-4">Step 1. Share this code</h3>
         <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 12px;">${state.roomCode}</textarea>
         <button id="copyOffer" class="btn btn-secondary mb-4" style="width: 100%;">Copy code</button>
         <hr style="border-color:var(--line-strong); margin: 16px 0;">
-        <h3 class="mb-4" style="font-weight: bold;">Step 2. Enter their response</h3>
+        <h3 class="mb-4">Step 2. Enter their response</h3>
         <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 12px;"></textarea>
         <button id="submitAnswer" class="btn btn-primary" style="width: 100%;">Connect</button>
       </div>`;
   } else if (state.onlineMode && state.answerCode) {
     connUI = `
       <div class="card" style="background:var(--success-soft); border-color:var(--success-line); margin-bottom: 24px;">
-        <h3 class="mb-4" style="font-weight: bold;">Send this code back</h3>
+        <h3 class="mb-4">Send this code back</h3>
         <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 12px;">${state.answerCode}</textarea>
         <button id="copyAnswer" class="btn btn-primary" style="width: 100%;">Copy answer code</button>
         <p class="text-green text-sm mt-2">Waiting for the host.</p>
@@ -5671,25 +5719,25 @@ if (toggle && card){ closeDraftStats(); toggle.onclick = ()=>{ if (card.classLis
 
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:6px">Host Draft-off</h3>
+        <h3 style="margin-bottom:6px">Host Draft-off</h3>
         <p class="text-xs text-gray mb-2">Create a room and share the code.</p>
         <button id="hostOff" class="btn btn-primary">Host</button>
       </div>
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:6px">Join Draft-off</h3>
+        <h3 style="margin-bottom:6px">Join Draft-off</h3>
         <p class="text-xs text-gray mb-2">Paste the host's code to connect.</p>
         <input id="joinCode" class="input mb-2" placeholder="Paste host code">
         <button id="joinOff" class="btn btn-primary">Join</button>
       </div>
       
         <div class="card p-4">
-    <h3 style="font-weight:800;margin-bottom:6px">Local (Hotseat)</h3>
+    <h3 style="margin-bottom:6px">Local (Hotseat)</h3>
     <p class="text-xs text-gray mb-2">Two players on one device. No internet connection.</p>
     <button id="localOff" class="btn btn-secondary">Start Local</button>
   </div>
 
       <div class="card p-4">
-    <h3 style="font-weight:800;margin-bottom:6px">Solo vs bot</h3>
+    <h3 style="margin-bottom:6px">Solo vs bot</h3>
     <p class="text-xs text-gray mb-2">Draft against a computer opponent, then battle its deck.</p>
     <button id="botOff" class="btn btn-primary">Start vs Bot</button>
   </div>
@@ -5981,7 +6029,7 @@ function WinstonSetup(){
 
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:6px">Pool Source</h3>
+        <h3 style="margin-bottom:6px">Pool Source</h3>
         <label class="text-xs">Pool size</label>
         <input id="winstonPoolSize" class="input mb-3" type="number" min="24" max="180" value="90">
         <div class="flex" style="gap:8px;flex-wrap:wrap">
@@ -5994,7 +6042,7 @@ function WinstonSetup(){
       </div>
 
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:6px">Upload Cube JSON</h3>
+        <h3 style="margin-bottom:6px">Upload Cube JSON</h3>
         <input id="winstonPoolFile" type="file" accept=".json" class="input">
         <div id="winstonPoolStatus" class="text-xs text-gray mt-3">Upload an exported deck JSON with a <code>cards</code> array.</div>
         <button id="startUploadedWinston" class="btn btn-primary mt-3" disabled>Start Uploaded Pool</button>
@@ -6061,7 +6109,7 @@ function WinstonDraft(){
         <div class="card p-4 mt-4">
           <div class="flex justify-between" style="align-items:center;gap:12px;flex-wrap:wrap">
             <div>
-              <h3 style="font-weight:800">Inspecting Pile ${W.currentPile + 1}</h3>
+              <h3>Inspecting Pile ${W.currentPile + 1}</h3>
               <p class="text-xs text-gray">${activePile.length ? `${activePile.length} card${activePile.length === 1 ? '' : 's'} in this pile.` : 'This pile is empty.'}</p>
             </div>
             <div class="flex" style="gap:8px;flex-wrap:wrap">
@@ -6076,7 +6124,7 @@ function WinstonDraft(){
       </div>
 
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:8px">Draft Log</h3>
+        <h3 style="margin-bottom:8px">Draft Log</h3>
         <div style="max-height:420px;overflow:auto">
           ${W.log.slice(0, 24).map(line => `<div class="text-xs text-gray" style="padding:5px 0;border-bottom:1px solid var(--line)">${htmlEscape(line)}</div>`).join('')}
         </div>
@@ -6102,11 +6150,11 @@ function WinstonResults(){
   wrap.innerHTML = `
     <div class="grid grid-2" style="gap:16px">
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:8px">Player 1 Picks</h3>
+        <h3 style="margin-bottom:8px">Player 1 Picks</h3>
         <div style="max-height:340px;overflow:auto">${list(W.p1)}</div>
       </div>
       <div class="card p-4">
-        <h3 style="font-weight:800;margin-bottom:8px">Player 2 Picks</h3>
+        <h3 style="margin-bottom:8px">Player 2 Picks</h3>
         <div style="max-height:340px;overflow:auto">${list(W.p2)}</div>
       </div>
     </div>
@@ -6390,7 +6438,7 @@ function CardCreator() {
     <div class="card-preview" style="position: relative;">
       <div style="background:var(--surface-2); padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+          <h3 style="font-size: 14px">${c.name || 'Unnamed'}</h3>
           <span style="font-size: 12px; color:var(--accent);">${c.cost || ''}</span>
         </div>
         <p class="text-xs text-gray">${c.type}</p>
@@ -6410,7 +6458,7 @@ function CardCreator() {
     ${embedded ? '' : topBarHtml({ title: 'Card collection', backLabel: 'Back', backId: 'backBtn', actionLabel: 'Deck editor', actionId: 'ccEditorBtn' })}
     
     <div class="card mb-4">
-      <h2 class="mb-4" style="font-weight: bold; font-size: 18px;">Search Scryfall</h2>
+      <h2 class="mb-4" style="font-size: 18px">Search Scryfall</h2>
       <div style="background:var(--surface-2); border-radius: 6px; padding: 12px; margin-bottom: 12px;">
         <p class="text-xs text-gray">Search works best over HTTPS. If a search fails, try an exact card name such as "Lightning Bolt".</p>
       </div>
@@ -6480,13 +6528,13 @@ function CardCreator() {
         <button id="submitCard" class="btn btn-primary btn-lg" style="width: 100%;">${state.editingCard ? 'Update card' : 'Create card'}</button>
       </div>
       <div>
-        <h3 class="mb-4" style="font-size: 18px; font-weight: bold;">Preview</h3>
+        <h3 class="mb-4" style="font-size: 18px">Preview</h3>
         <div id="preview"></div>
       </div>
     </div>
     
     <div class="card">
-      <h2 id="collectionCount" class="mb-4" style="font-size: 18px; font-weight: bold;">Collection (${state.cards.length} cards)</h2>
+      <h2 id="collectionCount" class="mb-4" style="font-size: 18px">Collection (${state.cards.length} cards)</h2>
       <div id="collectionGrid" class="grid grid-4">
        ${cardsHtml || '<p class="text-gray text-center p-4">No cards yet. Search Scryfall, or create your own.</p>'}
 </div>
@@ -6513,7 +6561,7 @@ function CardCreator() {
       <div class="card-preview">
         <div style="background:var(--surface-2); padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="font-weight: bold;">${form.name || 'Unnamed Card'}</h3>
+            <h3>${form.name || 'Unnamed Card'}</h3>
             <span style="font-size: 12px; color:var(--accent);">${form.cost || ''}</span>
           </div>
           <p class="text-xs text-gray">${form.type}</p>
@@ -6569,7 +6617,7 @@ function CardCreator() {
   wrapper.innerHTML = `
     <div style="background:var(--surface-2); padding: 8px; border-radius: 6px 6px 0 0; margin-bottom: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="font-weight: bold; font-size: 14px;">${c.name || 'Unnamed'}</h3>
+        <h3 style="font-size: 14px">${c.name || 'Unnamed'}</h3>
         <span style="font-size: 12px; color:var(--accent);">${c.cost || ''}</span>
       </div>
       <p class="text-xs text-gray">${c.type || ''}</p>
@@ -6667,7 +6715,7 @@ function showPreviewForIdx(idx) {
   const img = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
   hoverDiv.innerHTML = `
     <div style="font-weight:700; margin-bottom:4px;">${card.name}</div>
-    <div class="text-xs text-gray" style="margin-bottom:6px;">${card.type_line || ''}</div>
+    <div class="text-xs text-gray" style="margin-bottom:6px;">${normalizeTypeLine(card.type_line)}</div>
     ${img ? `<img src="${img}" style="width:100%; border-radius:6px; margin-bottom:8px;">` : ''}
     <div style="font-size:12px; line-height:1.3; white-space:pre-wrap;">${(card.oracle_text || '').replaceAll('\\n','<br>')}</div>
   `;
@@ -6703,7 +6751,7 @@ resultsDiv.onclick = (e) => {
   const newCard = {
     id: Date.now() + Math.random(),
     name: card.name,
-    type: card.type_line,
+    type: normalizeTypeLine(card.type_line),
     cost: card.mana_cost || '',
     colors: card.colors || [],
     power: card.power || 0,
@@ -6886,7 +6934,7 @@ if (!window.fetchCardByName) window.fetchCardByName = async function(name, setPr
 
 // 3) Convert a Scryfall card JSON to your in-game card objects (qty copies)
 if (!window.cardToGameObjects) window.cardToGameObjects = function(cardJSON, quantity, includeImages){
-  const type_line = cardJSON.type_line || '';
+  const type_line = normalizeTypeLine(cardJSON.type_line);
   const colors = Array.isArray(cardJSON.colors) ? cardJSON.colors : [];
   const mana_cost = cardJSON.mana_cost || '';
   const oracle_text = cardJSON.oracle_text || '';
@@ -7464,7 +7512,7 @@ function cloneCard(base){
       <div class="card p-4 mb-4" id="jumpstartMixer">
         <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
           <div>
-            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Jumpstart Packet Mixer</h3>
+            <h3 style="font-size:18px;margin-bottom:6px">Jumpstart Packet Mixer</h3>
             <p class="text-sm text-gray">Pick two themes, then build a shuffled 40-card packet deck for Player ${state.currentPlayer}.</p>
           </div>
           <div class="badge" id="jumpstartDeckName">40 cards</div>
@@ -7493,7 +7541,7 @@ function cloneCard(base){
       <div class="card p-4 mb-4" id="cubeStackTools">
         <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
           <div>
-            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Cube Center Stack</h3>
+            <h3 style="font-size:18px;margin-bottom:6px">Cube Center Stack</h3>
             <p class="text-sm text-gray">Use your current deck as the shared center stack, import a cube list, or generate a starter cube for quick testing.</p>
           </div>
           <div class="badge">Shared draw pile</div>
@@ -7517,7 +7565,7 @@ function cloneCard(base){
       <div class="card p-4 mb-4" id="dandanLibraryTools">
         <div class="flex justify-between" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
           <div>
-            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Dandan Shared Library</h3>
+            <h3 style="font-size:18px;margin-bottom:6px">Dandan Shared Library</h3>
             <p class="text-sm text-gray">Generate a blue shared-library stack with Dandan, counterplay, cantrips, bounce, and Islands.</p>
           </div>
           <div class="badge">Shared draw pile</div>
@@ -7586,7 +7634,7 @@ function cloneCard(base){
     ${issuesHtml}
 
     <div class="card p-4 hidden" id="deckShelfCard" style="margin-bottom:16px">
-      <h3 style="font-weight:800;font-size:15px;margin-bottom:10px">Saved decks</h3>
+      <h3 style="font-size:15px;margin-bottom:10px">Saved decks</h3>
       ${deckLibraryHtml('editorLib')}
     </div>
 
@@ -7601,7 +7649,7 @@ function cloneCard(base){
     <!-- Collapsed Import panel -->
     <div class="card p-4 hidden" id="importCard" style="margin-bottom:16px">
       <div class="flex justify-between" style="align-items:center;margin-bottom:8px">
-        <h3 style="font-weight:800;letter-spacing:.2px">Import decklist</h3>
+        <h3 style="letter-spacing:.2px">Import decklist</h3>
         <div class="text-xs text-gray">
           A .json upload replaces the current deck. A .txt file or pasted text goes Parse, then Import parsed.
         </div>
@@ -7659,7 +7707,7 @@ Island x14
           <input id="editorScrySearch" class="input" placeholder="Search Scryfall by name or query">
           <button id="editorScryBtn" class="btn btn-primary text-sm" type="button">Search</button>
         </div>
-        <div class="editor-scroll">
+        <div class="editor-scroll" id="availScroll">
           <div id="editorScryResults" class="scry-grid" style="margin-bottom:12px"></div>
           <h3>Your cards [${(state.cards||[]).length}]</h3>
           <div id="availContainer"></div>
@@ -8104,27 +8152,36 @@ function defaultZoneForCard(card){
 
 // --- Battlefield auto-placement geometry ---------------------------------
 //
-// Cards sit on the canvas at percentage coordinates but are drawn at a fixed
-// pixel size, so the lanes have to be measured rather than guessed. Three
-// fixed percentage lanes used to sit closer together than a card is tall, and
-// a land was drawn over the lower half of a creature.
+// Cards sit on the canvas at pixel offsets but are drawn at a measured size,
+// so the grid has to be measured rather than guessed. Three fixed lanes used
+// to be stacked as three separate bands. Three bands plus their gaps do not
+// fit a short canvas, the bands then ran into each other and the card shrank
+// to an unreadable 46 px.
+//
+// The board now flows as ONE wrapping grid. Cards keep their zone order
+// (creatures, then artifacts and enchantments, then lands, mirrored for the
+// opponent) and a wider gap marks each group, but a group does not claim a
+// row of its own. A realistic board is one row, so the card stays large.
+// When the rows genuinely do not fit, the canvas scrolls. It never overlaps
+// and it never shrinks the card below the readable size.
 //
 // canvasMetrics holds the last measured size of each canvas. canvasGeometry
-// turns a card count per lane into a card size plus a row grid that cannot
-// overlap. layoutBattleCanvases() re-measures after every render and re-places
-// every auto-positioned card.
+// turns a card count per zone into a card size plus a slot for every card.
+// layoutBattleCanvases() re-measures after every render and re-places every
+// auto-positioned card.
 
 const CANVAS_LANES = {
-  me:  ['supportField', 'creatureField', 'landField'],
-  opp: ['landField', 'creatureField', 'supportField']
+  me:  ['creatureField', 'supportField', 'landField'],
+  opp: ['landField', 'supportField', 'creatureField']
 };
 const CANVAS_CARD_RATIO = 95 / 68;   // the printed card ratio the app draws
 const CANVAS_CARD_MAX = 104;         // width in px, the size we want
-const CANVAS_CARD_MIN = 46;          // width in px, the size we refuse to go under
+const CANVAS_CARD_MIN = 68;          // width in px, the size we refuse to go under
 const CANVAS_PAD = 10;
 const CANVAS_GAP_X = 10;
+const CANVAS_GAP_X_TIGHT = 5;        // squeeze the columns before shrinking the card
+const CANVAS_GROUP_GAP = 20;         // the air that marks one zone off from the next
 const CANVAS_GAP_Y = 10;
-const CANVAS_LANE_SPREAD = 26;       // extra air between lanes when there is room
 
 const canvasMetrics = {
   me:  { w: 760, h: 320 },
@@ -8133,14 +8190,30 @@ const canvasMetrics = {
 
 function canvasSide(owner){ return owner === 'opp' ? 'opp' : 'me'; }
 
-function canvasRowPlan(counts, lanes, w, cardW){
-  const perRow = Math.max(1, Math.floor((w - 2 * CANVAS_PAD + CANVAS_GAP_X) / (cardW + CANVAS_GAP_X)));
-  const rows = lanes.map(z => Math.ceil(Math.max(0, counts[z] || 0) / perRow));
-  return { perRow, rows, totalRows: rows.reduce((a, b) => a + b, 0) };
+// Pure: lay the cards out left to right, wrap at the canvas width, and start a
+// new group with a wider gap. Returns a slot {x, row} for every card.
+function canvasFlowPlan(counts, lanes, w, cardW, gapX){
+  const inner = Math.max(cardW, w - 2 * CANVAS_PAD);
+  const slots = {};
+  let x = 0, row = 0, started = false;
+  lanes.forEach(zone => {
+    const n = Math.max(0, counts[zone] || 0);
+    slots[zone] = [];
+    if (!n) return;
+    if (started && x > 0) x += CANVAS_GROUP_GAP - gapX;
+    started = true;
+    for (let i = 0; i < n; i++) {
+      if (x > 0 && x + cardW > inner) { x = 0; row += 1; }
+      slots[zone].push({ x, row });
+      x += cardW + gapX;
+    }
+  });
+  return { slots, rows: started ? row + 1 : 0 };
 }
 
-// Pure: how many cards each lane holds plus the measured canvas, in; the grid
-// every auto-placed card sits on, out. The card is as large as the lanes allow.
+// Pure: how many cards each zone holds plus the measured canvas, in; the card
+// size and the slot grid, out. The card is as large as the space allows and
+// never smaller than CANVAS_CARD_MIN.
 function canvasGeometry(counts, owner){
   const side = canvasSide(owner);
   const box = canvasMetrics[side] || canvasMetrics.me;
@@ -8148,53 +8221,45 @@ function canvasGeometry(counts, owner){
   const h = Math.max(120, box.h || 120);
   const lanes = CANVAS_LANES[side];
 
-  let cardW = CANVAS_CARD_MIN;
-  let cardH = Math.round(cardW * CANVAS_CARD_RATIO);
-  let plan = canvasRowPlan(counts, lanes, w, cardW);
-  let fits = false;
-  for (let candidate = CANVAS_CARD_MAX; candidate >= CANVAS_CARD_MIN; candidate -= 2) {
-    const candidateH = Math.round(candidate * CANVAS_CARD_RATIO);
-    const p = canvasRowPlan(counts, lanes, w, candidate);
-    const used = p.totalRows * candidateH + Math.max(0, p.totalRows - 1) * CANVAS_GAP_Y;
-    if (p.totalRows === 0 || used + 2 * CANVAS_PAD <= h) {
-      cardW = candidate; cardH = candidateH; plan = p; fits = true; break;
+  const heightFor = (rows, cardH) =>
+    rows === 0 ? 0 : rows * cardH + (rows - 1) * CANVAS_GAP_Y + 2 * CANVAS_PAD;
+
+  // Widest card first, then a tighter column gap, and only then do we let the
+  // canvas scroll. We never trade legibility for a shorter board.
+  for (const gapX of [CANVAS_GAP_X, CANVAS_GAP_X_TIGHT]) {
+    for (let cardW = CANVAS_CARD_MAX; cardW >= CANVAS_CARD_MIN; cardW -= 2) {
+      const cardH = Math.round(cardW * CANVAS_CARD_RATIO);
+      const plan = canvasFlowPlan(counts, lanes, w, cardW, gapX);
+      if (heightFor(plan.rows, cardH) <= h) {
+        return { w, h, cardW, cardH, gapX, rowStep: cardH + CANVAS_GAP_Y,
+                 rows: plan.rows, slots: plan.slots, fits: true,
+                 contentH: heightFor(plan.rows, cardH) };
+      }
     }
   }
 
-  const used = plan.totalRows * cardH + Math.max(0, plan.totalRows - 1) * CANVAS_GAP_Y;
-  // The normal case: spread the slack between the lanes. The overflow case:
-  // even the smallest card needs more rows than the canvas has, so the rows
-  // step by whatever is left. That only happens on a board of 30-plus cards.
-  const rowStep = fits
-    ? cardH + CANVAS_GAP_Y
-    : Math.max(cardH * 0.34, (h - 2 * CANVAS_PAD - cardH) / Math.max(1, plan.totalRows - 1));
-  const laneCount = plan.rows.filter(r => r > 0).length;
-  const slack = fits ? Math.max(0, h - 2 * CANVAS_PAD - used) : 0;
-  const spread = laneCount > 1 ? Math.min(CANVAS_LANE_SPREAD, slack / (laneCount - 1)) : 0;
-
-  const laneY = {};
-  let y = CANVAS_PAD;
-  lanes.forEach((zone, i) => {
-    laneY[zone] = y;
-    if (plan.rows[i] > 0) y += plan.rows[i] * rowStep + spread;
-  });
-
-  return { w, h, cardW, cardH, perRow: plan.perRow, rowStep, laneY, fits };
+  // Too many rows for the space there is. Keep the card readable and let the
+  // canvas scroll instead of stacking the rows on top of each other.
+  const cardW = CANVAS_CARD_MIN;
+  const cardH = Math.round(cardW * CANVAS_CARD_RATIO);
+  const plan = canvasFlowPlan(counts, lanes, w, cardW, CANVAS_GAP_X_TIGHT);
+  return { w, h, cardW, cardH, gapX: CANVAS_GAP_X_TIGHT, rowStep: cardH + CANVAS_GAP_Y,
+           rows: plan.rows, slots: plan.slots, fits: false,
+           contentH: heightFor(plan.rows, cardH) };
 }
 
-// The percentage position of the i-th card of a lane, as the canvas is now.
+// The pixel position of the i-th card of a zone on a measured grid.
+function canvasSlotPos(g, zoneKey, i){
+  const slot = (g.slots[zoneKey] || [])[i];
+  if (!slot) return { x: CANVAS_PAD, y: CANVAS_PAD };
+  return { x: CANVAS_PAD + slot.x, y: CANVAS_PAD + slot.row * g.rowStep };
+}
+
+// Convenience for a single card. Callers that place many cards should build
+// the geometry once and call canvasSlotPos.
 function autoPosOnCanvas(counts, zoneKey, i, owner){
-  const g = canvasGeometry(counts, owner);
-  const col = i % g.perRow;
-  const row = Math.floor(i / g.perRow);
-  const x = CANVAS_PAD + col * (g.cardW + CANVAS_GAP_X);
-  const y = (g.laneY[zoneKey] ?? CANVAS_PAD) + row * g.rowStep;
-  return {
-    x: Math.round((100 * x / g.w) * 1000) / 1000,
-    y: Math.round((100 * y / g.h) * 1000) / 1000
-  };
+  return canvasSlotPos(canvasGeometry(counts, owner), zoneKey, i);
 }
-
 function canvasCountsFor(player){
   const counts = {};
   for (const key of BATTLE_ZONE_KEYS) counts[key] = (player?.[key] || []).length;
@@ -8213,13 +8278,16 @@ function layoutBattleCanvases(){
     for (const key of BATTLE_ZONE_KEYS) {
       counts[key] = el.querySelectorAll(`.canvas-card[data-zone="${key}"]`).length;
     }
+    // One geometry per canvas, not one per card.
     const g = canvasGeometry(counts, side);
     el.style.setProperty('--cc-w', g.cardW + 'px');
     el.style.setProperty('--cc-h', g.cardH + 'px');
+    // The scroll bar only appears when the rows genuinely do not fit.
+    el.classList.toggle('is-scrolling', !g.fits);
     el.querySelectorAll('.canvas-card[data-autopos]').forEach(node => {
-      const pos = autoPosOnCanvas(counts, node.getAttribute('data-zone'), Number(node.getAttribute('data-idx')) || 0, side);
-      node.style.left = pos.x + '%';
-      node.style.top = pos.y + '%';
+      const pos = canvasSlotPos(g, node.getAttribute('data-zone'), Number(node.getAttribute('data-idx')) || 0);
+      node.style.left = pos.x + 'px';
+      node.style.top = pos.y + 'px';
     });
   });
 }
@@ -8452,11 +8520,11 @@ function GameBoard() {
     } else if (state.onlineMode && state.waitingForAnswer) {
       connUI = `
         <div class="card" style="background:var(--surface-2); border-color:var(--line); margin-bottom: 24px;">
-          <h3 class="mb-4" style="font-weight: bold;">Step 1. Share this code</h3>
+          <h3 class="mb-4">Step 1. Share this code</h3>
           <textarea readonly class="input mb-4" rows="3" id="offerCode" style="font-size: 12px;">${state.roomCode}</textarea>
           <button id="copyOffer" class="btn btn-secondary mb-4" style="width: 100%;">Copy code</button>
           <hr style="border-color:var(--line-strong); margin: 16px 0;">
-          <h3 class="mb-4" style="font-weight: bold;">Step 2. Enter their response</h3>
+          <h3 class="mb-4">Step 2. Enter their response</h3>
           <textarea class="input mb-4" rows="3" id="answerInput" placeholder="Paste the answer code" style="font-size: 12px;"></textarea>
           <button id="submitAnswer" class="btn btn-primary" style="width: 100%;">Connect</button>
           ${statusLine}
@@ -8466,7 +8534,7 @@ function GameBoard() {
     } else if (state.onlineMode && state.answerCode) {
       connUI = `
         <div class="card" style="background:var(--success-soft); border-color:var(--success-line); margin-bottom: 24px;">
-          <h3 class="mb-4" style="font-weight: bold;">Send this code back</h3>
+          <h3 class="mb-4">Send this code back</h3>
           <textarea readonly class="input mb-4" rows="3" id="answerCode" style="font-size: 12px;">${state.answerCode}</textarea>
           <button id="copyAnswer" class="btn btn-primary" style="width: 100%;">Copy answer code</button>
           <p class="text-green text-sm mt-4">Waiting for the host.</p>
@@ -8815,11 +8883,13 @@ function GameBoard() {
     }, `Played ${card.name}.`);
   }
 
-  // Re-flow every permanent into tidy rows by type.
+  // Re-flow every permanent into tidy rows by type. Clearing card.pos hands
+  // the card back to the measured grid, so the board stays tidy through a
+  // resize instead of freezing at the size it had when Tidy was pressed.
   function tidyBattlefield(){
     executeGameAction('tidy_field', {}, () => {
       BATTLE_ZONE_KEYS.forEach(zoneKey => {
-        (me[zoneKey] || []).forEach((c, i) => { c.pos = autoPosFor(me, zoneKey, i, 'me'); });
+        (me[zoneKey] || []).forEach(c => { delete c.pos; });
       });
     }, 'Tidied the battlefield.', { ms: 900 });
   }
@@ -9019,7 +9089,7 @@ function GameBoard() {
         <div class="modal-content" style="max-width:820px">
           <div class="flex justify-between mb-4" style="align-items:flex-start;gap:12px">
             <div>
-              <h3 style="font-weight:800;font-size:18px">Declare attackers</h3>
+              <h3 style="font-size:18px">Declare attackers</h3>
               <div class="text-xs text-gray mt-1">
                 Pick who swings. The opponent has ${blockers} untapped creature${blockers === 1 ? '' : 's'} and will block on its own.
               </div>
@@ -9064,7 +9134,7 @@ function GameBoard() {
         <div class="modal-content" style="max-width:760px">
           <div class="flex justify-between mb-4">
             <div>
-              <h3 style="font-weight:800;font-size:18px">Incoming attack</h3>
+              <h3 style="font-size:18px">Incoming attack</h3>
               <div class="text-xs text-gray mt-1">Assign a blocker to each attacker, or let the damage through. Unblocked total: <strong>${incoming}</strong>. You would drop to <strong>${Math.max(0, me.health - incoming)}</strong> life.</div>
             </div>
           </div>
@@ -9106,7 +9176,7 @@ function GameBoard() {
         <div class="modal-content" style="max-width:720px">
           <div class="flex justify-between mb-4">
             <div>
-              <h3 style="font-weight:800;font-size:18px">${htmlEscape(landName)} target</h3>
+              <h3 style="font-size:18px">${htmlEscape(landName)} target</h3>
               <div class="text-xs text-gray mt-1">${htmlEscape(landGameTargetPrompt(landName))}</div>
             </div>
             <button id="cancelTargeting" class="btn btn-secondary text-xs">Cancel</button>
@@ -9145,12 +9215,15 @@ function GameBoard() {
     return setCardImageElement(img, c, { loading: 'eager', width: 100, height: 140 });
   };
   
-  const showCardInfo = (card, target) => {
-    const sidebar = target || div.querySelector('#cardInfo');
-    if (sidebar && card) {
+  // The Card info panel used to be written straight into the DOM, so the next
+  // render wiped it. In an online game that meant a remote action blanked the
+  // panel you were reading and shrank the sidebar under your scroll position.
+  // The hovered card now lives in state and the panel is rebuilt with the screen.
+  const cardInfoMarkup = (card) => {
+    {
       const c = card;
       const countersDisplay = c.counters && c.counters > 0 ? `<div class="text-green text-sm mt-2">+${c.counters}/+${c.counters} counters</div>` : '';
-      sidebar.innerHTML = `
+      return `
         <div class="card-preview">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
             <div class="text-center mb-2" style="font-weight: bold; flex: 1;">${htmlEscape(c.name || '')}</div>
@@ -9167,6 +9240,14 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         </div>
       `;
     }
+  };
+
+  const showCardInfo = (card, target) => {
+    if (!card) return;
+    // A target means a one-off panel elsewhere on the screen, not the sidebar.
+    if (!target) state.infoCard = card;
+    const sidebar = target || div.querySelector('#cardInfo');
+    if (sidebar) sidebar.innerHTML = cardInfoMarkup(card);
   };
   
   // Dynamic sizing classes based on card count
@@ -9191,26 +9272,26 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
   // wherever they are dropped. The three zone ARRAYS remain the data model
   // (the bot, horde, land-game rules, sync and undo all key off them) — free
   // placement is purely a card.pos = {x,y} percentage carried alongside.
-  const canvasCardsHtml = (player, owner) => BATTLE_ZONE_KEYS.flatMap(zoneKey =>
-    (player[zoneKey] || []).map((c, i) => {
-      const sel = owner === 'me'
-        && state.selectedFieldCard
-        && state.selectedFieldCard.zone === zoneKey
-        && state.selectedFieldCard.idx === i;
-      const pos = c.pos || autoPosFor(player, zoneKey, i, owner);
-      // data-autopos marks a card that has never been dropped by hand, so the
-      // post-render measuring pass may move it and a dropped card may not.
-      return `<div class="field-card canvas-card${c.tapped ? ' tapped' : ''}${sel ? ' selected' : ''}"
-        data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"${c.pos ? '' : ' data-autopos="1"'}
-        style="left:${pos.x}%;top:${pos.y}%"></div>`;
-    })).join('');
-
-  // Cards that have never been placed get a spot on the measured lane grid
-  // (see canvasGeometry). A full lane wraps to a second row, and the card only
-  // shrinks when the lanes genuinely cannot fit at the size we want.
-  function autoPosFor(player, zoneKey, i, owner){
-    return autoPosOnCanvas(canvasCountsFor(player), zoneKey, i, owner);
-  }
+  const canvasCardsHtml = (player, owner) => {
+    // One geometry for the whole canvas, then a slot per card.
+    const g = canvasGeometry(canvasCountsFor(player), owner);
+    return BATTLE_ZONE_KEYS.flatMap(zoneKey =>
+      (player[zoneKey] || []).map((c, i) => {
+        const sel = owner === 'me'
+          && state.selectedFieldCard
+          && state.selectedFieldCard.zone === zoneKey
+          && state.selectedFieldCard.idx === i;
+        // A dropped card keeps its percentage. An auto-placed card sits on the
+        // measured pixel grid, so a tall board scrolls instead of stacking up.
+        // data-autopos marks a card that has never been dropped by hand, so the
+        // post-render measuring pass may move it and a dropped card may not.
+        const pos = c.pos ? { x: c.pos.x + '%', y: c.pos.y + '%' } : null;
+        const slot = pos || (() => { const s2 = canvasSlotPos(g, zoneKey, i); return { x: s2.x + 'px', y: s2.y + 'px' }; })();
+        return `<div class="field-card canvas-card${c.tapped ? ' tapped' : ''}${sel ? ' selected' : ''}"
+          data-zone="${zoneKey}" data-owner="${owner}" data-idx="${i}"${c.pos ? '' : ' data-autopos="1"'}
+          style="left:${slot.x};top:${slot.y}"></div>`;
+      })).join('');
+  };
 
   const canvasBox = (player, owner) => {
     const count = battlefieldCards(player).length;
@@ -9390,7 +9471,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         </div>
         <h3 class="text-sm font-bold mb-2 text-center">Card info</h3>
         <div id="cardInfo">
-          <p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>
+          ${state.infoCard ? cardInfoMarkup(state.infoCard) : '<p class="text-gray text-xs text-center" style="padding: 20px;">Hover over a card</p>'}
         </div>
         <div class="mt-4" style="border-top:1px solid var(--line);padding-top:12px">
           <h3 class="text-sm font-bold mb-2 text-center">Action log</h3>
@@ -9409,7 +9490,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
     ${state.creatingToken ? `
       <div class="modal">
         <div class="modal-content" style="max-width: 400px;">
-          <h3 class="mb-4" style="font-weight: bold; font-size: 18px; text-align: center;">Create token</h3>
+          <h3 class="mb-4" style="font-size: 18px; text-align: center">Create token</h3>
           <div class="mb-4">
             <label for="tokenName">Token name</label>
             <input id="tokenName" class="input" placeholder="Soldier Token" value="Token">
@@ -9583,7 +9664,7 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
           <p class="text-gray mb-4">${detail}</p>
           <div class="flex" style="gap:10px;justify-content:center;flex-wrap:wrap">
             ${state.replayMode ? '' : '<button id="saveReplayEnd" class="btn btn-secondary">Save replay</button>'}
-            <button id="rematchBtn" class="btn btn-primary">Rematch</button>
+            ${state.replayMode ? '' : '<button id="rematchBtn" class="btn btn-primary">Rematch</button>'}
             <button id="returnBtn" class="btn btn-secondary">Menu</button>
           </div>
         </div>
@@ -9609,9 +9690,16 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
       }, 1100);
       render();
     };
-    // Nothing on the board itself is interactive while watching.
-    const shell = div.querySelector('.battle-board');
-    if (shell) shell.style.pointerEvents = 'none';
+    // Read-only means the WHOLE game surface, not just the two battlefields.
+    // The board overhaul moved the toolbar and the sidebar out of
+    // .battle-board, and a mask on that element alone left Draw, Undo, Tidy,
+    // End turn, the life steppers and the stack buttons live during a replay.
+    const shell = div.querySelector('.battle-shell');
+    if (shell) {
+      shell.style.pointerEvents = 'none';
+      shell.setAttribute('aria-disabled', 'true');
+      shell.querySelectorAll('button, input, select, textarea').forEach(el => { el.disabled = true; });
+    }
   }
 
   const handContainer = div.querySelector('#handContainer');
@@ -9644,9 +9732,14 @@ ${(c.type && (c.type.includes('Creature') || c.isToken)) ? (() => { const e = ef
         // Where on the battlefield did it land? Store as percentages so the
         // layout survives resizing and travels intact over the network.
         const box = dropTarget.getBoundingClientRect();
+        // A tall board scrolls, so read the drop in content space, not screen
+        // space. The percentage stays relative to the visible box, which is
+        // what an absolute top/left resolves against.
+        const h = Math.max(1, dropTarget.clientHeight);
+        const maxY = Math.max(88, ((dropTarget.scrollHeight - 24) / h) * 100);
         const pos = {
           x: Math.max(0, Math.min(92, ((event.clientX - box.left - 34) / box.width) * 100)),
-          y: Math.max(0, Math.min(88, ((event.clientY - box.top - 24) / box.height) * 100))
+          y: Math.max(0, Math.min(maxY, ((event.clientY - box.top + dropTarget.scrollTop - 24) / h) * 100))
         };
         dropOntoCanvas(payload, pos);
         return;
@@ -9901,6 +9994,11 @@ if (card.stun && card.stun > 0) {
       state.selectedZoneCard = null;
       state.viewingZone = null;
       state.targeting = null;
+      // Leaving the board leaves the replay too, or the next game starts dead.
+      stopReplayPlayback();
+      state.replayMode = false;
+      state.replayData = null;
+      state.replayIndex = 0;
       render();
     }
   };
@@ -10625,6 +10723,11 @@ div.querySelectorAll('.repeatLandEffect').forEach(btn => {
       state.selectedZoneCard = null;
       state.viewingZone = null;
       state.targeting = null;
+      // Leaving the board leaves the replay too, or the next game starts dead.
+      stopReplayPlayback();
+      state.replayMode = false;
+      state.replayData = null;
+      state.replayIndex = 0;
       render();
     };
   }
@@ -10675,6 +10778,7 @@ window.GALDUR_APP = {
 // text inputs are respected.
 document.addEventListener('keydown', (e) => {
   if (state.screen !== 'game' || !state.gameStarted || state.winner) return;
+  if (state.replayMode) return;   // a replay is read-only, keyboard included
   if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
   if (state.targeting || state.declaringAttack || state.viewingZone || state.creatingToken || state.landPicker) return;
   if (e.code === 'Space') {
