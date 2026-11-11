@@ -48,7 +48,7 @@ params:
           enabled: true
           title: Kevin Schoenholzer, PhD
           subtitle: "I am currently a Postdoctoral Researcher at the Institute of Communication and Public Policy, University of Lugano (Università della Svizzera italiana, [<u>USI</u>](https://search.usi.ch/en/people/0f2ecf024b739dc36a0f339bea7318e3/schoenholzer-kevin)) Switzerland, in the research group of Prof. Dr. Benedetto Lepori.<br>
-My research examines social stratification through quantitative analysis, modeling institutional, individual, and regional influences, and comparing how educational systems shape life trajectories across populations.<br>"
+My research examines educational inequality over the life course and between generations. I study how family background is related to achievement, expectations and attainment, how students move through higher education, and how graduates fare in the labour market. I compare countries and cohorts to see where education systems and welfare policies widen or narrow these differences. I work with panel, register and assessment data, and I build open-source research software and teaching tools.<br>"
           imageUrl: "headshot.jpg"
           imageWidth: 160
           imageHeight: 160

@@ -34,13 +34,16 @@ function getPredictorValue(record, predictorVar) {
 function parseParentEducationPredictor(record) {
     const parseISCED = (val) => {
         if (typeof val === 'number' && Number.isFinite(val)) return val;
+        // A missing value must stay missing: Number(null) and Number('') are 0,
+        // which would code missing parental education as ISCED 0.
+        if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return null;
         const numVal = Number(val);
         if (Number.isFinite(numVal)) return numVal;
 
         if (typeof val === 'string') {
             const upper = val.toUpperCase().trim();
             if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
-            const match = upper.match(/ISCED\s*(\d)/i);
+            const match = upper.match(/ISCED\s*(\d+)/i);
             if (match) return parseInt(match[1], 10);
         }
         return null;
@@ -324,7 +327,12 @@ export function buildDesignMatrix(data, outcomeVar, predictorVar, options = {}, 
  */
 function applyBRRStandardErrors(model, dm, weightType, options = {}) {
     const recs = dm.records;
-    const hasRep = recs && recs.length && Array.isArray(recs[0].rep_wgts) && recs[0].rep_wgts.length > 0;
+    // Every record must carry the same number of replicate weights. A selection
+    // can mix country-cycles with and without them; a partial set cannot give a
+    // design-based standard error, so the model-based one is kept.
+    const G0 = recs && recs.length && Array.isArray(recs[0].rep_wgts) ? recs[0].rep_wgts.length : 0;
+    const anyRep = !!recs && recs.some(rec => Array.isArray(rec.rep_wgts) && rec.rep_wgts.length > 0);
+    const hasRep = G0 > 0 && recs.every(rec => Array.isArray(rec.rep_wgts) && rec.rep_wgts.length === G0);
 
     // Callers that only need point estimates (e.g. per-country gradients in the
     // report) can pass { brr: false } to skip the 80-replicate refit.
@@ -332,6 +340,9 @@ function applyBRRStandardErrors(model, dm, weightType, options = {}) {
         model.seMethod = (weightType === 'none')
             ? 'Model-based, unweighted'
             : 'Model-based (assumes simple random sampling)';
+        if (options.brr !== false && weightType === 'student' && anyRep && !hasRep) {
+            model.seMethod = 'Model-based (replicate weights cover only part of this selection)';
+        }
         model.seActive = 'model';
         return model;
     }
@@ -362,6 +373,78 @@ function applyBRRStandardErrors(model, dm, weightType, options = {}) {
     return model;
 }
 
+/** Multiply two square-compatible matrices (small k). */
+function matMul(A, B) {
+    const n = A.length, m = B[0].length, p = B.length;
+    const C = Array.from({ length: n }, () => new Array(m).fill(0));
+    for (let i = 0; i < n; i++) for (let l = 0; l < p; l++) {
+        const a = A[i][l];
+        for (let j = 0; j < m; j++) C[i][j] += a * B[l][j];
+    }
+    return C;
+}
+
+/**
+ * Attach cluster-robust (school) standard errors to a fitted model.
+ *
+ * PISA samples whole classrooms within schools, so student outcomes are
+ * correlated within schools and the model-based errors understate uncertainty.
+ * This computes the CR1 sandwich estimator clustered on school_id:
+ *
+ *   V = adj · (X'WX)⁻¹ [ Σ_g S_g S_g' ] (X'WX)⁻¹ ,  S_g = Σ_{i∈g} w_i e_i x_i ,
+ *   adj = G/(G−1) · (N−1)/(N−k)
+ *
+ * matching sandwich::vcovCL(lm(..., weights = w), cluster = ~school_id,
+ * type = "HC1") in R; verified in pipeline/scripts/09-verify-rigor.R.
+ *
+ * @param {Object} model - fitted model (mutated: standardErrorsCluster, nClusters)
+ * @param {Object} dm - design matrix (records aligned to rows)
+ * @returns {Object} the model
+ */
+function applyClusterSE(model, dm) {
+    const recs = dm.records;
+    if (!recs || recs.length === 0 || !recs[0].school_id) return model;
+
+    const n = dm.y.length, k = model.coefficients.length;
+    const resid = model.residuals;
+    const w = dm.w;
+
+    // Cluster score sums S_g = Σ w_i e_i x_i
+    const Sg = new Map();
+    for (let i = 0; i < n; i++) {
+        const g = recs[i].school_id;
+        let s = Sg.get(g);
+        if (!s) { s = new Array(k).fill(0); Sg.set(g, s); }
+        const c = ((Number.isFinite(w[i]) && w[i] > 0) ? w[i] : 1) * resid[i];
+        const xi = dm.X[i];
+        for (let j = 0; j < k; j++) s[j] += c * xi[j];
+    }
+    const G = Sg.size;
+    if (G < 2) return model;
+
+    // Meat: Σ_g S_g S_g'
+    const meat = Array.from({ length: k }, () => new Array(k).fill(0));
+    for (const s of Sg.values()) {
+        for (let a = 0; a < k; a++) {
+            const sa = s[a];
+            for (let b = 0; b < k; b++) meat[a][b] += sa * s[b];
+        }
+    }
+
+    // Bread: (X'WX)⁻¹, recovered from the model vcov (vcov = σ̂²·(X'WX)⁻¹).
+    const SSE = resid.reduce((s, e, i) => s + (((Number.isFinite(w[i]) && w[i] > 0) ? w[i] : 1)) * e * e, 0);
+    const sigma2 = SSE / Math.max(model.df, 1);
+    const XtXinv = model.vcov.map(row => row.map(v => v / sigma2));
+
+    const adj = (G / (G - 1)) * ((n - 1) / Math.max(n - k, 1));
+    const V = matMul(matMul(XtXinv, meat), XtXinv);
+
+    model.standardErrorsCluster = model.coefficients.map((_, j) => Math.sqrt(Math.max(V[j][j] * adj, 0)));
+    model.nClusters = G;
+    model.meanClusterSize = n / G;
+    return model;
+}
+
 /**
  * Run pooled OLS regression
  * @param {Array} data - Array of student records
@@ -385,7 +468,7 @@ export function runPooledOLS(data, outcomeVar, predictorVar, controls = [], weig
         return null;
     }
 
-    return applyBRRStandardErrors({
+    return applyClusterSE(applyBRRStandardErrors({
         modelName: 'OLS (Pooled)',
         variableNames: dm.varNames,
         coefficients: fit.beta,
@@ -403,7 +486,7 @@ export function runPooledOLS(data, outcomeVar, predictorVar, controls = [], weig
         residuals: fit.residuals,
         fitted: fit.yhat,
         vcov: fit.vcov
-    }, dm, weightType, options);
+    }, dm, weightType, options), dm);
 }
 
 /**
@@ -430,10 +513,20 @@ export function runFixedEffects(data, outcomeVar, predictorVar, controls = [], w
         return null;
     }
 
-    // Calculate within and between R²
-    const { r2Within, r2Between } = calculateRsquaredComponents(data, fit.residuals, fit.yhat, dm.groupIndex);
+    // Within/between R² per the Stata xtreg convention, based on the slope-only
+    // linear prediction xb (country intercepts excluded; constant shifts cancel
+    // inside the correlations).
+    const nCountryDummies = dm.countries.length > 1 ? dm.countries.length - 1 : 0;
+    const skipCols = new Set([0]); // intercept
+    for (let j = 2; j < 2 + nCountryDummies; j++) skipCols.add(j);
+    const xb = dm.X.map(row => {
+        let v = 0;
+        for (let j = 0; j < row.length; j++) if (!skipCols.has(j)) v += row[j] * fit.beta[j];
+        return v;
+    });
+    const { r2Within, r2Between } = calculateRsquaredComponents(dm.y, dm.w, dm.groupIndex, xb);
 
-    return applyBRRStandardErrors({
+    return applyClusterSE(applyBRRStandardErrors({
         modelName: `Fixed Effects (Country dummies${includeYearFE ? ' + Year FE' : ''})`,
         variableNames: dm.varNames,
         coefficients: fit.beta,
@@ -453,7 +546,7 @@ export function runFixedEffects(data, outcomeVar, predictorVar, controls = [], w
         residuals: fit.residuals,
         fitted: fit.yhat,
         vcov: fit.vcov
-    }, dm, weightType);
+    }, dm, weightType), dm);
 }
 
 /**
@@ -687,63 +780,52 @@ function quasiDemeanRE(y, X, groups, groupIndex, sigma_u2, sigma_e2) {
 }
 
 /**
- * Calculate within and between R² for panel data
- * @param {Array} data - Original data
- * @param {Array} residuals - Regression residuals
- * @param {Array} fitted - Fitted values
- * @param {Array} groupIndex - Group membership
- * @returns {Object} R² components
+ * Within and between R² for the fixed-effects model, following the Stata xtreg
+ * convention: with xb the slope-only linear prediction (country intercepts
+ * excluded), the within R² is the squared weighted correlation between
+ * group-demeaned xb and group-demeaned y, and the between R² is the squared
+ * correlation between the group means of xb and y (each group counted once).
+ * On unweighted data the within R² equals the R² of the demeaned (within)
+ * regression that plm reports for model = "within"; verified in
+ * pipeline/scripts/09-verify-rigor.R.
+ * @param {Array} y - Response vector
+ * @param {Array} w - Weights
+ * @param {Array} groupIndex - Group membership per observation
+ * @param {Array} xb - Slope-only linear prediction per observation
+ * @returns {Object} { r2Within, r2Between }
  */
-function calculateRsquaredComponents(data, residuals, fitted, groupIndex) {
-    // This is a simplified calculation
-    // For proper within/between R², would need group-demeaned variables
-
+function calculateRsquaredComponents(y, w, groupIndex, xb) {
     const groups = [...new Set(groupIndex)];
-    const byGroup = {};
-
-    groups.forEach(g => {
-        byGroup[g] = { residuals: [], fitted: [] };
-    });
-
-    for (let i = 0; i < residuals.length; i++) {
-        const g = groupIndex[i];
-        byGroup[g].residuals.push(residuals[i]);
-        byGroup[g].fitted.push(fitted[i]);
+    const gW = {}, gY = {}, gXb = {};
+    groups.forEach(g => { gW[g] = 0; gY[g] = 0; gXb[g] = 0; });
+    for (let i = 0; i < y.length; i++) {
+        const g = groupIndex[i], wi = w[i];
+        gW[g] += wi; gY[g] += wi * y[i]; gXb[g] += wi * xb[i];
     }
+    groups.forEach(g => { if (gW[g] > 0) { gY[g] /= gW[g]; gXb[g] /= gW[g]; } });
 
-    // Calculate group means of fitted values
-    const groupMeans = {};
-    groups.forEach(g => {
-        const vals = byGroup[g].fitted;
-        groupMeans[g] = vals.reduce((a, b) => a + b, 0) / vals.length;
-    });
-
-    // Within variation (deviations from group means)
-    let withinSS = 0;
-    let totalWithinSS = 0;
-    const overallMean = fitted.reduce((a, b) => a + b, 0) / fitted.length;
-
-    for (let i = 0; i < fitted.length; i++) {
-        const g = groupIndex[i];
-        withinSS += Math.pow(fitted[i] - groupMeans[g], 2);
-        totalWithinSS += Math.pow(residuals[i], 2);
+    // Within: squared weighted correlation of group-demeaned xb and y.
+    let sxx = 0, syy = 0, sxy = 0;
+    for (let i = 0; i < y.length; i++) {
+        const g = groupIndex[i], wi = w[i];
+        const dx = xb[i] - gXb[g], dy = y[i] - gY[g];
+        sxx += wi * dx * dx; syy += wi * dy * dy; sxy += wi * dx * dy;
     }
+    const r2Within = (sxx > 0 && syy > 0) ? (sxy * sxy) / (sxx * syy) : NaN;
 
-    const r2Within = 1 - (totalWithinSS / Math.max(withinSS, 1e-9));
-
-    // Between variation (group means)
-    let betweenSS = 0;
+    // Between: squared correlation of the group means, each group counted once
+    // (the Stata xtreg convention).
+    const nG = groups.length;
+    const mX = groups.reduce((s, g) => s + gXb[g], 0) / nG;
+    const mY = groups.reduce((s, g) => s + gY[g], 0) / nG;
+    let bxx = 0, byy = 0, bxy = 0;
     groups.forEach(g => {
-        const n = byGroup[g].fitted.length;
-        betweenSS += n * Math.pow(groupMeans[g] - overallMean, 2);
+        const dx = gXb[g] - mX, dy = gY[g] - mY;
+        bxx += dx * dx; byy += dy * dy; bxy += dx * dy;
     });
+    const r2Between = (bxx > 0 && byy > 0) ? (bxy * bxy) / (bxx * byy) : NaN;
 
-    const r2Between = 1 - (totalWithinSS / Math.max(betweenSS, 1e-9));
-
-    return {
-        r2Within: Math.max(0, Math.min(1, r2Within)),
-        r2Between: Math.max(0, Math.min(1, r2Between))
-    };
+    return { r2Within, r2Between };
 }
 
 /**
@@ -783,6 +865,9 @@ function parseISCEDCode(value) {
         return value;
     }
 
+    // A missing value must stay missing: Number(null) and Number('') are 0,
+    // which would code missing parental education as ISCED 0.
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
     const numValue = Number(value);
     if (Number.isFinite(numValue)) {
         return numValue;
@@ -798,7 +883,7 @@ function parseISCEDCode(value) {
         }
 
         // Extract ISCED level number
-        const match = upper.match(/ISCED\s*(\d)/i);
+        const match = upper.match(/ISCED\s*(\d+)/i);
         if (match) {
             return parseInt(match[1], 10);
         }

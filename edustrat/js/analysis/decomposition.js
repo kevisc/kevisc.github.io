@@ -29,13 +29,16 @@ function getPredictorValue(record, predictorVar) {
 function parseParentEducation(record) {
     const parseISCED = (val) => {
         if (typeof val === 'number' && isFinite(val)) return val;
+        // A missing value must stay missing: Number(null) and Number('') are 0,
+        // which would code missing parental education as ISCED 0.
+        if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return null;
         const numVal = Number(val);
         if (isFinite(numVal)) return numVal;
 
         if (typeof val === 'string') {
             const upper = val.toUpperCase().trim();
             if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
-            const match = upper.match(/ISCED\s*(\d)/i);
+            const match = upper.match(/ISCED\s*(\d+)/i);
             if (match) return parseInt(match[1], 10);
         }
         return null;
