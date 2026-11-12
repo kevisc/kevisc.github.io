@@ -5,7 +5,7 @@
  * Date: 2025-12-16
  */
 
-import { weightedMean } from '../core/utils.js';
+import { weightedMean, parentalEducation } from '../core/utils.js';
 
 /**
  * Get predictor value from a record
@@ -32,35 +32,7 @@ function getPredictorValue(record, predictorVar) {
  * @returns {Number|null} Numeric education value
  */
 function parseParentEducationPredictor(record) {
-    const parseISCED = (val) => {
-        if (typeof val === 'number' && Number.isFinite(val)) return val;
-        // A missing value must stay missing: Number(null) and Number('') are 0,
-        // which would code missing parental education as ISCED 0.
-        if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return null;
-        const numVal = Number(val);
-        if (Number.isFinite(numVal)) return numVal;
-
-        if (typeof val === 'string') {
-            const upper = val.toUpperCase().trim();
-            if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
-            const match = upper.match(/ISCED\s*(\d+)/i);
-            if (match) return parseInt(match[1], 10);
-        }
-        return null;
-    };
-
-    const motherEduc = parseISCED(record.mother_educ);
-    const fatherEduc = parseISCED(record.father_educ);
-
-    if (motherEduc !== null && fatherEduc !== null) {
-        return Math.max(motherEduc, fatherEduc);
-    }
-    if (motherEduc !== null) return motherEduc;
-    if (fatherEduc !== null) return fatherEduc;
-
-    // Try alternative field names
-    const altValue = parseISCED(record.parent_edu) || parseISCED(record.PARED);
-    return altValue;
+    return parentalEducation(record);
 }
 
 /**
@@ -859,47 +831,6 @@ function parseGender(record) {
  * @param {String|Number} value - ISCED code or numeric value
  * @returns {Number|null} Numeric education level or null if invalid
  */
-function parseISCEDCode(value) {
-    // If already numeric, return it
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        return value;
-    }
-
-    // A missing value must stay missing: Number(null) and Number('') are 0,
-    // which would code missing parental education as ISCED 0.
-    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
-    const numValue = Number(value);
-    if (Number.isFinite(numValue)) {
-        return numValue;
-    }
-
-    // Parse ISCED text codes (e.g., "ISCED 3A", "ISCED 2", "None")
-    if (typeof value === 'string') {
-        const upper = value.toUpperCase().trim();
-
-        // Handle "None" or missing
-        if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') {
-            return null;
-        }
-
-        // Extract ISCED level number
-        const match = upper.match(/ISCED\s*(\d+)/i);
-        if (match) {
-            return parseInt(match[1], 10);
-        }
-
-        // Handle other common education level strings
-        if (upper.includes('PRIMARY') || upper.includes('ELEMENTARY')) return 1;
-        if (upper.includes('LOWER SECONDARY') || upper.includes('MIDDLE')) return 2;
-        if (upper.includes('UPPER SECONDARY') || upper.includes('HIGH SCHOOL')) return 3;
-        if (upper.includes('POST-SECONDARY') || upper.includes('VOCATIONAL')) return 4;
-        if (upper.includes('BACHELOR') || upper.includes('UNDERGRADUATE')) return 6;
-        if (upper.includes('MASTER')) return 7;
-        if (upper.includes('DOCTOR') || upper.includes('PHD')) return 8;
-    }
-
-    return null;
-}
 
 /**
  * Parse parental education as a numeric value
@@ -908,26 +839,7 @@ function parseISCEDCode(value) {
  * @returns {Number|null} Numeric education value or null if missing
  */
 function parseParentEducation(record) {
-    const motherEduc = parseISCEDCode(record.mother_educ);
-    const fatherEduc = parseISCEDCode(record.father_educ);
-
-    // If both available, use the higher value (common in PISA analyses)
-    if (motherEduc !== null && fatherEduc !== null) {
-        return Math.max(motherEduc, fatherEduc);
-    }
-
-    // Return whichever is available
-    if (motherEduc !== null) return motherEduc;
-    if (fatherEduc !== null) return fatherEduc;
-
-    // Try other field names
-    const alternatives = ['parent_edu', 'PARED', 'pared', 'hisei'];
-    for (const field of alternatives) {
-        const val = parseISCEDCode(record[field]);
-        if (val !== null) return val;
-    }
-
-    return null;
+    return parentalEducation(record);
 }
 
 /**

@@ -16,13 +16,13 @@ EduStrat enables students, instructors, and researchers to explore educational i
 
 - **Survey-weighted estimates**: means, ESCS gradients, achievement gaps and regression models with the PISA student weight, a senate weight or no weight
 - **Design-based standard errors**: Fay BRR standard errors from the 80 PISA replicate weights for the country-cycles that carry them; model-based standard errors elsewhere, labelled as such
-- **Regression models**: pooled OLS, country fixed effects and random effects, with a Hausman test, school-clustered standard errors and regression diagnostics
+- **Regression models**: pooled OLS, country fixed effects and random effects, with a Hausman test, school-clustered standard errors and regression diagnostics; ESCS or parental schooling (four levels) as the predictor
 - **Inequality measures**: Gini coefficient, Lorenz curves, percentile ratios (P90/P10), SES quartile gaps with Cohen's *d*, variance decomposition and Oaxaca-Blinder decomposition
 - **Within-country trends**: one estimate per PISA cycle and country, with a precision-weighted trend and a country fixed-effects panel
 - **Missing data**: a comparison of listwise deletion with full-information maximum likelihood (FIML) for the gradient
 - **Show the R code**: each result panel shows the R code that reproduces the number on screen, and the Export tab bundles the opened panels into one R script
 - **Teaching aids**: shareable links that open a configured analysis, a guided tour, self-check questions and a lab-report export
-- **Exports**: CSV tables, figures (PNG/SVG) and a self-contained HTML report
+- **Exports**: CSV tables, every chart as a PNG file, and a self-contained HTML report with all charts
 
 ### Verification
 

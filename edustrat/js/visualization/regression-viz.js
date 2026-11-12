@@ -6,6 +6,7 @@
  */
 
 import { CHART_COLORS, INK, baseLayout, BASE_CONFIG } from './chart-theme.js';
+import { parentalEducation } from '../core/utils.js';
 
 /**
  * Fixed model → color mapping so a model keeps its color across every chart:
@@ -40,30 +41,7 @@ function getPredictorValue(record, predictorVar) {
  * @returns {Number|null} Numeric education level
  */
 function parseParentEducation(record) {
-    const parseISCED = (val) => {
-        if (typeof val === 'number' && isFinite(val)) return val;
-        // A missing value must stay missing: Number(null) and Number('') are 0,
-        // which would code missing parental education as ISCED 0.
-        if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return null;
-        const numVal = Number(val);
-        if (isFinite(numVal)) return numVal;
-
-        if (typeof val === 'string') {
-            const upper = val.toUpperCase().trim();
-            if (upper === 'NONE' || upper === 'NA' || upper === 'N/A' || upper === '') return null;
-            const match = upper.match(/ISCED\s*(\d+)/i);
-            if (match) return parseInt(match[1], 10);
-        }
-        return null;
-    };
-
-    const motherEduc = parseISCED(record.mother_educ);
-    const fatherEduc = parseISCED(record.father_educ);
-
-    if (motherEduc !== null && fatherEduc !== null) {
-        return Math.max(motherEduc, fatherEduc);
-    }
-    return motherEduc !== null ? motherEduc : fatherEduc;
+    return parentalEducation(record);
 }
 
 /**
@@ -89,7 +67,7 @@ export function createModelTable(model) {
             <div class="methodology-note" style="margin-bottom: 1rem;">
                 N = ${model.nobs.toLocaleString()}${model.ngroups ? `, Groups = ${model.ngroups}` : ''}<br>
                 ${model.seMethod ? `Standard errors: ${model.seMethod}<br>` : ''}
-                ${model.standardErrorsCluster && isFinite(model.standardErrorsCluster[1]) ? `School-clustered SE (focal predictor): ${model.standardErrorsCluster[1].toFixed(3)} across ${model.nClusters.toLocaleString()} schools — vs ${model.standardErrors[1].toFixed(3)} model-based; clustering students within schools changes the uncertainty.<br>` : ''}
+                ${model.standardErrorsCluster && isFinite(model.standardErrorsCluster[1]) ? `School-clustered SE (focal predictor): ${model.standardErrorsCluster[1].toFixed(3)} across ${model.nClusters.toLocaleString()} schools, against ${model.standardErrors[1].toFixed(3)} model-based; clustering students within schools changes the uncertainty.<br>` : ''}
                 ${useBRR ? `<span style="color: var(--text-secondary);">t, p and 95% CI use the BRR errors; the model-based column (SRS assumption) is shown for comparison.</span><br>` : ''}
                 ${model.r2Within !== undefined && !isNaN(model.r2Within) ? `R² (within) = ${model.r2Within.toFixed(3)}<br>` : ''}
                 ${model.r2Between !== undefined && !isNaN(model.r2Between) ? `R² (between) = ${model.r2Between.toFixed(3)}<br>` : ''}

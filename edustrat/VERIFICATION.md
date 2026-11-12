@@ -348,17 +348,25 @@ for 15 country-cycles. Three things changed.
   parental education differed from the R reference by 17 to 26 percent. The
   parser now keeps a missing value missing, and all 18 FIML checks pass. Analyses
   with ESCS as the predictor were not affected.
-- **Two-digit education codes.** The five 2022 files with replicate weights label
-  parental education with the PISA 2022 codes, which run to "ISCED 10". The parser
-  and the R reference both read one digit, so the top category became 1. Both now
-  read the whole number. Parental education is still not on one scale across all
-  files: most files stop at upper secondary schooling, and the files with
-  replicate weights use the full scale of their cycle. The Data tab says so.
+- **Parental education on one scale.** The 15 files with replicate weights stored
+  the raw OECD index code of parental education (0 to 6 in 2015 and 2018, 1 to 10
+  in 2022) under an "ISCED" label. The other 498 files, built from learningtower,
+  use five schooling categories that stop at upper secondary. The two codings were
+  not comparable, and the parser read "ISCED 10" as 1. The 15 files now use the
+  learningtower categories; the mapping follows the value labels of the OECD files
+  and is written down in `05-add-replicate-weights.R`. One shared parser turns the
+  categories into four levels (0 below primary, 1 primary, 2 lower secondary,
+  3 upper secondary or higher). "less than ISCED1" is now 0; it was 1 before.
 - **Mixed selections.** A selection can combine country-cycles with and without
   replicate weights. The regression code tested only the first record and then
   failed on the records without replicate weights. BRR standard errors are now
   reported only when every record carries them; otherwise the model-based error
   is shown and labelled.
+- **Exports.** The HTML report and the chart export drew all charts at once, into
+  tabs that were not visible. A safeguard skips such draws, so the report held no
+  chart and the chart export found none. Both now open each tab in turn and
+  capture its charts. The country table of the report read a field that does not
+  exist and stayed empty; it is filled now.
 - **Reference scripts.** `07-verify-trends.R` now computes BRR standard errors
   where the data carry replicate weights, `09-verify-rigor.R` drops the
   replicate-weight column before it builds the panel, and `run-rcode.mjs` executes

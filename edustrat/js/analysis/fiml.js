@@ -1,3 +1,4 @@
+import { parentalEducation } from '../core/utils.js';
 /**
  * Full-Information Maximum Likelihood (FIML) for missing data.
  *
@@ -78,26 +79,8 @@ function parsePredictorValue(record, predictorVar) {
         const v = +record[predictorVar];
         return isFinite(v) ? v : NaN;
     }
-    const parse = (val) => {
-        if (typeof val === 'number' && isFinite(val)) return val;
-        // A missing value must stay missing: Number(null) and Number('') are 0,
-        // which would code missing parental education as ISCED 0.
-        if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return NaN;
-        const n = Number(val);
-        if (isFinite(n)) return n;
-        if (typeof val === 'string') {
-            const u = val.toUpperCase().trim();
-            if (u === 'NONE' || u === 'NA' || u === 'N/A' || u === '') return NaN;
-            const m = u.match(/ISCED\s*(\d+)/i);
-            if (m) return parseInt(m[1], 10);
-        }
-        return NaN;
-    };
-    const mo = parse(record.mother_educ), fa = parse(record.father_educ);
-    if (isFinite(mo) && isFinite(fa)) return Math.max(mo, fa);
-    if (isFinite(mo)) return mo;
-    if (isFinite(fa)) return fa;
-    return NaN;
+    const level = parentalEducation(record);
+    return level === null ? NaN : level;
 }
 
 /**

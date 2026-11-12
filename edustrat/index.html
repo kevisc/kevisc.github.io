@@ -91,7 +91,7 @@
                     <div class="stat-card" style="text-align: center;">
                         <h3 style="color: var(--primary-color); margin-bottom: 0.75rem;">Exports</h3>
                         <p style="color: var(--text-secondary); line-height: 1.6;">
-                            Tables as CSV, figures as PNG or SVG, an HTML report, and an R script of the analyses you opened
+                            Tables as CSV, every chart as a PNG file, an HTML report with all charts, and an R script of the analyses you opened
                         </p>
                     </div>
                 </div>
@@ -300,7 +300,7 @@
                                 <option value="escs">Socioeconomic Status (ESCS)</option>
                                 <option value="parent_edu">Parental Education</option>
                             </select>
-                            <div class="weight-info" style="margin-top: 0.5rem;">Parental education is the higher of the mother's and the father's level. Its coding differs between files: most stop at upper secondary schooling (ISCED 3), and the files with replicate weights use the full ISCED scale of their cycle. Compare its coefficients within one country and cycle. Use ESCS to compare across countries and cycles.</div>
+                            <div class="weight-info" style="margin-top: 0.5rem;">Parental education is the higher schooling level of the mother and the father, on four levels: 0 below primary, 1 primary, 2 lower secondary, 3 upper secondary or higher. It does not separate tertiary degrees. ESCS is the finer measure.</div>
                         </div>
 
                         <!-- Sampling Weights -->
@@ -371,7 +371,7 @@
             <div id="overview" class="tab-content">
                 <div class="section-title">Intergenerational Transmission Overview</div>
                 <p class="description">
-                    This dashboard examines the intergenerational transmission of educational achievement—how parental characteristics (education, occupational status, and household wealth, captured through the ESCS index) relate to children's academic performance at age 15.
+                    This dashboard examines the intergenerational transmission of educational achievement: how parental characteristics (education, occupational status, and household wealth, captured through the ESCS index) relate to children's academic performance at age 15.
                     The analysis framework draws on social stratification theory (Bourdieu & Passeron, 1977; Coleman et al., 1966)
                     to quantify how strongly family background predicts student outcomes across countries and over time.
                 </p>
@@ -380,7 +380,7 @@
                     <strong>Key Metrics Explained:</strong><br>
                     <strong>Mean Achievement:</strong> Survey-weighted average of test scores using OECD-recommended student weights (W_FSTUWT). Calculated as: μ = Σ(w_i × score_i) / Σ(w_i)<br>
                     <strong>Dispersion Index (Gini):</strong> Measures spread of achievement scores from 0 (all students identical) to 1 (maximum dispersion). Higher values indicate greater variation in outcomes.<br>
-                    <strong>ESCS Gradient (β):</strong> The intergenerational transmission coefficient—shows how many score points of achievement are associated with a one-unit increase in family socioeconomic status. Larger values indicate stronger intergenerational transmission.
+                    <strong>ESCS Gradient (β):</strong> The intergenerational transmission coefficient. It shows how many score points of achievement are associated with a one-unit increase in family socioeconomic status. Larger values indicate stronger intergenerational transmission.
                 </div>
 
                 <div class="grid-3">
@@ -454,14 +454,14 @@
                         <p style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 1rem; line-height: 1.6;">
                             <strong>What this shows:</strong> A survey-weighted Lorenz curve. Students are ranked from lowest to highest score;
                             the curve plots the cumulative share of students (x-axis) against the cumulative share of the total score they hold (y-axis).
-                            The dashed 45° line is perfect equality — every student scoring identically. Each country's Gini coefficient appears in the legend.<br>
+                            The dashed 45° line is perfect equality, where every student scores the same. Each country's Gini coefficient appears in the legend.<br>
                             <strong>How to read it:</strong> The further a curve bows below the diagonal, the more unequally achievement is distributed.
                             A point at (0.40, 0.30) means the lowest-scoring 40% of students account for 30% of the total score. The Gini coefficient is
                             twice the area between the curve and the diagonal (0 = everyone equal; larger = more spread).<br>
                             <strong>An important caveat:</strong> The Gini and the Lorenz curve were designed for <em>ratio-scale</em> quantities such as income,
                             which have a meaningful zero. Achievement scores are <em>interval-scaled</em> with an arbitrary origin (the PISA scale is anchored to an
                             OECD mean near 500), so the Gini of achievement is best read as a descriptive dispersion index for comparison <em>across countries or over time</em>,
-                            not as an income-style measure of inequality — its absolute level depends on where the scale's zero is placed.<br>
+                            not as an income-style measure of inequality: its absolute level depends on where the scale's zero is placed.<br>
                             <strong>Calculation:</strong> Records sorted by score; cumulative survey-weighted shares of students and of total score.
                             Gini computed as 2·cov<sub>w</sub>(score, rank) / mean<sub>w</sub>(score), verified against an R reference.
                         </p>
@@ -510,17 +510,17 @@
                     <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Oaxaca–Blinder Decomposition: Why Do Two Countries Differ?</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                         <strong>What this shows:</strong> The mean achievement gap between two countries, split into the part attributable to
-                        <em>composition</em> (country A's students have different family backgrounds than country B's — the "endowments" or explained part)
-                        and the part attributable to <em>returns</em> (the same background translates into different achievement — coefficients plus interaction, the unexplained part).<br>
+                        <em>composition</em> (country A's students have different family backgrounds than country B's; this is the "endowments" or explained part)
+                        and the part attributable to <em>returns</em> (the same background translates into different achievement; this is coefficients plus interaction, the unexplained part).<br>
                         <strong>How to read it:</strong> A large explained share means the gap mostly reflects who the students are;
-                        a large unexplained share means the gap persists even for students with the same measured background — pointing at differences in the education systems themselves.<br>
+                        a large unexplained share means the gap persists even for students with the same measured background, which points at differences in the education systems themselves.<br>
                         <strong>Caveat:</strong> This is descriptive accounting on observed covariates, not a causal decomposition, and the split depends on the
                         reference group (country B's coefficients are used as the reference here).
                     </p>
                     <div class="controls-section" style="margin-bottom: 1rem;">
                         <label for="oaxaca-a" style="font-weight: 600; margin-right: 0.5rem;">Country A:</label>
                         <select id="oaxaca-a" class="select-input" style="min-width: 120px;"></select>
-                        <label for="oaxaca-b" style="font-weight: 600; margin: 0 0.5rem 0 1.5rem;">Country B (reference):</label>
+                        <label for="oaxaca-b" style="font-weight: 600; margin: 0.75rem 0.5rem 0 0;">Country B (reference):</label>
                         <select id="oaxaca-b" class="select-input" style="min-width: 120px;"></select>
                     </div>
                     <div id="oaxaca-results"></div>
@@ -591,7 +591,7 @@
                 <div id="fiml-comparison-container" style="margin-top: 2.5rem;">
                     <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Missing Data: Listwise Deletion vs. FIML</h3>
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-                        <strong>What this shows:</strong> The bivariate socioeconomic gradient estimated two ways — by <em>listwise deletion</em>
+                        <strong>What this shows:</strong> The bivariate socioeconomic gradient estimated two ways: by <em>listwise deletion</em>
                         (the default everywhere else in the app, which drops any student missing the score or the predictor) and by
                         <em>full-information maximum likelihood</em> (FIML), which keeps every partially-observed student and estimates the model
                         by EM under joint normality.<br>
@@ -644,13 +644,13 @@
 
                 <!-- Detailed diagnostics: browse on demand -->
                 <details class="diag-section">
-                    <summary>Model fit comparison <span class="diag-hint">which specification fits best — R², AIC/BIC, ICC</span></summary>
+                    <summary>Model fit comparison <span class="diag-hint">which specification fits best: R², AIC/BIC, ICC</span></summary>
                     <div class="diag-body">
                         <p class="diag-explainer">
                             <strong>R²</strong> is the share of variance explained (higher = better);
                             <strong>R² within / between</strong> split that for panel models;
                             <strong>AIC/BIC</strong> trade fit against complexity (lower = better, BIC penalizes complexity more);
-                            <strong>ICC (ρ)</strong> is the share of variance at the country level — a high ICC is the reason panel models exist.
+                            <strong>ICC (ρ)</strong> is the share of variance at the country level. A high ICC is the reason panel models exist.
                         </p>
                         <div id="model-comparison-table"></div>
                     </div>
@@ -661,28 +661,28 @@
                     <div class="diag-body">
                         <p class="diag-explainer">
                             Tests whether the country effects correlate with the predictors.
-                            <strong>p &lt; 0.05</strong>: they do — random effects would be inconsistent, keep <strong>fixed effects</strong>.
-                            <strong>p ≥ 0.05</strong>: no evidence they do — <strong>random effects</strong> is acceptable and more efficient.
+                            <strong>p &lt; 0.05</strong>: they do. Random effects would be inconsistent, so keep <strong>fixed effects</strong>.
+                            <strong>p ≥ 0.05</strong>: no evidence they do, so <strong>random effects</strong> is acceptable and more efficient.
                         </p>
                         <div id="hausman-panel"></div>
                     </div>
                 </details>
 
                 <details class="diag-section">
-                    <summary>Residual diagnostics <span class="diag-hint">are the residuals well behaved — mean, skewness, normality, heteroscedasticity</span></summary>
+                    <summary>Residual diagnostics <span class="diag-hint">are the residuals well behaved: mean, skewness, normality, heteroscedasticity</span></summary>
                     <div class="diag-body">
                         <p class="diag-explainer">
                             Healthy residuals have mean ≈ 0, skewness ≈ 0 (±1 acceptable), excess kurtosis ≈ 0 (±2 acceptable),
                             a Jarque–Bera p above 0.05 (normality not rejected), a variance ratio below ~1.5 (no fanning),
                             and under 1% of observations beyond 3σ. With PISA's large samples, formal normality tests reject
-                            easily — read the magnitudes, not only the p-values.
+                            easily, so read the magnitudes, not only the p-values.
                         </p>
                         <div id="residual-diagnostics-table"></div>
                     </div>
                 </details>
 
                 <details class="diag-section">
-                    <summary>Influential observations <span class="diag-hint">is any single student driving the results — Cook's distance</span></summary>
+                    <summary>Influential observations <span class="diag-hint">is any single student driving the results: Cook's distance</span></summary>
                     <div class="diag-body">
                         <p class="diag-explainer">
                             Cook's distance combines an observation's leverage (unusual predictor values) with its residual size;
@@ -717,7 +717,7 @@
                     <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
                         <strong>What this shows:</strong> Choropleth world map displaying the ESCS gradient (intergenerational transmission strength) for each country.
                         Colors range from blue (low gradients, higher educational mobility) to red (high gradients, stronger intergenerational transmission).<br>
-                        <strong>Interpretation:</strong> Darker red countries have stronger intergenerational transmission—children's achievement is more tightly linked to family background.
+                        <strong>Interpretation:</strong> Darker red countries have stronger intergenerational transmission: children's achievement is more tightly linked to family background.
                         Blue countries show higher educational mobility. Hover over countries to see exact gradient values, R², and sample size.<br>
                         <strong>Calculation:</strong> For each country, run bivariate OLS: achievement = β₀ + β₁(ESCS) + ε. Map displays β₁ coefficient.
                     </p>
@@ -780,7 +780,7 @@
                 <p class="description">
                     How does a country's achievement, its socioeconomic gradient, or its inequality
                     <em>change across PISA cycles</em>? This tab estimates a focal statistic once per cycle
-                    for each selected country and models its trajectory over time — the within-country,
+                    for each selected country and models its trajectory over time. This is the within-country,
                     over-time view that the cross-sectional country fixed effects on the Regression tab do not provide.
                 </p>
 
@@ -1118,6 +1118,6 @@
     </div>
 
     <!-- Application JavaScript Modules -->
-    <script type="module" src="js/app.js?v=4.3.1"></script>
+    <script type="module" src="js/app.js?v=4.4.0"></script>
 </body>
 </html>

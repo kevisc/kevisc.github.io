@@ -38,6 +38,7 @@ parse_isced <- function(v) {
   n <- suppressWarnings(as.numeric(v)); if (is.finite(n)) return(n)
   u <- toupper(trimws(v))
   if (u %in% c("NONE", "NA", "N/A", "")) return(NA_real_)
+  if (grepl("LESS THAN", u, fixed = TRUE)) return(0)
   m <- regmatches(u, regexpr("ISCED\\s*([0-9]+)", u))
   if (length(m) == 1 && nchar(m) > 0) return(as.numeric(gsub("\\D", "", m)))
   NA_real_
